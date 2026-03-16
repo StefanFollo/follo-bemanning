@@ -101,3 +101,27 @@ export function daysBetween(a, b) {
 export function overlaps(aStart, aEnd, bStart, bEnd) {
   return aStart <= bEnd && bStart <= aEnd;
 }
+
+// Cloud sync via Vercel KV
+export async function loadFromCloud() {
+  try {
+    const res = await fetch('/api/state');
+    if (!res.ok) return null;
+    const data = await res.json();
+    return Object.keys(data).length > 0 ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveToCloud(state) {
+  try {
+    await fetch('/api/state', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(state),
+    });
+  } catch {
+    // localStorage er backup
+  }
+}

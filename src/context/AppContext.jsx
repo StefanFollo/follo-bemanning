@@ -1,7 +1,8 @@
-import { createContext, useContext, useReducer, useEffect } from 'react';
+import { createContext, useContext, useReducer, useEffect, useState } from 'react';
 import {
   loadState,
   saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag,
+  loadFromCloud, saveToCloud,
   uid,
 } from '../store';
 
@@ -9,6 +10,17 @@ const AppContext = createContext(null);
 
 function reducer(state, action) {
   switch (action.type) {
+    // --- Last inn fra sky ---
+    case 'LOAD_STATE': {
+      const s = action.payload;
+      if (s.ansatte) saveAnsatte(s.ansatte);
+      if (s.prosjekter) saveProsjekter(s.prosjekter);
+      if (s.tildelinger) saveTildelinger(s.tildelinger);
+      if (s.oppgaver) saveOppgaver(s.oppgaver);
+      if (s.fag) saveFag(s.fag);
+      return { ...state, ...s };
+    }
+
     // --- Ansatte ---
     case 'ADD_ANSATT': {
       const next = [...state.ansatte, { ...action.payload, id: uid() }];
@@ -98,6 +110,25 @@ function reducer(state, action) {
 
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, null, loadState);
+  const [cloudReady, setCloudReady] = useState(false);
+
+  // Last inn fra sky ved oppstart
+  useEffect(() => {
+    loadFromCloud().then(cloudState => {
+      if (cloudState) {
+        dispatch({ type: 'LOAD_STATE', payload: cloudState });
+      }
+      setCloudReady(true);
+    });
+  }, []);
+
+  // Auto-lagre til sky 1 sekund etter siste endring
+  useEffect(() => {
+    if (!cloudReady) return;
+    const timer = setTimeout(() => saveToCloud(state), 1000);
+    return () => clearTimeout(timer);
+  }, [state, cloudReady]);
+
   return (
     <AppContext.Provider value={{ state, dispatch }}>
       {children}
