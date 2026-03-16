@@ -9,6 +9,7 @@ const FAG_COLORS = {
   'Rørlegger': '#06b6d4',
   'Tømrer': '#8b5cf6',
   'Flislegger': '#f97316',
+  'Prosjektleder': '#0ea5e9',
 };
 
 function fagColor(fag) { return FAG_COLORS[fag] || '#6b7280'; }

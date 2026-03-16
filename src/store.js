@@ -1,6 +1,6 @@
 // Persistent state via localStorage
 
-const DEFAULT_FAG = ['Bas Tømrer', 'Montør', 'Lærling Tømrer', 'Maler', 'Rørlegger', 'Tømrer', 'Flislegger'];
+const DEFAULT_FAG = ['Bas Tømrer', 'Montør', 'Lærling Tømrer', 'Maler', 'Rørlegger', 'Tømrer', 'Flislegger', 'Prosjektleder'];
 
 function mkId(n) { return 'seed' + n; }
 
