@@ -407,3 +407,123 @@ body {
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: #f1f5f9; }
 ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+/* ===== MOBILE BOTTOM NAV ===== */
+.mobile-nav {
+  display: none;
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: #1e293b;
+  border-top: 1px solid #334155;
+  z-index: 200;
+  padding: 4px 0 env(safe-area-inset-bottom, 4px);
+}
+.mobile-nav-inner {
+  display: flex; justify-content: space-around;
+}
+.mobile-nav-btn {
+  background: none; border: none; color: #94a3b8;
+  cursor: pointer; padding: 6px 12px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  font-size: 10px; font-weight: 500; min-width: 60px;
+  transition: color .15s;
+}
+.mobile-nav-btn.active { color: #3b82f6; }
+.mobile-nav-icon { font-size: 20px; }
+
+/* ===== RESPONSIVE / MOBILE ===== */
+@media (max-width: 640px) {
+  /* Header */
+  .app-header {
+    padding: 8px 12px;
+    min-height: 52px;
+  }
+  .brand-logo { width: 36px; height: 36px; font-size: 14px; }
+  .brand-name { font-size: 15px; }
+  .brand-sub { display: none; }
+
+  /* Hide desktop nav, show mobile nav */
+  .nav { display: none; }
+  .mobile-nav { display: block; }
+
+  /* Extra bottom padding so content clears the bottom nav */
+  .main {
+    padding: 12px 10px 80px;
+  }
+
+  /* Page header */
+  .page-header { margin-bottom: 14px; }
+  .page-header h2 { font-size: 18px; }
+
+  /* Toolbar */
+  .toolbar { flex-direction: column; align-items: stretch; gap: 8px; }
+  .search-input { width: 100%; font-size: 16px; } /* 16px prevents iOS zoom */
+
+  /* Filter bar */
+  .filter-bar { gap: 6px; }
+  .filter-btn { font-size: 12px; padding: 5px 10px; }
+
+  /* Compact table — switch to card-like rows on mobile */
+  .ct-header { display: none; }
+  .ct-row {
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    gap: 6px;
+    align-items: flex-start;
+  }
+  .ct-ansatt-navn {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .ct-kontakt { display: none; }
+  .ct-dato { display: none; }
+  .ct-status { width: auto; }
+  .ct-fag { width: auto; flex-shrink: 0; }
+  .ct-progress { width: 100%; min-width: auto; order: 10; }
+  .ct-actions { margin-left: auto; flex-shrink: 0; }
+  .ct-name { width: 100%; }
+  .ct-prosjekt-navn { white-space: normal; }
+
+  /* Grid: wrap in scroll container */
+  .uke-grid-wrap, .ressurs-grid-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 12px;
+  }
+  .uke-grid, .ressurs-grid {
+    min-width: 560px;
+    border-radius: 0;
+  }
+
+  /* Uke nav buttons */
+  .uke-nav { gap: 6px; flex-wrap: nowrap; }
+  .uke-nav .btn { padding: 6px 10px; font-size: 12px; }
+  .uke-label { font-size: 12px; text-align: center; flex: 1; }
+
+  /* Tab bar */
+  .tab-btn { padding: 8px 14px; font-size: 13px; }
+
+  /* Form */
+  .form-row { grid-template-columns: 1fr; }
+  .form input, .form select, .form textarea { font-size: 16px; } /* prevent iOS zoom */
+
+  /* Modal */
+  .modal-backdrop { align-items: flex-end; padding: 0; }
+  .modal {
+    border-radius: 20px 20px 0 0;
+    max-height: 92vh;
+    padding: 20px 16px;
+    width: 100%;
+  }
+
+  /* Framdrift */
+  .framdrift-layout { grid-template-columns: 1fr; }
+  .oppgave-row { flex-wrap: wrap; }
+  .oppgave-slider { width: 100%; }
+  .oppgave-slider-wrap { flex: 1 1 100%; }
+  .framdrift-p-bar { min-width: 70px; }
+  .total-fremgang { font-size: 28px; }
+
+  /* Ressurs */
+  .ressurs-gruppe { margin-bottom: 16px; }
+  .ressurs-fag-header { font-size: 13px; padding: 6px 12px; }
+}

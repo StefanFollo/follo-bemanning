@@ -77,6 +77,7 @@ export default function Bemanningsplan() {
           <button className="btn" onClick={nextWeek}>Neste uke →</button>
         </div>
 
+        <div className="uke-grid-wrap">
         <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(7, 1fr)` }}>
           <div className="uke-header-cell"></div>
           {weekDays.map((dag, i) => {
@@ -141,6 +142,7 @@ export default function Bemanningsplan() {
             </React.Fragment>
           ))}
         </div>
+        </div>
 
         <div style={{ marginTop: 12, color: '#6b7280', fontSize: 13 }}>
           Klikk på en celle for å legge til en tildeling for den ansatte.
@@ -175,6 +177,7 @@ export default function Bemanningsplan() {
               <div className="ressurs-fag-header" style={{ borderLeft: `4px solid ${fagColor(fag)}` }}>
                 {fag} ({fagAnsatte.length} ansatt{fagAnsatte.length !== 1 ? 'e' : ''})
               </div>
+              <div className="ressurs-grid-wrap">
               <div className="ressurs-grid" style={{ gridTemplateColumns: `180px repeat(8, 1fr)` }}>
                 <div className="uke-header-cell" style={{ fontSize: 12 }}>Ansatt</div>
                 {weeks.map(w => (
@@ -220,6 +223,7 @@ export default function Bemanningsplan() {
                     })}
                   </React.Fragment>
                 ))}
+              </div>
               </div>
             </div>
           );
