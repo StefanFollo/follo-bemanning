@@ -34,6 +34,7 @@ function Modal({ title, onClose, children }) {
 export default function Bemanningsplan() {
   const { state, dispatch } = useApp();
   const [tab, setTab] = useState('uke');
+  const [ukeMode, setUkeMode] = useState('dag'); // 'dag' | 'uke'
   const [currentWeek, setCurrentWeek] = useState(() => weekStart(dateToIso(new Date())));
   const [showModal, setShowModal] = useState(false);
   const [tilForm, setTilForm] = useState({ ansattId: '', prosjektId: '', startDato: '', sluttDato: '' });
@@ -66,37 +67,30 @@ export default function Bemanningsplan() {
 
   // --- UKE-VISNING ---
   function UkeVisning() {
-    const weekEnd = addDays(currentWeek, 6);
     const today = dateToIso(new Date());
-
-    // Assign a stable color to each project by index
     const PROJ_COLORS = ['#2563eb','#16a34a','#dc2626','#9333ea','#ea580c','#0891b2','#be185d','#854d0e','#065f46','#1e40af'];
     const prosjektColor = (pid) => {
       const idx = state.prosjekter.findIndex(p => p.id === pid);
       return PROJ_COLORS[idx % PROJ_COLORS.length] || '#6b7280';
     };
 
-    // Find which projects have tildelinger this week
-    const ukeProsjektIds = [...new Set(
+    // ---- DAG-MODUS ----
+    const weekEnd = addDays(currentWeek, 6);
+
+    const dagProsjektIds = [...new Set(
       state.tildelinger
         .filter(t => overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd))
         .map(t => t.prosjektId)
     )];
-    const ukeProsjekter = ukeProsjektIds
-      .map(id => state.prosjekter.find(p => p.id === id))
-      .filter(Boolean);
-
-    // Employees with any tildeling this week
-    const tildeltAnsatteIds = new Set(
-      state.tildelinger
-        .filter(t => overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd))
-        .map(t => t.ansattId)
+    const dagProsjekter = dagProsjektIds.map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean);
+    const dagTildeltIds = new Set(
+      state.tildelinger.filter(t => overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd)).map(t => t.ansattId)
     );
-    const ledigeAnsatte = state.ansatte.filter(a => !tildeltAnsatteIds.has(a.id));
+    const dagLedige = state.ansatte.filter(a => !dagTildeltIds.has(a.id));
 
-    function AnsattRad({ ansatt }) {
+    function DagAnsattRad({ ansatt }) {
       return (
-        <React.Fragment key={ansatt.id}>
+        <React.Fragment>
           <div className="uke-row-label">
             <div className="mini-avatar" style={{ background: fagColor(ansatt.fag) }}>
               {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
@@ -107,27 +101,20 @@ export default function Bemanningsplan() {
             </div>
           </div>
           {weekDays.map(dag => {
-            const dagTildelinger = state.tildelinger.filter(t =>
+            const dagTil = state.tildelinger.filter(t =>
               t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, dag, dag)
             );
             return (
-              <div
-                key={`${ansatt.id}-${dag}`}
-                className="uke-cell"
-                onClick={() => openAddTildeling(ansatt.id, dag)}
-                title="Klikk for å legge til tildeling"
-              >
-                {dagTildelinger.map(t => {
-                  const prosjekt = state.prosjekter.find(p => p.id === t.prosjektId);
+              <div key={`${ansatt.id}-${dag}`} className="uke-cell"
+                onClick={() => openAddTildeling(ansatt.id, dag)} title="Klikk for å legge til tildeling">
+                {dagTil.map(t => {
+                  const p = state.prosjekter.find(p => p.id === t.prosjektId);
                   return (
-                    <div
-                      key={t.id}
-                      className="tildeling-chip"
+                    <div key={t.id} className="tildeling-chip"
                       style={{ background: prosjektColor(t.prosjektId) }}
                       onClick={e => e.stopPropagation()}
-                      title={`${prosjekt?.navn || 'Ukjent'}\n${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
-                    >
-                      <span>{prosjekt?.navn?.slice(0, 12) || '–'}</span>
+                      title={`${p?.navn || 'Ukjent'}\n${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}>
+                      <span>{p?.navn?.slice(0, 12) || '–'}</span>
                       <button className="chip-delete" onClick={e => { e.stopPropagation(); deleteTildeling(t.id); }}>✕</button>
                     </div>
                   );
@@ -139,16 +126,107 @@ export default function Bemanningsplan() {
       );
     }
 
-    function GridHeader() {
+    function DagGridHeader() {
       return (
         <>
           <div className="uke-header-cell"></div>
-          {weekDays.map((dag, i) => {
-            const isToday = dag === today;
+          {weekDays.map((dag, i) => (
+            <div key={dag} className={`uke-header-cell ${dag === today ? 'today' : ''}`}>
+              <div>{DAG_NAVN[i]}</div>
+              <div className="dag-dato">{dag.slice(5).replace('-', '.')}</div>
+            </div>
+          ))}
+        </>
+      );
+    }
+
+    function ProsjektGruppe({ prosjekt, ansatte, cols, GridHeader, AnsattRad }) {
+      const color = prosjektColor(prosjekt.id);
+      return (
+        <div className="uke-prosjekt-gruppe">
+          <div className="uke-prosjekt-header" style={{ borderLeft: `4px solid ${color}` }}>
+            <span className="uke-prosjekt-farge" style={{ background: color }} />
+            <span className="uke-prosjekt-navn">{prosjekt.navn}</span>
+            <span className="uke-prosjekt-antall">{ansatte.length} ansatt{ansatte.length !== 1 ? 'e' : ''}</span>
+          </div>
+          <div className="uke-grid-wrap">
+            <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(${cols}, 1fr)` }}>
+              <GridHeader />
+              {ansatte.map(a => <AnsattRad key={a.id} ansatt={a} />)}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ---- UKE-MODUS (10 uker) ----
+    const TEN_WEEKS = Array.from({ length: 10 }, (_, i) => addDays(currentWeek, i * 7));
+
+    const periodeStart = currentWeek;
+    const periodeEnd = addDays(currentWeek, 10 * 7 - 1);
+
+    const ukeProsjektIds = [...new Set(
+      state.tildelinger
+        .filter(t => overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd))
+        .map(t => t.prosjektId)
+    )];
+    const ukeProsjekter = ukeProsjektIds.map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean);
+    const ukeTildeltIds = new Set(
+      state.tildelinger.filter(t => overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd)).map(t => t.ansattId)
+    );
+    const ukeLedige = state.ansatte.filter(a => !ukeTildeltIds.has(a.id));
+
+    function UkeAnsattRad({ ansatt }) {
+      return (
+        <React.Fragment>
+          <div className="uke-row-label">
+            <div className="mini-avatar" style={{ background: fagColor(ansatt.fag) }}>
+              {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+            </div>
+            <div>
+              <div className="row-navn">{ansatt.navn}</div>
+              <div className="row-fag" style={{ color: fagColor(ansatt.fag) }}>{ansatt.fag}</div>
+            </div>
+          </div>
+          {TEN_WEEKS.map(wStart => {
+            const wEnd = addDays(wStart, 6);
+            const ukeTil = state.tildelinger.filter(t =>
+              t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, wStart, wEnd)
+            );
+            const prosjekterIUke = [...new Map(
+              ukeTil.map(t => [t.prosjektId, state.prosjekter.find(p => p.id === t.prosjektId)])
+            ).values()].filter(Boolean);
+            const isCurrentWeek = wStart === weekStart(today);
             return (
-              <div key={dag} className={`uke-header-cell ${isToday ? 'today' : ''}`}>
-                <div>{DAG_NAVN[i]}</div>
-                <div className="dag-dato">{dag.slice(5).replace('-', '.')}</div>
+              <div key={`${ansatt.id}-${wStart}`}
+                className={`uke-cell uke-cell-uke ${isCurrentWeek ? 'current-week-col' : ''}`}
+                onClick={() => openAddTildeling(ansatt.id, wStart)}
+                title="Klikk for å legge til tildeling">
+                {prosjekterIUke.map(p => (
+                  <div key={p.id} className="uke-uke-chip"
+                    style={{ background: prosjektColor(p.id) }}
+                    title={p.navn}>
+                    {p.navn.slice(0, 10)}
+                  </div>
+                ))}
+                {prosjekterIUke.length === 0 && <span className="ledig">–</span>}
+              </div>
+            );
+          })}
+        </React.Fragment>
+      );
+    }
+
+    function UkeGridHeader() {
+      return (
+        <>
+          <div className="uke-header-cell"></div>
+          {TEN_WEEKS.map(w => {
+            const isCurrentWeek = w === weekStart(today);
+            return (
+              <div key={w} className={`uke-header-cell ${isCurrentWeek ? 'today' : ''}`} style={{ fontSize: 12 }}>
+                <div style={{ fontWeight: 700 }}>Uke {getWeekNumber(w)}</div>
+                <div className="dag-dato">{w.slice(5).replace('-', '.')}</div>
               </div>
             );
           })}
@@ -156,70 +234,73 @@ export default function Bemanningsplan() {
       );
     }
 
+    const navLabel = ukeMode === 'dag'
+      ? `Uke ${getWeekNumber(currentWeek)}: ${formatDate(currentWeek)} – ${formatDate(addDays(currentWeek, 6))}`
+      : `Uke ${getWeekNumber(currentWeek)} – Uke ${getWeekNumber(addDays(currentWeek, 9 * 7))}`;
+
     return (
       <div>
         <div className="uke-nav">
-          <button className="btn" onClick={prevWeek}>← Forrige uke</button>
-          <div className="uke-label">
-            Uke {getWeekNumber(currentWeek)}: {formatDate(currentWeek)} – {formatDate(addDays(currentWeek, 6))}
-          </div>
+          <button className="btn" onClick={prevWeek}>← Forrige</button>
+          <div className="uke-label">{navLabel}</div>
           <button className="btn" onClick={thisWeek}>I dag</button>
-          <button className="btn" onClick={nextWeek}>Neste uke →</button>
+          <button className="btn" onClick={nextWeek}>Neste →</button>
+          <div className="ukemode-toggle">
+            <button className={`ukemode-btn ${ukeMode === 'dag' ? 'active' : ''}`} onClick={() => setUkeMode('dag')}>Dager</button>
+            <button className={`ukemode-btn ${ukeMode === 'uke' ? 'active' : ''}`} onClick={() => setUkeMode('uke')}>Uker</button>
+          </div>
         </div>
 
-        {state.ansatte.length === 0 && (
-          <div className="empty">Ingen ansatte registrert enda.</div>
-        )}
+        {state.ansatte.length === 0 && <div className="empty">Ingen ansatte registrert enda.</div>}
 
-        {/* Grupper per prosjekt */}
-        {ukeProsjekter.map(prosjekt => {
-          const projAnsatteIds = [...new Set(
-            state.tildelinger
-              .filter(t => t.prosjektId === prosjekt.id && overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd))
-              .map(t => t.ansattId)
-          )];
-          const projAnsatte = projAnsatteIds.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
-          const color = prosjektColor(prosjekt.id);
-
-          return (
-            <div key={prosjekt.id} className="uke-prosjekt-gruppe">
-              <div className="uke-prosjekt-header" style={{ borderLeft: `4px solid ${color}` }}>
-                <span className="uke-prosjekt-farge" style={{ background: color }} />
-                <span className="uke-prosjekt-navn">{prosjekt.navn}</span>
-                <span className="uke-prosjekt-antall">{projAnsatte.length} ansatt{projAnsatte.length !== 1 ? 'e' : ''}</span>
-              </div>
-              <div className="uke-grid-wrap">
-                <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(7, 1fr)` }}>
-                  <GridHeader />
-                  {projAnsatte.map(ansatt => <AnsattRad key={ansatt.id} ansatt={ansatt} />)}
+        {ukeMode === 'dag' ? (
+          <>
+            {dagProsjekter.map(prosjekt => {
+              const ids = [...new Set(state.tildelinger.filter(t => t.prosjektId === prosjekt.id && overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd)).map(t => t.ansattId))];
+              const ansatte = ids.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
+              return <ProsjektGruppe key={prosjekt.id} prosjekt={prosjekt} ansatte={ansatte} cols={7} GridHeader={DagGridHeader} AnsattRad={DagAnsattRad} />;
+            })}
+            {dagLedige.length > 0 && (
+              <div className="uke-prosjekt-gruppe">
+                <div className="uke-prosjekt-header" style={{ borderLeft: '4px solid #9ca3af' }}>
+                  <span className="uke-prosjekt-navn" style={{ color: '#6b7280' }}>Ikke tildelt denne uken</span>
+                  <span className="uke-prosjekt-antall">{dagLedige.length} ansatt{dagLedige.length !== 1 ? 'e' : ''}</span>
+                </div>
+                <div className="uke-grid-wrap">
+                  <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(7, 1fr)` }}>
+                    <DagGridHeader />
+                    {dagLedige.map(a => <DagAnsattRad key={a.id} ansatt={a} />)}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
-
-        {/* Ledige ansatte */}
-        {ledigeAnsatte.length > 0 && (
-          <div className="uke-prosjekt-gruppe">
-            <div className="uke-prosjekt-header" style={{ borderLeft: '4px solid #9ca3af' }}>
-              <span className="uke-prosjekt-navn" style={{ color: '#6b7280' }}>Ikke tildelt denne uken</span>
-              <span className="uke-prosjekt-antall">{ledigeAnsatte.length} ansatt{ledigeAnsatte.length !== 1 ? 'e' : ''}</span>
-            </div>
-            <div className="uke-grid-wrap">
-              <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(7, 1fr)` }}>
-                <GridHeader />
-                {ledigeAnsatte.map(ansatt => <AnsattRad key={ansatt.id} ansatt={ansatt} />)}
+            )}
+          </>
+        ) : (
+          <>
+            {ukeProsjekter.map(prosjekt => {
+              const ids = [...new Set(state.tildelinger.filter(t => t.prosjektId === prosjekt.id && overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd)).map(t => t.ansattId))];
+              const ansatte = ids.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
+              return <ProsjektGruppe key={prosjekt.id} prosjekt={prosjekt} ansatte={ansatte} cols={10} GridHeader={UkeGridHeader} AnsattRad={UkeAnsattRad} />;
+            })}
+            {ukeLedige.length > 0 && (
+              <div className="uke-prosjekt-gruppe">
+                <div className="uke-prosjekt-header" style={{ borderLeft: '4px solid #9ca3af' }}>
+                  <span className="uke-prosjekt-navn" style={{ color: '#6b7280' }}>Ikke tildelt i perioden</span>
+                  <span className="uke-prosjekt-antall">{ukeLedige.length} ansatt{ukeLedige.length !== 1 ? 'e' : ''}</span>
+                </div>
+                <div className="uke-grid-wrap">
+                  <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(10, 1fr)` }}>
+                    <UkeGridHeader />
+                    {ukeLedige.map(a => <UkeAnsattRad key={a.id} ansatt={a} />)}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
-        )}
-
-        {ukeProsjekter.length === 0 && state.ansatte.length > 0 && (
-          <div style={{ marginTop: 8 }} />
+            )}
+          </>
         )}
 
         <div style={{ marginTop: 12, color: '#6b7280', fontSize: 13 }}>
-          Klikk på en celle for å legge til en tildeling for den ansatte.
+          Klikk på en celle for å legge til en tildeling.
         </div>
       </div>
     );

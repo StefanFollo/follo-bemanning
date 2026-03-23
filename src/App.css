@@ -269,6 +269,26 @@ body {
 }
 .chip-delete:hover { color: white; }
 
+/* ===== UKE MODE TOGGLE ===== */
+.ukemode-toggle {
+  display: flex; border: 1.5px solid #cbd5e1; border-radius: 8px; overflow: hidden; flex-shrink: 0;
+}
+.ukemode-btn {
+  background: white; border: none; cursor: pointer;
+  padding: 6px 14px; font-size: 13px; font-weight: 500; color: #475569;
+  transition: background .15s, color .15s;
+}
+.ukemode-btn:hover { background: #f1f5f9; }
+.ukemode-btn.active { background: #1e293b; color: white; }
+
+.uke-cell-uke { min-height: 44px; }
+.uke-uke-chip {
+  color: white; font-size: 10px; padding: 2px 5px;
+  border-radius: 4px; margin-bottom: 2px; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.current-week-col { background: #fffbeb !important; }
+
 /* ===== UKE PROSJEKTGRUPPER ===== */
 .uke-prosjekt-gruppe { margin-bottom: 20px; }
 .uke-prosjekt-header {
