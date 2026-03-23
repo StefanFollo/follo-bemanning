@@ -151,6 +151,83 @@ export default function Bemanningsplan() {
     );
   }
 
+  // --- PROSJEKTOVERSIKT ---
+  function ProsjektOversiktVisning() {
+    const today = dateToIso(new Date());
+    const aktive = state.prosjekter.filter(p => p.status === 'aktiv' || !p.status);
+
+    return (
+      <div className="proj-oversikt-wrap">
+        {aktive.length === 0 && <div className="empty">Ingen aktive prosjekter.</div>}
+        <div className="proj-oversikt-grid">
+          {aktive.map(prosjekt => {
+            const tildelinger = state.tildelinger.filter(t => t.prosjektId === prosjekt.id);
+            const aktiveTildelinger = tildelinger.filter(t => overlaps(t.startDato, t.sluttDato, today, addDays(today, 30)));
+            const ansatteIds = [...new Set(aktiveTildelinger.map(t => t.ansattId))];
+            const ansatte = ansatteIds.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
+
+            const alleIds = [...new Set(tildelinger.map(t => t.ansattId))];
+            const alleAnsatte = alleIds.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
+
+            const byFag = {};
+            for (const a of ansatte) {
+              if (!byFag[a.fag]) byFag[a.fag] = [];
+              byFag[a.fag].push(a);
+            }
+
+            return (
+              <div key={prosjekt.id} className="proj-oversikt-card">
+                <div className="proj-oversikt-header">
+                  <div className="proj-oversikt-tittel">
+                    <div className="proj-oversikt-navn">{prosjekt.navn}</div>
+                    {prosjekt.adresse && <div className="proj-oversikt-meta">{prosjekt.adresse}</div>}
+                  </div>
+                  <div className="proj-oversikt-count">
+                    <span className="proj-count-num">{ansatte.length}</span>
+                    <span className="proj-count-lbl">nå</span>
+                    {alleAnsatte.length !== ansatte.length && (
+                      <span className="proj-count-total">/ {alleAnsatte.length} tot.</span>
+                    )}
+                  </div>
+                </div>
+
+                {ansatte.length === 0 ? (
+                  <div className="proj-oversikt-tom">
+                    {alleAnsatte.length > 0
+                      ? `${alleAnsatte.length} tildelt – ingen aktive neste 30 dager`
+                      : 'Ingen ansatte tildelt'}
+                  </div>
+                ) : (
+                  <div className="proj-fag-grupper">
+                    {Object.entries(byFag).map(([fag, fagAnsatte]) => (
+                      <div key={fag} className="proj-fag-rad">
+                        <div className="proj-fag-label">
+                          <span className="fag-dot" style={{ background: fagColor(fag) }} />
+                          <span style={{ color: fagColor(fag), fontWeight: 600, fontSize: 12 }}>{fag}</span>
+                          <span className="proj-fag-antall">{fagAnsatte.length}</span>
+                        </div>
+                        <div className="proj-avatar-rad">
+                          {fagAnsatte.map(a => (
+                            <div key={a.id} className="proj-avatar-wrap" title={a.navn}>
+                              <div className="mini-avatar" style={{ background: fagColor(a.fag), width: 34, height: 34, fontSize: 12 }}>
+                                {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                              </div>
+                              <div className="proj-avatar-navn">{a.navn.split(' ')[0]}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   // --- RESSURSALLOKERING ---
   function RessursVisning() {
     // Show 8 weeks from current week
@@ -246,9 +323,14 @@ export default function Bemanningsplan() {
         <button className={`tab-btn ${tab === 'ressurs' ? 'active' : ''}`} onClick={() => setTab('ressurs')}>
           Ressursallokering
         </button>
+        <button className={`tab-btn ${tab === 'prosjekt' ? 'active' : ''}`} onClick={() => setTab('prosjekt')}>
+          Prosjektoversikt
+        </button>
       </div>
 
-      {tab === 'uke' ? <UkeVisning /> : <RessursVisning />}
+      {tab === 'uke' && <UkeVisning />}
+      {tab === 'ressurs' && <RessursVisning />}
+      {tab === 'prosjekt' && <ProsjektOversiktVisning />}
 
       {showModal && (
         <Modal title="Legg til tildeling" onClose={() => setShowModal(false)}>

@@ -400,6 +400,51 @@ body {
   font-size: 12px; font-weight: 600; border: 1px solid;
 }
 
+/* ===== PROSJEKTOVERSIKT ===== */
+.proj-oversikt-wrap { }
+.proj-oversikt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+.proj-oversikt-card {
+  background: white; border-radius: 12px;
+  border: 1px solid #e2e8f0; box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  padding: 16px; display: flex; flex-direction: column; gap: 12px;
+}
+.proj-oversikt-header {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+}
+.proj-oversikt-tittel { flex: 1; min-width: 0; }
+.proj-oversikt-navn { font-size: 15px; font-weight: 700; color: #1e293b; }
+.proj-oversikt-meta { font-size: 12px; color: #9ca3af; margin-top: 2px; }
+.proj-oversikt-count {
+  display: flex; flex-direction: column; align-items: center;
+  background: #eff6ff; border-radius: 10px; padding: 6px 12px;
+  flex-shrink: 0; min-width: 52px; text-align: center;
+}
+.proj-count-num { font-size: 22px; font-weight: 800; color: #2563eb; line-height: 1; }
+.proj-count-lbl { font-size: 10px; color: #6b7280; font-weight: 500; }
+.proj-count-total { font-size: 10px; color: #9ca3af; }
+.proj-oversikt-tom { font-size: 13px; color: #9ca3af; font-style: italic; }
+.proj-fag-grupper { display: flex; flex-direction: column; gap: 10px; }
+.proj-fag-rad { }
+.proj-fag-label {
+  display: flex; align-items: center; gap: 6px;
+  margin-bottom: 6px;
+}
+.proj-fag-antall {
+  background: #f1f5f9; color: #475569;
+  font-size: 11px; font-weight: 600;
+  padding: 1px 6px; border-radius: 10px;
+}
+.proj-avatar-rad { display: flex; flex-wrap: wrap; gap: 8px; }
+.proj-avatar-wrap {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  cursor: default;
+}
+.proj-avatar-navn { font-size: 10px; color: #6b7280; max-width: 40px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* ===== EMPTY STATE ===== */
 .empty { color: #9ca3af; font-size: 14px; padding: 32px; text-align: center; }
 
@@ -526,4 +571,9 @@ body {
   /* Ressurs */
   .ressurs-gruppe { margin-bottom: 16px; }
   .ressurs-fag-header { font-size: 13px; padding: 6px 12px; }
+
+  /* Prosjektoversikt */
+  .proj-oversikt-grid { grid-template-columns: 1fr; }
+  .proj-oversikt-navn { font-size: 14px; }
+  .tab-btn { padding: 8px 10px; font-size: 12px; }
 }
