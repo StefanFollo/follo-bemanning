@@ -475,6 +475,37 @@ export default function Bemanningsplan() {
       else thisWeek();
     }
 
+    function renderProsjektRader(prosjekter, ledige, cols, AnsattRad, periodeS, periodeE) {
+      return (
+        <>
+          {prosjekter.map(prosjekt => {
+            const color = prosjektColor(prosjekt.id);
+            const ids = [...new Set(state.tildelinger.filter(t => t.prosjektId === prosjekt.id && overlaps(t.startDato, t.sluttDato, periodeS, periodeE)).map(t => t.ansattId))];
+            const ansatte = ids.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
+            return (
+              <React.Fragment key={prosjekt.id}>
+                <div className="uke-prosjekt-header" style={{ gridColumn: '1 / -1', borderLeft: `4px solid ${color}` }}>
+                  <span className="uke-prosjekt-farge" style={{ background: color }} />
+                  <span className="uke-prosjekt-navn">{prosjekt.navn}</span>
+                  <span className="uke-prosjekt-antall">{ansatte.length} ansatt{ansatte.length !== 1 ? 'e' : ''}</span>
+                </div>
+                {ansatte.map(a => <AnsattRad key={a.id} ansatt={a} />)}
+              </React.Fragment>
+            );
+          })}
+          {ledige.length > 0 && (
+            <React.Fragment>
+              <div className="uke-prosjekt-header" style={{ gridColumn: '1 / -1', borderLeft: '4px solid #9ca3af' }}>
+                <span className="uke-prosjekt-navn" style={{ color: '#6b7280' }}>Ikke tildelt i perioden</span>
+                <span className="uke-prosjekt-antall">{ledige.length} ansatt{ledige.length !== 1 ? 'e' : ''}</span>
+              </div>
+              {ledige.map(a => <AnsattRad key={a.id} ansatt={a} />)}
+            </React.Fragment>
+          )}
+        </>
+      );
+    }
+
     return (
       <div>
         <div className="uke-nav">
@@ -492,71 +523,26 @@ export default function Bemanningsplan() {
         {state.ansatte.length === 0 && <div className="empty">Ingen ansatte registrert enda.</div>}
 
         {ukeMode === 'dag' ? (
-          <>
-            {dagProsjekter.map(prosjekt => {
-              const ids = [...new Set(state.tildelinger.filter(t => t.prosjektId === prosjekt.id && overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd)).map(t => t.ansattId))];
-              const ansatte = ids.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
-              return <ProsjektGruppe key={prosjekt.id} prosjekt={prosjekt} ansatte={ansatte} cols={7} GridHeader={DagGridHeader} AnsattRad={DagAnsattRad} />;
-            })}
-            {dagLedige.length > 0 && (
-              <div className="uke-prosjekt-gruppe">
-                <div className="uke-prosjekt-header" style={{ borderLeft: '4px solid #9ca3af' }}>
-                  <span className="uke-prosjekt-navn" style={{ color: '#6b7280' }}>Ikke tildelt denne uken</span>
-                  <span className="uke-prosjekt-antall">{dagLedige.length} ansatt{dagLedige.length !== 1 ? 'e' : ''}</span>
-                </div>
-                <div className="uke-grid-wrap">
-                  <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(7, 1fr)` }}>
-                    <DagGridHeader />
-                    {dagLedige.map(a => <DagAnsattRad key={a.id} ansatt={a} />)}
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
+          <div className="uke-grid-wrap">
+            <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(7, 1fr)` }}>
+              <DagGridHeader />
+              {renderProsjektRader(dagProsjekter, dagLedige, 7, DagAnsattRad, currentWeek, weekEnd)}
+            </div>
+          </div>
         ) : ukeMode === 'uke' ? (
-          <>
-            {ukeProsjekter.map(prosjekt => {
-              const ids = [...new Set(state.tildelinger.filter(t => t.prosjektId === prosjekt.id && overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd)).map(t => t.ansattId))];
-              const ansatte = ids.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
-              return <ProsjektGruppe key={prosjekt.id} prosjekt={prosjekt} ansatte={ansatte} cols={10} GridHeader={UkeGridHeader} AnsattRad={UkeAnsattRad} />;
-            })}
-            {ukeLedige.length > 0 && (
-              <div className="uke-prosjekt-gruppe">
-                <div className="uke-prosjekt-header" style={{ borderLeft: '4px solid #9ca3af' }}>
-                  <span className="uke-prosjekt-navn" style={{ color: '#6b7280' }}>Ikke tildelt i perioden</span>
-                  <span className="uke-prosjekt-antall">{ukeLedige.length} ansatt{ukeLedige.length !== 1 ? 'e' : ''}</span>
-                </div>
-                <div className="uke-grid-wrap">
-                  <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(10, 1fr)` }}>
-                    <UkeGridHeader />
-                    {ukeLedige.map(a => <UkeAnsattRad key={a.id} ansatt={a} />)}
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
+          <div className="uke-grid-wrap">
+            <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(10, 1fr)` }}>
+              <UkeGridHeader />
+              {renderProsjektRader(ukeProsjekter, ukeLedige, 10, UkeAnsattRad, periodeStart, periodeEnd)}
+            </div>
+          </div>
         ) : (
-          <>
-            {maanedProsjekter.map(prosjekt => {
-              const ids = [...new Set(state.tildelinger.filter(t => t.prosjektId === prosjekt.id && overlaps(t.startDato, t.sluttDato, currentMonth, maanedPeriodeEnd)).map(t => t.ansattId))];
-              const ansatte = ids.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
-              return <ProsjektGruppe key={prosjekt.id} prosjekt={prosjekt} ansatte={ansatte} cols={6} GridHeader={MaanedGridHeader} AnsattRad={MaanedAnsattRad} />;
-            })}
-            {maanedLedige.length > 0 && (
-              <div className="uke-prosjekt-gruppe">
-                <div className="uke-prosjekt-header" style={{ borderLeft: '4px solid #9ca3af' }}>
-                  <span className="uke-prosjekt-navn" style={{ color: '#6b7280' }}>Ikke tildelt i perioden</span>
-                  <span className="uke-prosjekt-antall">{maanedLedige.length} ansatt{maanedLedige.length !== 1 ? 'e' : ''}</span>
-                </div>
-                <div className="uke-grid-wrap">
-                  <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(6, 1fr)` }}>
-                    <MaanedGridHeader />
-                    {maanedLedige.map(a => <MaanedAnsattRad key={a.id} ansatt={a} />)}
-                  </div>
-                </div>
-              </div>
-            )}
-          </>
+          <div className="uke-grid-wrap">
+            <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(6, 1fr)` }}>
+              <MaanedGridHeader />
+              {renderProsjektRader(maanedProsjekter, maanedLedige, 6, MaanedAnsattRad, currentMonth, maanedPeriodeEnd)}
+            </div>
+          </div>
         )}
 
         <div style={{ marginTop: 12, color: '#6b7280', fontSize: 13 }}>
