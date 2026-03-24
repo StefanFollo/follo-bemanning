@@ -313,6 +313,44 @@ body {
 .ukemode-btn.active { background: #1e293b; color: white; }
 
 .uke-cell-uke { min-height: 44px; }
+.uke-cell-dag { min-height: 40px; padding: 2px 3px; }
+
+/* Uke-grensen og dagens kolonne i uke-dag-visning */
+.week-start-col { border-left: 2px solid #cbd5e1 !important; }
+.today-col { background: #fffbeb !important; }
+
+/* Dato-nål (drabar vertikal linje) */
+.uke-grid-wrap { position: relative; overflow-x: auto; }
+.timeline-needle {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 2px;
+  background: #ef4444;
+  cursor: ew-resize;
+  z-index: 20;
+  touch-action: none;
+  pointer-events: all;
+}
+.timeline-needle::before {
+  content: '';
+  position: absolute;
+  top: 0; left: -5px;
+  width: 12px; height: 100%;
+}
+.needle-label {
+  position: absolute;
+  top: 4px;
+  left: 5px;
+  background: #ef4444;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,.2);
+}
 .uke-uke-chip {
   color: white; font-size: 10px; padding: 2px 5px;
   border-radius: 4px; margin-bottom: 2px; white-space: nowrap;

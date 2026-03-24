@@ -147,6 +147,11 @@ export default function Bemanningsplan() {
       return FALLBACK_COLORS[idx % FALLBACK_COLORS.length] || '#6b7280';
     };
 
+    // Needle state for uke-modus
+    const [needleDay, setNeedleDay] = useState(today);
+    const draggingNeedle = useRef(false);
+    const gridWrapRef = useRef(null);
+
     // ---- DAG-MODUS ----
     const weekEnd = addDays(currentWeek, 6);
 
@@ -270,8 +275,16 @@ export default function Bemanningsplan() {
       );
     }
 
-    // ---- UKE-MODUS (10 uker) ----
+    // ---- UKE-MODUS: Man–Fre × 10 uker (50 kolonner) ----
     const TEN_WEEKS = Array.from({ length: 10 }, (_, i) => addDays(currentWeek, i * 7));
+
+    // Alle arbeidsdager (Man–Fre) for 10 uker = 50 dager
+    const WORK_DAYS_UKE = [];
+    for (let w = 0; w < 10; w++) {
+      for (let d = 0; d < 5; d++) {
+        WORK_DAYS_UKE.push(addDays(currentWeek, w * 7 + d));
+      }
+    }
 
     const periodeStart = currentWeek;
     const periodeEnd = addDays(currentWeek, 10 * 7 - 1);
@@ -287,8 +300,33 @@ export default function Bemanningsplan() {
     );
     const ukeLedige = state.ansatte.filter(a => !ukeTildeltIds.has(a.id));
 
+    // Needle helpers
+    function getNeedleLeft(day) {
+      const idx = WORK_DAYS_UKE.indexOf(day);
+      if (idx < 0) return null;
+      const pct = (idx / WORK_DAYS_UKE.length) * 100;
+      const pxOffset = (idx / WORK_DAYS_UKE.length) * 180;
+      return `calc(${(180 - pxOffset).toFixed(1)}px + ${pct.toFixed(2)}%)`;
+    }
+    function handleNeedlePointerDown(e) {
+      e.preventDefault();
+      draggingNeedle.current = true;
+      e.currentTarget.setPointerCapture(e.pointerId);
+    }
+    function handleNeedlePointerMove(e) {
+      if (!draggingNeedle.current) return;
+      const wrap = gridWrapRef.current;
+      if (!wrap) return;
+      const rect = wrap.getBoundingClientRect();
+      const x = e.clientX - rect.left + wrap.scrollLeft - 180;
+      const colWidth = (wrap.scrollWidth - 180) / WORK_DAYS_UKE.length;
+      const idx = Math.max(0, Math.min(WORK_DAYS_UKE.length - 1, Math.floor(x / colWidth)));
+      setNeedleDay(WORK_DAYS_UKE[idx]);
+    }
+    function handleNeedlePointerUp() { draggingNeedle.current = false; }
+
     function UkeAnsattRad({ ansatt }) {
-      const [dragOverW, setDragOverW] = useState(null);
+      const [dragOverDay, setDragOverDay] = useState(null);
       return (
         <React.Fragment>
           <div className="uke-row-label">
@@ -300,47 +338,53 @@ export default function Bemanningsplan() {
               <div className="row-fag" style={{ color: fagColor(ansatt.fag) }}>{ansatt.fag}</div>
             </div>
           </div>
-          {TEN_WEEKS.map(wStart => {
-            const wEnd = addDays(wStart, 6);
-            const ukeTil = state.tildelinger.filter(t =>
-              t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, wStart, wEnd)
+          {WORK_DAYS_UKE.map((dag, i) => {
+            const isMonday = i % 5 === 0;
+            const dagTil = state.tildelinger.filter(t =>
+              t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, dag, dag)
             );
-            const prosjekterIUke = [...new Map(
-              ukeTil.map(t => [t.prosjektId, state.prosjekter.find(p => p.id === t.prosjektId)])
-            ).values()].filter(Boolean);
-            const isCurrentWeek = wStart === weekStart(today);
-            const isOver = dragOverW === wStart;
+            const isToday = dag === today;
+            const isOver = dragOverDay === dag;
             return (
-              <div key={`${ansatt.id}-${wStart}`}
-                className={`uke-cell uke-cell-uke ${isCurrentWeek ? 'current-week-col' : ''} ${isOver ? 'drag-over' : ''}`}
-                onClick={() => prosjekterIUke.length === 0 && openAddTildeling(ansatt.id, wStart)}
-                onDragOver={e => { e.preventDefault(); setDragOverW(wStart); }}
-                onDragLeave={() => setDragOverW(null)}
-                onDrop={e => { e.preventDefault(); setDragOverW(null); handleDrop(wStart, 'week'); }}
-                title={prosjekterIUke.length === 0 ? 'Klikk for å legge til' : undefined}
+              <div key={`${ansatt.id}-${dag}`}
+                className={`uke-cell uke-cell-dag ${isToday ? 'today-col' : ''} ${isMonday ? 'week-start-col' : ''} ${isOver ? 'drag-over' : ''}`}
+                onClick={() => dagTil.length === 0 && openAddTildeling(ansatt.id, dag)}
+                onDragOver={e => { e.preventDefault(); setDragOverDay(dag); }}
+                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverDay(null); }}
+                onDrop={e => { e.preventDefault(); setDragOverDay(null); handleDrop(dag, 'day'); }}
+                title={dagTil.length === 0 ? 'Klikk for å legge til' : undefined}
               >
-                {ukeTil.map(t => {
-                  const p = state.prosjekter.find(pr => pr.id === t.prosjektId);
-                  if (!p) return null;
+                {dagTil.map(t => {
+                  const p = state.prosjekter.find(p => p.id === t.prosjektId);
+                  const isFirstVis = t.startDato === dag || dag === WORK_DAYS_UKE[0];
+                  const isLastVis  = t.sluttDato === dag || dag === WORK_DAYS_UKE[WORK_DAYS_UKE.length - 1];
                   return (
-                    <div key={t.id} className="uke-uke-chip"
-                      style={{ background: prosjektColor(p.id) }}
+                    <div key={t.id}
+                      className="tildeling-chip"
+                      style={{ background: prosjektColor(t.prosjektId) }}
                       onClick={e => e.stopPropagation()}
-                      title={`${p.navn} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
+                      title={`${p?.navn || 'Ukjent'} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
                     >
-                      <span className="uke-chip-handle uke-chip-handle-l"
-                        draggable
-                        onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'start' }; }}
-                        title="Dra for å endre startdato">◂</span>
-                      <span className="uke-chip-navn">{p.navn.slice(0, 9)}</span>
-                      <span className="uke-chip-handle uke-chip-handle-r"
-                        draggable
-                        onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'end' }; }}
-                        title="Dra for å endre sluttdato">▸</span>
+                      {isFirstVis ? (
+                        <div className="chip-handle chip-handle-l" draggable
+                          onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'start' }; }}
+                          title="Dra for å endre startdato">◂</div>
+                      ) : <div className="chip-handle-spacer" />}
+                      <span className="chip-navn">{p?.navn?.slice(0, 8) || '–'}</span>
+                      <div className="chip-btns">
+                        <button className="chip-split" title="Del opp med pause"
+                          onClick={e => { e.stopPropagation(); setSplitModal(t); setSplitForm({ gapStart: '', gapEnd: '' }); }}>✂</button>
+                        <button className="chip-delete"
+                          onClick={e => { e.stopPropagation(); deleteTildeling(t.id); }}>✕</button>
+                      </div>
+                      {isLastVis ? (
+                        <div className="chip-handle chip-handle-r" draggable
+                          onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'end' }; }}
+                          title="Dra for å endre sluttdato">▸</div>
+                      ) : <div className="chip-handle-spacer" />}
                     </div>
                   );
                 })}
-                {prosjekterIUke.length === 0 && <span className="ledig">–</span>}
               </div>
             );
           })}
@@ -352,12 +396,22 @@ export default function Bemanningsplan() {
       return (
         <>
           <div className="uke-header-cell"></div>
-          {TEN_WEEKS.map(w => {
-            const isCurrentWeek = w === weekStart(today);
+          {WORK_DAYS_UKE.map((dag, i) => {
+            const isMonday = i % 5 === 0;
+            const weekIdx = Math.floor(i / 5);
+            const isToday = dag === today;
+            const isCurrentWeek = TEN_WEEKS[weekIdx] === weekStart(today);
             return (
-              <div key={w} className={`uke-header-cell ${isCurrentWeek ? 'today' : ''}`} style={{ fontSize: 12 }}>
-                <div style={{ fontWeight: 700 }}>Uke {getWeekNumber(w)}</div>
-                <div className="dag-dato">{w.slice(5).replace('-', '.')}</div>
+              <div key={dag}
+                className={`uke-header-cell ${isToday ? 'today' : ''} ${isMonday ? 'week-start-col' : ''}`}
+                style={{ fontSize: 11, padding: '4px 2px', textAlign: 'center' }}>
+                {isMonday && (
+                  <div style={{ fontSize: 10, fontWeight: 700, color: isCurrentWeek ? '#2563eb' : '#94a3b8', lineHeight: 1.2 }}>
+                    U{getWeekNumber(TEN_WEEKS[weekIdx])}
+                  </div>
+                )}
+                <div style={{ fontWeight: isMonday ? 700 : 400 }}>{DAG_NAVN[i % 5]}</div>
+                <div className="dag-dato" style={{ fontSize: 10 }}>{dag.slice(8)}.{dag.slice(5, 7)}</div>
               </div>
             );
           })}
@@ -530,10 +584,24 @@ export default function Bemanningsplan() {
             </div>
           </div>
         ) : ukeMode === 'uke' ? (
-          <div className="uke-grid-wrap">
-            <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(10, 1fr)` }}>
+          <div className="uke-grid-wrap"
+            ref={gridWrapRef}
+            onPointerMove={handleNeedlePointerMove}
+            onPointerUp={handleNeedlePointerUp}
+          >
+            {/* Drabar dato-nål */}
+            {getNeedleLeft(needleDay) && (
+              <div className="timeline-needle"
+                style={{ left: getNeedleLeft(needleDay) }}
+                onPointerDown={handleNeedlePointerDown}
+                title={`Nål: ${formatDate(needleDay)} — dra for å flytte`}
+              >
+                <div className="needle-label">{formatDate(needleDay)}</div>
+              </div>
+            )}
+            <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(50, minmax(34px, 1fr))` }}>
               <UkeGridHeader />
-              {renderProsjektRader(ukeProsjekter, ukeLedige, 10, UkeAnsattRad, periodeStart, periodeEnd)}
+              {renderProsjektRader(ukeProsjekter, ukeLedige, 50, UkeAnsattRad, periodeStart, periodeEnd)}
             </div>
           </div>
         ) : (
