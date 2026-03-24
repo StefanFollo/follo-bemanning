@@ -273,28 +273,32 @@ body {
   cursor: pointer; font-size: 10px; padding: 0 2px; line-height: 1;
 }
 .chip-split:hover, .chip-delete:hover { color: white; }
+/* Day-view chip handles — always visible */
 .chip-handle {
-  display: none; align-items: center; justify-content: center;
-  cursor: ew-resize; font-size: 11px; color: rgba(255,255,255,.9);
-  padding: 0 3px; flex-shrink: 0; user-select: none; font-weight: bold;
+  display: flex; align-items: center; justify-content: center;
+  cursor: ew-resize; font-size: 12px; color: rgba(255,255,255,.95);
+  padding: 0 4px; flex-shrink: 0; user-select: none; font-weight: bold;
+  background: rgba(0,0,0,.15); border-radius: 2px;
 }
-.chip-handle-l { border-right: 1px solid rgba(255,255,255,.3); margin-right: 2px; }
-.chip-handle-r { border-left: 1px solid rgba(255,255,255,.3); margin-left: 2px; }
-.tildeling-chip:hover .chip-handle { display: flex; }
+.chip-handle:hover { background: rgba(0,0,0,.3); }
+.chip-handle-l { margin-right: 3px; }
+.chip-handle-r { margin-left: 3px; }
+.chip-handle-spacer { width: 6px; flex-shrink: 0; }
 
 /* Drag-over cell highlight */
 .uke-cell.drag-over { background: #dbeafe !important; outline: 2px dashed #3b82f6; }
 
-/* Uke/maaned chip handles */
-.uke-uke-chip { display: flex; align-items: center; gap: 2px; }
-.uke-chip-navn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Uke/maaned chip handles — always visible */
+.uke-uke-chip { display: flex; align-items: center; gap: 0; }
+.uke-chip-navn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 2px; }
 .uke-chip-handle {
-  display: none; cursor: ew-resize; font-size: 9px;
-  color: rgba(255,255,255,.9); font-weight: bold; user-select: none; flex-shrink: 0;
+  display: inline-flex; align-items: center; cursor: ew-resize; font-size: 10px;
+  color: rgba(255,255,255,.95); font-weight: bold; user-select: none; flex-shrink: 0;
+  background: rgba(0,0,0,.15); padding: 0 3px;
 }
-.uke-chip-handle-l { border-right: 1px solid rgba(255,255,255,.3); padding-right: 2px; }
-.uke-chip-handle-r { border-left: 1px solid rgba(255,255,255,.3); padding-left: 2px; }
-.uke-uke-chip:hover .uke-chip-handle { display: inline; }
+.uke-chip-handle:hover { background: rgba(0,0,0,.3); }
+.uke-chip-handle-l { border-radius: 3px 0 0 3px; }
+.uke-chip-handle-r { border-radius: 0 3px 3px 0; }
 
 /* ===== UKE MODE TOGGLE ===== */
 .ukemode-toggle {

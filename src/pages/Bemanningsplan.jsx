@@ -196,26 +196,18 @@ export default function Bemanningsplan() {
                     <div key={t.id}
                       className="tildeling-chip"
                       style={{ background: prosjektColor(t.prosjektId) }}
-                      draggable
-                      onDragStart={e => {
-                        // Don't override if a handle started the drag
-                        if (e.target.closest('.chip-handle')) return;
-                        e.stopPropagation();
-                        dragRef.current = { tildelingId: t.id, type: 'move', offsetDays: daysDiff(t.startDato, dag) };
-                        e.dataTransfer.effectAllowed = 'move';
-                      }}
                       onClick={e => e.stopPropagation()}
                       title={`${p?.navn || 'Ukjent'} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
                     >
-                      {isFirstVis && (
-                        <div className="chip-handle chip-handle-l" draggable
-                          title="Dra ← → for å endre startdato"
+                      {isFirstVis ? (
+                        <div className="chip-handle chip-handle-l"
+                          draggable
                           onDragStart={e => {
                             e.stopPropagation();
                             dragRef.current = { tildelingId: t.id, type: 'start' };
-                            e.dataTransfer.effectAllowed = 'move';
-                          }}>◂</div>
-                      )}
+                          }}
+                          title="Dra for å endre startdato">◂</div>
+                      ) : <div className="chip-handle-spacer" />}
                       <span className="chip-navn">{p?.navn?.slice(0, 11) || '–'}</span>
                       <div className="chip-btns">
                         <button className="chip-split" title="Del opp med pause"
@@ -223,15 +215,15 @@ export default function Bemanningsplan() {
                         <button className="chip-delete"
                           onClick={e => { e.stopPropagation(); deleteTildeling(t.id); }}>✕</button>
                       </div>
-                      {isLastVis && (
-                        <div className="chip-handle chip-handle-r" draggable
-                          title="Dra ← → for å endre sluttdato"
+                      {isLastVis ? (
+                        <div className="chip-handle chip-handle-r"
+                          draggable
                           onDragStart={e => {
                             e.stopPropagation();
                             dragRef.current = { tildelingId: t.id, type: 'end' };
-                            e.dataTransfer.effectAllowed = 'move';
-                          }}>▸</div>
-                      )}
+                          }}
+                          title="Dra for å endre sluttdato">▸</div>
+                      ) : <div className="chip-handle-spacer" />}
                     </div>
                   );
                 })}
@@ -330,21 +322,18 @@ export default function Bemanningsplan() {
                   return (
                     <div key={t.id} className="uke-uke-chip"
                       style={{ background: prosjektColor(p.id) }}
-                      draggable
-                      onDragStart={e => {
-                        if (e.target.closest('.uke-chip-handle')) return;
-                        e.stopPropagation();
-                        dragRef.current = { tildelingId: t.id, type: 'move', offsetDays: 0 };
-                        e.dataTransfer.effectAllowed = 'move';
-                      }}
                       onClick={e => e.stopPropagation()}
                       title={`${p.navn} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
                     >
-                      <span className="uke-chip-handle uke-chip-handle-l" draggable title="Dra ← → for å endre startdato"
-                        onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'start' }; e.dataTransfer.effectAllowed = 'move'; }}>◂</span>
+                      <span className="uke-chip-handle uke-chip-handle-l"
+                        draggable
+                        onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'start' }; }}
+                        title="Dra for å endre startdato">◂</span>
                       <span className="uke-chip-navn">{p.navn.slice(0, 9)}</span>
-                      <span className="uke-chip-handle uke-chip-handle-r" draggable title="Dra ← → for å endre sluttdato"
-                        onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'end' }; e.dataTransfer.effectAllowed = 'move'; }}>▸</span>
+                      <span className="uke-chip-handle uke-chip-handle-r"
+                        draggable
+                        onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'end' }; }}
+                        title="Dra for å endre sluttdato">▸</span>
                     </div>
                   );
                 })}
@@ -425,21 +414,18 @@ export default function Bemanningsplan() {
                   return (
                     <div key={t.id} className="uke-uke-chip"
                       style={{ background: prosjektColor(p.id) }}
-                      draggable
-                      onDragStart={e => {
-                        if (e.target.closest('.uke-chip-handle')) return;
-                        e.stopPropagation();
-                        dragRef.current = { tildelingId: t.id, type: 'move', offsetDays: 0 };
-                        e.dataTransfer.effectAllowed = 'move';
-                      }}
                       onClick={e => e.stopPropagation()}
                       title={`${p.navn} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
                     >
-                      <span className="uke-chip-handle uke-chip-handle-l" draggable title="Dra ← → for å endre startdato"
-                        onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'start' }; e.dataTransfer.effectAllowed = 'move'; }}>◂</span>
+                      <span className="uke-chip-handle uke-chip-handle-l"
+                        draggable
+                        onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'start' }; }}
+                        title="Dra for å endre startdato">◂</span>
                       <span className="uke-chip-navn">{p.navn.slice(0, 9)}</span>
-                      <span className="uke-chip-handle uke-chip-handle-r" draggable title="Dra ← → for å endre sluttdato"
-                        onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'end' }; e.dataTransfer.effectAllowed = 'move'; }}>▸</span>
+                      <span className="uke-chip-handle uke-chip-handle-r"
+                        draggable
+                        onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'end' }; }}
+                        title="Dra for å endre sluttdato">▸</span>
                     </div>
                   );
                 })}
