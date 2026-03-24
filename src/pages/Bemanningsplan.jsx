@@ -184,7 +184,10 @@ export default function Bemanningsplan() {
                 className={`uke-cell ${isOver ? 'drag-over' : ''}`}
                 onClick={() => dagTil.length === 0 && openAddTildeling(ansatt.id, dag)}
                 onDragOver={e => { e.preventDefault(); setDragOverDay(dag); }}
-                onDragLeave={() => setDragOverDay(null)}
+                onDragLeave={e => {
+                  // Only clear if cursor truly left the cell (not just moved to a child)
+                  if (!e.currentTarget.contains(e.relatedTarget)) setDragOverDay(null);
+                }}
                 onDrop={e => { e.preventDefault(); setDragOverDay(null); handleDrop(dag, 'day'); }}
                 title={dagTil.length === 0 ? 'Klikk for å legge til' : undefined}
               >
