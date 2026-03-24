@@ -16,6 +16,26 @@ const FAG_COLORS = {
 function fagColor(fag) { return FAG_COLORS[fag] || '#6b7280'; }
 
 const DAG_NAVN = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
+const MAANED_NAVN = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des'];
+
+function monthStart(isoDate) {
+  return isoDate.slice(0, 7) + '-01';
+}
+function addMonths(isoDate, n) {
+  const d = isoToDate ? new Date(isoDate + 'T00:00:00') : new Date(isoDate);
+  d.setMonth(d.getMonth() + n);
+  return d.toISOString().slice(0, 10).slice(0, 7) + '-01';
+}
+function monthEnd(isoDate) {
+  const d = new Date(isoDate + 'T00:00:00');
+  d.setMonth(d.getMonth() + 1);
+  d.setDate(0);
+  return d.toISOString().slice(0, 10);
+}
+function monthLabel(isoDate) {
+  const m = parseInt(isoDate.slice(5, 7), 10) - 1;
+  return MAANED_NAVN[m] + ' ' + isoDate.slice(0, 4);
+}
 
 function Modal({ title, onClose, children }) {
   return (
@@ -34,8 +54,9 @@ function Modal({ title, onClose, children }) {
 export default function Bemanningsplan() {
   const { state, dispatch } = useApp();
   const [tab, setTab] = useState('uke');
-  const [ukeMode, setUkeMode] = useState('dag'); // 'dag' | 'uke'
+  const [ukeMode, setUkeMode] = useState('dag'); // 'dag' | 'uke' | 'maaned'
   const [currentWeek, setCurrentWeek] = useState(() => weekStart(dateToIso(new Date())));
+  const [currentMonth, setCurrentMonth] = useState(() => monthStart(dateToIso(new Date())));
   const [showModal, setShowModal] = useState(false);
   const [tilForm, setTilForm] = useState({ ansattId: '', prosjektId: '', startDato: '', sluttDato: '' });
 
@@ -234,20 +255,107 @@ export default function Bemanningsplan() {
       );
     }
 
+    const SIX_MONTHS = Array.from({ length: 6 }, (_, i) => addMonths(currentMonth, i));
+    const maanedPeriodeEnd = monthEnd(SIX_MONTHS[5]);
+
+    const maanedProsjektIds = [...new Set(
+      state.tildelinger
+        .filter(t => overlaps(t.startDato, t.sluttDato, currentMonth, maanedPeriodeEnd))
+        .map(t => t.prosjektId)
+    )];
+    const maanedProsjekter = maanedProsjektIds.map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean);
+    const maanedTildeltIds = new Set(
+      state.tildelinger.filter(t => overlaps(t.startDato, t.sluttDato, currentMonth, maanedPeriodeEnd)).map(t => t.ansattId)
+    );
+    const maanedLedige = state.ansatte.filter(a => !maanedTildeltIds.has(a.id));
+
+    function MaanedAnsattRad({ ansatt }) {
+      return (
+        <React.Fragment>
+          <div className="uke-row-label">
+            <div className="mini-avatar" style={{ background: fagColor(ansatt.fag) }}>
+              {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+            </div>
+            <div>
+              <div className="row-navn">{ansatt.navn}</div>
+              <div className="row-fag" style={{ color: fagColor(ansatt.fag) }}>{ansatt.fag}</div>
+            </div>
+          </div>
+          {SIX_MONTHS.map(mStart => {
+            const mEnd = monthEnd(mStart);
+            const mTil = state.tildelinger.filter(t =>
+              t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, mStart, mEnd)
+            );
+            const prosjekterIMaaned = [...new Map(
+              mTil.map(t => [t.prosjektId, state.prosjekter.find(p => p.id === t.prosjektId)])
+            ).values()].filter(Boolean);
+            const isCurrentMonth = mStart.slice(0, 7) === today.slice(0, 7);
+            return (
+              <div key={`${ansatt.id}-${mStart}`}
+                className={`uke-cell uke-cell-uke ${isCurrentMonth ? 'current-week-col' : ''}`}
+                onClick={() => openAddTildeling(ansatt.id, mStart)}
+                title="Klikk for å legge til tildeling">
+                {prosjekterIMaaned.map(p => (
+                  <div key={p.id} className="uke-uke-chip"
+                    style={{ background: prosjektColor(p.id) }}
+                    title={p.navn}>
+                    {p.navn.slice(0, 10)}
+                  </div>
+                ))}
+                {prosjekterIMaaned.length === 0 && <span className="ledig">–</span>}
+              </div>
+            );
+          })}
+        </React.Fragment>
+      );
+    }
+
+    function MaanedGridHeader() {
+      return (
+        <>
+          <div className="uke-header-cell"></div>
+          {SIX_MONTHS.map(m => {
+            const isCurrentMonth = m.slice(0, 7) === today.slice(0, 7);
+            return (
+              <div key={m} className={`uke-header-cell ${isCurrentMonth ? 'today' : ''}`} style={{ fontSize: 12 }}>
+                <div style={{ fontWeight: 700 }}>{monthLabel(m)}</div>
+              </div>
+            );
+          })}
+        </>
+      );
+    }
+
     const navLabel = ukeMode === 'dag'
       ? `Uke ${getWeekNumber(currentWeek)}: ${formatDate(currentWeek)} – ${formatDate(addDays(currentWeek, 6))}`
-      : `Uke ${getWeekNumber(currentWeek)} – Uke ${getWeekNumber(addDays(currentWeek, 9 * 7))}`;
+      : ukeMode === 'uke'
+      ? `Uke ${getWeekNumber(currentWeek)} – Uke ${getWeekNumber(addDays(currentWeek, 9 * 7))}`
+      : `${monthLabel(SIX_MONTHS[0])} – ${monthLabel(SIX_MONTHS[5])}`;
+
+    function handlePrev() {
+      if (ukeMode === 'maaned') setCurrentMonth(m => addMonths(m, -1));
+      else prevWeek();
+    }
+    function handleNext() {
+      if (ukeMode === 'maaned') setCurrentMonth(m => addMonths(m, 1));
+      else nextWeek();
+    }
+    function handleToday() {
+      if (ukeMode === 'maaned') setCurrentMonth(monthStart(dateToIso(new Date())));
+      else thisWeek();
+    }
 
     return (
       <div>
         <div className="uke-nav">
-          <button className="btn" onClick={prevWeek}>← Forrige</button>
+          <button className="btn" onClick={handlePrev}>← Forrige</button>
           <div className="uke-label">{navLabel}</div>
-          <button className="btn" onClick={thisWeek}>I dag</button>
-          <button className="btn" onClick={nextWeek}>Neste →</button>
+          <button className="btn" onClick={handleToday}>I dag</button>
+          <button className="btn" onClick={handleNext}>Neste →</button>
           <div className="ukemode-toggle">
             <button className={`ukemode-btn ${ukeMode === 'dag' ? 'active' : ''}`} onClick={() => setUkeMode('dag')}>Dager</button>
             <button className={`ukemode-btn ${ukeMode === 'uke' ? 'active' : ''}`} onClick={() => setUkeMode('uke')}>Uker</button>
+            <button className={`ukemode-btn ${ukeMode === 'maaned' ? 'active' : ''}`} onClick={() => setUkeMode('maaned')}>Måneder</button>
           </div>
         </div>
 
@@ -275,7 +383,7 @@ export default function Bemanningsplan() {
               </div>
             )}
           </>
-        ) : (
+        ) : ukeMode === 'uke' ? (
           <>
             {ukeProsjekter.map(prosjekt => {
               const ids = [...new Set(state.tildelinger.filter(t => t.prosjektId === prosjekt.id && overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd)).map(t => t.ansattId))];
@@ -292,6 +400,28 @@ export default function Bemanningsplan() {
                   <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(10, 1fr)` }}>
                     <UkeGridHeader />
                     {ukeLedige.map(a => <UkeAnsattRad key={a.id} ansatt={a} />)}
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            {maanedProsjekter.map(prosjekt => {
+              const ids = [...new Set(state.tildelinger.filter(t => t.prosjektId === prosjekt.id && overlaps(t.startDato, t.sluttDato, currentMonth, maanedPeriodeEnd)).map(t => t.ansattId))];
+              const ansatte = ids.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
+              return <ProsjektGruppe key={prosjekt.id} prosjekt={prosjekt} ansatte={ansatte} cols={6} GridHeader={MaanedGridHeader} AnsattRad={MaanedAnsattRad} />;
+            })}
+            {maanedLedige.length > 0 && (
+              <div className="uke-prosjekt-gruppe">
+                <div className="uke-prosjekt-header" style={{ borderLeft: '4px solid #9ca3af' }}>
+                  <span className="uke-prosjekt-navn" style={{ color: '#6b7280' }}>Ikke tildelt i perioden</span>
+                  <span className="uke-prosjekt-antall">{maanedLedige.length} ansatt{maanedLedige.length !== 1 ? 'e' : ''}</span>
+                </div>
+                <div className="uke-grid-wrap">
+                  <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(6, 1fr)` }}>
+                    <MaanedGridHeader />
+                    {maanedLedige.map(a => <MaanedAnsattRad key={a.id} ansatt={a} />)}
                   </div>
                 </div>
               </div>
