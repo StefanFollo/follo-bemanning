@@ -367,6 +367,20 @@ body {
 .fag-gruppe-navn { font-weight: 700; font-size: 15px; }
 .fag-dot-lg { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
 
+/* ===== PROSJEKT FARGE ===== */
+.prosjekt-farge-dot {
+  width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; display: inline-block;
+}
+.farge-picker {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px;
+}
+.farge-swatch {
+  width: 28px; height: 28px; border-radius: 50%; border: 3px solid transparent;
+  cursor: pointer; padding: 0; transition: transform .1s, border-color .1s;
+}
+.farge-swatch:hover { transform: scale(1.15); }
+.farge-swatch.selected { border-color: #1e293b; transform: scale(1.2); }
+
 .oppgave-row {
   display: flex; align-items: center; gap: 10px;
   padding: 8px 0; border-bottom: 1px solid #f8fafc;

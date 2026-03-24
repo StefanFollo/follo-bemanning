@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { formatDate } from '../store';
+import { formatDate, PROSJEKT_PALETTE } from '../store';
 
 const STATUS_LABELS = { planlagt: 'Planlagt', aktiv: 'Aktiv', fullfort: 'Fullfort' };
 const STATUS_COLORS = { planlagt: '#6b7280', aktiv: '#2563eb', fullfort: '#16a34a' };
@@ -19,7 +19,12 @@ function Modal({ title, onClose, children }) {
   );
 }
 
-const EMPTY = { navn: '', adresse: '', startDato: '', sluttDato: '', status: 'planlagt', beskrivelse: '' };
+function nextAutoColor(prosjekter) {
+  const used = prosjekter.map(p => p.farge).filter(Boolean);
+  return PROSJEKT_PALETTE.find(c => !used.includes(c)) || PROSJEKT_PALETTE[prosjekter.length % PROSJEKT_PALETTE.length];
+}
+
+const EMPTY = { navn: '', adresse: '', startDato: '', sluttDato: '', status: 'planlagt', beskrivelse: '', farge: PROSJEKT_PALETTE[0] };
 
 export default function Prosjekter() {
   const { state, dispatch } = useApp();
@@ -31,7 +36,7 @@ export default function Prosjekter() {
 
   function openNew() {
     setEditing(null);
-    setForm(EMPTY);
+    setForm({ ...EMPTY, farge: nextAutoColor(state.prosjekter) });
     setShowModal(true);
   }
 
@@ -108,9 +113,12 @@ export default function Prosjekter() {
 
             return (
               <div className="ct-row" key={p.id}>
-                <div className="ct-col ct-name">
-                  <span className="ct-prosjekt-navn">{p.navn}</span>
-                  {p.adresse && <span className="ct-sub">{p.adresse}</span>}
+                <div className="ct-col ct-name" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span className="prosjekt-farge-dot" style={{ background: p.farge || '#6b7280' }} />
+                  <div>
+                    <span className="ct-prosjekt-navn">{p.navn}</span>
+                    {p.adresse && <span className="ct-sub">{p.adresse}</span>}
+                  </div>
                 </div>
                 <div className="ct-col ct-status">
                   <span className="badge" style={{ background: STATUS_COLORS[p.status], fontSize: 11 }}>
@@ -161,6 +169,19 @@ export default function Prosjekter() {
                 <label>Sluttdato</label>
                 <input type="date" value={form.sluttDato} onChange={e => setForm(f => ({ ...f, sluttDato: e.target.value }))} />
               </div>
+            </div>
+            <label>Prosjektfarge</label>
+            <div className="farge-picker">
+              {PROSJEKT_PALETTE.map(c => (
+                <button
+                  key={c}
+                  type="button"
+                  className={`farge-swatch ${form.farge === c ? 'selected' : ''}`}
+                  style={{ background: c }}
+                  onClick={() => setForm(f => ({ ...f, farge: c }))}
+                  title={c}
+                />
+              ))}
             </div>
             <label>Beskrivelse</label>
             <textarea value={form.beskrivelse} onChange={e => setForm(f => ({ ...f, beskrivelse: e.target.value }))} rows={2} placeholder="Valgfri beskrivelse" />

@@ -18,6 +18,8 @@ const SEED_ANSATTE = [
   'Tomas Strumilas','Tomasz Miroslaw Czop','Tommy Fredriksen',
 ].map((navn, i) => ({ id: mkId('a' + i), navn, fag: 'Montør', telefon: '', epost: '' }));
 
+const PROJ_PALETTE = ['#2563eb','#16a34a','#dc2626','#9333ea','#ea580c','#0891b2','#be185d','#854d0e','#065f46','#1e40af','#b45309','#0f766e'];
+
 const SEED_PROSJEKTER = [
   '25032 Tvetenveien 20','Arne Nordli','Askveien 6','Belsjøparken 13',
   'Bjerkelundsveien 39','Carl Nords vei 7b','Eikestubben 9',
@@ -28,7 +30,9 @@ const SEED_PROSJEKTER = [
   'Sameiet Søndre Moer B6','Sandbukta 4','Skullerudbakken 46',
   'Steinhammerveien 6B','Stølsveien 12B','Øreliveien 16B',
   'Åslandsveien 31','Åsulvs vei 21',
-].map((navn, i) => ({ id: mkId('p' + i), navn, adresse: '', startDato: '', sluttDato: '', status: 'aktiv', beskrivelse: '' }));
+].map((navn, i) => ({ id: mkId('p' + i), navn, adresse: '', startDato: '', sluttDato: '', status: 'aktiv', beskrivelse: '', farge: PROJ_PALETTE[i % PROJ_PALETTE.length] }));
+
+export const PROSJEKT_PALETTE = PROJ_PALETTE;
 
 function load(key, fallback) {
   try {

@@ -89,10 +89,12 @@ export default function Bemanningsplan() {
   // --- UKE-VISNING ---
   function UkeVisning() {
     const today = dateToIso(new Date());
-    const PROJ_COLORS = ['#2563eb','#16a34a','#dc2626','#9333ea','#ea580c','#0891b2','#be185d','#854d0e','#065f46','#1e40af'];
+    const FALLBACK_COLORS = ['#2563eb','#16a34a','#dc2626','#9333ea','#ea580c','#0891b2','#be185d','#854d0e','#065f46','#1e40af'];
     const prosjektColor = (pid) => {
+      const p = state.prosjekter.find(p => p.id === pid);
+      if (p?.farge) return p.farge;
       const idx = state.prosjekter.findIndex(p => p.id === pid);
-      return PROJ_COLORS[idx % PROJ_COLORS.length] || '#6b7280';
+      return FALLBACK_COLORS[idx % FALLBACK_COLORS.length] || '#6b7280';
     };
 
     // ---- DAG-MODUS ----
