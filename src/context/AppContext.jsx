@@ -67,6 +67,18 @@ function reducer(state, action) {
       saveTildelinger(next);
       return { ...state, tildelinger: next };
     }
+    case 'UPDATE_TILDELING': {
+      const next = state.tildelinger.map(t => t.id === action.payload.id ? { ...t, ...action.payload } : t);
+      saveTildelinger(next);
+      return { ...state, tildelinger: next };
+    }
+    case 'SPLIT_TILDELING': {
+      // Remove original, add two new parts
+      const without = state.tildelinger.filter(t => t.id !== action.id);
+      const withParts = [...without, ...action.parts.map(p => ({ ...p, id: uid() }))];
+      saveTildelinger(withParts);
+      return { ...state, tildelinger: withParts };
+    }
     case 'DELETE_TILDELING': {
       const next = state.tildelinger.filter(t => t.id !== action.id);
       saveTildelinger(next);

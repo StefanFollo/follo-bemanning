@@ -259,15 +259,35 @@ body {
 .tildeling-chip {
   display: flex; align-items: center; justify-content: space-between;
   background: #2563eb; color: white; font-size: 11px;
-  padding: 2px 6px; border-radius: 4px; gap: 4px;
-  cursor: default;
+  padding: 2px 4px 2px 6px; border-radius: 4px; gap: 2px;
+  cursor: grab; position: relative;
 }
-.chip-delete {
-  background: none; border: none; color: rgba(255,255,255,.7);
-  cursor: pointer; font-size: 10px; padding: 0 2px;
-  line-height: 1;
+.tildeling-chip:active { cursor: grabbing; opacity: .8; }
+.chip-navn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip-btns {
+  display: none; align-items: center; gap: 1px; flex-shrink: 0;
 }
-.chip-delete:hover { color: white; }
+.tildeling-chip:hover .chip-btns { display: flex; }
+.chip-split, .chip-delete {
+  background: none; border: none; color: rgba(255,255,255,.75);
+  cursor: pointer; font-size: 10px; padding: 0 2px; line-height: 1;
+}
+.chip-split:hover, .chip-delete:hover { color: white; }
+.chip-handle {
+  display: none; align-items: center; justify-content: center;
+  cursor: ew-resize; font-size: 10px; color: rgba(255,255,255,.8);
+  padding: 0 2px; flex-shrink: 0; user-select: none;
+}
+.tildeling-chip:hover .chip-handle { display: flex; }
+
+/* Drag-over cell highlight */
+.uke-cell.drag-over { background: #dbeafe !important; outline: 2px dashed #3b82f6; }
+
+/* Extend handle on uke/maaned chips */
+.uke-chip-extend {
+  display: none; cursor: ew-resize; font-size: 9px; color: rgba(255,255,255,.8); padding-left: 3px;
+}
+.uke-uke-chip:hover .uke-chip-extend { display: inline; }
 
 /* ===== UKE MODE TOGGLE ===== */
 .ukemode-toggle {
