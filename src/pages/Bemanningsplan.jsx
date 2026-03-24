@@ -105,12 +105,20 @@ export default function Bemanningsplan() {
       const newStart = addDays(targetDay, -offset);
       const newEnd = addDays(newStart, duration);
       dispatch({ type: 'UPDATE_TILDELING', payload: { ...t, startDato: newStart, sluttDato: newEnd } });
-    } else if (d.type === 'extend') {
+    } else if (d.type === 'end') {
+      // Extend OR shorten from right — any date >= startDato is valid
       const newEnd = unit === 'week' ? addDays(targetDay, 6)
                   : unit === 'month' ? monthEnd(targetDay)
                   : targetDay;
       if (newEnd >= t.startDato)
         dispatch({ type: 'UPDATE_TILDELING', payload: { ...t, sluttDato: newEnd } });
+    } else if (d.type === 'start') {
+      // Extend OR shorten from left — any date <= sluttDato is valid
+      const newStart = unit === 'week' ? targetDay
+                     : unit === 'month' ? targetDay
+                     : targetDay;
+      if (newStart <= t.sluttDato)
+        dispatch({ type: 'UPDATE_TILDELING', payload: { ...t, startDato: newStart } });
     }
   }
 
@@ -182,13 +190,16 @@ export default function Bemanningsplan() {
               >
                 {dagTil.map(t => {
                   const p = state.prosjekter.find(p => p.id === t.prosjektId);
-                  const isLastVis = t.sluttDato === dag || (t.sluttDato > weekDays[6] && dag === weekDays[6]);
+                  const isFirstVis = t.startDato === dag || (t.startDato < weekDays[0] && dag === weekDays[0]);
+                  const isLastVis  = t.sluttDato === dag || (t.sluttDato > weekDays[6] && dag === weekDays[6]);
                   return (
                     <div key={t.id}
                       className="tildeling-chip"
                       style={{ background: prosjektColor(t.prosjektId) }}
                       draggable
                       onDragStart={e => {
+                        // Don't override if a handle started the drag
+                        if (e.target.closest('.chip-handle')) return;
                         e.stopPropagation();
                         dragRef.current = { tildelingId: t.id, type: 'move', offsetDays: daysDiff(t.startDato, dag) };
                         e.dataTransfer.effectAllowed = 'move';
@@ -196,6 +207,15 @@ export default function Bemanningsplan() {
                       onClick={e => e.stopPropagation()}
                       title={`${p?.navn || 'Ukjent'} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
                     >
+                      {isFirstVis && (
+                        <div className="chip-handle chip-handle-l" draggable
+                          title="Dra ← → for å endre startdato"
+                          onDragStart={e => {
+                            e.stopPropagation();
+                            dragRef.current = { tildelingId: t.id, type: 'start' };
+                            e.dataTransfer.effectAllowed = 'move';
+                          }}>◂</div>
+                      )}
                       <span className="chip-navn">{p?.navn?.slice(0, 11) || '–'}</span>
                       <div className="chip-btns">
                         <button className="chip-split" title="Del opp med pause"
@@ -204,13 +224,13 @@ export default function Bemanningsplan() {
                           onClick={e => { e.stopPropagation(); deleteTildeling(t.id); }}>✕</button>
                       </div>
                       {isLastVis && (
-                        <div className="chip-handle" draggable
-                          title="Dra for å endre sluttdato"
+                        <div className="chip-handle chip-handle-r" draggable
+                          title="Dra ← → for å endre sluttdato"
                           onDragStart={e => {
                             e.stopPropagation();
-                            dragRef.current = { tildelingId: t.id, type: 'extend' };
+                            dragRef.current = { tildelingId: t.id, type: 'end' };
                             e.dataTransfer.effectAllowed = 'move';
-                          }}>⇔</div>
+                          }}>▸</div>
                       )}
                     </div>
                   );
@@ -311,13 +331,20 @@ export default function Bemanningsplan() {
                     <div key={t.id} className="uke-uke-chip"
                       style={{ background: prosjektColor(p.id) }}
                       draggable
-                      onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'move', offsetDays: 0 }; e.dataTransfer.effectAllowed = 'move'; }}
+                      onDragStart={e => {
+                        if (e.target.closest('.uke-chip-handle')) return;
+                        e.stopPropagation();
+                        dragRef.current = { tildelingId: t.id, type: 'move', offsetDays: 0 };
+                        e.dataTransfer.effectAllowed = 'move';
+                      }}
                       onClick={e => e.stopPropagation()}
                       title={`${p.navn} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
                     >
-                      {p.navn.slice(0, 10)}
-                      <span className="uke-chip-extend" draggable title="Dra for å utvide"
-                        onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'extend' }; e.dataTransfer.effectAllowed = 'move'; }}>⇔</span>
+                      <span className="uke-chip-handle uke-chip-handle-l" draggable title="Dra ← → for å endre startdato"
+                        onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'start' }; e.dataTransfer.effectAllowed = 'move'; }}>◂</span>
+                      <span className="uke-chip-navn">{p.navn.slice(0, 9)}</span>
+                      <span className="uke-chip-handle uke-chip-handle-r" draggable title="Dra ← → for å endre sluttdato"
+                        onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'end' }; e.dataTransfer.effectAllowed = 'move'; }}>▸</span>
                     </div>
                   );
                 })}
@@ -399,13 +426,20 @@ export default function Bemanningsplan() {
                     <div key={t.id} className="uke-uke-chip"
                       style={{ background: prosjektColor(p.id) }}
                       draggable
-                      onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'move', offsetDays: 0 }; e.dataTransfer.effectAllowed = 'move'; }}
+                      onDragStart={e => {
+                        if (e.target.closest('.uke-chip-handle')) return;
+                        e.stopPropagation();
+                        dragRef.current = { tildelingId: t.id, type: 'move', offsetDays: 0 };
+                        e.dataTransfer.effectAllowed = 'move';
+                      }}
                       onClick={e => e.stopPropagation()}
                       title={`${p.navn} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
                     >
-                      {p.navn.slice(0, 10)}
-                      <span className="uke-chip-extend" draggable title="Dra for å utvide"
-                        onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'extend' }; e.dataTransfer.effectAllowed = 'move'; }}>⇔</span>
+                      <span className="uke-chip-handle uke-chip-handle-l" draggable title="Dra ← → for å endre startdato"
+                        onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'start' }; e.dataTransfer.effectAllowed = 'move'; }}>◂</span>
+                      <span className="uke-chip-navn">{p.navn.slice(0, 9)}</span>
+                      <span className="uke-chip-handle uke-chip-handle-r" draggable title="Dra ← → for å endre sluttdato"
+                        onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'end' }; e.dataTransfer.effectAllowed = 'move'; }}>▸</span>
                     </div>
                   );
                 })}
