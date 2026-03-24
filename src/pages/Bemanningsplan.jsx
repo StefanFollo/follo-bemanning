@@ -204,7 +204,7 @@ export default function Bemanningsplan() {
                     <div key={t.id}
                       className="tildeling-chip"
                       style={{ background: prosjektColor(t.prosjektId) }}
-                      onClick={e => e.stopPropagation()}
+                      onClick={e => { e.stopPropagation(); if (window.confirm(`Slett tildeling «${p?.navn || ''}»?\n${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`)) deleteTildeling(t.id); }}
                       title={`${p?.navn || 'Ukjent'} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
                     >
                       {isFirstVis ? (
@@ -306,7 +306,7 @@ export default function Bemanningsplan() {
       if (idx < 0) return null;
       const pct = (idx / WORK_DAYS_UKE.length) * 100;
       const pxOffset = (idx / WORK_DAYS_UKE.length) * 180;
-      return `calc(${(180 - pxOffset).toFixed(1)}px + ${pct.toFixed(2)}%)`;
+      return `calc(${(150 - pxOffset).toFixed(1)}px + ${pct.toFixed(2)}%)`;
     }
     function handleNeedlePointerDown(e) {
       e.preventDefault();
@@ -318,8 +318,8 @@ export default function Bemanningsplan() {
       const wrap = gridWrapRef.current;
       if (!wrap) return;
       const rect = wrap.getBoundingClientRect();
-      const x = e.clientX - rect.left + wrap.scrollLeft - 180;
-      const colWidth = (wrap.scrollWidth - 180) / WORK_DAYS_UKE.length;
+      const x = e.clientX - rect.left + wrap.scrollLeft - 150;
+      const colWidth = (wrap.scrollWidth - 150) / WORK_DAYS_UKE.length;
       const idx = Math.max(0, Math.min(WORK_DAYS_UKE.length - 1, Math.floor(x / colWidth)));
       setNeedleDay(WORK_DAYS_UKE[idx]);
     }
@@ -362,7 +362,7 @@ export default function Bemanningsplan() {
                     <div key={t.id}
                       className="tildeling-chip"
                       style={{ background: prosjektColor(t.prosjektId) }}
-                      onClick={e => e.stopPropagation()}
+                      onClick={e => { e.stopPropagation(); if (window.confirm(`Slett tildeling «${p?.navn || ''}»?\n${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`)) deleteTildeling(t.id); }}
                       title={`${p?.navn || 'Ukjent'} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
                     >
                       {isFirstVis ? (
@@ -471,7 +471,7 @@ export default function Bemanningsplan() {
                   return (
                     <div key={t.id} className="uke-uke-chip"
                       style={{ background: prosjektColor(p.id) }}
-                      onClick={e => e.stopPropagation()}
+                      onClick={e => { e.stopPropagation(); if (window.confirm(`Slett tildeling «${p?.navn || ''}»?\n${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`)) deleteTildeling(t.id); }}
                       title={`${p.navn} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
                     >
                       <span className="uke-chip-handle uke-chip-handle-l"
@@ -578,7 +578,7 @@ export default function Bemanningsplan() {
 
         {ukeMode === 'dag' ? (
           <div className="uke-grid-wrap">
-            <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(7, 1fr)` }}>
+            <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(7, 1fr)` }}>
               <DagGridHeader />
               {renderProsjektRader(dagProsjekter, dagLedige, 7, DagAnsattRad, currentWeek, weekEnd)}
             </div>
@@ -599,14 +599,14 @@ export default function Bemanningsplan() {
                 <div className="needle-label">{formatDate(needleDay)}</div>
               </div>
             )}
-            <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(50, minmax(34px, 1fr))` }}>
+            <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(50, minmax(32px, 1fr))` }}>
               <UkeGridHeader />
               {renderProsjektRader(ukeProsjekter, ukeLedige, 50, UkeAnsattRad, periodeStart, periodeEnd)}
             </div>
           </div>
         ) : (
           <div className="uke-grid-wrap">
-            <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(6, 1fr)` }}>
+            <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(6, 1fr)` }}>
               <MaanedGridHeader />
               {renderProsjektRader(maanedProsjekter, maanedLedige, 6, MaanedAnsattRad, currentMonth, maanedPeriodeEnd)}
             </div>
@@ -724,7 +724,7 @@ export default function Bemanningsplan() {
                 {fag} ({fagAnsatte.length} ansatt{fagAnsatte.length !== 1 ? 'e' : ''})
               </div>
               <div className="ressurs-grid-wrap">
-              <div className="ressurs-grid" style={{ gridTemplateColumns: `180px repeat(8, 1fr)` }}>
+              <div className="ressurs-grid" style={{ gridTemplateColumns: `150px repeat(8, 1fr)` }}>
                 <div className="uke-header-cell" style={{ fontSize: 12 }}>Ansatt</div>
                 {weeks.map(w => (
                   <div key={w} className="uke-header-cell" style={{ fontSize: 11 }}>
@@ -782,7 +782,10 @@ export default function Bemanningsplan() {
     <div className="page">
       <div className="page-header">
         <h2>Bemanningsplan</h2>
-        <button className="btn btn-primary" onClick={() => openAddTildeling()}>+ Ny tildeling</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn no-print" onClick={() => window.print()} title="Skriv ut / Lagre som PDF">🖨 PDF</button>
+          <button className="btn btn-primary no-print" onClick={() => openAddTildeling()}>+ Ny tildeling</button>
+        </div>
       </div>
 
       <div className="tab-bar">
