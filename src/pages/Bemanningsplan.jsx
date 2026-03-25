@@ -3,6 +3,8 @@ import { useApp } from '../context/AppContext';
 import { weekStart, addDays, isoToDate, dateToIso, formatDate, overlaps } from '../store';
 import { getHolidayMap } from '../holidays';
 
+const FERIE_ID = '__FERIE__';
+
 const FAG_COLORS = {
   'Bas Tømrer': '#f59e0b',
   'Montør': '#3b82f6',
@@ -76,6 +78,16 @@ export default function Bemanningsplan() {
       prosjektId: state.prosjekter[0]?.id || '',
       startDato: dag || currentWeek,
       sluttDato: dag || addDays(currentWeek, 4),
+    });
+    setShowModal(true);
+  }
+
+  function openAddFerie(ansattId) {
+    setTilForm({
+      ansattId: ansattId || (state.ansatte[0]?.id || ''),
+      prosjektId: FERIE_ID,
+      startDato: currentWeek,
+      sluttDato: addDays(currentWeek, 4),
     });
     setShowModal(true);
   }
@@ -162,14 +174,18 @@ export default function Bemanningsplan() {
 
     const dagProsjektIds = [...new Set(
       state.tildelinger
-        .filter(t => overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd))
+        .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd))
         .map(t => t.prosjektId)
     )];
     const dagProsjekter = dagProsjektIds.map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean);
     const dagTildeltIds = new Set(
-      state.tildelinger.filter(t => overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd)).map(t => t.ansattId)
+      state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd)).map(t => t.ansattId)
     );
-    const dagLedige = state.ansatte.filter(a => !dagTildeltIds.has(a.id));
+    const dagFerieIds = new Set(
+      state.tildelinger.filter(t => t.prosjektId === FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd)).map(t => t.ansattId)
+    );
+    const dagFerieAnsatte = state.ansatte.filter(a => dagFerieIds.has(a.id) && !dagTildeltIds.has(a.id));
+    const dagLedige = state.ansatte.filter(a => !dagTildeltIds.has(a.id) && !dagFerieIds.has(a.id));
 
     // Shared Gantt row container — renders continuous bars with drag handles
     function GanttRowContainer({ ansatt, days, unit }) {
@@ -237,18 +253,20 @@ export default function Bemanningsplan() {
           {myTil.map(t => {
             const pos = getBarPos(t);
             if (!pos) return null;
-            const p = state.prosjekter.find(pr => pr.id === t.prosjektId);
+            const isFerie = t.prosjektId === FERIE_ID;
+            const p = isFerie ? null : state.prosjekter.find(pr => pr.id === t.prosjektId);
+            const barLabel = isFerie ? 'Ferie / Fri' : (p?.navn || '–');
             return (
               <div key={t.id}
-                className="gantt-bar"
-                style={{ left: pos.left, width: pos.width, background: prosjektColor(t.prosjektId) }}
-                onClick={e => { e.stopPropagation(); if (window.confirm(`Slett «${p?.navn || ''}»?\n${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`)) deleteTildeling(t.id); }}
-                title={`${p?.navn || 'Ukjent'} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
+                className={`gantt-bar${isFerie ? ' gantt-bar-ferie' : ''}`}
+                style={{ left: pos.left, width: pos.width, ...(isFerie ? {} : { background: prosjektColor(t.prosjektId) }) }}
+                onClick={e => { e.stopPropagation(); if (window.confirm(`Slett «${barLabel}»?\n${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`)) deleteTildeling(t.id); }}
+                title={`${barLabel} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
               >
                 {pos.isFirst
                   ? <div className="gantt-handle gantt-handle-l" draggable onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'start' }; }}>◂</div>
                   : <div className="gantt-handle-spacer" />}
-                <span className="gantt-label">{p?.navn || '–'}</span>
+                <span className="gantt-label">{barLabel}</span>
                 <div className="gantt-actions">
                   <button onClick={e => { e.stopPropagation(); setSplitModal(t); setSplitForm({ gapStart: '', gapEnd: '' }); }} title="Del opp">✂</button>
                   <button onClick={e => { e.stopPropagation(); if (window.confirm(`Slett «${p?.navn}»?`)) deleteTildeling(t.id); }} title="Slett">✕</button>
@@ -334,14 +352,18 @@ export default function Bemanningsplan() {
 
     const ukeProsjektIds = [...new Set(
       state.tildelinger
-        .filter(t => overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd))
+        .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd))
         .map(t => t.prosjektId)
     )];
     const ukeProsjekter = ukeProsjektIds.map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean);
     const ukeTildeltIds = new Set(
-      state.tildelinger.filter(t => overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd)).map(t => t.ansattId)
+      state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd)).map(t => t.ansattId)
     );
-    const ukeLedige = state.ansatte.filter(a => !ukeTildeltIds.has(a.id));
+    const ukeFerieIds = new Set(
+      state.tildelinger.filter(t => t.prosjektId === FERIE_ID && overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd)).map(t => t.ansattId)
+    );
+    const ukeFerieAnsatte = state.ansatte.filter(a => ukeFerieIds.has(a.id) && !ukeTildeltIds.has(a.id));
+    const ukeLedige = state.ansatte.filter(a => !ukeTildeltIds.has(a.id) && !ukeFerieIds.has(a.id));
 
     // Needle helpers
     function getNeedleLeft(day) {
@@ -421,14 +443,18 @@ export default function Bemanningsplan() {
 
     const maanedProsjektIds = [...new Set(
       state.tildelinger
-        .filter(t => overlaps(t.startDato, t.sluttDato, currentMonth, maanedPeriodeEnd))
+        .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentMonth, maanedPeriodeEnd))
         .map(t => t.prosjektId)
     )];
     const maanedProsjekter = maanedProsjektIds.map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean);
     const maanedTildeltIds = new Set(
-      state.tildelinger.filter(t => overlaps(t.startDato, t.sluttDato, currentMonth, maanedPeriodeEnd)).map(t => t.ansattId)
+      state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentMonth, maanedPeriodeEnd)).map(t => t.ansattId)
     );
-    const maanedLedige = state.ansatte.filter(a => !maanedTildeltIds.has(a.id));
+    const maanedFerieIds = new Set(
+      state.tildelinger.filter(t => t.prosjektId === FERIE_ID && overlaps(t.startDato, t.sluttDato, currentMonth, maanedPeriodeEnd)).map(t => t.ansattId)
+    );
+    const maanedFerieAnsatte = state.ansatte.filter(a => maanedFerieIds.has(a.id) && !maanedTildeltIds.has(a.id));
+    const maanedLedige = state.ansatte.filter(a => !maanedTildeltIds.has(a.id) && !maanedFerieIds.has(a.id));
 
     function MaanedAnsattRad({ ansatt }) {
       return (
@@ -483,7 +509,7 @@ export default function Bemanningsplan() {
       else thisWeek();
     }
 
-    function renderProsjektRader(prosjekter, ledige, cols, AnsattRad, periodeS, periodeE) {
+    function renderProsjektRader(prosjekter, ledige, cols, AnsattRad, periodeS, periodeE, ferieAnsatte = []) {
       return (
         <>
           {prosjekter.map(prosjekt => {
@@ -501,6 +527,16 @@ export default function Bemanningsplan() {
               </React.Fragment>
             );
           })}
+          {ferieAnsatte.length > 0 && (
+            <React.Fragment>
+              <div className="uke-prosjekt-header" style={{ gridColumn: '1 / -1', borderLeft: '4px solid #94a3b8', background: '#f8fafc' }}>
+                <span style={{ fontSize: 14, marginRight: 6 }}>🏖</span>
+                <span className="uke-prosjekt-navn" style={{ color: '#475569' }}>Ferie / Fri</span>
+                <span className="uke-prosjekt-antall">{ferieAnsatte.length} ansatt{ferieAnsatte.length !== 1 ? 'e' : ''}</span>
+              </div>
+              {ferieAnsatte.map(a => <AnsattRad key={a.id} ansatt={a} />)}
+            </React.Fragment>
+          )}
           {ledige.length > 0 && (
             <React.Fragment>
               <div className="uke-prosjekt-header" style={{ gridColumn: '1 / -1', borderLeft: '4px solid #9ca3af' }}>
@@ -534,7 +570,7 @@ export default function Bemanningsplan() {
           <div className="uke-grid-wrap">
             <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(7, 1fr)` }}>
               <DagGridHeader />
-              {renderProsjektRader(dagProsjekter, dagLedige, 7, DagAnsattRad, currentWeek, weekEnd)}
+              {renderProsjektRader(dagProsjekter, dagLedige, 7, DagAnsattRad, currentWeek, weekEnd, dagFerieAnsatte)}
             </div>
           </div>
         ) : ukeMode === 'uke' ? (
@@ -555,14 +591,14 @@ export default function Bemanningsplan() {
             )}
             <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(50, minmax(32px, 1fr))` }}>
               <UkeGridHeader />
-              {renderProsjektRader(ukeProsjekter, ukeLedige, 50, UkeAnsattRad, periodeStart, periodeEnd)}
+              {renderProsjektRader(ukeProsjekter, ukeLedige, 50, UkeAnsattRad, periodeStart, periodeEnd, ukeFerieAnsatte)}
             </div>
           </div>
         ) : (
           <div className="uke-grid-wrap">
             <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(6, 1fr)` }}>
               <MaanedGridHeader />
-              {renderProsjektRader(maanedProsjekter, maanedLedige, 6, MaanedAnsattRad, currentMonth, maanedPeriodeEnd)}
+              {renderProsjektRader(maanedProsjekter, maanedLedige, 6, MaanedAnsattRad, currentMonth, maanedPeriodeEnd, maanedFerieAnsatte)}
             </div>
           </div>
         )}
@@ -738,6 +774,7 @@ export default function Bemanningsplan() {
         <h2>Bemanningsplan</h2>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn no-print" onClick={() => window.print()} title="Skriv ut / Lagre som PDF">🖨 PDF</button>
+          <button className="btn no-print" onClick={() => openAddFerie()} title="Registrer ferie eller fri">🏖 Ferie</button>
           <button className="btn btn-primary no-print" onClick={() => openAddTildeling()}>+ Ny tildeling</button>
         </div>
       </div>
@@ -805,15 +842,16 @@ export default function Bemanningsplan() {
       )}
 
       {showModal && (
-        <Modal title="Legg til tildeling" onClose={() => setShowModal(false)}>
+        <Modal title={tilForm.prosjektId === FERIE_ID ? '🏖 Legg til ferie / fri' : 'Legg til tildeling'} onClose={() => setShowModal(false)}>
           <div className="form">
             <label>Ansatt *</label>
             <select value={tilForm.ansattId} onChange={e => setTilForm(f => ({ ...f, ansattId: e.target.value }))}>
               {state.ansatte.map(a => <option key={a.id} value={a.id}>{a.navn} ({a.fag})</option>)}
             </select>
 
-            <label>Prosjekt *</label>
+            <label>{tilForm.prosjektId === FERIE_ID ? 'Type' : 'Prosjekt *'}</label>
             <select value={tilForm.prosjektId} onChange={e => setTilForm(f => ({ ...f, prosjektId: e.target.value }))}>
+              <option value={FERIE_ID}>🏖 Ferie / Fri</option>
               {state.prosjekter.map(p => <option key={p.id} value={p.id}>{p.navn}</option>)}
             </select>
 
@@ -829,14 +867,13 @@ export default function Bemanningsplan() {
             </div>
 
             {state.ansatte.length === 0 && <p style={{ color: '#dc2626' }}>Legg til ansatte først.</p>}
-            {state.prosjekter.length === 0 && <p style={{ color: '#dc2626' }}>Legg til prosjekter først.</p>}
 
             <div className="form-actions">
               <button className="btn" onClick={() => setShowModal(false)}>Avbryt</button>
               <button
                 className="btn btn-primary"
                 onClick={handleAddTildeling}
-                disabled={state.ansatte.length === 0 || state.prosjekter.length === 0}
+                disabled={state.ansatte.length === 0}
               >
                 Lagre
               </button>
