@@ -387,8 +387,15 @@ body {
   margin-top: 1px;
 }
 .gantt-bg-cell.holiday-col {
-  background: #fef2f2 !important;
-  border-right-color: #fecaca;
+  background: #fee2e2 !important;
+  border-right: 1px solid #fca5a5;
+}
+.gantt-bg-cell.holiday-col::after {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: #ef4444;
 }
 .gantt-bg-cell.holiday-col.drag-over { background: #dbeafe !important; }
 

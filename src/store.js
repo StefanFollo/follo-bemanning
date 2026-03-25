@@ -73,7 +73,11 @@ export function isoToDate(str) {
 }
 
 export function dateToIso(d) {
-  return d.toISOString().slice(0, 10);
+  // Use local date (not UTC) to avoid timezone shift in Norwegian timezone
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 }
 
 export function addDays(dateStr, n) {
