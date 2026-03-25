@@ -370,6 +370,28 @@ body {
 .uke-chip-handle-l { border-radius: 3px 0 0 3px; }
 .uke-chip-handle-r { border-radius: 0 3px 3px 0; }
 
+/* ===== HELLIGDAGER ===== */
+.holiday-header {
+  background: #fef2f2 !important;
+  color: #dc2626 !important;
+}
+.holiday-header .dag-dato { color: #dc2626 !important; }
+.holiday-label {
+  font-size: 8px;
+  color: #dc2626;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.1;
+  margin-top: 1px;
+}
+.gantt-bg-cell.holiday-col {
+  background: #fef2f2 !important;
+  border-right-color: #fecaca;
+}
+.gantt-bg-cell.holiday-col.drag-over { background: #dbeafe !important; }
+
 /* ===== GANTT BARS ===== */
 .gantt-row {
   position: relative;

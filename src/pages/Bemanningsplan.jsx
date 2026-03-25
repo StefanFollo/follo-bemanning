@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { weekStart, addDays, isoToDate, dateToIso, formatDate, overlaps } from '../store';
+import { getHolidayMap } from '../holidays';
 
 const FAG_COLORS = {
   'Bas Tømrer': '#f59e0b',
@@ -139,6 +140,10 @@ export default function Bemanningsplan() {
   // --- UKE-VISNING ---
   function UkeVisning() {
     const today = dateToIso(new Date());
+    const thisYear = new Date().getFullYear();
+    const HOLIDAYS = getHolidayMap(thisYear - 1, thisYear + 2);
+    const isHoliday = (iso) => !!HOLIDAYS[iso];
+    const holidayName = (iso) => HOLIDAYS[iso] || '';
     const FALLBACK_COLORS = ['#2563eb','#16a34a','#dc2626','#9333ea','#ea580c','#0891b2','#be185d','#854d0e','#065f46','#1e40af'];
     const prosjektColor = (pid) => {
       const p = state.prosjekter.find(p => p.id === pid);
@@ -220,10 +225,12 @@ export default function Bemanningsplan() {
           {days.map((d, i) => {
             const isMonday = unit === 'day_50' && i % 5 === 0;
             const isTod = unit === 'month' ? d.slice(0, 7) === today.slice(0, 7) : d === today;
+            const isHol = unit !== 'month' && isHoliday(d);
             return (
               <div key={d}
-                className={`gantt-bg-cell${isTod ? ' today-col' : ''}${isMonday ? ' week-start-col' : ''}${dragOverIdx === i ? ' drag-over' : ''}`}
+                className={`gantt-bg-cell${isTod ? ' today-col' : ''}${isMonday ? ' week-start-col' : ''}${isHol ? ' holiday-col' : ''}${dragOverIdx === i ? ' drag-over' : ''}`}
                 style={{ left: `${(i / n) * 100}%`, width: `${100 / n}%` }}
+                title={isHol ? holidayName(d) : undefined}
               />
             );
           })}
@@ -277,12 +284,17 @@ export default function Bemanningsplan() {
       return (
         <>
           <div className="uke-header-cell"></div>
-          {weekDays.map((dag, i) => (
-            <div key={dag} className={`uke-header-cell ${dag === today ? 'today' : ''}`}>
-              <div>{DAG_NAVN[i]}</div>
-              <div className="dag-dato">{dag.slice(5).replace('-', '.')}</div>
-            </div>
-          ))}
+          {weekDays.map((dag, i) => {
+            const hol = HOLIDAYS[dag];
+            return (
+              <div key={dag} className={`uke-header-cell ${dag === today ? 'today' : ''} ${hol ? 'holiday-header' : ''}`}
+                title={hol || undefined}>
+                <div>{DAG_NAVN[i]}</div>
+                <div className="dag-dato">{dag.slice(5).replace('-', '.')}</div>
+                {hol && <div className="holiday-label">{hol}</div>}
+              </div>
+            );
+          })}
         </>
       );
     }
@@ -383,10 +395,12 @@ export default function Bemanningsplan() {
             const weekIdx = Math.floor(i / 5);
             const isToday = dag === today;
             const isCurrentWeek = TEN_WEEKS[weekIdx] === weekStart(today);
+            const hol = HOLIDAYS[dag];
             return (
               <div key={dag}
-                className={`uke-header-cell ${isToday ? 'today' : ''} ${isMonday ? 'week-start-col' : ''}`}
-                style={{ fontSize: 11, padding: '4px 2px', textAlign: 'center' }}>
+                className={`uke-header-cell ${isToday ? 'today' : ''} ${isMonday ? 'week-start-col' : ''} ${hol ? 'holiday-header' : ''}`}
+                style={{ fontSize: 11, padding: '4px 2px', textAlign: 'center' }}
+                title={hol || undefined}>
                 {isMonday && (
                   <div style={{ fontSize: 10, fontWeight: 700, color: isCurrentWeek ? '#2563eb' : '#94a3b8', lineHeight: 1.2 }}>
                     U{getWeekNumber(TEN_WEEKS[weekIdx])}
@@ -394,6 +408,7 @@ export default function Bemanningsplan() {
                 )}
                 <div style={{ fontWeight: isMonday ? 700 : 400 }}>{DAG_NAVN[i % 5]}</div>
                 <div className="dag-dato" style={{ fontSize: 10 }}>{dag.slice(8)}.{dag.slice(5, 7)}</div>
+                {hol && <div className="holiday-label">{hol.split(' ')[0]}</div>}
               </div>
             );
           })}
