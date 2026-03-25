@@ -4,6 +4,7 @@ import Prosjekter from './pages/Prosjekter';
 import Ansatte from './pages/Ansatte';
 import Bemanningsplan from './pages/Bemanningsplan';
 import Framdriftsplan from './pages/Framdriftsplan';
+import LoginPage from './pages/LoginPage';
 import './App.css';
 
 const TABS = [
@@ -15,6 +16,9 @@ const TABS = [
 
 function App() {
   const [activeTab, setActiveTab] = useState('prosjekter');
+  const [loggedIn, setLoggedIn] = useState(() => localStorage.getItem('fbs_auth') === 'ok');
+
+  if (!loggedIn) return <LoginPage onLogin={() => setLoggedIn(true)} />;
 
   return (
     <AppProvider>
@@ -38,6 +42,9 @@ function App() {
                 <span>{tab.label}</span>
               </button>
             ))}
+            <button className="nav-btn logout-btn" onClick={() => { localStorage.removeItem('fbs_auth'); setLoggedIn(false); }} title="Logg ut">
+              🚪 Logg ut
+            </button>
           </nav>
         </header>
 

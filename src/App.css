@@ -10,6 +10,75 @@ body {
 
 #root { min-height: 100vh; display: flex; flex-direction: column; }
 
+/* ===== LOGIN PAGE ===== */
+.login-bg {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  padding: 24px;
+}
+.login-card {
+  background: white;
+  border-radius: 20px;
+  padding: 48px 40px;
+  width: 100%;
+  max-width: 400px;
+  box-shadow: 0 25px 60px rgba(0,0,0,.4);
+  text-align: center;
+}
+.login-logo {
+  background: #f59e0b;
+  color: #1e293b;
+  font-weight: 800;
+  font-size: 24px;
+  width: 64px; height: 64px;
+  border-radius: 16px;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 16px;
+}
+.login-title { font-size: 22px; font-weight: 800; color: #1e293b; margin-bottom: 4px; }
+.login-sub { font-size: 13px; color: #64748b; margin-bottom: 32px; }
+.login-form { text-align: left; display: flex; flex-direction: column; gap: 16px; }
+.login-field { display: flex; flex-direction: column; gap: 6px; }
+.login-field label { font-size: 13px; font-weight: 600; color: #374151; }
+.login-field input {
+  padding: 12px 14px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  font-size: 15px;
+  outline: none;
+  transition: border-color .2s;
+}
+.login-field input:focus { border-color: #f59e0b; }
+.login-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  text-align: center;
+}
+.login-btn {
+  background: #f59e0b;
+  color: #1e293b;
+  border: none;
+  border-radius: 10px;
+  padding: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 4px;
+  transition: background .2s, transform .1s;
+}
+.login-btn:hover:not(:disabled) { background: #d97706; transform: translateY(-1px); }
+.login-btn:disabled { opacity: .6; cursor: not-allowed; }
+
+/* Logout button */
+.logout-btn { margin-left: 8px; border-left: 1px solid rgba(255,255,255,.15); padding-left: 16px; }
+
 /* ===== APP SHELL ===== */
 .app { display: flex; flex-direction: column; min-height: 100vh; }
 
