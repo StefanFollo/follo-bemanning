@@ -181,11 +181,7 @@ export default function Bemanningsplan() {
     const dagTildeltIds = new Set(
       state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd)).map(t => t.ansattId)
     );
-    const dagFerieIds = new Set(
-      state.tildelinger.filter(t => t.prosjektId === FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd)).map(t => t.ansattId)
-    );
-    const dagFerieAnsatte = state.ansatte.filter(a => dagFerieIds.has(a.id) && !dagTildeltIds.has(a.id));
-    const dagLedige = state.ansatte.filter(a => !dagTildeltIds.has(a.id) && !dagFerieIds.has(a.id));
+    const dagLedige = state.ansatte.filter(a => !dagTildeltIds.has(a.id));
 
     // Shared Gantt row container — renders continuous bars with drag handles
     function GanttRowContainer({ ansatt, days, unit }) {
@@ -359,11 +355,7 @@ export default function Bemanningsplan() {
     const ukeTildeltIds = new Set(
       state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd)).map(t => t.ansattId)
     );
-    const ukeFerieIds = new Set(
-      state.tildelinger.filter(t => t.prosjektId === FERIE_ID && overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd)).map(t => t.ansattId)
-    );
-    const ukeFerieAnsatte = state.ansatte.filter(a => ukeFerieIds.has(a.id) && !ukeTildeltIds.has(a.id));
-    const ukeLedige = state.ansatte.filter(a => !ukeTildeltIds.has(a.id) && !ukeFerieIds.has(a.id));
+    const ukeLedige = state.ansatte.filter(a => !ukeTildeltIds.has(a.id));
 
     // Needle helpers
     function getNeedleLeft(day) {
@@ -450,11 +442,7 @@ export default function Bemanningsplan() {
     const maanedTildeltIds = new Set(
       state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentMonth, maanedPeriodeEnd)).map(t => t.ansattId)
     );
-    const maanedFerieIds = new Set(
-      state.tildelinger.filter(t => t.prosjektId === FERIE_ID && overlaps(t.startDato, t.sluttDato, currentMonth, maanedPeriodeEnd)).map(t => t.ansattId)
-    );
-    const maanedFerieAnsatte = state.ansatte.filter(a => maanedFerieIds.has(a.id) && !maanedTildeltIds.has(a.id));
-    const maanedLedige = state.ansatte.filter(a => !maanedTildeltIds.has(a.id) && !maanedFerieIds.has(a.id));
+    const maanedLedige = state.ansatte.filter(a => !maanedTildeltIds.has(a.id));
 
     function MaanedAnsattRad({ ansatt }) {
       return (
@@ -509,7 +497,7 @@ export default function Bemanningsplan() {
       else thisWeek();
     }
 
-    function renderProsjektRader(prosjekter, ledige, cols, AnsattRad, periodeS, periodeE, ferieAnsatte = []) {
+    function renderProsjektRader(prosjekter, ledige, cols, AnsattRad, periodeS, periodeE) {
       return (
         <>
           {prosjekter.map(prosjekt => {
@@ -527,16 +515,6 @@ export default function Bemanningsplan() {
               </React.Fragment>
             );
           })}
-          {ferieAnsatte.length > 0 && (
-            <React.Fragment>
-              <div className="uke-prosjekt-header" style={{ gridColumn: '1 / -1', borderLeft: '4px solid #94a3b8', background: '#f8fafc' }}>
-                <span style={{ fontSize: 14, marginRight: 6 }}>🏖</span>
-                <span className="uke-prosjekt-navn" style={{ color: '#475569' }}>Ferie / Fri</span>
-                <span className="uke-prosjekt-antall">{ferieAnsatte.length} ansatt{ferieAnsatte.length !== 1 ? 'e' : ''}</span>
-              </div>
-              {ferieAnsatte.map(a => <AnsattRad key={a.id} ansatt={a} />)}
-            </React.Fragment>
-          )}
           {ledige.length > 0 && (
             <React.Fragment>
               <div className="uke-prosjekt-header" style={{ gridColumn: '1 / -1', borderLeft: '4px solid #9ca3af' }}>
@@ -570,7 +548,7 @@ export default function Bemanningsplan() {
           <div className="uke-grid-wrap">
             <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(7, 1fr)` }}>
               <DagGridHeader />
-              {renderProsjektRader(dagProsjekter, dagLedige, 7, DagAnsattRad, currentWeek, weekEnd, dagFerieAnsatte)}
+              {renderProsjektRader(dagProsjekter, dagLedige, 7, DagAnsattRad, currentWeek, weekEnd)}
             </div>
           </div>
         ) : ukeMode === 'uke' ? (
@@ -591,14 +569,14 @@ export default function Bemanningsplan() {
             )}
             <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(50, minmax(32px, 1fr))` }}>
               <UkeGridHeader />
-              {renderProsjektRader(ukeProsjekter, ukeLedige, 50, UkeAnsattRad, periodeStart, periodeEnd, ukeFerieAnsatte)}
+              {renderProsjektRader(ukeProsjekter, ukeLedige, 50, UkeAnsattRad, periodeStart, periodeEnd)}
             </div>
           </div>
         ) : (
           <div className="uke-grid-wrap">
             <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(6, 1fr)` }}>
               <MaanedGridHeader />
-              {renderProsjektRader(maanedProsjekter, maanedLedige, 6, MaanedAnsattRad, currentMonth, maanedPeriodeEnd, maanedFerieAnsatte)}
+              {renderProsjektRader(maanedProsjekter, maanedLedige, 6, MaanedAnsattRad, currentMonth, maanedPeriodeEnd)}
             </div>
           </div>
         )}
