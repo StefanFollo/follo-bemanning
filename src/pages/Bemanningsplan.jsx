@@ -166,8 +166,97 @@ export default function Bemanningsplan() {
     );
     const dagLedige = state.ansatte.filter(a => !dagTildeltIds.has(a.id));
 
+    // Shared Gantt row container — renders continuous bars with drag handles
+    function GanttRowContainer({ ansatt, days, unit }) {
+      const [dragOverIdx, setDragOverIdx] = useState(null);
+      const n = days.length;
+      const viewEnd = unit === 'month' ? monthEnd(days[n - 1]) : days[n - 1];
+
+      const myTil = state.tildelinger.filter(t =>
+        t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, days[0], viewEnd)
+      );
+
+      function getIdxFromEvent(e) {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        return Math.min(n - 1, Math.max(0, Math.floor(x / (rect.width / n))));
+      }
+
+      function getBarPos(t) {
+        let si = -1, ei = -1;
+        for (let i = 0; i < n; i++) {
+          const hit = unit === 'month'
+            ? overlaps(t.startDato, t.sluttDato, days[i], monthEnd(days[i]))
+            : (days[i] >= t.startDato && days[i] <= t.sluttDato);
+          if (hit) { if (si === -1) si = i; ei = i; }
+        }
+        if (si === -1) return null;
+        return {
+          left: `${(si / n) * 100}%`,
+          width: `${((ei - si + 1) / n) * 100}%`,
+          isFirst: t.startDato >= days[0],
+          isLast: t.sluttDato <= viewEnd,
+        };
+      }
+
+      return (
+        <div
+          className="gantt-row"
+          style={{ gridColumn: '2 / -1' }}
+          onDragOver={e => { e.preventDefault(); setDragOverIdx(getIdxFromEvent(e)); }}
+          onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverIdx(null); }}
+          onDrop={e => {
+            e.preventDefault();
+            const idx = getIdxFromEvent(e);
+            setDragOverIdx(null);
+            handleDrop(days[idx], unit === 'month' ? 'month' : 'day');
+          }}
+          onClick={e => {
+            if (e.target === e.currentTarget || e.target.classList.contains('gantt-bg-cell')) {
+              openAddTildeling(ansatt.id, days[getIdxFromEvent(e)]);
+            }
+          }}
+        >
+          {days.map((d, i) => {
+            const isMonday = unit === 'day_50' && i % 5 === 0;
+            const isTod = unit === 'month' ? d.slice(0, 7) === today.slice(0, 7) : d === today;
+            return (
+              <div key={d}
+                className={`gantt-bg-cell${isTod ? ' today-col' : ''}${isMonday ? ' week-start-col' : ''}${dragOverIdx === i ? ' drag-over' : ''}`}
+                style={{ left: `${(i / n) * 100}%`, width: `${100 / n}%` }}
+              />
+            );
+          })}
+          {myTil.map(t => {
+            const pos = getBarPos(t);
+            if (!pos) return null;
+            const p = state.prosjekter.find(pr => pr.id === t.prosjektId);
+            return (
+              <div key={t.id}
+                className="gantt-bar"
+                style={{ left: pos.left, width: pos.width, background: prosjektColor(t.prosjektId) }}
+                onClick={e => { e.stopPropagation(); if (window.confirm(`Slett «${p?.navn || ''}»?\n${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`)) deleteTildeling(t.id); }}
+                title={`${p?.navn || 'Ukjent'} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
+              >
+                {pos.isFirst
+                  ? <div className="gantt-handle gantt-handle-l" draggable onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'start' }; }}>◂</div>
+                  : <div className="gantt-handle-spacer" />}
+                <span className="gantt-label">{p?.navn || '–'}</span>
+                <div className="gantt-actions">
+                  <button onClick={e => { e.stopPropagation(); setSplitModal(t); setSplitForm({ gapStart: '', gapEnd: '' }); }} title="Del opp">✂</button>
+                  <button onClick={e => { e.stopPropagation(); if (window.confirm(`Slett «${p?.navn}»?`)) deleteTildeling(t.id); }} title="Slett">✕</button>
+                </div>
+                {pos.isLast
+                  ? <div className="gantt-handle gantt-handle-r" draggable onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'end' }; }}>▸</div>
+                  : <div className="gantt-handle-spacer" />}
+              </div>
+            );
+          })}
+        </div>
+      );
+    }
+
     function DagAnsattRad({ ansatt }) {
-      const [dragOverDay, setDragOverDay] = useState(null);
       return (
         <React.Fragment>
           <div className="uke-row-label">
@@ -179,65 +268,7 @@ export default function Bemanningsplan() {
               <div className="row-fag" style={{ color: fagColor(ansatt.fag) }}>{ansatt.fag}</div>
             </div>
           </div>
-          {weekDays.map(dag => {
-            const dagTil = state.tildelinger.filter(t =>
-              t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, dag, dag)
-            );
-            const isOver = dragOverDay === dag;
-            return (
-              <div key={`${ansatt.id}-${dag}`}
-                className={`uke-cell ${isOver ? 'drag-over' : ''}`}
-                onClick={() => dagTil.length === 0 && openAddTildeling(ansatt.id, dag)}
-                onDragOver={e => { e.preventDefault(); setDragOverDay(dag); }}
-                onDragLeave={e => {
-                  // Only clear if cursor truly left the cell (not just moved to a child)
-                  if (!e.currentTarget.contains(e.relatedTarget)) setDragOverDay(null);
-                }}
-                onDrop={e => { e.preventDefault(); setDragOverDay(null); handleDrop(dag, 'day'); }}
-                title={dagTil.length === 0 ? 'Klikk for å legge til' : undefined}
-              >
-                {dagTil.map(t => {
-                  const p = state.prosjekter.find(p => p.id === t.prosjektId);
-                  const isFirstVis = t.startDato === dag || (t.startDato < weekDays[0] && dag === weekDays[0]);
-                  const isLastVis  = t.sluttDato === dag || (t.sluttDato > weekDays[6] && dag === weekDays[6]);
-                  return (
-                    <div key={t.id}
-                      className="tildeling-chip"
-                      style={{ background: prosjektColor(t.prosjektId) }}
-                      onClick={e => { e.stopPropagation(); if (window.confirm(`Slett tildeling «${p?.navn || ''}»?\n${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`)) deleteTildeling(t.id); }}
-                      title={`${p?.navn || 'Ukjent'} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
-                    >
-                      {isFirstVis ? (
-                        <div className="chip-handle chip-handle-l"
-                          draggable
-                          onDragStart={e => {
-                            e.stopPropagation();
-                            dragRef.current = { tildelingId: t.id, type: 'start' };
-                          }}
-                          title="Dra for å endre startdato">◂</div>
-                      ) : <div className="chip-handle-spacer" />}
-                      <span className="chip-navn">{p?.navn?.slice(0, 11) || '–'}</span>
-                      <div className="chip-btns">
-                        <button className="chip-split" title="Del opp med pause"
-                          onClick={e => { e.stopPropagation(); setSplitModal(t); setSplitForm({ gapStart: '', gapEnd: '' }); }}>✂</button>
-                        <button className="chip-delete"
-                          onClick={e => { e.stopPropagation(); deleteTildeling(t.id); }}>✕</button>
-                      </div>
-                      {isLastVis ? (
-                        <div className="chip-handle chip-handle-r"
-                          draggable
-                          onDragStart={e => {
-                            e.stopPropagation();
-                            dragRef.current = { tildelingId: t.id, type: 'end' };
-                          }}
-                          title="Dra for å endre sluttdato">▸</div>
-                      ) : <div className="chip-handle-spacer" />}
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
+          <GanttRowContainer ansatt={ansatt} days={weekDays} unit="day" />
         </React.Fragment>
       );
     }
@@ -326,7 +357,6 @@ export default function Bemanningsplan() {
     function handleNeedlePointerUp() { draggingNeedle.current = false; }
 
     function UkeAnsattRad({ ansatt }) {
-      const [dragOverDay, setDragOverDay] = useState(null);
       return (
         <React.Fragment>
           <div className="uke-row-label">
@@ -338,59 +368,11 @@ export default function Bemanningsplan() {
               <div className="row-fag" style={{ color: fagColor(ansatt.fag) }}>{ansatt.fag}</div>
             </div>
           </div>
-          {WORK_DAYS_UKE.map((dag, i) => {
-            const isMonday = i % 5 === 0;
-            const dagTil = state.tildelinger.filter(t =>
-              t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, dag, dag)
-            );
-            const isToday = dag === today;
-            const isOver = dragOverDay === dag;
-            return (
-              <div key={`${ansatt.id}-${dag}`}
-                className={`uke-cell uke-cell-dag ${isToday ? 'today-col' : ''} ${isMonday ? 'week-start-col' : ''} ${isOver ? 'drag-over' : ''}`}
-                onClick={() => dagTil.length === 0 && openAddTildeling(ansatt.id, dag)}
-                onDragOver={e => { e.preventDefault(); setDragOverDay(dag); }}
-                onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverDay(null); }}
-                onDrop={e => { e.preventDefault(); setDragOverDay(null); handleDrop(dag, 'day'); }}
-                title={dagTil.length === 0 ? 'Klikk for å legge til' : undefined}
-              >
-                {dagTil.map(t => {
-                  const p = state.prosjekter.find(p => p.id === t.prosjektId);
-                  const isFirstVis = t.startDato === dag || dag === WORK_DAYS_UKE[0];
-                  const isLastVis  = t.sluttDato === dag || dag === WORK_DAYS_UKE[WORK_DAYS_UKE.length - 1];
-                  return (
-                    <div key={t.id}
-                      className="tildeling-chip"
-                      style={{ background: prosjektColor(t.prosjektId) }}
-                      onClick={e => { e.stopPropagation(); if (window.confirm(`Slett tildeling «${p?.navn || ''}»?\n${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`)) deleteTildeling(t.id); }}
-                      title={`${p?.navn || 'Ukjent'} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
-                    >
-                      {isFirstVis ? (
-                        <div className="chip-handle chip-handle-l" draggable
-                          onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'start' }; }}
-                          title="Dra for å endre startdato">◂</div>
-                      ) : <div className="chip-handle-spacer" />}
-                      <span className="chip-navn">{p?.navn?.slice(0, 8) || '–'}</span>
-                      <div className="chip-btns">
-                        <button className="chip-split" title="Del opp med pause"
-                          onClick={e => { e.stopPropagation(); setSplitModal(t); setSplitForm({ gapStart: '', gapEnd: '' }); }}>✂</button>
-                        <button className="chip-delete"
-                          onClick={e => { e.stopPropagation(); deleteTildeling(t.id); }}>✕</button>
-                      </div>
-                      {isLastVis ? (
-                        <div className="chip-handle chip-handle-r" draggable
-                          onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'end' }; }}
-                          title="Dra for å endre sluttdato">▸</div>
-                      ) : <div className="chip-handle-spacer" />}
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
+          <GanttRowContainer ansatt={ansatt} days={WORK_DAYS_UKE} unit="day_50" />
         </React.Fragment>
       );
     }
+
 
     function UkeGridHeader() {
       return (
@@ -434,7 +416,6 @@ export default function Bemanningsplan() {
     const maanedLedige = state.ansatte.filter(a => !maanedTildeltIds.has(a.id));
 
     function MaanedAnsattRad({ ansatt }) {
-      const [dragOverM, setDragOverM] = useState(null);
       return (
         <React.Fragment>
           <div className="uke-row-label">
@@ -446,53 +427,11 @@ export default function Bemanningsplan() {
               <div className="row-fag" style={{ color: fagColor(ansatt.fag) }}>{ansatt.fag}</div>
             </div>
           </div>
-          {SIX_MONTHS.map(mStart => {
-            const mEnd = monthEnd(mStart);
-            const mTil = state.tildelinger.filter(t =>
-              t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, mStart, mEnd)
-            );
-            const prosjekterIMaaned = [...new Map(
-              mTil.map(t => [t.prosjektId, state.prosjekter.find(p => p.id === t.prosjektId)])
-            ).values()].filter(Boolean);
-            const isCurrentMonth = mStart.slice(0, 7) === today.slice(0, 7);
-            const isOver = dragOverM === mStart;
-            return (
-              <div key={`${ansatt.id}-${mStart}`}
-                className={`uke-cell uke-cell-uke ${isCurrentMonth ? 'current-week-col' : ''} ${isOver ? 'drag-over' : ''}`}
-                onClick={() => prosjekterIMaaned.length === 0 && openAddTildeling(ansatt.id, mStart)}
-                onDragOver={e => { e.preventDefault(); setDragOverM(mStart); }}
-                onDragLeave={() => setDragOverM(null)}
-                onDrop={e => { e.preventDefault(); setDragOverM(null); handleDrop(mStart, 'month'); }}
-                title={prosjekterIMaaned.length === 0 ? 'Klikk for å legge til' : undefined}
-              >
-                {mTil.map(t => {
-                  const p = state.prosjekter.find(pr => pr.id === t.prosjektId);
-                  if (!p) return null;
-                  return (
-                    <div key={t.id} className="uke-uke-chip"
-                      style={{ background: prosjektColor(p.id) }}
-                      onClick={e => { e.stopPropagation(); if (window.confirm(`Slett tildeling «${p?.navn || ''}»?\n${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`)) deleteTildeling(t.id); }}
-                      title={`${p.navn} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
-                    >
-                      <span className="uke-chip-handle uke-chip-handle-l"
-                        draggable
-                        onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'start' }; }}
-                        title="Dra for å endre startdato">◂</span>
-                      <span className="uke-chip-navn">{p.navn.slice(0, 9)}</span>
-                      <span className="uke-chip-handle uke-chip-handle-r"
-                        draggable
-                        onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'end' }; }}
-                        title="Dra for å endre sluttdato">▸</span>
-                    </div>
-                  );
-                })}
-                {prosjekterIMaaned.length === 0 && <span className="ledig">–</span>}
-              </div>
-            );
-          })}
+          <GanttRowContainer ansatt={ansatt} days={SIX_MONTHS} unit="month" />
         </React.Fragment>
       );
     }
+
 
     function MaanedGridHeader() {
       return (
