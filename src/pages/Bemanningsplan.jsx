@@ -66,7 +66,7 @@ export default function Bemanningsplan() {
   const [splitForm, setSplitForm] = useState({ gapStart: '', gapEnd: '' });
   const dragRef = useRef(null);
 
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(currentWeek, i));
+  const weekDays = Array.from({ length: 56 }, (_, i) => addDays(currentWeek, i));
 
   function prevWeek() { setCurrentWeek(w => addDays(w, -7)); }
   function nextWeek() { setCurrentWeek(w => addDays(w, 7)); }
@@ -170,7 +170,7 @@ export default function Bemanningsplan() {
     const gridWrapRef = useRef(null);
 
     // ---- DAG-MODUS ----
-    const weekEnd = addDays(currentWeek, 6);
+    const weekEnd = addDays(currentWeek, 55);
 
     const dagProsjektIds = [...new Set(
       state.tildelinger
@@ -300,12 +300,21 @@ export default function Bemanningsplan() {
           <div className="uke-header-cell"></div>
           {weekDays.map((dag, i) => {
             const hol = HOLIDAYS[dag];
+            const isMonday = i % 7 === 0;
+            const weekNum = getWeekNumber(dag);
+            const isCurrentWeek = weekStart(dag) === weekStart(today);
             return (
-              <div key={dag} className={`uke-header-cell ${dag === today ? 'today' : ''} ${hol ? 'holiday-header' : ''}`}
+              <div key={dag} className={`uke-header-cell ${dag === today ? 'today' : ''} ${isMonday ? 'week-start-col' : ''} ${hol ? 'holiday-header' : ''}`}
+                style={{ fontSize: 11, padding: '4px 2px', textAlign: 'center' }}
                 title={hol || undefined}>
-                <div>{DAG_NAVN[i]}</div>
-                <div className="dag-dato">{dag.slice(5).replace('-', '.')}</div>
-                {hol && <div className="holiday-label">{hol}</div>}
+                {isMonday && (
+                  <div style={{ fontSize: 10, fontWeight: 700, color: isCurrentWeek ? '#2563eb' : '#94a3b8', lineHeight: 1.2 }}>
+                    U{weekNum}
+                  </div>
+                )}
+                <div style={{ fontWeight: isMonday ? 700 : 400 }}>{DAG_NAVN[i % 7]}</div>
+                <div className="dag-dato" style={{ fontSize: 10 }}>{dag.slice(8)}.{dag.slice(5, 7)}</div>
+                {hol && <div className="holiday-label">{hol.split(' ')[0]}</div>}
               </div>
             );
           })}
@@ -332,19 +341,19 @@ export default function Bemanningsplan() {
       );
     }
 
-    // ---- UKE-MODUS: Man–Fre × 10 uker (50 kolonner) ----
-    const TEN_WEEKS = Array.from({ length: 10 }, (_, i) => addDays(currentWeek, i * 7));
+    // ---- UKE-MODUS: Man–Fre × 26 uker (130 kolonner) ----
+    const TEN_WEEKS = Array.from({ length: 26 }, (_, i) => addDays(currentWeek, i * 7));
 
-    // Alle arbeidsdager (Man–Fre) for 10 uker = 50 dager
+    // Alle arbeidsdager (Man–Fre) for 26 uker = 130 dager
     const WORK_DAYS_UKE = [];
-    for (let w = 0; w < 10; w++) {
+    for (let w = 0; w < 26; w++) {
       for (let d = 0; d < 5; d++) {
         WORK_DAYS_UKE.push(addDays(currentWeek, w * 7 + d));
       }
     }
 
     const periodeStart = currentWeek;
-    const periodeEnd = addDays(currentWeek, 10 * 7 - 1);
+    const periodeEnd = addDays(currentWeek, 26 * 7 - 1);
 
     const ukeProsjektIds = [...new Set(
       state.tildelinger
@@ -408,7 +417,7 @@ export default function Bemanningsplan() {
             const isMonday = i % 5 === 0;
             const weekIdx = Math.floor(i / 5);
             const isToday = dag === today;
-            const isCurrentWeek = TEN_WEEKS[weekIdx] === weekStart(today);
+            const isCurrentWeek = weekStart(dag) === weekStart(today);
             const hol = HOLIDAYS[dag];
             return (
               <div key={dag}
@@ -430,8 +439,8 @@ export default function Bemanningsplan() {
       );
     }
 
-    const SIX_MONTHS = Array.from({ length: 6 }, (_, i) => addMonths(currentMonth, i));
-    const maanedPeriodeEnd = monthEnd(SIX_MONTHS[5]);
+    const SIX_MONTHS = Array.from({ length: 18 }, (_, i) => addMonths(currentMonth, i));
+    const maanedPeriodeEnd = monthEnd(SIX_MONTHS[17]);
 
     const maanedProsjektIds = [...new Set(
       state.tildelinger
@@ -479,10 +488,10 @@ export default function Bemanningsplan() {
     }
 
     const navLabel = ukeMode === 'dag'
-      ? `Uke ${getWeekNumber(currentWeek)}: ${formatDate(currentWeek)} – ${formatDate(addDays(currentWeek, 6))}`
+      ? `Uke ${getWeekNumber(currentWeek)} – Uke ${getWeekNumber(addDays(currentWeek, 55))}`
       : ukeMode === 'uke'
-      ? `Uke ${getWeekNumber(currentWeek)} – Uke ${getWeekNumber(addDays(currentWeek, 9 * 7))}`
-      : `${monthLabel(SIX_MONTHS[0])} – ${monthLabel(SIX_MONTHS[5])}`;
+      ? `Uke ${getWeekNumber(currentWeek)} – Uke ${getWeekNumber(addDays(currentWeek, 25 * 7))}`
+      : `${monthLabel(SIX_MONTHS[0])} – ${monthLabel(SIX_MONTHS[17])}`;
 
     function handlePrev() {
       if (ukeMode === 'maaned') setCurrentMonth(m => addMonths(m, -1));
@@ -546,9 +555,9 @@ export default function Bemanningsplan() {
 
         {ukeMode === 'dag' ? (
           <div className="uke-grid-wrap">
-            <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(7, 1fr)` }}>
+            <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(56, minmax(32px, 1fr))` }}>
               <DagGridHeader />
-              {renderProsjektRader(dagProsjekter, dagLedige, 7, DagAnsattRad, currentWeek, weekEnd)}
+              {renderProsjektRader(dagProsjekter, dagLedige, 56, DagAnsattRad, currentWeek, weekEnd)}
             </div>
           </div>
         ) : ukeMode === 'uke' ? (
@@ -567,16 +576,16 @@ export default function Bemanningsplan() {
                 <div className="needle-label">{formatDate(needleDay)}</div>
               </div>
             )}
-            <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(50, minmax(32px, 1fr))` }}>
+            <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(130, minmax(28px, 1fr))` }}>
               <UkeGridHeader />
-              {renderProsjektRader(ukeProsjekter, ukeLedige, 50, UkeAnsattRad, periodeStart, periodeEnd)}
+              {renderProsjektRader(ukeProsjekter, ukeLedige, 130, UkeAnsattRad, periodeStart, periodeEnd)}
             </div>
           </div>
         ) : (
           <div className="uke-grid-wrap">
-            <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(6, 1fr)` }}>
+            <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(18, minmax(80px, 1fr))` }}>
               <MaanedGridHeader />
-              {renderProsjektRader(maanedProsjekter, maanedLedige, 6, MaanedAnsattRad, currentMonth, maanedPeriodeEnd)}
+              {renderProsjektRader(maanedProsjekter, maanedLedige, 18, MaanedAnsattRad, currentMonth, maanedPeriodeEnd)}
             </div>
           </div>
         )}
