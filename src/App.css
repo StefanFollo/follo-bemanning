@@ -508,7 +508,7 @@ body {
 .today-col { background: #fffbeb !important; }
 
 /* Dato-nål (drabar vertikal linje) */
-.uke-grid-wrap { position: relative; overflow-x: auto; }
+.uke-grid-wrap { position: relative; overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 230px); }
 .timeline-needle {
   position: absolute;
   top: 0; bottom: 0;
