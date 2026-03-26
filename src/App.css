@@ -887,6 +887,104 @@ body {
 }
 
 /* ===== PRINT / PDF ===== */
+
+/* ===== PROSJEKT OVERSIKT ===== */
+.proj-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+@media (max-width: 700px) {
+  .proj-summary-cards { grid-template-columns: repeat(2, 1fr); }
+}
+.proj-summary-card {
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  border: 1px solid #e2e8f0;
+}
+.proj-summary-icon { font-size: 22px; line-height: 1; }
+.proj-summary-count { font-size: 32px; font-weight: 800; line-height: 1.1; }
+.proj-summary-label { font-size: 12px; color: #64748b; font-weight: 600; text-align: center; }
+
+.proj-gruppe { border-radius: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+
+.proj-gruppe-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: #f8fafc;
+  border: none;
+  border-bottom: 1px solid #e2e8f0;
+  cursor: pointer;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 700;
+  color: #1e293b;
+  transition: background 0.15s;
+}
+.proj-gruppe-header:hover { background: #f1f5f9; }
+.proj-gruppe-icon { font-size: 16px; }
+.proj-gruppe-label { flex: 1; }
+.proj-gruppe-count {
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 10px;
+  padding: 1px 8px;
+  min-width: 22px;
+  text-align: center;
+}
+.proj-gruppe-chevron { color: #94a3b8; font-size: 13px; }
+
+.ct-gantt { flex: 2 !important; min-width: 180px; }
+
+.proj-gantt-wrap {
+  position: relative;
+  height: 28px;
+  background: #f1f5f9;
+  border-radius: 4px;
+  overflow: hidden;
+}
+.proj-gantt-tick {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 1px;
+  background: #e2e8f0;
+}
+.proj-gantt-tick-label {
+  position: absolute;
+  bottom: 2px; left: 2px;
+  font-size: 9px;
+  color: #94a3b8;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.proj-gantt-today {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 2px;
+  background: #ef4444;
+  z-index: 3;
+}
+.proj-gantt-bar {
+  position: absolute;
+  top: 6px; height: 16px;
+  border-radius: 3px;
+  z-index: 2;
+  min-width: 4px;
+  transition: filter 0.15s;
+}
+.proj-gantt-bar:hover { filter: brightness(0.85); }
+.proj-gantt-bar-open { border-radius: 3px 0 0 3px; }
+
 /* ===== RØRLEGGER TIMEPLAN ===== */
 .ror-grid-wrap {
   overflow-x: auto;
