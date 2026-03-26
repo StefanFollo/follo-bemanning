@@ -72,6 +72,12 @@ function MiniGantt({ prosjekt, color }) {
   );
 }
 
+const FAG_COLORS = {
+  'Bas Tømrer': '#f59e0b', 'Montør': '#3b82f6', 'Lærling Tømrer': '#16a34a',
+  'Maler': '#ec4899', 'Rørlegger': '#06b6d4', 'Tømrer': '#8b5cf6',
+  'Flislegger': '#f97316', 'Prosjektleder': '#0ea5e9',
+};
+
 // Backward-compat: 'planlagt' vises som 'Vi jobber med', 'aktiv' som 'Pågående'
 const STATUS_LABELS = {
   jobber_med: 'Vi jobber med',
@@ -271,7 +277,9 @@ export default function Prosjekter() {
                       ? Math.round(opp.reduce((s, o) => s + (o.fremgang || 0), 0) / opp.length)
                       : null;
                     const tildelinger = state.tildelinger.filter(t => t.prosjektId === p.id);
-                    const ansatteCount = new Set(tildelinger.map(t => t.ansattId)).size;
+                    const ansatteIds = [...new Set(tildelinger.map(t => t.ansattId))];
+                    const ansatteCount = ansatteIds.length;
+                    const ansatteNavn = ansatteIds.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
                     const barColor = p.farge || color;
 
                     return (
@@ -283,8 +291,17 @@ export default function Prosjekter() {
                             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
                               {p.adresse && <span className="ct-sub">{p.adresse}</span>}
                               {ansatteCount > 0 && (
-                                <span style={{ fontSize: 11, color: '#6b7280', background: '#f1f5f9', borderRadius: 4, padding: '0 5px' }}>
-                                  👷 {ansatteCount}
+                                <span className="ansatte-tooltip-wrap">
+                                  <span className="ansatte-badge">👷 {ansatteCount}</span>
+                                  <div className="ansatte-tooltip">
+                                    <div className="ansatte-tooltip-tittel">Tildelte ansatte</div>
+                                    {ansatteNavn.map(a => (
+                                      <div key={a.id} className="ansatte-tooltip-rad">
+                                        <span className="ansatte-tooltip-dot" style={{ background: FAG_COLORS[a.fag] || '#6b7280' }} />
+                                        {a.navn}
+                                      </div>
+                                    ))}
+                                  </div>
                                 </span>
                               )}
                               {p.startDato && (

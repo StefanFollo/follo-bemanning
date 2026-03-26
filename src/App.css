@@ -985,6 +985,67 @@ body {
 .proj-gantt-bar:hover { filter: brightness(0.85); }
 .proj-gantt-bar-open { border-radius: 3px 0 0 3px; }
 
+/* Ansatte hover-tooltip */
+.ansatte-tooltip-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.ansatte-badge {
+  font-size: 11px;
+  color: #6b7280;
+  background: #f1f5f9;
+  border-radius: 4px;
+  padding: 0 6px;
+  cursor: default;
+  user-select: none;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s;
+}
+.ansatte-tooltip-wrap:hover .ansatte-badge {
+  background: #e0f2fe;
+  border-color: #7dd3fc;
+  color: #0369a1;
+}
+.ansatte-tooltip {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 200;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 12px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.13);
+  min-width: 180px;
+  max-width: 260px;
+  pointer-events: none;
+}
+.ansatte-tooltip-wrap:hover .ansatte-tooltip { display: block; }
+.ansatte-tooltip-tittel {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  margin-bottom: 6px;
+}
+.ansatte-tooltip-rad {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: #1e293b;
+  padding: 2px 0;
+  white-space: nowrap;
+}
+.ansatte-tooltip-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 /* ===== RØRLEGGER TIMEPLAN ===== */
 .ror-grid-wrap {
   overflow-x: auto;
