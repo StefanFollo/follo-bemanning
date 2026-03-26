@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useEffect, useState } from 'react';
 import {
   loadState,
-  saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag,
+  saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag, saveRorTimer,
   loadFromCloud, saveToCloud,
   uid,
 } from '../store';
@@ -18,6 +18,7 @@ function reducer(state, action) {
       if (s.tildelinger) saveTildelinger(s.tildelinger);
       if (s.oppgaver) saveOppgaver(s.oppgaver);
       if (s.fag) saveFag(s.fag);
+      if (s.rorTimer) saveRorTimer(s.rorTimer);
       return { ...state, ...s };
     }
 
@@ -100,6 +101,23 @@ function reducer(state, action) {
       const next = state.oppgaver.filter(o => o.id !== action.id);
       saveOppgaver(next);
       return { ...state, oppgaver: next };
+    }
+
+    // --- Rørlegger timer ---
+    case 'ADD_ROR_TIMER': {
+      const next = [...(state.rorTimer || []), { ...action.payload, id: uid() }];
+      saveRorTimer(next);
+      return { ...state, rorTimer: next };
+    }
+    case 'UPDATE_ROR_TIMER': {
+      const next = (state.rorTimer || []).map(t => t.id === action.payload.id ? { ...t, ...action.payload } : t);
+      saveRorTimer(next);
+      return { ...state, rorTimer: next };
+    }
+    case 'DELETE_ROR_TIMER': {
+      const next = (state.rorTimer || []).filter(t => t.id !== action.id);
+      saveRorTimer(next);
+      return { ...state, rorTimer: next };
     }
 
     // --- Fag ---

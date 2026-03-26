@@ -4,6 +4,7 @@ import Prosjekter from './pages/Prosjekter';
 import Ansatte from './pages/Ansatte';
 import Bemanningsplan from './pages/Bemanningsplan';
 import Framdriftsplan from './pages/Framdriftsplan';
+import RorleggerPlan from './pages/RorleggerPlan';
 import LoginPage from './pages/LoginPage';
 import './App.css';
 
@@ -11,6 +12,7 @@ const TABS = [
   { id: 'prosjekter', label: 'Prosjekter', icon: '🏗' },
   { id: 'ansatte', label: 'Ansatte', icon: '👷' },
   { id: 'bemanningsplan', label: 'Bemanningsplan', icon: '📅' },
+  { id: 'rorlegger', label: 'Rørlegger', icon: '🔧' },
   { id: 'framdrift', label: 'Framdrift', icon: '📊' },
 ];
 
@@ -52,6 +54,7 @@ function App() {
           {activeTab === 'prosjekter' && <Prosjekter />}
           {activeTab === 'ansatte' && <Ansatte />}
           {activeTab === 'bemanningsplan' && <Bemanningsplan />}
+          {activeTab === 'rorlegger' && <RorleggerPlan />}
           {activeTab === 'framdrift' && <Framdriftsplan />}
         </main>
 
