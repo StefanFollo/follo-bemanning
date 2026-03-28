@@ -108,6 +108,20 @@ export default function Bemanningsplan() {
     return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
   }
 
+  // Lagre og gjenopprette scroll-posisjon rundt dispatch
+  // slik at siden ikke hopper til toppen etter drag
+  function dispatchKeepScroll(action) {
+    const wraps = [...document.querySelectorAll('.uke-grid-wrap')];
+    const saved = wraps.map(el => ({ el, top: el.scrollTop, left: el.scrollLeft }));
+    dispatch(action);
+    requestAnimationFrame(() => {
+      saved.forEach(({ el, top, left }) => {
+        el.scrollTop = top;
+        el.scrollLeft = left;
+      });
+    });
+  }
+
   function handleDrop(targetDay, unit /* 'day'|'week'|'month' */) {
     const d = dragRef.current;
     if (!d) return;
@@ -119,21 +133,17 @@ export default function Bemanningsplan() {
       const offset = unit === 'day' ? d.offsetDays : 0;
       const newStart = addDays(targetDay, -offset);
       const newEnd = addDays(newStart, duration);
-      dispatch({ type: 'UPDATE_TILDELING', payload: { ...t, startDato: newStart, sluttDato: newEnd } });
+      dispatchKeepScroll({ type: 'UPDATE_TILDELING', payload: { ...t, startDato: newStart, sluttDato: newEnd } });
     } else if (d.type === 'end') {
-      // Extend OR shorten from right — any date >= startDato is valid
       const newEnd = unit === 'week' ? addDays(targetDay, 6)
                   : unit === 'month' ? monthEnd(targetDay)
                   : targetDay;
       if (newEnd >= t.startDato)
-        dispatch({ type: 'UPDATE_TILDELING', payload: { ...t, sluttDato: newEnd } });
+        dispatchKeepScroll({ type: 'UPDATE_TILDELING', payload: { ...t, sluttDato: newEnd } });
     } else if (d.type === 'start') {
-      // Extend OR shorten from left — any date <= sluttDato is valid
-      const newStart = unit === 'week' ? targetDay
-                     : unit === 'month' ? targetDay
-                     : targetDay;
+      const newStart = targetDay;
       if (newStart <= t.sluttDato)
-        dispatch({ type: 'UPDATE_TILDELING', payload: { ...t, startDato: newStart } });
+        dispatchKeepScroll({ type: 'UPDATE_TILDELING', payload: { ...t, startDato: newStart } });
     }
   }
 
