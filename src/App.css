@@ -439,10 +439,24 @@ body {
 
 /* Opptatt-bar: ansatt er på et annet prosjekt i denne perioden */
 .gantt-bar-busy {
-  opacity: 0.22;
+  opacity: 0.42;
   pointer-events: none;
   border-radius: 3px;
   z-index: 0;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  padding: 0 5px;
+}
+.gantt-busy-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: white;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0,0,0,.35);
+  pointer-events: none;
 }
 
 .gantt-bar-ferie {

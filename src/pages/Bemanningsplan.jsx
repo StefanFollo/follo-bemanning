@@ -276,7 +276,9 @@ export default function Bemanningsplan() {
                 className="gantt-bar gantt-bar-busy"
                 style={{ left: pos.left, width: pos.width, background: prosjektColor(t.prosjektId) }}
                 title={`Opptatt: ${pNavn} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
-              />
+              >
+                <span className="gantt-busy-label">{pNavn}</span>
+              </div>
             );
           })}
           {/* Primær-bars: dette prosjektets tildelinger + ferie */}
