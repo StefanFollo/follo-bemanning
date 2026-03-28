@@ -109,17 +109,20 @@ export default function Bemanningsplan() {
   }
 
   // Lagre og gjenopprette scroll-posisjon rundt dispatch
-  // slik at siden ikke hopper til toppen etter drag
+  // Dobbel rAF sikrer at React er ferdig med painting før vi restorer
   function dispatchKeepScroll(action) {
+    const winY = window.scrollY;
+    const winX = window.scrollX;
     const wraps = [...document.querySelectorAll('.uke-grid-wrap')];
     const saved = wraps.map(el => ({ el, top: el.scrollTop, left: el.scrollLeft }));
     dispatch(action);
-    requestAnimationFrame(() => {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      window.scrollTo({ top: winY, left: winX, behavior: 'instant' });
       saved.forEach(({ el, top, left }) => {
         el.scrollTop = top;
         el.scrollLeft = left;
       });
-    });
+    }));
   }
 
   function handleDrop(targetDay, unit /* 'day'|'week'|'month' */) {
@@ -168,13 +171,9 @@ export default function Bemanningsplan() {
     const HOLIDAYS = getHolidayMap(thisYear - 1, thisYear + 2);
     const isHoliday = (iso) => !!HOLIDAYS[iso];
     const holidayName = (iso) => HOLIDAYS[iso] || '';
-    const FALLBACK_COLORS = ['#2563eb','#16a34a','#dc2626','#9333ea','#ea580c','#0891b2','#be185d','#854d0e','#065f46','#1e40af'];
-    const prosjektColor = (pid) => {
-      const p = state.prosjekter.find(p => p.id === pid);
-      if (p?.farge) return p.farge;
-      const idx = state.prosjekter.findIndex(p => p.id === pid);
-      return FALLBACK_COLORS[idx % FALLBACK_COLORS.length] || '#6b7280';
-    };
+    // Én myk stålblå farge på alle prosjektbarer — ikke skarp, passer til designet
+    const PROSJEKT_BAR_FARGE = '#6b8fc4';
+    const prosjektColor = (_pid) => PROSJEKT_BAR_FARGE;
 
     // Needle state for uke-modus
     const [needleDay, setNeedleDay] = useState(today);
