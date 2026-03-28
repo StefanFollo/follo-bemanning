@@ -66,7 +66,9 @@ export default function Bemanningsplan() {
   const [splitForm, setSplitForm] = useState({ gapStart: '', gapEnd: '' });
   const dragRef = useRef(null);
 
-  const weekDays = Array.from({ length: 56 }, (_, i) => addDays(currentWeek, i));
+  // Kun hverdager (Man–Fre) over 8 uker = 40 kolonner
+  const weekDays = Array.from({ length: 56 }, (_, i) => addDays(currentWeek, i))
+    .filter(d => { const dow = new Date(d + 'T00:00:00').getDay(); return dow >= 1 && dow <= 5; });
 
   function prevWeek() { setCurrentWeek(w => addDays(w, -7)); }
   function nextWeek() { setCurrentWeek(w => addDays(w, 7)); }
@@ -298,9 +300,10 @@ export default function Bemanningsplan() {
       return (
         <>
           <div className="uke-header-cell"></div>
-          {weekDays.map((dag, i) => {
+          {weekDays.map((dag) => {
             const hol = HOLIDAYS[dag];
-            const isMonday = i % 7 === 0;
+            const dow = new Date(dag + 'T00:00:00').getDay(); // 1=Man … 5=Fre
+            const isMonday = dow === 1;
             const weekNum = getWeekNumber(dag);
             const isCurrentWeek = weekStart(dag) === weekStart(today);
             return (
@@ -312,7 +315,7 @@ export default function Bemanningsplan() {
                     U{weekNum}
                   </div>
                 )}
-                <div style={{ fontWeight: isMonday ? 700 : 400 }}>{DAG_NAVN[i % 7]}</div>
+                <div style={{ fontWeight: isMonday ? 700 : 400 }}>{DAG_NAVN[dow - 1]}</div>
                 <div className="dag-dato" style={{ fontSize: 10 }}>{dag.slice(8)}.{dag.slice(5, 7)}</div>
                 {hol && <div className="holiday-label">{hol.split(' ')[0]}</div>}
               </div>
@@ -555,9 +558,9 @@ export default function Bemanningsplan() {
 
         {ukeMode === 'dag' ? (
           <div className="uke-grid-wrap">
-            <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(56, minmax(32px, 1fr))` }}>
+            <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(${weekDays.length}, minmax(36px, 1fr))` }}>
               <DagGridHeader />
-              {renderProsjektRader(dagProsjekter, dagLedige, 56, DagAnsattRad, currentWeek, weekEnd)}
+              {renderProsjektRader(dagProsjekter, dagLedige, weekDays.length, DagAnsattRad, currentWeek, weekEnd)}
             </div>
           </div>
         ) : ukeMode === 'uke' ? (
