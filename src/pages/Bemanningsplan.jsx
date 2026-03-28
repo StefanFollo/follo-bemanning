@@ -195,7 +195,8 @@ export default function Bemanningsplan() {
     const dagLedige = state.ansatte.filter(a => !dagTildeltIds.has(a.id));
 
     // Shared Gantt row container — renders continuous bars with drag handles
-    function GanttRowContainer({ ansatt, days, unit }) {
+    // prosjektId: vis kun dette prosjektets bars normalt; andre prosjekter vises som opptatt-bar
+    function GanttRowContainer({ ansatt, days, unit, prosjektId }) {
       const [dragOverIdx, setDragOverIdx] = useState(null);
       const n = days.length;
       const viewEnd = unit === 'month' ? monthEnd(days[n - 1]) : days[n - 1];
@@ -203,6 +204,14 @@ export default function Bemanningsplan() {
       const myTil = state.tildelinger.filter(t =>
         t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, days[0], viewEnd)
       );
+
+      // Splitt i primær (dette prosjektet + ferie) og opptatt (andre prosjekter)
+      const primaryTil = prosjektId
+        ? myTil.filter(t => t.prosjektId === prosjektId || t.prosjektId === FERIE_ID)
+        : myTil;
+      const busyTil = prosjektId
+        ? myTil.filter(t => t.prosjektId !== prosjektId && t.prosjektId !== FERIE_ID)
+        : [];
 
       function getIdxFromEvent(e) {
         const rect = e.currentTarget.getBoundingClientRect();
@@ -257,7 +266,21 @@ export default function Bemanningsplan() {
               />
             );
           })}
-          {myTil.map(t => {
+          {/* Opptatt-bars: andre prosjekter — gjennomsiktig, ikke klikkbar */}
+          {busyTil.map(t => {
+            const pos = getBarPos(t);
+            if (!pos) return null;
+            const pNavn = state.prosjekter.find(pr => pr.id === t.prosjektId)?.navn || '–';
+            return (
+              <div key={t.id + '-busy'}
+                className="gantt-bar gantt-bar-busy"
+                style={{ left: pos.left, width: pos.width, background: prosjektColor(t.prosjektId) }}
+                title={`Opptatt: ${pNavn} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
+              />
+            );
+          })}
+          {/* Primær-bars: dette prosjektets tildelinger + ferie */}
+          {primaryTil.map(t => {
             const pos = getBarPos(t);
             if (!pos) return null;
             const isFerie = t.prosjektId === FERIE_ID;
@@ -288,7 +311,7 @@ export default function Bemanningsplan() {
       );
     }
 
-    function DagAnsattRad({ ansatt }) {
+    function DagAnsattRad({ ansatt, prosjektId }) {
       return (
         <React.Fragment>
           <div className="uke-row-label">
@@ -300,7 +323,7 @@ export default function Bemanningsplan() {
               <div className="row-fag" style={{ color: fagColor(ansatt.fag) }}>{ansatt.fag}</div>
             </div>
           </div>
-          <GanttRowContainer ansatt={ansatt} days={weekDays} unit="day" />
+          <GanttRowContainer ansatt={ansatt} days={weekDays} unit="day" prosjektId={prosjektId} />
         </React.Fragment>
       );
     }
@@ -403,7 +426,7 @@ export default function Bemanningsplan() {
     }
     function handleNeedlePointerUp() { draggingNeedle.current = false; }
 
-    function UkeAnsattRad({ ansatt }) {
+    function UkeAnsattRad({ ansatt, prosjektId }) {
       return (
         <React.Fragment>
           <div className="uke-row-label">
@@ -415,7 +438,7 @@ export default function Bemanningsplan() {
               <div className="row-fag" style={{ color: fagColor(ansatt.fag) }}>{ansatt.fag}</div>
             </div>
           </div>
-          <GanttRowContainer ansatt={ansatt} days={WORK_DAYS_UKE} unit="day_50" />
+          <GanttRowContainer ansatt={ansatt} days={WORK_DAYS_UKE} unit="day_50" prosjektId={prosjektId} />
         </React.Fragment>
       );
     }
@@ -465,7 +488,7 @@ export default function Bemanningsplan() {
     );
     const maanedLedige = state.ansatte.filter(a => !maanedTildeltIds.has(a.id));
 
-    function MaanedAnsattRad({ ansatt }) {
+    function MaanedAnsattRad({ ansatt, prosjektId }) {
       return (
         <React.Fragment>
           <div className="uke-row-label">
@@ -477,7 +500,7 @@ export default function Bemanningsplan() {
               <div className="row-fag" style={{ color: fagColor(ansatt.fag) }}>{ansatt.fag}</div>
             </div>
           </div>
-          <GanttRowContainer ansatt={ansatt} days={SIX_MONTHS} unit="month" />
+          <GanttRowContainer ansatt={ansatt} days={SIX_MONTHS} unit="month" prosjektId={prosjektId} />
         </React.Fragment>
       );
     }
@@ -532,7 +555,7 @@ export default function Bemanningsplan() {
                   <span className="uke-prosjekt-navn">{prosjekt.navn}</span>
                   <span className="uke-prosjekt-antall">{ansatte.length} ansatt{ansatte.length !== 1 ? 'e' : ''}</span>
                 </div>
-                {ansatte.map(a => <AnsattRad key={a.id} ansatt={a} />)}
+                {ansatte.map(a => <AnsattRad key={a.id} ansatt={a} prosjektId={prosjekt.id} />)}
               </React.Fragment>
             );
           })}
@@ -542,7 +565,7 @@ export default function Bemanningsplan() {
                 <span className="uke-prosjekt-navn" style={{ color: '#6b7280' }}>Ikke tildelt i perioden</span>
                 <span className="uke-prosjekt-antall">{ledige.length} ansatt{ledige.length !== 1 ? 'e' : ''}</span>
               </div>
-              {ledige.map(a => <AnsattRad key={a.id} ansatt={a} />)}
+              {ledige.map(a => <AnsattRad key={a.id} ansatt={a} prosjektId={null} />)}
             </React.Fragment>
           )}
         </>

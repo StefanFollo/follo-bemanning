@@ -436,6 +436,15 @@ body {
   min-width: 8px;
 }
 .gantt-bar:hover { filter: brightness(1.1); }
+
+/* Opptatt-bar: ansatt er på et annet prosjekt i denne perioden */
+.gantt-bar-busy {
+  opacity: 0.22;
+  pointer-events: none;
+  border-radius: 3px;
+  z-index: 0;
+}
+
 .gantt-bar-ferie {
   background: repeating-linear-gradient(
     45deg,
