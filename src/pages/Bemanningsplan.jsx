@@ -66,8 +66,8 @@ export default function Bemanningsplan() {
   const [splitForm, setSplitForm] = useState({ gapStart: '', gapEnd: '' });
   const dragRef = useRef(null);
 
-  // Kun hverdager (Man–Fre) over 8 uker = 40 kolonner
-  const weekDays = Array.from({ length: 56 }, (_, i) => addDays(currentWeek, i))
+  // Kun hverdager (Man–Fre) over 52 uker = ~260 kolonner
+  const weekDays = Array.from({ length: 52 * 7 }, (_, i) => addDays(currentWeek, i))
     .filter(d => { const dow = new Date(d + 'T00:00:00').getDay(); return dow >= 1 && dow <= 5; });
 
   function prevWeek() { setCurrentWeek(w => addDays(w, -7)); }
@@ -172,7 +172,7 @@ export default function Bemanningsplan() {
     const gridWrapRef = useRef(null);
 
     // ---- DAG-MODUS ----
-    const weekEnd = addDays(currentWeek, 55);
+    const weekEnd = addDays(currentWeek, 52 * 7 - 1);
 
     const dagProsjektIds = [...new Set(
       state.tildelinger
@@ -344,19 +344,19 @@ export default function Bemanningsplan() {
       );
     }
 
-    // ---- UKE-MODUS: Man–Fre × 26 uker (130 kolonner) ----
-    const TEN_WEEKS = Array.from({ length: 26 }, (_, i) => addDays(currentWeek, i * 7));
+    // ---- UKE-MODUS: Man–Fre × 52 uker (260 kolonner) ----
+    const TEN_WEEKS = Array.from({ length: 52 }, (_, i) => addDays(currentWeek, i * 7));
 
-    // Alle arbeidsdager (Man–Fre) for 26 uker = 130 dager
+    // Alle arbeidsdager (Man–Fre) for 52 uker = 260 dager
     const WORK_DAYS_UKE = [];
-    for (let w = 0; w < 26; w++) {
+    for (let w = 0; w < 52; w++) {
       for (let d = 0; d < 5; d++) {
         WORK_DAYS_UKE.push(addDays(currentWeek, w * 7 + d));
       }
     }
 
     const periodeStart = currentWeek;
-    const periodeEnd = addDays(currentWeek, 26 * 7 - 1);
+    const periodeEnd = addDays(currentWeek, 52 * 7 - 1);
 
     const ukeProsjektIds = [...new Set(
       state.tildelinger
@@ -491,9 +491,9 @@ export default function Bemanningsplan() {
     }
 
     const navLabel = ukeMode === 'dag'
-      ? `Uke ${getWeekNumber(currentWeek)} – Uke ${getWeekNumber(addDays(currentWeek, 55))}`
+      ? `${formatDate(currentWeek)} – ${formatDate(weekDays[weekDays.length - 1])}`
       : ukeMode === 'uke'
-      ? `Uke ${getWeekNumber(currentWeek)} – Uke ${getWeekNumber(addDays(currentWeek, 25 * 7))}`
+      ? `${formatDate(currentWeek)} – ${formatDate(addDays(currentWeek, 51 * 7 + 4))}`
       : `${monthLabel(SIX_MONTHS[0])} – ${monthLabel(SIX_MONTHS[17])}`;
 
     function handlePrev() {
@@ -579,9 +579,9 @@ export default function Bemanningsplan() {
                 <div className="needle-label">{formatDate(needleDay)}</div>
               </div>
             )}
-            <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(130, minmax(28px, 1fr))` }}>
+            <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(260, minmax(28px, 1fr))` }}>
               <UkeGridHeader />
-              {renderProsjektRader(ukeProsjekter, ukeLedige, 130, UkeAnsattRad, periodeStart, periodeEnd)}
+              {renderProsjektRader(ukeProsjekter, ukeLedige, 260, UkeAnsattRad, periodeStart, periodeEnd)}
             </div>
           </div>
         ) : (
