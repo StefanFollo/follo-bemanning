@@ -1451,3 +1451,196 @@ body {
 .proj-meta-belop { color: #16a34a; background: #f0fdf4; }
 
 .bef-kort-pl { font-size: 11px; color: #6b7280; }
+
+/* ===== FRAMDRIFTSPLAN GANTT ===== */
+.fd-prosjekt-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  border-bottom: 2px solid #e2e8f0;
+  padding-bottom: 0;
+}
+.fd-prosjekt-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  border-radius: 6px 6px 0 0;
+  font-size: 13px;
+  color: #64748b;
+  transition: background .15s, color .15s;
+  white-space: nowrap;
+  max-width: 200px;
+}
+.fd-prosjekt-tab:hover { background: #f1f5f9; color: #1e293b; }
+.fd-prosjekt-tab.active { color: #1e293b; font-weight: 600; background: #f8fafc; }
+.fd-tab-navn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fd-tab-pct { font-size: 11px; font-weight: 700; flex-shrink: 0; }
+
+.fd-total-wrap {
+  background: white;
+  border-radius: 10px;
+  padding: 14px 18px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  margin-bottom: 4px;
+}
+
+.fd-grid-wrap {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 420px);
+  min-height: 180px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: white;
+  margin-top: 8px;
+}
+.fd-grid {
+  display: grid;
+  min-width: max-content;
+}
+
+/* Header cells */
+.fd-header-cell {
+  padding: 6px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  background: #f8fafc;
+  border-bottom: 2px solid #e2e8f0;
+  border-right: 1px solid #f1f5f9;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  text-align: center;
+  white-space: nowrap;
+}
+.fd-today-col { background: #eff6ff !important; color: #2563eb; }
+.fd-week-start { border-left: 2px solid #e2e8f0; }
+
+/* Row label */
+.fd-row-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 13px;
+  background: #f8fafc;
+  border-right: 2px solid #e2e8f0;
+  border-bottom: 1px solid #f1f5f9;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  min-width: 150px;
+}
+.fd-oppgave-navn {
+  font-size: 12px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+/* Fag header */
+.fd-fag-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #f1f5f9;
+  font-size: 12px;
+  font-weight: 700;
+  border-bottom: 1px solid #e2e8f0;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+}
+
+/* Gantt row */
+.fd-gantt-row {
+  position: relative;
+  height: 36px;
+  border-bottom: 1px solid #f1f5f9;
+  background: white;
+}
+.fd-gantt-row:hover { background: #fafbff; }
+
+.fd-today-line {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 2px;
+  background: #ef4444;
+  opacity: 0.7;
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Bar */
+.fd-bar {
+  position: absolute;
+  top: 5px;
+  height: 26px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  cursor: grab;
+  z-index: 2;
+  box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  user-select: none;
+  min-width: 20px;
+}
+.fd-bar:active { cursor: grabbing; }
+.fd-bar-progress {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  pointer-events: none;
+  border-radius: 5px 0 0 5px;
+}
+.fd-bar-label {
+  position: relative;
+  z-index: 1;
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0,0,0,.3);
+  padding: 0 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  pointer-events: none;
+}
+.fd-handle {
+  position: relative;
+  z-index: 2;
+  width: 14px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  color: rgba(255,255,255,.8);
+  cursor: ew-resize;
+  height: 100%;
+}
+.fd-handle:hover { color: white; background: rgba(0,0,0,.15); }
+.fd-handle-l { border-radius: 5px 0 0 5px; }
+.fd-handle-r { border-radius: 0 5px 5px 0; }
+
+.fd-bar-ingen {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  font-size: 11px;
+  color: #cbd5e1;
+  font-style: italic;
+}
