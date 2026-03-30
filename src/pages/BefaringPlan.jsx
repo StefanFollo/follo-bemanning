@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { uid, dateToIso, isoToDate, addDays, weekStart, overlaps } from '../store';
 
-const JOBB_TYPER = ['Ny bygg', 'Tilbygg', 'Tak jobb', 'Fasade jobb', 'Tømrer', 'Maling', 'Rørlegger', 'Flislegging', 'Elektro', 'Rehabilitering', 'Annet'];
+const JOBB_TYPER = ['Ny bygg', 'Tilbygg', 'Tak jobb', 'Fasade jobb', 'Bad', 'Tømrer', 'Maling', 'Rørlegger', 'Flislegging', 'Elektro', 'Rehabilitering', 'Annet'];
 
 const STATUS = {
   planlagt:     { label: 'Planlagt',      farge: '#3b82f6', bg: '#eff6ff', ikon: '📋' },
@@ -10,6 +10,8 @@ const STATUS = {
   godkjent:     { label: 'Godkjent',      farge: '#16a34a', bg: '#f0fdf4', ikon: '✅' },
   tapt:         { label: 'Tapt',          farge: '#6b7280', bg: '#f9fafb', ikon: '❌' },
 };
+
+const PL_FARGER = ['#2563eb','#16a34a','#9333ea','#ea580c','#0891b2','#be185d','#854d0e','#0f766e','#b45309','#1d4ed8'];
 
 const MAANED_NAVN = ['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
 const DAG_NAVN_KORT = ['Man','Tir','Ons','Tor','Fre','Lør','Søn'];
@@ -55,6 +57,13 @@ export default function BefaringPlan() {
   const befaringer = state.befaringer || [];
   const today = dateToIso(new Date());
   const prosjektledere = state.ansatte.filter(a => a.fag === 'Prosjekt Leder');
+
+  // Gi hver prosjektleder en fast unik farge basert på indeks
+  function plFarge(plId) {
+    if (!plId) return null;
+    const idx = prosjektledere.findIndex(a => a.id === plId);
+    return PL_FARGER[idx >= 0 ? idx % PL_FARGER.length : 0];
+  }
 
   const [visModal, setVisModal] = useState(false);
   const [redigerer, setRedigerer] = useState(null); // befaring-objekt eller null
@@ -211,11 +220,12 @@ export default function BefaringPlan() {
                   {bfs.map(b => {
                     const pl = b.prosjektlederId ? state.ansatte.find(a => a.id === b.prosjektlederId) : null;
                     const plInitialer = pl ? pl.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : null;
+                    const chipFarge = plFarge(b.prosjektlederId) || STATUS[b.status]?.farge || '#6b7280';
                     return (
                       <div
                         key={b.id}
                         className="bef-kal-chip"
-                        style={{ background: STATUS[b.status]?.farge || '#6b7280' }}
+                        style={{ background: chipFarge }}
                         onClick={e => { e.stopPropagation(); apneRediger(b); }}
                         title={`${b.tid ? b.tid + ' – ' : ''}${b.kontaktNavn} – ${b.adresse}${pl ? ` (${pl.navn})` : ''}`}
                       >
