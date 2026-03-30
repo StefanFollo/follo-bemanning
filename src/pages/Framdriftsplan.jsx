@@ -1,9 +1,11 @@
 import { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { dateToIso, isoToDate, formatDate, uid } from '../store';
+import { dateToIso, isoToDate, formatDate, uid, weekStart, overlaps } from '../store';
+import { getHolidayMap } from '../holidays';
 
 // ─── Dato-hjelp ──────────────────────────────────────────────
 const MAANED = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des'];
+const DAG_NAVN = ['Man','Tir','Ons','Tor','Fre'];
 
 function today() { return dateToIso(new Date()); }
 
@@ -36,6 +38,25 @@ function monthEndIso(ym) {
 }
 
 function monthStartIso(ym) { return ym + '-01'; }
+
+function getWeekNumber(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  d.setHours(0,0,0,0);
+  d.setDate(d.getDate() + 3 - ((d.getDay()+6)%7));
+  const w = new Date(d.getFullYear(), 0, 4);
+  return 1 + Math.round(((d-w)/86400000 - 3 + ((w.getDay()+6)%7))/7);
+}
+
+// Lag array av hverdager (man-fre) fra startdato over N uker
+function hverdager(fraIso, antUker) {
+  return Array.from({ length: antUker * 7 }, (_, i) => addDays(fraIso, i))
+    .filter(d => { const dow = new Date(d + 'T00:00:00').getDay(); return dow >= 1 && dow <= 5; });
+}
+
+// Lag array av uker (mandag-fredag, én per uke) fra startdato over N uker
+function ukeStarter(fraIso, antUker) {
+  return Array.from({ length: antUker }, (_, i) => addDays(fraIso, i * 7));
+}
 
 function pctInRange(iso, rangeStart, rangeDays) {
   if (!iso) return null;
@@ -94,25 +115,46 @@ export default function Framdriftsplan() {
   const [valgtProsjektId, setValgtProsjektId] = useState(() => state.prosjekter[0]?.id || null);
   const [collapsed, setCollapsed] = useState({});
   const [showModal, setShowModal] = useState(false);
-  const [editModal, setEditModal] = useState(null);   // oppgave-objekt
+  const [editModal, setEditModal] = useState(null);
   const [form, setForm] = useState(null);
-  const [månedOffset, setMånedOffset] = useState(0);
+  const [ukeMode, setUkeMode] = useState('maaned'); // 'dag' | 'uke' | 'maaned'
+  const [periodeOffset, setPeriodeOffset] = useState(0);
   const MÅNEDER_SYNLIG = 18;
+  const UKE_SYNLIG = 26;
+  const DAG_SYNLIG = 13; // uker i dag-modus
   const dragRef = useRef(null);
   const gridRef = useRef(null);
+
+  const thisYear = new Date().getFullYear();
+  const HOLIDAYS = getHolidayMap(thisYear - 1, thisYear + 2);
 
   const prosjekt = state.prosjekter.find(p => p.id === valgtProsjektId) || state.prosjekter[0];
   const alleOppgaver = prosjekt ? state.oppgaver.filter(o => o.prosjektId === prosjekt.id) : [];
 
-  // Tidslinje-setup
-  const tl0 = (() => {
-    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + månedOffset);
+  // ── Tidslinje avhengig av modus ──────────────────────────────
+  const baseWeek = weekStart(today());
+
+  // Dag-modus: hverdager over 13 uker
+  const dagStart = addDays(baseWeek, periodeOffset * 5 * DAG_SYNLIG);
+  const dagDager = hverdager(dagStart, DAG_SYNLIG);
+
+  // Uke-modus: mandag i hver uke over 26 uker
+  const ukeStart = addDays(baseWeek, periodeOffset * UKE_SYNLIG * 7);
+  const ukeUker  = ukeStarter(ukeStart, UKE_SYNLIG);
+
+  // Måned-modus: 18 måneder
+  const mndBase = (() => {
+    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + periodeOffset * 6);
     return dateToIso(d).slice(0, 7) + '-01';
   })();
-  const måneder = monthsArray(tl0, MÅNEDER_SYNLIG);
-  const tlStart = tl0;
-  const tlEnd   = monthEndIso(måneder[måneder.length - 1]);
-  const tlDays  = daysBetween(tlStart, addDays(tlEnd, 1));
+  const måneder  = monthsArray(mndBase, MÅNEDER_SYNLIG);
+  const tlStart  = ukeMode === 'dag' ? dagDager[0]
+                 : ukeMode === 'uke' ? ukeUker[0]
+                 : mndBase;
+  const tlEnd    = ukeMode === 'dag' ? dagDager[dagDager.length - 1]
+                 : ukeMode === 'uke' ? addDays(ukeUker[ukeUker.length - 1], 4)
+                 : monthEndIso(måneder[måneder.length - 1]);
+  const tlDays   = daysBetween(tlStart, addDays(tlEnd, 1));
 
   // "I dag"-linje
   const todayPct = pctInRange(today(), tlStart, tlDays);
@@ -347,10 +389,19 @@ export default function Framdriftsplan() {
 
       {/* Periode-navigasjon */}
       <div className="uke-nav" style={{ marginBottom: 8 }}>
-        <button className="btn" onClick={() => setMånedOffset(o => o - 6)}>← Forrige</button>
-        <span className="uke-label">{MAANED[new Date(tl0).getMonth()]} {new Date(tl0).getFullYear()} – {MAANED[new Date(tlEnd + 'T00:00:00').getMonth()]} {new Date(tlEnd + 'T00:00:00').getFullYear()}</span>
-        <button className="btn" onClick={() => setMånedOffset(0)}>I dag</button>
-        <button className="btn" onClick={() => setMånedOffset(o => o + 6)}>Neste →</button>
+        <button className="btn" onClick={() => setPeriodeOffset(o => o - 1)}>← Forrige</button>
+        <span className="uke-label">
+          {ukeMode === 'maaned'
+            ? `${MAANED[new Date(tlStart+'T00:00:00').getMonth()]} ${new Date(tlStart+'T00:00:00').getFullYear()} – ${MAANED[new Date(tlEnd+'T00:00:00').getMonth()]} ${new Date(tlEnd+'T00:00:00').getFullYear()}`
+            : `${formatDate(tlStart)} – ${formatDate(tlEnd)}`}
+        </span>
+        <button className="btn" onClick={() => setPeriodeOffset(0)}>I dag</button>
+        <button className="btn" onClick={() => setPeriodeOffset(o => o + 1)}>Neste →</button>
+        <div className="ukemode-toggle">
+          <button className={`ukemode-btn ${ukeMode==='dag'?'active':''}`} onClick={() => { setUkeMode('dag'); setPeriodeOffset(0); }}>Dager</button>
+          <button className={`ukemode-btn ${ukeMode==='uke'?'active':''}`} onClick={() => { setUkeMode('uke'); setPeriodeOffset(0); }}>Uker</button>
+          <button className={`ukemode-btn ${ukeMode==='maaned'?'active':''}`} onClick={() => { setUkeMode('maaned'); setPeriodeOffset(0); }}>Måneder</button>
+        </div>
       </div>
 
       {/* Gantt-tabell */}
@@ -361,39 +412,91 @@ export default function Framdriftsplan() {
           <div className="fd2-celle fd2-celle-navn fd2-header-celle">Aktivitet</div>
           <div className="fd2-celle fd2-celle-varighet fd2-header-celle">Varighet</div>
           <div className="fd2-celle fd2-celle-tl fd2-header-celle fd2-tl-header">
-            {/* År-rad */}
-            <div className="fd2-tl-aar-rad">
-              {(() => {
-                const aarGrupper = [];
-                let gjeldende = null;
-                måneder.forEach((m, i) => {
-                  const aar = m.slice(0, 4);
-                  if (gjeldende?.aar !== aar) {
-                    gjeldende = { aar, antall: 1, fra: i };
-                    aarGrupper.push(gjeldende);
-                  } else {
-                    gjeldende.antall++;
-                  }
-                });
-                return aarGrupper.map(g => (
-                  <div key={g.aar} className="fd2-aar-celle" style={{ width: `${(g.antall / MÅNEDER_SYNLIG) * 100}%` }}>
-                    {g.aar}
+            {ukeMode === 'maaned' && <>
+              {/* Måned: år-rad + måneds-rad */}
+              <div className="fd2-tl-aar-rad">
+                {(() => {
+                  const ag = []; let g = null;
+                  måneder.forEach(m => {
+                    const aar = m.slice(0,4);
+                    if (g?.aar !== aar) { g = { aar, antall: 1 }; ag.push(g); } else g.antall++;
+                  });
+                  return ag.map(x => (
+                    <div key={x.aar} className="fd2-aar-celle" style={{ width: `${(x.antall/MÅNEDER_SYNLIG)*100}%` }}>{x.aar}</div>
+                  ));
+                })()}
+              </div>
+              <div className="fd2-tl-mnd-rad">
+                {måneder.map(m => (
+                  <div key={m} className={`fd2-mnd-celle ${m===today().slice(0,7)?'fd2-mnd-idag':''}`} style={{ width: `${100/MÅNEDER_SYNLIG}%` }}>
+                    {MAANED[parseInt(m.slice(5,7),10)-1]}
                   </div>
-                ));
-              })()}
-            </div>
-            {/* Måneds-rad */}
-            <div className="fd2-tl-mnd-rad">
-              {måneder.map(m => {
-                const erNåværende = m === today().slice(0, 7);
-                return (
-                  <div key={m} className={`fd2-mnd-celle ${erNåværende ? 'fd2-mnd-idag' : ''}`}
-                    style={{ width: `${100 / MÅNEDER_SYNLIG}%` }}>
-                    {MAANED[parseInt(m.slice(5, 7), 10) - 1]}
-                  </div>
-                );
-              })}
-            </div>
+                ))}
+              </div>
+            </>}
+
+            {ukeMode === 'uke' && <>
+              {/* Uke: måned-rad + uke-rad */}
+              <div className="fd2-tl-aar-rad">
+                {(() => {
+                  const ag = []; let g = null;
+                  ukeUker.forEach(d => {
+                    const mnd = d.slice(0,7);
+                    if (g?.mnd !== mnd) { g = { mnd, antall: 1 }; ag.push(g); } else g.antall++;
+                  });
+                  return ag.map(x => (
+                    <div key={x.mnd} className="fd2-aar-celle" style={{ width: `${(x.antall/UKE_SYNLIG)*100}%` }}>
+                      {MAANED[parseInt(x.mnd.slice(5,7),10)-1]} {x.mnd.slice(0,4)}
+                    </div>
+                  ));
+                })()}
+              </div>
+              <div className="fd2-tl-mnd-rad">
+                {ukeUker.map((d, i) => {
+                  const erNå = weekStart(today()) === d;
+                  const hol = HOLIDAYS[d];
+                  return (
+                    <div key={d} className={`fd2-mnd-celle ${erNå?'fd2-mnd-idag':''} ${hol?'holiday-header':''}`}
+                      style={{ width: `${100/UKE_SYNLIG}%` }} title={hol||undefined}>
+                      U{getWeekNumber(d)}
+                    </div>
+                  );
+                })}
+              </div>
+            </>}
+
+            {ukeMode === 'dag' && <>
+              {/* Dag: uke-rad + dag-rad */}
+              <div className="fd2-tl-aar-rad">
+                {(() => {
+                  const ag = []; let g = null;
+                  dagDager.forEach((d, i) => {
+                    const dow = new Date(d+'T00:00:00').getDay();
+                    const wnr = getWeekNumber(d);
+                    if (dow === 1 || i === 0) { g = { wnr, antall: 1 }; ag.push(g); } else if (g) g.antall++;
+                  });
+                  return ag.map((x, i) => (
+                    <div key={i} className="fd2-aar-celle" style={{ width: `${(x.antall/dagDager.length)*100}%` }}>
+                      U{x.wnr}
+                    </div>
+                  ));
+                })()}
+              </div>
+              <div className="fd2-tl-mnd-rad">
+                {dagDager.map(d => {
+                  const dow = new Date(d+'T00:00:00').getDay();
+                  const erIdag = d === today();
+                  const hol = HOLIDAYS[d];
+                  return (
+                    <div key={d} className={`fd2-mnd-celle ${erIdag?'fd2-mnd-idag':''} ${hol?'holiday-header':''}`}
+                      style={{ width: `${100/dagDager.length}%`, minWidth: 28 }} title={hol||undefined}>
+                      <div style={{ fontSize: 9, color: '#94a3b8' }}>{DAG_NAVN[dow-1]}</div>
+                      <div>{d.slice(8)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>}
           </div>
         </div>
 
