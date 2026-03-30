@@ -125,6 +125,7 @@ export function loadState() {
     oppgaver: load('fbs_oppgaver', []),
     fag: load('fbs_fag', DEFAULT_FAG),
     rorTimer: load('fbs_ror_timer', []),
+    befaringer: load('fbs_befaringer', []),
   };
 }
 
@@ -134,6 +135,7 @@ export function saveTildelinger(data) { save('fbs_tildelinger', data); }
 export function saveOppgaver(data) { save('fbs_oppgaver', data); }
 export function saveFag(data) { save('fbs_fag', data); }
 export function saveRorTimer(data) { save('fbs_ror_timer', data); }
+export function saveBefaringer(data) { save('fbs_befaringer', data); }
 
 export function uid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);

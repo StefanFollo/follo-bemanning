@@ -5,10 +5,12 @@ import Ansatte from './pages/Ansatte';
 import Bemanningsplan from './pages/Bemanningsplan';
 import Framdriftsplan from './pages/Framdriftsplan';
 import RorleggerPlan from './pages/RorleggerPlan';
+import BefaringPlan from './pages/BefaringPlan';
 import LoginPage from './pages/LoginPage';
 import './App.css';
 
 const TABS = [
+  { id: 'befaring', label: 'Befaring', icon: '🔍' },
   { id: 'prosjekter', label: 'Prosjekter', icon: '🏗' },
   { id: 'ansatte', label: 'Ansatte', icon: '👷' },
   { id: 'bemanningsplan', label: 'Bemanningsplan', icon: '📅' },
@@ -51,6 +53,7 @@ function App() {
         </header>
 
         <main className="main">
+          {activeTab === 'befaring' && <BefaringPlan />}
           {activeTab === 'prosjekter' && <Prosjekter />}
           {activeTab === 'ansatte' && <Ansatte />}
           {activeTab === 'bemanningsplan' && <Bemanningsplan />}

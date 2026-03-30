@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useLayoutEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { weekStart, addDays, isoToDate, dateToIso, formatDate, overlaps } from '../store';
 import { getHolidayMap } from '../holidays';
@@ -65,6 +65,28 @@ export default function Bemanningsplan() {
   const [splitModal, setSplitModal] = useState(null); // tildeling object
   const [splitForm, setSplitForm] = useState({ gapStart: '', gapEnd: '' });
   const dragRef = useRef(null);
+  const scrollRestoreRef = useRef(null); // lagrer scroll-posisjoner mellom dispatch og useLayoutEffect
+
+  // Needle-state flyttes hit (var i UkeVisning) slik at UkeVisning() kan kalles som funksjon
+  const [needleDay, setNeedleDay] = useState(() => dateToIso(new Date()));
+  const draggingNeedle = useRef(false);
+  const gridWrapRef = useRef(null);
+
+  // useLayoutEffect kjøres synkront etter DOM-oppdatering men FØR nettleseren tegner.
+  // Bruker dette til å gjenopprette scroll etter dispatch, selv om komponenten ble re-mountet.
+  useLayoutEffect(() => {
+    if (!scrollRestoreRef.current) return;
+    const { winY, winX, wraps } = scrollRestoreRef.current;
+    scrollRestoreRef.current = null;
+    window.scrollTo({ top: winY, left: winX, behavior: 'instant' });
+    const newWraps = [...document.querySelectorAll('.uke-grid-wrap')];
+    newWraps.forEach((el, i) => {
+      if (wraps[i] !== undefined) {
+        el.scrollTop = wraps[i].top;
+        el.scrollLeft = wraps[i].left;
+      }
+    });
+  });
 
   // Kun hverdager (Man–Fre) over 52 uker = ~260 kolonner
   const weekDays = Array.from({ length: 52 * 7 }, (_, i) => addDays(currentWeek, i))
@@ -109,20 +131,15 @@ export default function Bemanningsplan() {
   }
 
   // Lagre og gjenopprette scroll-posisjon rundt dispatch
-  // Dobbel rAF sikrer at React er ferdig med painting før vi restorer
+  // Scroll-gjenopprettelsen skjer i useLayoutEffect over, etter at DOM er oppdatert
   function dispatchKeepScroll(action) {
-    const winY = window.scrollY;
-    const winX = window.scrollX;
     const wraps = [...document.querySelectorAll('.uke-grid-wrap')];
-    const saved = wraps.map(el => ({ el, top: el.scrollTop, left: el.scrollLeft }));
+    scrollRestoreRef.current = {
+      winY: window.scrollY,
+      winX: window.scrollX,
+      wraps: wraps.map(el => ({ top: el.scrollTop, left: el.scrollLeft })),
+    };
     dispatch(action);
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      window.scrollTo({ top: winY, left: winX, behavior: 'instant' });
-      saved.forEach(({ el, top, left }) => {
-        el.scrollTop = top;
-        el.scrollLeft = left;
-      });
-    }));
   }
 
   function handleDrop(targetDay, unit /* 'day'|'week'|'month' */) {
@@ -174,11 +191,6 @@ export default function Bemanningsplan() {
     // Én myk stålblå farge på alle prosjektbarer — ikke skarp, passer til designet
     const PROSJEKT_BAR_FARGE = '#6b8fc4';
     const prosjektColor = (_pid) => PROSJEKT_BAR_FARGE;
-
-    // Needle state for uke-modus
-    const [needleDay, setNeedleDay] = useState(today);
-    const draggingNeedle = useRef(false);
-    const gridWrapRef = useRef(null);
 
     // ---- DAG-MODUS ----
     const weekEnd = addDays(currentWeek, 52 * 7 - 1);
@@ -815,9 +827,9 @@ export default function Bemanningsplan() {
         </button>
       </div>
 
-      {tab === 'uke' && <UkeVisning />}
-      {tab === 'ressurs' && <RessursVisning />}
-      {tab === 'prosjekt' && <ProsjektOversiktVisning />}
+      {tab === 'uke' && UkeVisning()}
+      {tab === 'ressurs' && RessursVisning()}
+      {tab === 'prosjekt' && ProsjektOversiktVisning()}
 
       {splitModal && (
         <Modal title="Del opp tildeling med pause" onClose={() => setSplitModal(null)}>

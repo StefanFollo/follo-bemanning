@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useEffect, useState } from 'react';
 import {
   loadState,
-  saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag, saveRorTimer,
+  saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag, saveRorTimer, saveBefaringer,
   loadFromCloud, saveToCloud,
   uid,
 } from '../store';
@@ -19,6 +19,7 @@ function reducer(state, action) {
       if (s.oppgaver) saveOppgaver(s.oppgaver);
       if (s.fag) saveFag(s.fag);
       if (s.rorTimer) saveRorTimer(s.rorTimer);
+      if (s.befaringer) saveBefaringer(s.befaringer);
       return { ...state, ...s };
     }
 
@@ -118,6 +119,23 @@ function reducer(state, action) {
       const next = (state.rorTimer || []).filter(t => t.id !== action.id);
       saveRorTimer(next);
       return { ...state, rorTimer: next };
+    }
+
+    // --- Befaringer ---
+    case 'ADD_BEFARING': {
+      const next = [...(state.befaringer || []), { ...action.payload, id: uid() }];
+      saveBefaringer(next);
+      return { ...state, befaringer: next };
+    }
+    case 'UPDATE_BEFARING': {
+      const next = (state.befaringer || []).map(b => b.id === action.payload.id ? { ...b, ...action.payload } : b);
+      saveBefaringer(next);
+      return { ...state, befaringer: next };
+    }
+    case 'DELETE_BEFARING': {
+      const next = (state.befaringer || []).filter(b => b.id !== action.id);
+      saveBefaringer(next);
+      return { ...state, befaringer: next };
     }
 
     // --- Fag ---

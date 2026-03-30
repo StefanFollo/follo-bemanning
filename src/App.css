@@ -1285,3 +1285,153 @@ body {
     margin: 10mm;
   }
 }
+
+/* ===== BEFARING & TILBUD ===== */
+.bef-side { padding: 24px; max-width: 1200px; }
+
+.bef-pipeline {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.bef-pipeline-kort {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+}
+.bef-pipeline-ikon { font-size: 24px; margin-bottom: 6px; }
+.bef-pipeline-antall { font-size: 32px; font-weight: 800; line-height: 1; }
+.bef-pipeline-label { font-size: 13px; color: #64748b; margin-top: 4px; }
+
+.bef-innhold {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 24px;
+  align-items: start;
+}
+
+/* Kalender */
+.bef-kal-seksjon {
+  background: white;
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+}
+.bef-kal-nav {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.bef-kal-tittel { font-size: 17px; font-weight: 700; flex: 1; text-align: center; }
+.bef-kal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+.bef-kal-dagheader {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #94a3b8;
+  padding: 4px 0 8px;
+}
+.bef-kal-dag {
+  min-height: 80px;
+  border-radius: 8px;
+  padding: 6px 5px 4px;
+  cursor: pointer;
+  border: 1.5px solid transparent;
+  transition: border-color .15s, background .15s;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.bef-kal-dag:hover { border-color: #c7d2fe; background: #f8faff; }
+.bef-kal-dag--tom { cursor: default; }
+.bef-kal-dag--tom:hover { border-color: transparent; background: transparent; }
+.bef-kal-dag--idag { background: #eff6ff; border-color: #3b82f6; }
+.bef-kal-dato { font-size: 12px; font-weight: 600; color: #475569; }
+.bef-kal-dag--idag .bef-kal-dato { color: #2563eb; }
+.bef-kal-chip {
+  font-size: 10px;
+  font-weight: 600;
+  color: white;
+  border-radius: 4px;
+  padding: 2px 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+/* Liste */
+.bef-liste-seksjon {
+  background: white;
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07);
+}
+.bef-liste-tittel { font-size: 15px; font-weight: 700; margin-bottom: 14px; }
+.bef-tom-melding { color: #94a3b8; font-size: 13px; padding: 16px 0; }
+.bef-kort {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  margin-bottom: 10px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: box-shadow .15s;
+}
+.bef-kort:hover { box-shadow: 0 3px 10px rgba(0,0,0,.1); }
+.bef-kort-farge { width: 5px; flex-shrink: 0; }
+.bef-kort-innhold { flex: 1; padding: 10px 12px; }
+.bef-kort-navn { font-weight: 700; font-size: 14px; }
+.bef-kort-adresse { font-size: 12px; color: #64748b; margin-top: 2px; }
+.bef-kort-meta { display: flex; gap: 10px; margin-top: 6px; }
+.bef-kort-dato { font-size: 11px; color: #94a3b8; }
+.bef-kort-type { font-size: 11px; color: #94a3b8; }
+.bef-kort-status {
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+/* Befaring modal */
+.bef-modal { max-width: 520px; }
+.bef-status-velger { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.bef-status-btn {
+  padding: 6px 12px;
+  border-radius: 20px;
+  border: 1.5px solid;
+  background: white;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .15s;
+}
+.bef-status-btn.aktiv { font-weight: 700; }
+
+/* Kapasitetsmodal */
+.bef-kap-modal { max-width: 580px; }
+.bef-kap-liste { display: flex; flex-direction: column; gap: 8px; }
+.bef-kap-rad { display: grid; grid-template-columns: 110px 1fr 110px; align-items: center; gap: 12px; }
+.bef-kap-uke { font-size: 13px; font-weight: 600; white-space: nowrap; }
+.bef-kap-bar-wrap { height: 12px; background: #f1f5f9; border-radius: 6px; overflow: hidden; }
+.bef-kap-bar { height: 100%; border-radius: 6px; transition: width .3s; }
+.bef-kap-tall { font-size: 12px; font-weight: 600; text-align: right; }
+
+@media (max-width: 900px) {
+  .bef-innhold { grid-template-columns: 1fr; }
+  .bef-pipeline { grid-template-columns: repeat(2, 1fr); }
+}
