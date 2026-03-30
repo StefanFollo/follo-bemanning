@@ -52,11 +52,7 @@ export default function BefaringPlan() {
   const { state, dispatch } = useApp();
   const befaringer = state.befaringer || [];
   const today = dateToIso(new Date());
-  // Vis prosjektledere først, deretter resten – slik at Stefan, Joachim osv. alltid er tilgjengelige
-  const prosjektledere = [
-    ...state.ansatte.filter(a => a.fag === 'Prosjektleder'),
-    ...state.ansatte.filter(a => a.fag !== 'Prosjektleder'),
-  ];
+  const prosjektledere = state.ansatte.filter(a => a.fag === 'Prosjektleder');
 
   const [visModal, setVisModal] = useState(false);
   const [redigerer, setRedigerer] = useState(null); // befaring-objekt eller null
@@ -274,7 +270,7 @@ export default function BefaringPlan() {
               <select className="input" value={form.prosjektlederId} onChange={e => setForm(f => ({ ...f, prosjektlederId: e.target.value }))}>
                 <option value="">– Velg prosjektleder –</option>
                 {prosjektledere.map(a => (
-                  <option key={a.id} value={a.id}>{a.navn}{a.fag ? ` (${a.fag})` : ''}</option>
+                  <option key={a.id} value={a.id}>{a.navn}</option>
                 ))}
               </select>
 
