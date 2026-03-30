@@ -321,7 +321,7 @@ export default function Framdriftsplan() {
           <div
             className={`fd2-bar ${erGruppe ? 'fd2-bar-gruppe' : ''}`}
             style={{ ...style, touchAction: 'none' }}
-            title={`${oppgave.navn}\n${formatDate(effStart)} – ${formatDate(effEnd)}\n${varighet} dager`}
+            title={`${oppgave.navn}\n${formatDate(startD)} – ${formatDate(sluttD)}\n${varighet} dager`}
             onPointerDown={e => startDrag(e, oppgave, 'move')}
             onPointerMove={moveDrag}
             onPointerUp={endDrag}
