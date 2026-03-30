@@ -124,6 +124,7 @@ export default function Framdriftsplan() {
   const UKE_SYNLIG = 26;
   const DAG_SYNLIG = 13; // uker i dag-modus
   const activeDrag = useRef(null);
+  const dragPreviewRef = useRef(null); // speil av dragPreview for å unngå stale closure
   const gridRef = useRef(null);
 
   const thisYear = new Date().getFullYear();
@@ -195,9 +196,9 @@ export default function Framdriftsplan() {
   // ─── Pointer-drag (live feedback, ingen HTML5 drag) ──────────
   function startDrag(e, oppgave, type) {
     e.preventDefault();
-    e.stopPropagation();
+    e.stopPropagation(); // hindrer bar fra å fange hendelsen når handle klikkes
     const barArea = e.currentTarget.closest('.fd2-bar-area');
-    const pxPerDay = barArea ? barArea.offsetWidth / tlDays : 10;
+    const pxPerDay = barArea ? Math.max(1, barArea.offsetWidth / tlDays) : 10;
     activeDrag.current = {
       oppgave,
       type,
@@ -207,11 +208,14 @@ export default function Framdriftsplan() {
       pxPerDay,
     };
     e.currentTarget.setPointerCapture(e.pointerId);
-    setDragPreview({ id: oppgave.id, startDato: oppgave.startDato, sluttDato: oppgave.sluttDato });
+    const preview = { id: oppgave.id, startDato: oppgave.startDato, sluttDato: oppgave.sluttDato };
+    dragPreviewRef.current = preview;
+    setDragPreview(preview);
   }
 
   function moveDrag(e) {
     if (!activeDrag.current) return;
+    e.preventDefault();
     const { oppgave, type, origStart, origEnd, startX, pxPerDay } = activeDrag.current;
     const deltaDager = Math.round((e.clientX - startX) / pxPerDay);
     let newStart = origStart, newEnd = origEnd;
@@ -225,19 +229,25 @@ export default function Framdriftsplan() {
       const k = addDays(origEnd, deltaDager);
       newEnd = k >= origStart ? k : origStart;
     }
-    setDragPreview({ id: oppgave.id, startDato: newStart, sluttDato: newEnd });
+    const preview = { id: oppgave.id, startDato: newStart, sluttDato: newEnd };
+    dragPreviewRef.current = preview;
+    setDragPreview(preview);
   }
 
   function endDrag(e) {
     if (!activeDrag.current) return;
     const { oppgave } = activeDrag.current;
-    setDragPreview(prev => {
-      if (prev && prev.id === oppgave.id) {
-        dispatch({ type: 'UPDATE_OPPGAVE', payload: { ...oppgave, startDato: prev.startDato, sluttDato: prev.sluttDato } });
-      }
-      return null;
-    });
+    const preview = dragPreviewRef.current; // les fra ref, ikke stale state
     activeDrag.current = null;
+    dragPreviewRef.current = null;
+    setDragPreview(null);
+    if (preview && preview.id === oppgave.id) {
+      dispatch({ type: 'UPDATE_OPPGAVE', payload: {
+        ...oppgave,
+        startDato: preview.startDato,
+        sluttDato: preview.sluttDato,
+      }});
+    }
   }
 
   // ─── CRUD ────────────────────────────────────────────────────
@@ -308,22 +318,27 @@ export default function Framdriftsplan() {
         {style && (
           <div
             className={`fd2-bar ${erGruppe ? 'fd2-bar-gruppe' : ''} ${isDragging ? 'fd2-bar-dragging' : ''}`}
-            style={style}
+            style={{ ...style, touchAction: 'none' }}
             title={`${oppgave.navn}\n${formatDate(effStart)} – ${formatDate(effEnd)}\n${varighet} dager`}
             onPointerDown={e => startDrag(e, oppgave, 'move')}
             onPointerMove={moveDrag}
             onPointerUp={endDrag}
+            onPointerCancel={endDrag}
           >
             <div className="fd2-handle fd2-handle-l"
-              onPointerDown={e => startDrag(e, oppgave, 'start')}
+              style={{ touchAction: 'none' }}
+              onPointerDown={e => { e.stopPropagation(); startDrag(e, oppgave, 'start'); }}
               onPointerMove={moveDrag}
               onPointerUp={endDrag}
+              onPointerCancel={endDrag}
             >◂</div>
-            <span className="fd2-bar-tekst">{oppgave.navn}</span>
+            <span className="fd2-bar-tekst" style={{ pointerEvents: 'none' }}>{oppgave.navn}</span>
             <div className="fd2-handle fd2-handle-r"
-              onPointerDown={e => startDrag(e, oppgave, 'end')}
+              style={{ touchAction: 'none' }}
+              onPointerDown={e => { e.stopPropagation(); startDrag(e, oppgave, 'end'); }}
               onPointerMove={moveDrag}
               onPointerUp={endDrag}
+              onPointerCancel={endDrag}
             >▸</div>
           </div>
         )}
