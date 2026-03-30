@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { uid, dateToIso, isoToDate, addDays, weekStart, overlaps } from '../store';
 
-const JOBB_TYPER = ['Tømrer', 'Maling', 'Rørlegger', 'Flislegging', 'Elektro', 'Rehabilitering', 'Annet'];
+const JOBB_TYPER = ['Ny bygg', 'Tilbygg', 'Tak jobb', 'Fasade jobb', 'Tømrer', 'Maling', 'Rørlegger', 'Flislegging', 'Elektro', 'Rehabilitering', 'Annet'];
 
 const STATUS = {
   planlagt:     { label: 'Planlagt',      farge: '#3b82f6', bg: '#eff6ff', ikon: '📋' },
@@ -40,11 +40,12 @@ function tomModal() {
   return {
     kontaktNavn: '',
     adresse: '',
-    jobbType: 'Tømrer',
+    jobbType: 'Ny bygg',
     dato: dateToIso(new Date()),
     status: 'planlagt',
     notat: '',
     prosjektlederId: '',
+    estimertBelop: '',
   };
 }
 
@@ -236,6 +237,7 @@ export default function BefaringPlan() {
           {kommende.map(b => {
             const s = STATUS[b.status];
             const pl = b.prosjektlederId ? state.ansatte.find(a => a.id === b.prosjektlederId) : null;
+            const belopVis = b.estimertBelop ? new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(Number(b.estimertBelop)) : null;
             return (
               <div key={b.id} className="bef-kort" onClick={() => apneRediger(b)}>
                 <div className="bef-kort-farge" style={{ background: s.farge }} />
@@ -246,6 +248,7 @@ export default function BefaringPlan() {
                     <span className="bef-kort-dato">{new Date(b.dato + 'T00:00:00').toLocaleDateString('nb-NO', { weekday: 'short', day: '2-digit', month: 'short' })}</span>
                     <span className="bef-kort-type">{b.jobbType}</span>
                     {pl && <span className="bef-kort-pl">👤 {pl.navn}</span>}
+                    {belopVis && <span className="bef-kort-pl">💰 {belopVis}</span>}
                   </div>
                 </div>
                 <div className="bef-kort-status" style={{ color: s.farge, background: s.bg }}>
@@ -292,6 +295,17 @@ export default function BefaringPlan() {
                   <input type="date" className="input" value={form.dato} onChange={e => setForm(f => ({ ...f, dato: e.target.value }))} />
                 </div>
               </div>
+
+              <label>Størrelse på jobb (ca. kr)</label>
+              <input
+                className="input"
+                type="number"
+                min="0"
+                step="10000"
+                value={form.estimertBelop}
+                onChange={e => setForm(f => ({ ...f, estimertBelop: e.target.value }))}
+                placeholder="f.eks. 500000"
+              />
 
               <label>Status</label>
               <div className="bef-status-velger">
