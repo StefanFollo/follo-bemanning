@@ -44,6 +44,7 @@ function tomModal() {
     dato: dateToIso(new Date()),
     status: 'planlagt',
     notat: '',
+    prosjektlederId: '',
   };
 }
 
@@ -51,6 +52,7 @@ export default function BefaringPlan() {
   const { state, dispatch } = useApp();
   const befaringer = state.befaringer || [];
   const today = dateToIso(new Date());
+  const prosjektledere = state.ansatte.filter(a => a.fag === 'Prosjektleder');
 
   const [visModal, setVisModal] = useState(false);
   const [redigerer, setRedigerer] = useState(null); // befaring-objekt eller null
@@ -204,17 +206,21 @@ export default function BefaringPlan() {
                   onClick={() => apneNy(dag)}
                 >
                   <span className="bef-kal-dato">{dag.slice(8)}</span>
-                  {bfs.map(b => (
-                    <div
-                      key={b.id}
-                      className="bef-kal-chip"
-                      style={{ background: STATUS[b.status]?.farge || '#6b7280' }}
-                      onClick={e => { e.stopPropagation(); apneRediger(b); }}
-                      title={`${b.kontaktNavn} – ${b.adresse}`}
-                    >
-                      {b.kontaktNavn.split(' ')[0]}
-                    </div>
-                  ))}
+                  {bfs.map(b => {
+                    const pl = b.prosjektlederId ? state.ansatte.find(a => a.id === b.prosjektlederId) : null;
+                    const plInitialer = pl ? pl.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : null;
+                    return (
+                      <div
+                        key={b.id}
+                        className="bef-kal-chip"
+                        style={{ background: STATUS[b.status]?.farge || '#6b7280' }}
+                        onClick={e => { e.stopPropagation(); apneRediger(b); }}
+                        title={`${b.kontaktNavn} – ${b.adresse}${pl ? ` (${pl.navn})` : ''}`}
+                      >
+                        {b.kontaktNavn.split(' ')[0]}{plInitialer ? ` · ${plInitialer}` : ''}
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })}
@@ -229,6 +235,7 @@ export default function BefaringPlan() {
           )}
           {kommende.map(b => {
             const s = STATUS[b.status];
+            const pl = b.prosjektlederId ? state.ansatte.find(a => a.id === b.prosjektlederId) : null;
             return (
               <div key={b.id} className="bef-kort" onClick={() => apneRediger(b)}>
                 <div className="bef-kort-farge" style={{ background: s.farge }} />
@@ -238,6 +245,7 @@ export default function BefaringPlan() {
                   <div className="bef-kort-meta">
                     <span className="bef-kort-dato">{new Date(b.dato + 'T00:00:00').toLocaleDateString('nb-NO', { weekday: 'short', day: '2-digit', month: 'short' })}</span>
                     <span className="bef-kort-type">{b.jobbType}</span>
+                    {pl && <span className="bef-kort-pl">👤 {pl.navn}</span>}
                   </div>
                 </div>
                 <div className="bef-kort-status" style={{ color: s.farge, background: s.bg }}>
@@ -258,6 +266,14 @@ export default function BefaringPlan() {
               <button className="btn-icon" onClick={() => setVisModal(false)}>✕</button>
             </div>
             <div className="form">
+              <label>Prosjektleder (befaringsansvarlig)</label>
+              <select className="input" value={form.prosjektlederId} onChange={e => setForm(f => ({ ...f, prosjektlederId: e.target.value }))}>
+                <option value="">– Velg prosjektleder –</option>
+                {prosjektledere.map(a => (
+                  <option key={a.id} value={a.id}>{a.navn}</option>
+                ))}
+              </select>
+
               <label>Kontaktnavn *</label>
               <input className="input" value={form.kontaktNavn} onChange={e => setForm(f => ({ ...f, kontaktNavn: e.target.value }))} placeholder="Navn på kontaktperson / prosjekt" />
 
