@@ -52,7 +52,7 @@ export default function BefaringPlan() {
   const { state, dispatch } = useApp();
   const befaringer = state.befaringer || [];
   const today = dateToIso(new Date());
-  const prosjektledere = [...state.ansatte].sort((a, b) => a.navn.localeCompare(b.navn));
+  const prosjektledere = state.ansatte.filter(a => a.fag === 'Prosjekt Leder');
 
   const [visModal, setVisModal] = useState(false);
   const [redigerer, setRedigerer] = useState(null); // befaring-objekt eller null
