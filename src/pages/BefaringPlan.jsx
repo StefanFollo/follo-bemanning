@@ -42,6 +42,7 @@ function tomModal() {
     adresse: '',
     jobbType: 'Ny bygg',
     dato: dateToIso(new Date()),
+    tid: '09:00',
     status: 'planlagt',
     notat: '',
     prosjektlederId: '',
@@ -216,9 +217,9 @@ export default function BefaringPlan() {
                         className="bef-kal-chip"
                         style={{ background: STATUS[b.status]?.farge || '#6b7280' }}
                         onClick={e => { e.stopPropagation(); apneRediger(b); }}
-                        title={`${b.kontaktNavn} – ${b.adresse}${pl ? ` (${pl.navn})` : ''}`}
+                        title={`${b.tid ? b.tid + ' – ' : ''}${b.kontaktNavn} – ${b.adresse}${pl ? ` (${pl.navn})` : ''}`}
                       >
-                        {b.kontaktNavn.split(' ')[0]}{plInitialer ? ` · ${plInitialer}` : ''}
+                        {b.tid && <span style={{fontSize:9, opacity:0.9}}>{b.tid} </span>}{b.kontaktNavn.split(' ')[0]}{plInitialer ? ` · ${plInitialer}` : ''}
                       </div>
                     );
                   })}
@@ -245,7 +246,7 @@ export default function BefaringPlan() {
                   <div className="bef-kort-navn">{b.kontaktNavn}</div>
                   <div className="bef-kort-adresse">{b.adresse}</div>
                   <div className="bef-kort-meta">
-                    <span className="bef-kort-dato">{new Date(b.dato + 'T00:00:00').toLocaleDateString('nb-NO', { weekday: 'short', day: '2-digit', month: 'short' })}</span>
+                    <span className="bef-kort-dato">{new Date(b.dato + 'T00:00:00').toLocaleDateString('nb-NO', { weekday: 'short', day: '2-digit', month: 'short' })}{b.tid ? ` kl. ${b.tid}` : ''}</span>
                     <span className="bef-kort-type">{b.jobbType}</span>
                     {pl && <span className="bef-kort-pl">👤 {pl.navn}</span>}
                     {belopVis && <span className="bef-kort-pl">💰 {belopVis}</span>}
@@ -293,6 +294,10 @@ export default function BefaringPlan() {
                 <div>
                   <label>Dato for befaring</label>
                   <input type="date" className="input" value={form.dato} onChange={e => setForm(f => ({ ...f, dato: e.target.value }))} />
+                </div>
+                <div>
+                  <label>Tidspunkt</label>
+                  <input type="time" className="input" value={form.tid || '09:00'} onChange={e => setForm(f => ({ ...f, tid: e.target.value }))} />
                 </div>
               </div>
 
