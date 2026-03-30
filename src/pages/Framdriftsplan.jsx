@@ -1,46 +1,79 @@
-import { useState, useRef, useLayoutEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { formatDate, weekStart, addDays, dateToIso, isoToDate, overlaps } from '../store';
-import { getHolidayMap } from '../holidays';
+import { dateToIso, isoToDate, formatDate, uid } from '../store';
 
-const FAG_COLORS = {
-  'Bas Tømrer': '#f59e0b', 'Montør': '#3b82f6', 'Lærling Tømrer': '#16a34a',
-  'Maler': '#ec4899', 'Rørlegger': '#06b6d4', 'Tømrer': '#8b5cf6',
-  'Flislegger': '#f97316', 'Prosjekt Leder': '#0ea5e9', 'Prosjektleder': '#0ea5e9',
-};
-function fagColor(fag) { return FAG_COLORS[fag] || '#6b7280'; }
+// ─── Dato-hjelp ──────────────────────────────────────────────
+const MAANED = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des'];
 
-function progressColor(pct) {
-  if (pct >= 80) return '#16a34a';
-  if (pct >= 40) return '#2563eb';
-  return '#dc2626';
-}
+function today() { return dateToIso(new Date()); }
 
-const DAG_NAVN = ['Man', 'Tir', 'Ons', 'Tor', 'Fre'];
-const MAANED_NAVN = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des'];
-
-function monthStart(iso) { return iso.slice(0,7) + '-01'; }
-function addMonths(iso, n) {
+function addDays(iso, n) {
   const d = new Date(iso + 'T00:00:00');
-  d.setMonth(d.getMonth() + n);
-  return dateToIso(d).slice(0,7) + '-01';
-}
-function monthEnd(iso) {
-  const d = new Date(iso + 'T00:00:00');
-  d.setMonth(d.getMonth() + 1); d.setDate(0);
+  d.setDate(d.getDate() + n);
   return dateToIso(d);
 }
-function monthLabel(iso) {
-  return MAANED_NAVN[parseInt(iso.slice(5,7),10)-1] + ' ' + iso.slice(0,4);
-}
-function getWeekNumber(iso) {
-  const d = new Date(iso + 'T00:00:00');
-  d.setHours(0,0,0,0);
-  d.setDate(d.getDate() + 3 - ((d.getDay()+6)%7));
-  const w = new Date(d.getFullYear(), 0, 4);
-  return 1 + Math.round(((d-w)/86400000 - 3 + ((w.getDay()+6)%7))/7);
+
+function daysBetween(a, b) {
+  if (!a || !b) return 0;
+  return Math.max(0, Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000));
 }
 
+function monthsArray(fromIso, count) {
+  const out = [];
+  const d = new Date(fromIso + 'T00:00:00');
+  d.setDate(1);
+  for (let i = 0; i < count; i++) {
+    const iso = dateToIso(d).slice(0, 7);
+    out.push(iso);
+    d.setMonth(d.getMonth() + 1);
+  }
+  return out;
+}
+
+function monthEndIso(ym) {
+  const [y, m] = ym.split('-').map(Number);
+  return dateToIso(new Date(y, m, 0)); // last day of month
+}
+
+function monthStartIso(ym) { return ym + '-01'; }
+
+function pctInRange(iso, rangeStart, rangeDays) {
+  if (!iso) return null;
+  const diff = daysBetween(rangeStart, iso);
+  return Math.max(0, Math.min(100, (diff / rangeDays) * 100));
+}
+
+function barStyle(startDato, sluttDato, rangeStart, rangeDays, color) {
+  if (!startDato || !sluttDato) return null;
+  const left = pctInRange(startDato, rangeStart, rangeDays);
+  const right = pctInRange(addDays(sluttDato, 1), rangeStart, rangeDays);
+  if (left === null || right === null || right <= left) return null;
+  return { left: left.toFixed(2) + '%', width: (right - left).toFixed(2) + '%', background: color };
+}
+
+// ─── Standardfarger per ny aktivitet ─────────────────────────
+const FARGER = ['#6366f1','#8b5cf6','#3b82f6','#06b6d4','#16a34a','#f59e0b','#ea580c','#ec4899'];
+function nesteFarge(oppgaver) {
+  const used = oppgaver.map(o => o.farge).filter(Boolean);
+  return FARGER.find(f => !used.includes(f)) || FARGER[oppgaver.length % FARGER.length];
+}
+
+// ─── Tom oppgave ─────────────────────────────────────────────
+function tomOppgave(prosjektId, erGruppe, parentId, farge, rekkefølge) {
+  return {
+    navn: '',
+    prosjektId,
+    erGruppe: !!erGruppe,
+    parentId: parentId || null,
+    startDato: today(),
+    sluttDato: addDays(today(), erGruppe ? 30 : 7),
+    farge: farge || '#6366f1',
+    fremgang: 0,
+    rekkefølge: rekkefølge || 0,
+  };
+}
+
+// ─── Modal ───────────────────────────────────────────────────
 function Modal({ title, onClose, children }) {
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -55,455 +88,374 @@ function Modal({ title, onClose, children }) {
   );
 }
 
-const EMPTY_OPPGAVE = { navn: '', fag: '', fremgang: 0, startDato: '', sluttDato: '' };
-
+// ─── Hoved-komponent ─────────────────────────────────────────
 export default function Framdriftsplan() {
   const { state, dispatch } = useApp();
-  const [selectedProsjekt, setSelectedProsjekt] = useState(null);
+  const [valgtProsjektId, setValgtProsjektId] = useState(() => state.prosjekter[0]?.id || null);
+  const [collapsed, setCollapsed] = useState({});
   const [showModal, setShowModal] = useState(false);
-  const [editingOppgave, setEditingOppgave] = useState(null);
-  const [oppgaveForm, setOppgaveForm] = useState(EMPTY_OPPGAVE);
-  const [ukeMode, setUkeMode] = useState('uke'); // 'dag' | 'uke' | 'maaned'
-  const [currentWeek, setCurrentWeek] = useState(() => weekStart(dateToIso(new Date())));
-  const [currentMonth, setCurrentMonth] = useState(() => monthStart(dateToIso(new Date())));
+  const [editModal, setEditModal] = useState(null);   // oppgave-objekt
+  const [form, setForm] = useState(null);
+  const [månedOffset, setMånedOffset] = useState(0);
+  const MÅNEDER_SYNLIG = 18;
   const dragRef = useRef(null);
-  const scrollRef = useRef(null);
-  const scrollSave = useRef(null);
+  const gridRef = useRef(null);
 
-  const today = dateToIso(new Date());
-  const thisYear = new Date().getFullYear();
-  const HOLIDAYS = getHolidayMap(thisYear - 1, thisYear + 2);
+  const prosjekt = state.prosjekter.find(p => p.id === valgtProsjektId) || state.prosjekter[0];
+  const alleOppgaver = prosjekt ? state.oppgaver.filter(o => o.prosjektId === prosjekt.id) : [];
 
-  const prosjekt = state.prosjekter.find(p => p.id === selectedProsjekt) || state.prosjekter[0];
-  const prosjektOppgaver = prosjekt ? state.oppgaver.filter(o => o.prosjektId === prosjekt.id) : [];
-  const totalFremgang = prosjektOppgaver.length
-    ? Math.round(prosjektOppgaver.reduce((s, o) => s + (o.fremgang || 0), 0) / prosjektOppgaver.length)
-    : 0;
-  const fagGrupper = state.fag.map(fag => ({
-    fag, oppgaver: prosjektOppgaver.filter(o => o.fag === fag),
-  })).filter(g => g.oppgaver.length > 0);
-  const uklassifiserte = prosjektOppgaver.filter(o => !state.fag.includes(o.fag));
+  // Tidslinje-setup
+  const tl0 = (() => {
+    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + månedOffset);
+    return dateToIso(d).slice(0, 7) + '-01';
+  })();
+  const måneder = monthsArray(tl0, MÅNEDER_SYNLIG);
+  const tlStart = tl0;
+  const tlEnd   = monthEndIso(måneder[måneder.length - 1]);
+  const tlDays  = daysBetween(tlStart, addDays(tlEnd, 1));
 
-  // --- Scroll restore ---
-  useLayoutEffect(() => {
-    if (!scrollSave.current) return;
-    const { top, left } = scrollSave.current;
-    scrollSave.current = null;
-    if (scrollRef.current) { scrollRef.current.scrollTop = top; scrollRef.current.scrollLeft = left; }
+  // "I dag"-linje
+  const todayPct = pctInRange(today(), tlStart, tlDays);
+
+  // Grupper og oppgaver sortert
+  const grupper = alleOppgaver
+    .filter(o => o.erGruppe)
+    .sort((a, b) => (a.rekkefølge || 0) - (b.rekkefølge || 0));
+  const løseAktiviteter = alleOppgaver
+    .filter(o => !o.erGruppe && !o.parentId)
+    .sort((a, b) => (a.rekkefølge || 0) - (b.rekkefølge || 0));
+
+  function barnAv(gruppeId) {
+    return alleOppgaver
+      .filter(o => !o.erGruppe && o.parentId === gruppeId)
+      .sort((a, b) => (a.rekkefølge || 0) - (b.rekkefølge || 0));
+  }
+
+  // Autobered gruppe-bar (min start → max slutt av barn)
+  function gruppeBar(g) {
+    const barn = barnAv(g.id);
+    if (barn.length === 0) return { start: g.startDato, slutt: g.sluttDato };
+    const start = barn.reduce((s, b) => b.startDato < s ? b.startDato : s, barn[0].startDato);
+    const slutt  = barn.reduce((s, b) => b.sluttDato > s ? b.sluttDato : s, barn[0].sluttDato);
+    return { start, slutt };
+  }
+
+  // ID-nummerering per prosjekt (sekvensielt)
+  const idMap = {};
+  let n = 1;
+  grupper.forEach(g => {
+    idMap[g.id] = n++;
+    barnAv(g.id).forEach(b => { idMap[b.id] = n++; });
   });
+  løseAktiviteter.forEach(a => { idMap[a.id] = n++; });
 
-  function dispatchKeepScroll(action) {
-    if (scrollRef.current) scrollSave.current = { top: scrollRef.current.scrollTop, left: scrollRef.current.scrollLeft };
-    dispatch(action);
-  }
-
-  // --- Dag-modus kolonner (26 uker × 5 dager) ---
-  const dagDays = Array.from({ length: 26 * 7 }, (_, i) => addDays(currentWeek, i))
-    .filter(d => { const dow = new Date(d + 'T00:00:00').getDay(); return dow >= 1 && dow <= 5; });
-
-  // --- Uke-modus (26 uker × 5 dager) ---
-  const ukeDays = [];
-  for (let w = 0; w < 26; w++) for (let d = 0; d < 5; d++) ukeDays.push(addDays(currentWeek, w*7+d));
-
-  // --- Måned-modus (18 måneder) ---
-  const maaneder = Array.from({ length: 18 }, (_, i) => addMonths(currentMonth, i));
-
-  const days = ukeMode === 'dag' ? dagDays : ukeMode === 'uke' ? ukeDays : maaneder;
-  const viewStart = days[0];
-  const viewEnd = ukeMode === 'maaned' ? monthEnd(days[days.length-1]) : days[days.length-1];
-
-  function prevPeriode() {
-    if (ukeMode === 'maaned') setCurrentMonth(m => addMonths(m, -3));
-    else setCurrentWeek(w => addDays(w, -7*4));
-  }
-  function nextPeriode() {
-    if (ukeMode === 'maaned') setCurrentMonth(m => addMonths(m, 3));
-    else setCurrentWeek(w => addDays(w, 7*4));
-  }
-  function gotoPeriode() {
-    setCurrentWeek(weekStart(today));
-    setCurrentMonth(monthStart(today));
-  }
-
-  const navLabel = ukeMode === 'maaned'
-    ? `${monthLabel(maaneder[0])} – ${monthLabel(maaneder[17])}`
-    : `${formatDate(days[0])} – ${formatDate(days[days.length-1])}`;
-
-  // --- Bar position ---
-  function getBarPos(startDato, sluttDato) {
-    const n = days.length;
-    let si = -1, ei = -1;
-    for (let i = 0; i < n; i++) {
-      const hit = ukeMode === 'maaned'
-        ? overlaps(startDato, sluttDato, days[i], monthEnd(days[i]))
-        : (days[i] >= startDato && days[i] <= sluttDato);
-      if (hit) { if (si < 0) si = i; ei = i; }
-    }
-    if (si < 0) return null;
-    const pct = 100 / n;
-    return { left: `${si * pct}%`, width: `${(ei - si + 1) * pct}%` };
-  }
-
-  // --- Drag handlers ---
-  function handleDragStart(e, oppgave, type) {
+  // ─── Drag ───────────────────────────────────────────────────
+  function onDragStart(e, oppgave, type) {
     e.stopPropagation();
-    dragRef.current = { oppgaveId: oppgave.id, type, startDato: oppgave.startDato, sluttDato: oppgave.sluttDato };
+    dragRef.current = { id: oppgave.id, type, startDato: oppgave.startDato, sluttDato: oppgave.sluttDato };
   }
 
-  function getIdxFromEvent(e) {
+  function pctFromMouseX(e) {
     const rect = e.currentTarget.getBoundingClientRect();
+    const scrollLeft = gridRef.current ? gridRef.current.scrollLeft : 0;
     const x = e.clientX - rect.left;
-    return Math.min(days.length-1, Math.max(0, Math.floor(x / (rect.width / days.length))));
+    return Math.max(0, Math.min(100, (x / rect.width) * 100));
   }
 
-  function handleDrop(e, dayOrMonth) {
+  function isoFromPct(pct) {
+    const days = Math.round((pct / 100) * tlDays);
+    return addDays(tlStart, days);
+  }
+
+  function onDrop(e, oppgave) {
     e.preventDefault();
-    if (!dragRef.current) return;
-    const { oppgaveId, type, startDato, sluttDato } = dragRef.current;
-    const oppgave = state.oppgaver.find(o => o.id === oppgaveId);
-    if (!oppgave) return;
-    const idx = getIdxFromEvent(e);
-    const targetDay = ukeMode === 'maaned' ? days[idx] : days[idx];
-
+    if (!dragRef.current || dragRef.current.id !== oppgave.id) return;
+    const { type, startDato, sluttDato } = dragRef.current;
+    const pct = pctFromMouseX(e);
+    const iso = isoFromPct(pct);
     let newStart = startDato, newEnd = sluttDato;
-    if (type === 'move') {
-      const len = ukeMode === 'maaned'
-        ? Math.round((new Date(sluttDato+'T00:00:00') - new Date(startDato+'T00:00:00')) / 86400000)
-        : Math.max(0, days.indexOf(sluttDato) - days.indexOf(startDato));
-      newStart = targetDay;
-      newEnd = ukeMode === 'maaned' ? addDays(targetDay, len) : (days[Math.min(days.length-1, idx+len)] || targetDay);
-    } else if (type === 'start') {
-      newStart = targetDay <= sluttDato ? targetDay : sluttDato;
+    if (type === 'start') {
+      newStart = iso <= sluttDato ? iso : sluttDato;
     } else if (type === 'end') {
-      newEnd = targetDay >= startDato ? targetDay : startDato;
+      newEnd = iso >= startDato ? iso : startDato;
+    } else {
+      const len = daysBetween(startDato, sluttDato);
+      newStart = iso;
+      newEnd = addDays(iso, len);
     }
-
-    dispatchKeepScroll({ type: 'UPDATE_OPPGAVE', payload: { ...oppgave, startDato: newStart, sluttDato: newEnd } });
+    dispatch({ type: 'UPDATE_OPPGAVE', payload: { ...oppgave, startDato: newStart, sluttDato: newEnd } });
     dragRef.current = null;
   }
 
-  // --- CRUD ---
-  function openAddOppgave() {
-    setEditingOppgave(null);
-    const defaultStart = prosjekt?.startDato || today;
-    const defaultEnd = prosjekt?.sluttDato || addDays(today, 14);
-    setOppgaveForm({ ...EMPTY_OPPGAVE, fag: state.fag[0] || '', startDato: defaultStart, sluttDato: defaultEnd });
+  // ─── CRUD ────────────────────────────────────────────────────
+  function åpneNyGruppe() {
+    const rek = alleOppgaver.length;
+    setForm({ ...tomOppgave(prosjekt.id, true, null, '#4b5563', rek), _type: 'gruppe' });
+    setEditModal(null);
     setShowModal(true);
   }
-  function openEditOppgave(o) {
-    setEditingOppgave(o);
-    setOppgaveForm({ ...o });
+
+  function åpneNyAktivitet(parentId) {
+    const farge = nesteFarge(alleOppgaver);
+    const rek = alleOppgaver.length;
+    setForm({ ...tomOppgave(prosjekt.id, false, parentId || null, farge, rek), _type: 'aktivitet' });
+    setEditModal(null);
     setShowModal(true);
   }
-  function handleSaveOppgave() {
-    if (!oppgaveForm.navn.trim() || !prosjekt) return;
-    if (editingOppgave) {
-      dispatch({ type: 'UPDATE_OPPGAVE', payload: { ...oppgaveForm, id: editingOppgave.id } });
+
+  function åpneRediger(oppgave) {
+    setForm({ ...oppgave, _type: oppgave.erGruppe ? 'gruppe' : 'aktivitet' });
+    setEditModal(oppgave);
+    setShowModal(true);
+  }
+
+  function lagre() {
+    if (!form.navn.trim()) return;
+    const { _type, ...data } = form;
+    if (editModal) {
+      dispatch({ type: 'UPDATE_OPPGAVE', payload: { ...data, id: editModal.id } });
     } else {
-      dispatch({ type: 'ADD_OPPGAVE', payload: { ...oppgaveForm, prosjektId: prosjekt.id } });
+      dispatch({ type: 'ADD_OPPGAVE', payload: data });
     }
     setShowModal(false);
   }
-  function handleDeleteOppgave(id) {
-    if (confirm('Slett oppgaven?')) dispatch({ type: 'DELETE_OPPGAVE', id });
-  }
-  function handleFremgangChange(oppgave, val) {
-    dispatch({ type: 'UPDATE_OPPGAVE', payload: { ...oppgave, fremgang: Number(val) } });
+
+  function slett(id) {
+    if (confirm('Slett aktiviteten?')) {
+      dispatch({ type: 'DELETE_OPPGAVE', id });
+      // Slett også eventuelle barn
+      state.oppgaver.filter(o => o.parentId === id).forEach(b =>
+        dispatch({ type: 'DELETE_OPPGAVE', id: b.id })
+      );
+      setShowModal(false);
+    }
   }
 
-  // --- Gantt grid ---
-  function GanttHeader() {
-    if (ukeMode === 'maaned') {
-      return <>
-        <div className="fd-row-label" />
-        {maaneder.map(m => {
-          const erIMnd = m.slice(0,7) === today.slice(0,7);
-          return <div key={m} className={`fd-header-cell ${erIMnd ? 'fd-today-col' : ''}`}>{monthLabel(m)}</div>;
-        })}
-      </>;
-    }
-    if (ukeMode === 'uke') {
-      return <>
-        <div className="fd-row-label" />
-        {ukeDays.map((d, i) => {
-          const isMonday = i % 5 === 0;
-          const weekIdx = Math.floor(i / 5);
-          const isToday = d === today;
-          const hol = HOLIDAYS[d];
-          return (
-            <div key={d} className={`fd-header-cell ${isToday ? 'fd-today-col' : ''} ${isMonday ? 'fd-week-start' : ''} ${hol ? 'holiday-header' : ''}`}
-              style={{ fontSize: 10, padding: '3px 1px', textAlign: 'center' }} title={hol || undefined}>
-              {isMonday && <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8' }}>U{getWeekNumber(ukeDays[weekIdx*5])}</div>}
-              <div style={{ fontWeight: isMonday ? 700 : 400 }}>{DAG_NAVN[i%5]}</div>
-              <div style={{ fontSize: 9, color: '#94a3b8' }}>{d.slice(8)}.{d.slice(5,7)}</div>
-            </div>
-          );
-        })};
-      </>;
-    }
-    // dag-modus
-    return <>
-      <div className="fd-row-label" />
-      {dagDays.map((d, i) => {
-        const dow = new Date(d+'T00:00:00').getDay();
-        const isMonday = dow === 1;
-        const isToday = d === today;
-        const hol = HOLIDAYS[d];
-        return (
-          <div key={d} className={`fd-header-cell ${isToday ? 'fd-today-col' : ''} ${isMonday ? 'fd-week-start' : ''} ${hol ? 'holiday-header' : ''}`}
-            style={{ fontSize: 10, textAlign: 'center' }} title={hol || undefined}>
-            {isMonday && <div style={{ fontSize: 9, fontWeight: 700, color: '#94a3b8' }}>U{getWeekNumber(d)}</div>}
-            <div>{DAG_NAVN[dow-1]}</div>
-            <div style={{ fontSize: 9, color: '#94a3b8' }}>{d.slice(8)}.{d.slice(5,7)}</div>
-          </div>
-        );
-      })}
-    </>;
+  function toggleCollapse(id) {
+    setCollapsed(c => ({ ...c, [id]: !c[id] }));
   }
 
-  function GanttRow({ oppgave }) {
-    const color = fagColor(oppgave.fag);
-    const pos = oppgave.startDato && oppgave.sluttDato ? getBarPos(oppgave.startDato, oppgave.sluttDato) : null;
-    const pct = oppgave.fremgang || 0;
+  // ─── Render en bar-rad ────────────────────────────────────────
+  function BarRad({ oppgave, erGruppe, startD, sluttD }) {
+    const color = erGruppe ? '#374151' : (oppgave.farge || '#6366f1');
+    const style = barStyle(startD, sluttD, tlStart, tlDays, color);
+    const varighet = daysBetween(startD, sluttD) + 1;
 
     return (
-      <div className="fd-gantt-row"
+      <div className="fd2-bar-area"
         onDragOver={e => e.preventDefault()}
-        onDrop={e => handleDrop(e, null)}
+        onDrop={e => onDrop(e, oppgave)}
       >
-        {/* Today line */}
-        {(() => {
-          const ti = days.indexOf(today);
-          if (ti < 0) return null;
-          return <div className="fd-today-line" style={{ left: `${(ti / days.length) * 100}%` }} />;
-        })()}
-
-        {pos && (
-          <div
-            className="fd-bar"
-            style={{ left: pos.left, width: pos.width, background: color }}
-            draggable
-            onDragStart={e => handleDragStart(e, oppgave, 'move')}
-            title={`${oppgave.navn} · ${formatDate(oppgave.startDato)} – ${formatDate(oppgave.sluttDato)}`}
-          >
-            {/* Progress fill */}
-            <div className="fd-bar-progress" style={{ width: pct + '%', background: 'rgba(255,255,255,0.35)' }} />
-            {/* Left handle */}
-            <div className="fd-handle fd-handle-l" draggable onDragStart={e => { e.stopPropagation(); handleDragStart(e, oppgave, 'start'); }}>◂</div>
-            <span className="fd-bar-label">{oppgave.navn} {pct > 0 ? `${pct}%` : ''}</span>
-            {/* Right handle */}
-            <div className="fd-handle fd-handle-r" draggable onDragStart={e => { e.stopPropagation(); handleDragStart(e, oppgave, 'end'); }}>▸</div>
+        {todayPct !== null && (
+          <div className="fd2-today-line" style={{ left: todayPct.toFixed(2) + '%' }}>
+            <span className="fd2-today-label">I dag</span>
           </div>
         )}
-        {!pos && (
-          <div className="fd-bar-ingen" title="Ingen datoer satt – rediger oppgaven">
-            Ingen datoer
+        {style && (
+          <div
+            className={`fd2-bar ${erGruppe ? 'fd2-bar-gruppe' : ''}`}
+            style={style}
+            draggable
+            onDragStart={e => onDragStart(e, oppgave, 'move')}
+            title={`${oppgave.navn}\n${formatDate(startD)} – ${formatDate(sluttD)}\n${varighet} dager`}
+          >
+            <div className="fd2-handle fd2-handle-l" draggable
+              onDragStart={e => { e.stopPropagation(); onDragStart(e, oppgave, 'start'); }}>◂</div>
+            <span className="fd2-bar-tekst">{oppgave.navn}</span>
+            <div className="fd2-handle fd2-handle-r" draggable
+              onDragStart={e => { e.stopPropagation(); onDragStart(e, oppgave, 'end'); }}>▸</div>
           </div>
         )}
       </div>
     );
   }
 
-  const cols = days.length;
-  const gridTemplate = `150px repeat(${cols}, minmax(${ukeMode === 'maaned' ? 60 : ukeMode === 'uke' ? 28 : 36}px, 1fr))`;
+  // ─── Render en rad ─────────────────────────────────────────
+  function Rad({ oppgave, indentert, erGruppe }) {
+    const startD = erGruppe ? gruppeBar(oppgave).start : oppgave.startDato;
+    const sluttD = erGruppe ? gruppeBar(oppgave).slutt  : oppgave.sluttDato;
+    const varighet = (startD && sluttD) ? (daysBetween(startD, sluttD) + 1) + 'd' : '–';
+    const barn = erGruppe ? barnAv(oppgave.id) : [];
+    const isOpen = !collapsed[oppgave.id];
+
+    return (
+      <>
+        <div className={`fd2-rad ${erGruppe ? 'fd2-rad-gruppe' : ''}`}>
+          {/* ID */}
+          <div className="fd2-celle fd2-celle-id">{idMap[oppgave.id]}</div>
+
+          {/* Aktivitet */}
+          <div className="fd2-celle fd2-celle-navn" style={{ paddingLeft: indentert ? 28 : 12 }}>
+            {erGruppe && (
+              <button className="fd2-toggle" onClick={() => toggleCollapse(oppgave.id)}>
+                {isOpen ? '▾' : '▸'}
+              </button>
+            )}
+            <span
+              className="fd2-navn-tekst"
+              onClick={() => åpneRediger(oppgave)}
+              title="Klikk for å redigere"
+            >
+              {oppgave.navn || <em style={{ color: '#94a3b8' }}>Uten navn</em>}
+            </span>
+            {erGruppe && (
+              <button className="fd2-legg-til-barn" onClick={() => åpneNyAktivitet(oppgave.id)} title="Legg til aktivitet i denne fasen">+</button>
+            )}
+          </div>
+
+          {/* Varighet */}
+          <div className="fd2-celle fd2-celle-varighet">{varighet}</div>
+
+          {/* Bar */}
+          <BarRad oppgave={oppgave} erGruppe={erGruppe} startD={startD} sluttD={sluttD} />
+        </div>
+
+        {/* Barn */}
+        {erGruppe && isOpen && barn.map(b => (
+          <Rad key={b.id} oppgave={b} indentert erGruppe={false} />
+        ))}
+      </>
+    );
+  }
+
+  if (state.prosjekter.length === 0) {
+    return <div className="page"><div className="empty">Ingen prosjekter. Legg til et prosjekt først.</div></div>;
+  }
 
   return (
-    <div className="page">
-      <div className="page-header">
-        <h2>Framdriftsplan</h2>
-        {prosjekt && <button className="btn btn-primary" onClick={openAddOppgave}>+ Ny oppgave</button>}
+    <div className="page fd2-side">
+      {/* Topptittel */}
+      <div className="page-header" style={{ marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <h2>Fremdriftsplan</h2>
+          {/* Prosjekt-dropdown */}
+          <select
+            className="fd2-prosjekt-select"
+            value={valgtProsjektId || ''}
+            onChange={e => setValgtProsjektId(e.target.value)}
+          >
+            {state.prosjekter.map(p => (
+              <option key={p.id} value={p.id}>{p.navn}</option>
+            ))}
+          </select>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={åpneNyGruppe}>+ Ny fase</button>
+          <button className="btn btn-primary" onClick={() => åpneNyAktivitet(null)}>+ Ny aktivitet</button>
+        </div>
       </div>
 
-      {/* Prosjekt-tabs */}
-      <div className="fd-prosjekt-tabs">
-        {state.prosjekter.map(p => {
-          const opp = state.oppgaver.filter(o => o.prosjektId === p.id);
-          const fr = opp.length ? Math.round(opp.reduce((s,o) => s+(o.fremgang||0),0)/opp.length) : null;
-          const isActive = prosjekt?.id === p.id;
-          return (
-            <button key={p.id}
-              className={`fd-prosjekt-tab ${isActive ? 'active' : ''}`}
-              style={isActive ? { borderBottom: `3px solid ${p.farge || '#2563eb'}` } : {}}
-              onClick={() => setSelectedProsjekt(p.id)}
-            >
-              <span className="fd-tab-navn">{p.navn}</span>
-              {fr !== null && <span className="fd-tab-pct" style={{ color: progressColor(fr) }}>{fr}%</span>}
-            </button>
-          );
-        })}
+      {/* Periode-navigasjon */}
+      <div className="uke-nav" style={{ marginBottom: 8 }}>
+        <button className="btn" onClick={() => setMånedOffset(o => o - 6)}>← Forrige</button>
+        <span className="uke-label">{MAANED[new Date(tl0).getMonth()]} {new Date(tl0).getFullYear()} – {MAANED[new Date(tlEnd + 'T00:00:00').getMonth()]} {new Date(tlEnd + 'T00:00:00').getFullYear()}</span>
+        <button className="btn" onClick={() => setMånedOffset(0)}>I dag</button>
+        <button className="btn" onClick={() => setMånedOffset(o => o + 6)}>Neste →</button>
       </div>
 
-      {!prosjekt ? (
-        <div className="empty">Ingen prosjekter registrert.</div>
-      ) : (
-        <>
-          {/* Total fremgang */}
-          <div className="fd-total-wrap">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontWeight: 700, fontSize: 15 }}>{prosjekt.navn}</span>
-              {prosjekt.startDato && <span style={{ color: '#64748b', fontSize: 13 }}>{formatDate(prosjekt.startDato)} – {formatDate(prosjekt.sluttDato)}</span>}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8 }}>
-              <div className="progress-bar big-bar" style={{ flex: 1 }}>
-                <div className="progress-fill" style={{ width: totalFremgang + '%', background: progressColor(totalFremgang) }} />
-              </div>
-              <span style={{ fontWeight: 800, fontSize: 18, color: progressColor(totalFremgang), minWidth: 48 }}>{totalFremgang}%</span>
-            </div>
-          </div>
-
-          {/* Tidslinje-navigasjon */}
-          <div className="uke-nav" style={{ marginTop: 16 }}>
-            <button className="btn" onClick={prevPeriode}>← Forrige</button>
-            <div className="uke-label">{navLabel}</div>
-            <button className="btn" onClick={gotoPeriode}>I dag</button>
-            <button className="btn" onClick={nextPeriode}>Neste →</button>
-            <div className="ukemode-toggle">
-              <button className={`ukemode-btn ${ukeMode==='dag'?'active':''}`} onClick={() => setUkeMode('dag')}>Dager</button>
-              <button className={`ukemode-btn ${ukeMode==='uke'?'active':''}`} onClick={() => setUkeMode('uke')}>Uker</button>
-              <button className={`ukemode-btn ${ukeMode==='maaned'?'active':''}`} onClick={() => setUkeMode('maaned')}>Måneder</button>
-            </div>
-          </div>
-
-          {/* Gantt grid */}
-          {prosjektOppgaver.length === 0 ? (
-            <div className="empty" style={{ marginTop: 24 }}>Ingen oppgaver. Klikk "+ Ny oppgave" for å legge til.</div>
-          ) : (
-            <div className="fd-grid-wrap" ref={scrollRef}>
-              <div className="fd-grid" style={{ gridTemplateColumns: gridTemplate }}>
-                {/* Header */}
-                <GanttHeader />
-
-                {/* Rader gruppert per fag */}
-                {fagGrupper.map(({ fag, oppgaver }) => (
-                  <>
-                    <div key={fag + '-hdr'} className="fd-fag-header" style={{ gridColumn: '1 / -1', borderLeft: `4px solid ${fagColor(fag)}` }}>
-                      <span className="fag-dot-lg" style={{ background: fagColor(fag) }} />
-                      <span>{fag}</span>
-                      <span style={{ color: fagColor(fag), fontWeight: 700, marginLeft: 'auto' }}>
-                        {Math.round(oppgaver.reduce((s,o) => s+(o.fremgang||0), 0)/oppgaver.length)}%
-                      </span>
-                    </div>
-                    {oppgaver.map(o => (
-                      <>
-                        <div key={o.id+'-lbl'} className="fd-row-label">
-                          <span className="fd-oppgave-navn">{o.navn}</span>
-                          <button className="btn btn-sm" style={{ padding: '1px 6px', fontSize: 11 }} onClick={() => openEditOppgave(o)}>✎</button>
-                        </div>
-                        <GanttRow key={o.id} oppgave={o} />
-                      </>
-                    ))}
-                  </>
-                ))}
-                {uklassifiserte.map(o => (
-                  <>
-                    <div key={o.id+'-lbl'} className="fd-row-label">
-                      <span className="fd-oppgave-navn">{o.navn}</span>
-                      <button className="btn btn-sm" style={{ padding: '1px 6px', fontSize: 11 }} onClick={() => openEditOppgave(o)}>✎</button>
-                    </div>
-                    <GanttRow key={o.id} oppgave={o} />
-                  </>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Fremdriftssliders */}
-          {prosjektOppgaver.length > 0 && (
-            <div style={{ marginTop: 28 }}>
-              <h4 style={{ marginBottom: 14, fontSize: 14, color: '#475569' }}>Oppdater fremdrift</h4>
-              {fagGrupper.map(({ fag, oppgaver }) => (
-                <div key={fag} className="fag-gruppe">
-                  <div className="fag-gruppe-header">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span className="fag-dot-lg" style={{ background: fagColor(fag) }} />
-                      <span className="fag-gruppe-navn">{fag}</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div className="progress-bar" style={{ width: 100 }}>
-                        <div className="progress-fill" style={{ width: Math.round(oppgaver.reduce((s,o) => s+(o.fremgang||0),0)/oppgaver.length) + '%', background: fagColor(fag) }} />
-                      </div>
-                      <span style={{ color: fagColor(fag), fontWeight: 600, minWidth: 38 }}>
-                        {Math.round(oppgaver.reduce((s,o) => s+(o.fremgang||0),0)/oppgaver.length)}%
-                      </span>
-                    </div>
+      {/* Gantt-tabell */}
+      <div className="fd2-wrap" ref={gridRef}>
+        {/* Sticky header */}
+        <div className="fd2-header">
+          <div className="fd2-celle fd2-celle-id fd2-header-celle">ID</div>
+          <div className="fd2-celle fd2-celle-navn fd2-header-celle">Aktivitet</div>
+          <div className="fd2-celle fd2-celle-varighet fd2-header-celle">Varighet</div>
+          <div className="fd2-celle fd2-celle-tl fd2-header-celle fd2-tl-header">
+            {/* År-rad */}
+            <div className="fd2-tl-aar-rad">
+              {(() => {
+                const aarGrupper = [];
+                let gjeldende = null;
+                måneder.forEach((m, i) => {
+                  const aar = m.slice(0, 4);
+                  if (gjeldende?.aar !== aar) {
+                    gjeldende = { aar, antall: 1, fra: i };
+                    aarGrupper.push(gjeldende);
+                  } else {
+                    gjeldende.antall++;
+                  }
+                });
+                return aarGrupper.map(g => (
+                  <div key={g.aar} className="fd2-aar-celle" style={{ width: `${(g.antall / MÅNEDER_SYNLIG) * 100}%` }}>
+                    {g.aar}
                   </div>
-                  {oppgaver.map(o => (
-                    <div key={o.id} className="oppgave-row">
-                      <div className="oppgave-navn">{o.navn}</div>
-                      <div className="oppgave-slider-wrap">
-                        <input type="range" min={0} max={100} step={5}
-                          value={o.fremgang || 0}
-                          onChange={e => handleFremgangChange(o, e.target.value)}
-                          className="oppgave-slider"
-                          style={{ '--pct': (o.fremgang||0)+'%', '--color': fagColor(o.fag) }}
-                        />
-                        <span className="oppgave-pct">{o.fremgang || 0}%</span>
-                      </div>
-                      <div className="oppgave-actions">
-                        <button className="btn btn-sm btn-danger" onClick={() => handleDeleteOppgave(o.id)}>✕</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ))}
-              {uklassifiserte.length > 0 && (
-                <div className="fag-gruppe">
-                  <div className="fag-gruppe-header"><span className="fag-gruppe-navn" style={{ color: '#6b7280' }}>Andre</span></div>
-                  {uklassifiserte.map(o => (
-                    <div key={o.id} className="oppgave-row">
-                      <div className="oppgave-navn">{o.navn}</div>
-                      <div className="oppgave-slider-wrap">
-                        <input type="range" min={0} max={100} step={5}
-                          value={o.fremgang || 0}
-                          onChange={e => handleFremgangChange(o, e.target.value)}
-                          className="oppgave-slider"
-                        />
-                        <span className="oppgave-pct">{o.fremgang || 0}%</span>
-                      </div>
-                      <div className="oppgave-actions">
-                        <button className="btn btn-sm btn-danger" onClick={() => handleDeleteOppgave(o.id)}>✕</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                ));
+              })()}
+            </div>
+            {/* Måneds-rad */}
+            <div className="fd2-tl-mnd-rad">
+              {måneder.map(m => {
+                const erNåværende = m === today().slice(0, 7);
+                return (
+                  <div key={m} className={`fd2-mnd-celle ${erNåværende ? 'fd2-mnd-idag' : ''}`}
+                    style={{ width: `${100 / MÅNEDER_SYNLIG}%` }}>
+                    {MAANED[parseInt(m.slice(5, 7), 10) - 1]}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Rader */}
+        <div className="fd2-rader">
+          {grupper.map(g => <Rad key={g.id} oppgave={g} indentert={false} erGruppe={true} />)}
+          {løseAktiviteter.map(a => <Rad key={a.id} oppgave={a} indentert={false} erGruppe={false} />)}
+          {alleOppgaver.length === 0 && (
+            <div style={{ padding: '32px', color: '#94a3b8', textAlign: 'center', gridColumn: '1/-1' }}>
+              Ingen aktiviteter ennå. Klikk "+ Ny fase" eller "+ Ny aktivitet".
             </div>
           )}
-        </>
-      )}
+        </div>
+      </div>
 
       {/* Modal */}
-      {showModal && prosjekt && (
-        <Modal title={editingOppgave ? 'Rediger oppgave' : 'Ny oppgave'} onClose={() => setShowModal(false)}>
+      {showModal && (
+        <Modal
+          title={editModal ? 'Rediger' : form?._type === 'gruppe' ? 'Ny fase' : 'Ny aktivitet'}
+          onClose={() => setShowModal(false)}
+        >
           <div className="form">
-            <label>Oppgavenavn *</label>
-            <input value={oppgaveForm.navn} onChange={e => setOppgaveForm(f => ({ ...f, navn: e.target.value }))} placeholder="Beskriv oppgaven" />
-
-            <label>Fag</label>
-            <select value={oppgaveForm.fag} onChange={e => setOppgaveForm(f => ({ ...f, fag: e.target.value }))}>
-              {state.fag.map(f => <option key={f} value={f}>{f}</option>)}
-            </select>
+            <label>{form?._type === 'gruppe' ? 'Fasenavn' : 'Aktivitetsnavn'} *</label>
+            <input
+              className="input"
+              autoFocus
+              value={form?.navn || ''}
+              onChange={e => setForm(f => ({ ...f, navn: e.target.value }))}
+              placeholder={form?._type === 'gruppe' ? 'f.eks. Grunnarbeid' : 'f.eks. Graving, Støpe plate...'}
+            />
 
             <div className="form-row">
               <div>
                 <label>Startdato</label>
-                <input type="date" value={oppgaveForm.startDato} onChange={e => setOppgaveForm(f => ({ ...f, startDato: e.target.value }))} />
+                <input type="date" className="input" value={form?.startDato || ''} onChange={e => setForm(f => ({ ...f, startDato: e.target.value }))} />
               </div>
               <div>
                 <label>Sluttdato</label>
-                <input type="date" value={oppgaveForm.sluttDato} onChange={e => setOppgaveForm(f => ({ ...f, sluttDato: e.target.value }))} />
+                <input type="date" className="input" value={form?.sluttDato || ''} onChange={e => setForm(f => ({ ...f, sluttDato: e.target.value }))} />
               </div>
             </div>
 
-            <label>Fremdrift: {oppgaveForm.fremgang}%</label>
-            <input type="range" min={0} max={100} step={5}
-              value={oppgaveForm.fremgang}
-              onChange={e => setOppgaveForm(f => ({ ...f, fremgang: Number(e.target.value) }))}
-            />
+            {form?._type === 'aktivitet' && (
+              <>
+                <label>Farge</label>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {FARGER.map(c => (
+                    <button key={c} type="button"
+                      style={{ width: 28, height: 28, borderRadius: 6, background: c, border: form?.farge === c ? '3px solid #1e293b' : '2px solid transparent', cursor: 'pointer' }}
+                      onClick={() => setForm(f => ({ ...f, farge: c }))}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
 
-            <div className="form-actions">
+            <div className="modal-actions" style={{ marginTop: 16 }}>
+              {editModal && (
+                <button className="btn btn-danger" onClick={() => slett(editModal.id)}>Slett</button>
+              )}
               <button className="btn" onClick={() => setShowModal(false)}>Avbryt</button>
-              <button className="btn btn-primary" onClick={handleSaveOppgave}>Lagre</button>
+              <button className="btn btn-primary" onClick={lagre} disabled={!form?.navn?.trim()}>Lagre</button>
             </div>
           </div>
         </Modal>
