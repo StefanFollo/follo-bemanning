@@ -1839,3 +1839,10 @@ body {
   .fd2-celle-navn { width: 140px; }
   .fd2-celle-varighet { left: 188px; }
 }
+
+.fd2-bar-dragging {
+  opacity: 0.85;
+  box-shadow: 0 4px 16px rgba(0,0,0,.3) !important;
+  z-index: 10 !important;
+  cursor: grabbing !important;
+}

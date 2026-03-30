@@ -119,10 +119,11 @@ export default function Framdriftsplan() {
   const [form, setForm] = useState(null);
   const [ukeMode, setUkeMode] = useState('maaned'); // 'dag' | 'uke' | 'maaned'
   const [periodeOffset, setPeriodeOffset] = useState(0);
+  const [dragPreview, setDragPreview] = useState(null); // { id, startDato, sluttDato }
   const MÅNEDER_SYNLIG = 18;
   const UKE_SYNLIG = 26;
   const DAG_SYNLIG = 13; // uker i dag-modus
-  const dragRef = useRef(null);
+  const activeDrag = useRef(null);
   const gridRef = useRef(null);
 
   const thisYear = new Date().getFullYear();
@@ -191,42 +192,52 @@ export default function Framdriftsplan() {
   });
   løseAktiviteter.forEach(a => { idMap[a.id] = n++; });
 
-  // ─── Drag ───────────────────────────────────────────────────
-  function onDragStart(e, oppgave, type) {
-    e.stopPropagation();
-    dragRef.current = { id: oppgave.id, type, startDato: oppgave.startDato, sluttDato: oppgave.sluttDato };
-  }
-
-  function pctFromMouseX(e) {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const scrollLeft = gridRef.current ? gridRef.current.scrollLeft : 0;
-    const x = e.clientX - rect.left;
-    return Math.max(0, Math.min(100, (x / rect.width) * 100));
-  }
-
-  function isoFromPct(pct) {
-    const days = Math.round((pct / 100) * tlDays);
-    return addDays(tlStart, days);
-  }
-
-  function onDrop(e, oppgave) {
+  // ─── Pointer-drag (live feedback, ingen HTML5 drag) ──────────
+  function startDrag(e, oppgave, type) {
     e.preventDefault();
-    if (!dragRef.current || dragRef.current.id !== oppgave.id) return;
-    const { type, startDato, sluttDato } = dragRef.current;
-    const pct = pctFromMouseX(e);
-    const iso = isoFromPct(pct);
-    let newStart = startDato, newEnd = sluttDato;
-    if (type === 'start') {
-      newStart = iso <= sluttDato ? iso : sluttDato;
+    e.stopPropagation();
+    const barArea = e.currentTarget.closest('.fd2-bar-area');
+    const pxPerDay = barArea ? barArea.offsetWidth / tlDays : 10;
+    activeDrag.current = {
+      oppgave,
+      type,
+      origStart: oppgave.startDato,
+      origEnd:   oppgave.sluttDato,
+      startX:    e.clientX,
+      pxPerDay,
+    };
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setDragPreview({ id: oppgave.id, startDato: oppgave.startDato, sluttDato: oppgave.sluttDato });
+  }
+
+  function moveDrag(e) {
+    if (!activeDrag.current) return;
+    const { oppgave, type, origStart, origEnd, startX, pxPerDay } = activeDrag.current;
+    const deltaDager = Math.round((e.clientX - startX) / pxPerDay);
+    let newStart = origStart, newEnd = origEnd;
+    if (type === 'move') {
+      newStart = addDays(origStart, deltaDager);
+      newEnd   = addDays(origEnd,   deltaDager);
+    } else if (type === 'start') {
+      const k = addDays(origStart, deltaDager);
+      newStart = k <= origEnd ? k : origEnd;
     } else if (type === 'end') {
-      newEnd = iso >= startDato ? iso : startDato;
-    } else {
-      const len = daysBetween(startDato, sluttDato);
-      newStart = iso;
-      newEnd = addDays(iso, len);
+      const k = addDays(origEnd, deltaDager);
+      newEnd = k >= origStart ? k : origStart;
     }
-    dispatch({ type: 'UPDATE_OPPGAVE', payload: { ...oppgave, startDato: newStart, sluttDato: newEnd } });
-    dragRef.current = null;
+    setDragPreview({ id: oppgave.id, startDato: newStart, sluttDato: newEnd });
+  }
+
+  function endDrag(e) {
+    if (!activeDrag.current) return;
+    const { oppgave } = activeDrag.current;
+    setDragPreview(prev => {
+      if (prev && prev.id === oppgave.id) {
+        dispatch({ type: 'UPDATE_OPPGAVE', payload: { ...oppgave, startDato: prev.startDato, sluttDato: prev.sluttDato } });
+      }
+      return null;
+    });
+    activeDrag.current = null;
   }
 
   // ─── CRUD ────────────────────────────────────────────────────
@@ -279,15 +290,16 @@ export default function Framdriftsplan() {
 
   // ─── Render en bar-rad ────────────────────────────────────────
   function BarRad({ oppgave, erGruppe, startD, sluttD }) {
-    const color = erGruppe ? '#374151' : (oppgave.farge || '#6366f1');
-    const style = barStyle(startD, sluttD, tlStart, tlDays, color);
-    const varighet = daysBetween(startD, sluttD) + 1;
+    // Bruk live preview-datoer under dragging
+    const effStart = dragPreview?.id === oppgave.id ? dragPreview.startDato : startD;
+    const effEnd   = dragPreview?.id === oppgave.id ? dragPreview.sluttDato : sluttD;
+    const color    = erGruppe ? '#374151' : (oppgave.farge || '#6366f1');
+    const style    = barStyle(effStart, effEnd, tlStart, tlDays, color);
+    const varighet = daysBetween(effStart, effEnd) + 1;
+    const isDragging = dragPreview?.id === oppgave.id;
 
     return (
-      <div className="fd2-bar-area"
-        onDragOver={e => e.preventDefault()}
-        onDrop={e => onDrop(e, oppgave)}
-      >
+      <div className="fd2-bar-area">
         {todayPct !== null && (
           <div className="fd2-today-line" style={{ left: todayPct.toFixed(2) + '%' }}>
             <span className="fd2-today-label">I dag</span>
@@ -295,17 +307,29 @@ export default function Framdriftsplan() {
         )}
         {style && (
           <div
-            className={`fd2-bar ${erGruppe ? 'fd2-bar-gruppe' : ''}`}
+            className={`fd2-bar ${erGruppe ? 'fd2-bar-gruppe' : ''} ${isDragging ? 'fd2-bar-dragging' : ''}`}
             style={style}
-            draggable
-            onDragStart={e => onDragStart(e, oppgave, 'move')}
-            title={`${oppgave.navn}\n${formatDate(startD)} – ${formatDate(sluttD)}\n${varighet} dager`}
+            title={`${oppgave.navn}\n${formatDate(effStart)} – ${formatDate(effEnd)}\n${varighet} dager`}
+            onPointerDown={e => startDrag(e, oppgave, 'move')}
+            onPointerMove={moveDrag}
+            onPointerUp={endDrag}
           >
-            <div className="fd2-handle fd2-handle-l" draggable
-              onDragStart={e => { e.stopPropagation(); onDragStart(e, oppgave, 'start'); }}>◂</div>
+            <div className="fd2-handle fd2-handle-l"
+              onPointerDown={e => startDrag(e, oppgave, 'start')}
+              onPointerMove={moveDrag}
+              onPointerUp={endDrag}
+            >◂</div>
             <span className="fd2-bar-tekst">{oppgave.navn}</span>
-            <div className="fd2-handle fd2-handle-r" draggable
-              onDragStart={e => { e.stopPropagation(); onDragStart(e, oppgave, 'end'); }}>▸</div>
+            <div className="fd2-handle fd2-handle-r"
+              onPointerDown={e => startDrag(e, oppgave, 'end')}
+              onPointerMove={moveDrag}
+              onPointerUp={endDrag}
+            >▸</div>
+          </div>
+        )}
+        {!style && !erGruppe && (
+          <div className="fd2-bar-ingen" onClick={() => åpneRediger(oppgave)}>
+            Ingen datoer – klikk for å sette
           </div>
         )}
       </div>
