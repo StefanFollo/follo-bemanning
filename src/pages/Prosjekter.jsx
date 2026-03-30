@@ -1,6 +1,21 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { formatDate, PROSJEKT_PALETTE, isoToDate, dateToIso } from '../store';
+import { formatDate, PROSJEKT_PALETTE, isoToDate, dateToIso, daysBetween } from '../store';
+
+function formaterBelop(belop) {
+  if (!belop && belop !== 0) return null;
+  const n = Number(belop);
+  if (isNaN(n)) return null;
+  return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(n);
+}
+
+function varighetUker(startDato, sluttDato) {
+  if (!startDato || !sluttDato) return null;
+  const dager = daysBetween(startDato, sluttDato);
+  if (dager < 0) return null;
+  const uker = Math.ceil(dager / 7);
+  return uker === 1 ? '1 uke' : `${uker} uker`;
+}
 
 // Timeline spanning current + next year (24 months)
 function buildTimelineMonths() {
@@ -132,7 +147,7 @@ function nextAutoColor(prosjekter) {
   return PROSJEKT_PALETTE.find(c => !used.includes(c)) || PROSJEKT_PALETTE[prosjekter.length % PROSJEKT_PALETTE.length];
 }
 
-const EMPTY = { navn: '', adresse: '', startDato: '', sluttDato: '', status: 'jobber_med', beskrivelse: '', farge: PROSJEKT_PALETTE[0] };
+const EMPTY = { navn: '', adresse: '', startDato: '', sluttDato: '', status: 'jobber_med', beskrivelse: '', farge: PROSJEKT_PALETTE[0], belop: '', manskapAntall: '' };
 
 // Normaliser gammel status til visningsgruppe
 function normStatus(s) {
@@ -281,6 +296,8 @@ export default function Prosjekter() {
                     const ansatteCount = ansatteIds.length;
                     const ansatteNavn = ansatteIds.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
                     const barColor = p.farge || color;
+                    const belopVis = formaterBelop(p.belop);
+                    const varighetVis = varighetUker(p.startDato, p.sluttDato);
 
                     return (
                       <div className="ct-row" key={p.id}>
@@ -308,6 +325,15 @@ export default function Prosjekter() {
                                 <span style={{ fontSize: 11, color: '#94a3b8' }}>
                                   {formatDate(p.startDato)}{p.sluttDato ? ` – ${formatDate(p.sluttDato)}` : ''}
                                 </span>
+                              )}
+                              {varighetVis && (
+                                <span className="proj-meta-pill">⏱ {varighetVis}</span>
+                              )}
+                              {belopVis && (
+                                <span className="proj-meta-pill proj-meta-belop">💰 {belopVis}</span>
+                              )}
+                              {p.manskapAntall && (
+                                <span className="proj-meta-pill">👷 {p.manskapAntall} mann</span>
                               )}
                             </div>
                           </div>
@@ -365,6 +391,16 @@ export default function Prosjekter() {
               <div>
                 <label>Sluttdato</label>
                 <input type="date" value={form.sluttDato} onChange={e => setForm(f => ({ ...f, sluttDato: e.target.value }))} />
+              </div>
+            </div>
+            <div className="form-row">
+              <div>
+                <label>Kontraktssum (NOK)</label>
+                <input type="number" min="0" step="1000" value={form.belop} onChange={e => setForm(f => ({ ...f, belop: e.target.value }))} placeholder="f.eks. 850000" />
+              </div>
+              <div>
+                <label>Manskap (antall)</label>
+                <input type="number" min="1" max="50" value={form.manskapAntall} onChange={e => setForm(f => ({ ...f, manskapAntall: e.target.value }))} placeholder="f.eks. 4" />
               </div>
             </div>
             <label>Prosjektfarge</label>

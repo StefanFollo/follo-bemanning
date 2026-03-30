@@ -1435,3 +1435,17 @@ body {
   .bef-innhold { grid-template-columns: 1fr; }
   .bef-pipeline { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* Prosjekt meta-pills */
+.proj-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #475569;
+  background: #f1f5f9;
+  border-radius: 10px;
+  padding: 2px 8px;
+}
+.proj-meta-belop { color: #16a34a; background: #f0fdf4; }
