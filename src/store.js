@@ -107,6 +107,12 @@ function load(key, fallback) {
 
 function save(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
+  // Oppdater lokal timestamp slik at sky-data aldri overskriver nyere lokal data
+  localStorage.setItem('fbs_updated_at', Date.now().toString());
+}
+
+export function getLocalUpdatedAt() {
+  return parseInt(localStorage.getItem('fbs_updated_at') || '0', 10);
 }
 
 export function loadState() {
@@ -201,7 +207,7 @@ export async function saveToCloud(state) {
     await fetch('/api/state', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(state),
+      body: JSON.stringify({ ...state, _updatedAt: getLocalUpdatedAt() }),
     });
   } catch {
     // localStorage er backup

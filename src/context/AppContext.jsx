@@ -2,7 +2,7 @@ import { createContext, useContext, useReducer, useEffect, useState } from 'reac
 import {
   loadState,
   saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag, saveRorTimer, saveBefaringer,
-  loadFromCloud, saveToCloud,
+  loadFromCloud, saveToCloud, getLocalUpdatedAt,
   uid,
 } from '../store';
 
@@ -12,7 +12,7 @@ function reducer(state, action) {
   switch (action.type) {
     // --- Last inn fra sky ---
     case 'LOAD_STATE': {
-      const s = action.payload;
+      const { _updatedAt, ...s } = action.payload;
       if (s.ansatte) saveAnsatte(s.ansatte);
       if (s.prosjekter) saveProsjekter(s.prosjekter);
       if (s.tildelinger) saveTildelinger(s.tildelinger);
@@ -160,11 +160,16 @@ export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, null, loadState);
   const [cloudReady, setCloudReady] = useState(false);
 
-  // Last inn fra sky ved oppstart
+  // Last inn fra sky ved oppstart – men kun hvis sky-data er nyere enn lokale data
   useEffect(() => {
     loadFromCloud().then(cloudState => {
       if (cloudState) {
-        dispatch({ type: 'LOAD_STATE', payload: cloudState });
+        const cloudUpdatedAt = cloudState._updatedAt || 0;
+        const localUpdatedAt = getLocalUpdatedAt();
+        // Bruk sky-data kun hvis: ingen lokal timestamp (første gang) ELLER sky er nyere
+        if (localUpdatedAt === 0 || cloudUpdatedAt > localUpdatedAt) {
+          dispatch({ type: 'LOAD_STATE', payload: cloudState });
+        }
       }
       setCloudReady(true);
     });
