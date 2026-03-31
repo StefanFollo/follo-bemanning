@@ -218,9 +218,9 @@ export default function Bemanningsplan() {
         t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, days[0], viewEnd)
       );
 
-      // Splitt i primær (dette prosjektet + ferie) og opptatt (andre prosjekter)
+      // Splitt i primær (kun dette prosjektet) og opptatt (andre prosjekter, ikke ferie)
       const primaryTil = prosjektId
-        ? myTil.filter(t => t.prosjektId === prosjektId || t.prosjektId === FERIE_ID)
+        ? myTil.filter(t => t.prosjektId === prosjektId)
         : myTil;
       const busyTil = prosjektId
         ? myTil.filter(t => t.prosjektId !== prosjektId && t.prosjektId !== FERIE_ID)
