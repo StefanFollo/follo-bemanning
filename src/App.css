@@ -746,6 +746,31 @@ body {
   font-size: 12px; font-weight: 600; border: 1px solid;
 }
 
+/* ===== PROSJEKTER FULLSKJERM ===== */
+.proj-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  overflow-y: auto;
+  background: white;
+  padding: 12px 20px 24px;
+}
+/* Kompakt layout i fullskjerm */
+.proj-fullscreen .proj-summary-cards { display: none; }
+.proj-fullscreen .proj-gruppe { margin-bottom: 10px; }
+.proj-fullscreen .proj-gruppe-header { padding: 6px 14px; font-size: 13px; }
+.proj-fullscreen .ct-row { padding: 5px 12px; }
+.proj-fullscreen .ct-prosjekt-navn { font-size: 12px; }
+.proj-fullscreen .ct-sub { font-size: 11px; }
+.proj-fullscreen .proj-meta-pill { font-size: 10px; padding: 1px 5px; }
+.proj-fullscreen .proj-gantt-wrap { height: 16px; }
+.proj-fullscreen .proj-gantt-bar { height: 8px; top: 4px; }
+.proj-fullscreen .proj-gantt-bar-open { height: 8px; top: 4px; }
+.proj-fullscreen .ct-header { padding: 5px 12px; font-size: 11px; }
+.proj-fullscreen .btn-sm { padding: 2px 8px; font-size: 11px; }
+.proj-fullscreen .prosjekt-farge-dot { width: 8px; height: 8px; }
+.proj-fullscreen .ansatte-badge { font-size: 11px; }
+
 /* ===== PROSJEKTOVERSIKT ===== */
 .proj-oversikt-wrap { }
 .proj-oversikt-grid {

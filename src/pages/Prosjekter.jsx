@@ -165,6 +165,7 @@ export default function Prosjekter() {
   const [form, setForm] = useState(EMPTY);
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState({});
+  const [fullscreen, setFullscreen] = useState(false);
 
   function openNew() {
     setEditing(null);
@@ -222,10 +223,15 @@ export default function Prosjekter() {
   ];
 
   return (
-    <div className="page">
+    <div className={`page${fullscreen ? ' proj-fullscreen' : ''}`}>
       <div className="page-header">
         <h2>Prosjekter <span className="count-badge">{state.prosjekter.length}</span></h2>
-        <button className="btn btn-primary" onClick={openNew}>+ Nytt prosjekt</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={() => setFullscreen(f => !f)} title={fullscreen ? 'Avslutt fullskjerm' : 'Fullskjerm'}>
+            {fullscreen ? '✕ Lukk' : '⛶ Fullskjerm'}
+          </button>
+          <button className="btn btn-primary" onClick={openNew}>+ Nytt prosjekt</button>
+        </div>
       </div>
 
       {/* Summary cards */}
