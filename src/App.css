@@ -530,6 +530,19 @@ body {
 .week-start-col { border-left: 2px solid #cbd5e1 !important; }
 .today-col { background: #fffbeb !important; }
 
+/* Fullskjerm-modus for Bemanningsplan */
+.bplan-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  overflow-y: auto;
+  background: white;
+  padding: 16px 24px 24px;
+}
+.bplan-fullscreen .uke-grid-wrap {
+  max-height: calc(100vh - 140px) !important;
+}
+
 /* Dato-nål (drabar vertikal linje) */
 .uke-grid-wrap { position: relative; overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 230px); }
 .timeline-needle {

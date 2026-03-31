@@ -57,6 +57,7 @@ function Modal({ title, onClose, children }) {
 export default function Bemanningsplan() {
   const { state, dispatch } = useApp();
   const [tab, setTab] = useState('uke');
+  const [fullscreen, setFullscreen] = useState(false);
   const [ukeMode, setUkeMode] = useState('dag'); // 'dag' | 'uke' | 'maaned'
   const [currentWeek, setCurrentWeek] = useState(() => weekStart(dateToIso(new Date())));
   const [currentMonth, setCurrentMonth] = useState(() => monthStart(dateToIso(new Date())));
@@ -805,10 +806,13 @@ export default function Bemanningsplan() {
   }
 
   return (
-    <div className="page">
+    <div className={`page${fullscreen ? ' bplan-fullscreen' : ''}`}>
       <div className="page-header">
         <h2>Bemanningsplan</h2>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn no-print" onClick={() => setFullscreen(f => !f)} title={fullscreen ? 'Avslutt fullskjerm' : 'Fullskjerm – se alle ansatte'}>
+            {fullscreen ? '✕ Lukk' : '⛶ Fullskjerm'}
+          </button>
           <button className="btn no-print" onClick={() => window.print()} title="Skriv ut / Lagre som PDF">🖨 PDF</button>
           <button className="btn no-print" onClick={() => openAddFerie()} title="Registrer ferie eller fri">🏖 Ferie</button>
           <button className="btn btn-primary no-print" onClick={() => openAddTildeling()}>+ Ny tildeling</button>
