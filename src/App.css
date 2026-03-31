@@ -539,10 +539,22 @@ body {
   z-index: 200;
   overflow-y: auto;
   background: white;
-  padding: 16px 24px 24px;
+  padding: 8px 16px 8px;
 }
+/* Skjul tab-bar i fullskjerm – frigjør plass */
+.bplan-fullscreen .tab-bar { display: none; }
+/* Kompakt topptekst */
+.bplan-fullscreen .page-header { margin-bottom: 4px; }
+.bplan-fullscreen .page-header h2 { font-size: 16px; }
+/* Kompakt nav-rad */
+.bplan-fullscreen .uke-nav { margin-bottom: 4px; gap: 4px; flex-wrap: nowrap; }
+.bplan-fullscreen .uke-nav .btn { padding: 4px 10px; font-size: 12px; }
+.bplan-fullscreen .uke-label { font-size: 12px; }
+.bplan-fullscreen .ukemode-toggle { gap: 2px; }
+.bplan-fullscreen .ukemode-btn { padding: 4px 10px; font-size: 12px; }
+/* Grid – bruker nesten hele skjermen (100vh minus ~90px for header+nav) */
 .bplan-fullscreen .uke-grid-wrap {
-  max-height: calc(100vh - 140px) !important;
+  max-height: calc(100vh - 90px) !important;
 }
 
 /* Dato-nål (drabar vertikal linje) */
