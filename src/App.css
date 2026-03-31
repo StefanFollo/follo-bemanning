@@ -464,10 +464,10 @@ body {
 .gantt-bar-ferie {
   background: repeating-linear-gradient(
     45deg,
-    #94a3b8 0px, #94a3b8 5px,
-    #e2e8f0 5px, #e2e8f0 10px
+    #1e293b 0px, #1e293b 5px,
+    #94a3b8 5px, #94a3b8 10px
   ) !important;
-  color: #334155 !important;
+  color: white !important;
 }
 .gantt-handle {
   cursor: ew-resize;
