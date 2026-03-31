@@ -557,6 +557,16 @@ export default function Bemanningsplan() {
     }
 
     function renderProsjektRader(prosjekter, ledige, cols, AnsattRad, periodeS, periodeE) {
+      // Ansatte med ferie i perioden (brukes til å splitte "ledige"-seksjonen)
+      const ferieIds = new Set(
+        state.tildelinger
+          .filter(t => t.prosjektId === FERIE_ID && overlaps(t.startDato, t.sluttDato, periodeS, periodeE))
+          .map(t => t.ansattId)
+      );
+      // Ledige uten ferie → "Ikke tildelt", ledige med ferie → eget "Ferie"-avsnitt nederst
+      const ikkeTildelt = ledige.filter(a => !ferieIds.has(a.id));
+      const ferieKun    = ledige.filter(a =>  ferieIds.has(a.id));
+
       return (
         <>
           {prosjekter.map(prosjekt => {
@@ -574,13 +584,23 @@ export default function Bemanningsplan() {
               </React.Fragment>
             );
           })}
-          {ledige.length > 0 && (
+          {ikkeTildelt.length > 0 && (
             <React.Fragment>
               <div className="uke-prosjekt-header" style={{ gridColumn: '1 / -1', borderLeft: '4px solid #9ca3af' }}>
                 <span className="uke-prosjekt-navn" style={{ color: '#6b7280' }}>Ikke tildelt i perioden</span>
-                <span className="uke-prosjekt-antall">{ledige.length} ansatt{ledige.length !== 1 ? 'e' : ''}</span>
+                <span className="uke-prosjekt-antall">{ikkeTildelt.length} ansatt{ikkeTildelt.length !== 1 ? 'e' : ''}</span>
               </div>
-              {ledige.map(a => <AnsattRad key={a.id} ansatt={a} prosjektId={null} />)}
+              {ikkeTildelt.map(a => <AnsattRad key={a.id} ansatt={a} prosjektId={null} />)}
+            </React.Fragment>
+          )}
+          {ferieKun.length > 0 && (
+            <React.Fragment>
+              <div className="uke-prosjekt-header" style={{ gridColumn: '1 / -1', borderLeft: '4px solid #f59e0b' }}>
+                <span className="uke-prosjekt-farge" style={{ background: '#f59e0b' }} />
+                <span className="uke-prosjekt-navn">🏖 Ferie / Fri</span>
+                <span className="uke-prosjekt-antall">{ferieKun.length} ansatt{ferieKun.length !== 1 ? 'e' : ''}</span>
+              </div>
+              {ferieKun.map(a => <AnsattRad key={a.id} ansatt={a} prosjektId={null} />)}
             </React.Fragment>
           )}
         </>
