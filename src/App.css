@@ -153,6 +153,8 @@ body {
 .btn-primary:hover { background: #1d4ed8; }
 .btn-danger { background: #dc2626; border-color: #b91c1c; color: white; }
 .btn-danger:hover { background: #b91c1c; }
+.btn-success { background: #16a34a; border-color: #15803d; color: white; }
+.btn-success:hover { background: #15803d; }
 .btn-sm { padding: 4px 10px; font-size: 13px; }
 .btn-icon {
   background: none; border: none; cursor: pointer;

@@ -147,7 +147,9 @@ function nextAutoColor(prosjekter) {
   return PROSJEKT_PALETTE.find(c => !used.includes(c)) || PROSJEKT_PALETTE[prosjekter.length % PROSJEKT_PALETTE.length];
 }
 
-const EMPTY = { navn: '', adresse: '', startDato: '', sluttDato: '', status: 'jobber_med', beskrivelse: '', farge: PROSJEKT_PALETTE[0], belop: '', manskapAntall: '' };
+const JOBB_TYPER = ['Ny bygg', 'Tilbygg', 'Tak jobb', 'Fasade jobb', 'Bad', 'Tømrer', 'Maling', 'Rørlegger', 'Flislegging', 'Elektro', 'Rehabilitering', 'Annet'];
+
+const EMPTY = { navn: '', adresse: '', jobbType: '', startDato: '', sluttDato: '', status: 'jobber_med', beskrivelse: '', farge: PROSJEKT_PALETTE[0], belop: '', manskapAntall: '' };
 
 // Normaliser gammel status til visningsgruppe
 function normStatus(s) {
@@ -377,6 +379,11 @@ export default function Prosjekter() {
             <input value={form.navn} onChange={e => setForm(f => ({ ...f, navn: e.target.value }))} placeholder="Prosjektnavn" />
             <label>Adresse</label>
             <input value={form.adresse} onChange={e => setForm(f => ({ ...f, adresse: e.target.value }))} placeholder="Adresse" />
+            <label>Type jobb</label>
+            <select value={form.jobbType || ''} onChange={e => setForm(f => ({ ...f, jobbType: e.target.value }))}>
+              <option value="">– Velg type –</option>
+              {JOBB_TYPER.map(j => <option key={j} value={j}>{j}</option>)}
+            </select>
             <label>Status</label>
             <select value={normStatus(form.status)} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
               {SAVE_STATUSES.map(s => (
@@ -420,6 +427,13 @@ export default function Prosjekter() {
             <textarea value={form.beskrivelse} onChange={e => setForm(f => ({ ...f, beskrivelse: e.target.value }))} rows={2} placeholder="Valgfri beskrivelse" />
             <div className="form-actions">
               <button className="btn" onClick={() => setShowModal(false)}>Avbryt</button>
+              {editing && normStatus(form.status) !== 'fullfort' && (
+                <button className="btn btn-success" onClick={() => {
+                  setForm(f => ({ ...f, status: 'fullfort' }));
+                  dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...form, id: editing.id, status: 'fullfort' } });
+                  setShowModal(false);
+                }}>🏁 Prosjekt ferdig</button>
+              )}
               <button className="btn btn-primary" onClick={handleSave}>Lagre</button>
             </div>
           </div>
