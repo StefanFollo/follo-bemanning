@@ -117,8 +117,24 @@ export default function Bemanningsplan() {
     setShowModal(true);
   }
 
+  // Sjekker om ansatt allerede er tildelt et prosjekt i den gitte perioden
+  // ekskluderTildelingId brukes ved redigering slik at vi ikke kolliderer med seg selv
+  function harKonflikt(ansattId, startDato, sluttDato, ekskluderTildelingId = null) {
+    return state.tildelinger.some(t =>
+      t.ansattId === ansattId &&
+      t.prosjektId !== FERIE_ID &&
+      t.id !== ekskluderTildelingId &&
+      overlaps(t.startDato, t.sluttDato, startDato, sluttDato)
+    );
+  }
+
   function handleAddTildeling() {
     if (!tilForm.ansattId || !tilForm.prosjektId || !tilForm.startDato || !tilForm.sluttDato) return;
+    if (tilForm.prosjektId !== FERIE_ID && harKonflikt(tilForm.ansattId, tilForm.startDato, tilForm.sluttDato)) {
+      const navn = state.ansatte.find(a => a.id === tilForm.ansattId)?.navn || 'Ansatt';
+      alert(`${navn} er allerede tildelt et prosjekt i denne perioden.`);
+      return;
+    }
     dispatch({ type: 'ADD_TILDELING', payload: tilForm });
     setShowModal(false);
   }
@@ -149,22 +165,37 @@ export default function Bemanningsplan() {
     dragRef.current = null;
     const t = state.tildelinger.find(t => t.id === d.tildelingId);
     if (!t) return;
+    const navn = state.ansatte.find(a => a.id === t.ansattId)?.navn || 'Ansatt';
     if (d.type === 'move') {
       const duration = daysDiff(t.startDato, t.sluttDato);
       const offset = unit === 'day' ? d.offsetDays : 0;
       const newStart = addDays(targetDay, -offset);
       const newEnd = addDays(newStart, duration);
+      if (t.prosjektId !== FERIE_ID && harKonflikt(t.ansattId, newStart, newEnd, t.id)) {
+        alert(`${navn} er allerede tildelt et annet prosjekt i denne perioden.`);
+        return;
+      }
       dispatchKeepScroll({ type: 'UPDATE_TILDELING', payload: { ...t, startDato: newStart, sluttDato: newEnd } });
     } else if (d.type === 'end') {
       const newEnd = unit === 'week' ? addDays(targetDay, 6)
                   : unit === 'month' ? monthEnd(targetDay)
                   : targetDay;
-      if (newEnd >= t.startDato)
+      if (newEnd >= t.startDato) {
+        if (t.prosjektId !== FERIE_ID && harKonflikt(t.ansattId, t.startDato, newEnd, t.id)) {
+          alert(`${navn} er allerede tildelt et annet prosjekt i denne perioden.`);
+          return;
+        }
         dispatchKeepScroll({ type: 'UPDATE_TILDELING', payload: { ...t, sluttDato: newEnd } });
+      }
     } else if (d.type === 'start') {
       const newStart = targetDay;
-      if (newStart <= t.sluttDato)
+      if (newStart <= t.sluttDato) {
+        if (t.prosjektId !== FERIE_ID && harKonflikt(t.ansattId, newStart, t.sluttDato, t.id)) {
+          alert(`${navn} er allerede tildelt et annet prosjekt i denne perioden.`);
+          return;
+        }
         dispatchKeepScroll({ type: 'UPDATE_TILDELING', payload: { ...t, startDato: newStart } });
+      }
     }
   }
 
@@ -927,6 +958,13 @@ export default function Bemanningsplan() {
             </div>
 
             {state.ansatte.length === 0 && <p style={{ color: '#dc2626' }}>Legg til ansatte først.</p>}
+
+            {tilForm.prosjektId !== FERIE_ID && tilForm.ansattId && tilForm.startDato && tilForm.sluttDato &&
+              harKonflikt(tilForm.ansattId, tilForm.startDato, tilForm.sluttDato) && (
+              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#dc2626' }}>
+                ⚠️ {state.ansatte.find(a => a.id === tilForm.ansattId)?.navn} er allerede tildelt et prosjekt i denne perioden.
+              </div>
+            )}
 
             <div className="form-actions">
               <button className="btn" onClick={() => setShowModal(false)}>Avbryt</button>
