@@ -17,61 +17,93 @@ function varighetUker(startDato, sluttDato) {
   return uker === 1 ? '1 uke' : `${uker} uker`;
 }
 
-// Timeline spanning current + next year (24 months)
-function buildTimelineMonths() {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), 0, 1); // Jan this year
-  const months = [];
-  for (let i = 0; i < 24; i++) {
-    const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
-    months.push({
-      iso: dateToIso(d).slice(0, 7),
-      label: ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des'][d.getMonth()],
-      year: d.getFullYear(),
-      isFirstOfYear: d.getMonth() === 0,
-    });
-  }
-  return months;
-}
+const MND = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des'];
 
-const TIMELINE_MONTHS = buildTimelineMonths();
-const TL_START = TIMELINE_MONTHS[0].iso + '-01';
-const TL_END_D = new Date(TL_START);
-TL_END_D.setMonth(TL_END_D.getMonth() + 24);
-const TL_DAYS = Math.round((TL_END_D - new Date(TL_START + 'T00:00:00')) / 86400000);
-
-function pctInTimeline(isoDate) {
-  if (!isoDate) return null;
+function addDaysLocal(isoDate, n) {
   const d = new Date(isoDate + 'T00:00:00');
-  const start = new Date(TL_START + 'T00:00:00');
-  const diff = Math.round((d - start) / 86400000);
-  return Math.max(0, Math.min(100, (diff / TL_DAYS) * 100));
+  d.setDate(d.getDate() + n);
+  return dateToIso(d);
 }
 
-function MiniGantt({ prosjekt, color }) {
-  const s = pctInTimeline(prosjekt.startDato);
-  const e = pctInTimeline(prosjekt.sluttDato);
-  const today = pctInTimeline(dateToIso(new Date()));
+function mondayOf(isoDate) {
+  const d = new Date(isoDate + 'T00:00:00');
+  const dow = d.getDay();
+  const diff = dow === 0 ? -6 : 1 - dow;
+  d.setDate(d.getDate() + diff);
+  return dateToIso(d);
+}
+
+// Bygg timeline-konfigurasjon for valgt modus
+function buildTimeline(mode) {
+  const todayIso = dateToIso(new Date());
+
+  if (mode === 'maaned') {
+    const now = new Date();
+    const startD = new Date(now.getFullYear(), 0, 1);
+    const tlStart = dateToIso(startD);
+    const endD = new Date(startD.getFullYear() + 2, startD.getMonth(), startD.getDate());
+    const tlDays = Math.round((endD - startD) / 86400000);
+    const ticks = [];
+    for (let i = 0; i < 24; i++) {
+      const d = new Date(startD.getFullYear(), startD.getMonth() + i, 1);
+      const pct = (Math.round((d - startD) / 86400000) / tlDays) * 100;
+      ticks.push({ pct, label: d.getMonth() === 0 ? String(d.getFullYear()) : (i % 3 === 0 ? MND[d.getMonth()] : null) });
+    }
+    return { tlStart, tlDays, ticks, label: 'Tidslinje (2 år)' };
+  }
+
+  if (mode === 'uke') {
+    const tlStart = mondayOf(todayIso);
+    const tlDays = 26 * 7;
+    const ticks = [];
+    for (let w = 0; w < 26; w++) {
+      const d = new Date(addDaysLocal(tlStart, w * 7) + 'T00:00:00');
+      const pct = (w * 7 / tlDays) * 100;
+      const mndStart = d.getDate() <= 7; // første uke i måneden
+      ticks.push({ pct, label: mndStart ? MND[d.getMonth()] : (w % 4 === 0 ? `U${getWeekNr(d)}` : null) });
+    }
+    return { tlStart, tlDays, ticks, label: 'Tidslinje (26 uker)' };
+  }
+
+  // dag: 13 uker
+  const tlStart = mondayOf(todayIso);
+  const tlDays = 13 * 7;
+  const ticks = [];
+  for (let w = 0; w < 13; w++) {
+    const d = new Date(addDaysLocal(tlStart, w * 7) + 'T00:00:00');
+    const pct = (w * 7 / tlDays) * 100;
+    ticks.push({ pct, label: `${d.getDate()}/${d.getMonth() + 1}` });
+  }
+  return { tlStart, tlDays, ticks, label: 'Tidslinje (13 uker)' };
+}
+
+function getWeekNr(d) {
+  const tmp = new Date(d); tmp.setHours(0,0,0,0);
+  tmp.setDate(tmp.getDate() + 3 - ((tmp.getDay()+6)%7));
+  const w = new Date(tmp.getFullYear(), 0, 4);
+  return 1 + Math.round(((tmp - w)/86400000 - 3 + ((w.getDay()+6)%7))/7);
+}
+
+function MiniGantt({ prosjekt, color, tlStart, tlDays, ticks }) {
+  function pct(iso) {
+    if (!iso) return null;
+    const diff = Math.round((new Date(iso + 'T00:00:00') - new Date(tlStart + 'T00:00:00')) / 86400000);
+    return Math.max(0, Math.min(100, (diff / tlDays) * 100));
+  }
+  const s = pct(prosjekt.startDato);
+  const e = pct(prosjekt.sluttDato);
+  const todayPct = pct(dateToIso(new Date()));
 
   return (
     <div className="proj-gantt-wrap">
-      {/* Month ticks */}
-      {TIMELINE_MONTHS.map((m, i) => (
-        <div key={m.iso}
-          className="proj-gantt-tick"
-          style={{ left: `${(i / TIMELINE_MONTHS.length) * 100}%` }}>
-          {(i % 3 === 0) && (
-            <span className="proj-gantt-tick-label">
-              {m.isFirstOfYear ? m.year : m.label}
-            </span>
-          )}
+      {ticks.map((t, i) => (
+        <div key={i} className="proj-gantt-tick" style={{ left: `${t.pct}%` }}>
+          {t.label && <span className="proj-gantt-tick-label">{t.label}</span>}
         </div>
       ))}
-      {/* Today line */}
-      {today !== null && (
-        <div className="proj-gantt-today" style={{ left: `${today}%` }} title="I dag" />
+      {todayPct !== null && (
+        <div className="proj-gantt-today" style={{ left: `${todayPct}%` }} title="I dag" />
       )}
-      {/* Project bar */}
       {s !== null && e !== null ? (
         <div className="proj-gantt-bar"
           style={{ left: `${s}%`, width: `${Math.max(0.5, e - s)}%`, background: color }}
@@ -166,6 +198,8 @@ export default function Prosjekter() {
   const [search, setSearch] = useState('');
   const [collapsed, setCollapsed] = useState({});
   const [fullscreen, setFullscreen] = useState(false);
+  const [tlMode, setTlMode] = useState('maaned');
+  const tl = buildTimeline(tlMode);
 
   function openNew() {
     setEditing(null);
@@ -290,7 +324,14 @@ export default function Prosjekter() {
                 <div className="compact-table">
                   <div className="ct-header">
                     <div className="ct-col ct-name">Prosjektnavn</div>
-                    <div className="ct-col ct-gantt">Tidslinje (2 år)</div>
+                    <div className="ct-col ct-gantt" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span>{tl.label}</span>
+                      <div className="ukemode-toggle" style={{ marginLeft: 'auto' }}>
+                        <button className={`ukemode-btn ${tlMode==='dag'?'active':''}`} onClick={() => setTlMode('dag')}>Dag</button>
+                        <button className={`ukemode-btn ${tlMode==='uke'?'active':''}`} onClick={() => setTlMode('uke')}>Uke</button>
+                        <button className={`ukemode-btn ${tlMode==='maaned'?'active':''}`} onClick={() => setTlMode('maaned')}>Måned</button>
+                      </div>
+                    </div>
                     <div className="ct-col ct-progress">Fremdrift</div>
                     <div className="ct-col ct-actions"></div>
                   </div>
@@ -347,7 +388,7 @@ export default function Prosjekter() {
                           </div>
                         </div>
                         <div className="ct-col ct-gantt">
-                          <MiniGantt prosjekt={p} color={barColor} />
+                          <MiniGantt prosjekt={p} color={barColor} tlStart={tl.tlStart} tlDays={tl.tlDays} ticks={tl.ticks} />
                         </div>
                         <div className="ct-col ct-progress">
                           {fremgang !== null ? (
