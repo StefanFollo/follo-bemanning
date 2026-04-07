@@ -532,6 +532,41 @@ body {
 .week-start-col { border-left: 2px solid #cbd5e1 !important; }
 .today-col { background: #fffbeb !important; }
 
+/* Storskjerm-modus – skalert oversikt for TV/projektor */
+.bplan-storskjerm {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: white;
+  overflow: hidden;
+  padding: 0;
+}
+.bplan-storskjerm .bplan-storskjerm-close {
+  position: fixed;
+  top: 8px; right: 12px;
+  z-index: 400;
+  background: #1e293b;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0.75;
+}
+.bplan-storskjerm .bplan-storskjerm-close:hover { opacity: 1; }
+/* Skjul all chrome i storskjerm */
+.bplan-storskjerm .page-header { display: none; }
+.bplan-storskjerm .tab-bar { display: none; }
+/* Kompakt nav */
+.bplan-storskjerm .uke-nav { margin: 4px 8px 4px; gap: 4px; flex-wrap: nowrap; }
+.bplan-storskjerm .uke-nav .btn { padding: 3px 8px; font-size: 11px; }
+.bplan-storskjerm .uke-label { font-size: 11px; }
+.bplan-storskjerm .ukemode-btn { padding: 3px 8px; font-size: 11px; }
+/* Fjern alle scroll-begrensninger – vis hele griden */
+.bplan-storskjerm .uke-grid-wrap { max-height: none !important; overflow: visible; }
+
 /* Fullskjerm-modus for Bemanningsplan */
 .bplan-fullscreen {
   position: fixed;

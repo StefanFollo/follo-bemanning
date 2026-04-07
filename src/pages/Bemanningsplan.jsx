@@ -1,4 +1,4 @@
-import React, { useState, useRef, useLayoutEffect } from 'react';
+import React, { useState, useRef, useLayoutEffect, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { weekStart, addDays, isoToDate, dateToIso, formatDate, overlaps } from '../store';
 import { getHolidayMap } from '../holidays';
@@ -58,6 +58,8 @@ export default function Bemanningsplan() {
   const { state, dispatch } = useApp();
   const [tab, setTab] = useState('uke');
   const [fullscreen, setFullscreen] = useState(false);
+  const [storskjerm, setStorskjerm] = useState(false);
+  const storskjermContentRef = useRef(null);
   const [ukeMode, setUkeMode] = useState('dag'); // 'dag' | 'uke' | 'maaned'
   const [currentWeek, setCurrentWeek] = useState(() => weekStart(dateToIso(new Date())));
   const [currentMonth, setCurrentMonth] = useState(() => monthStart(dateToIso(new Date())));
@@ -72,6 +74,26 @@ export default function Bemanningsplan() {
   const [needleDay, setNeedleDay] = useState(() => dateToIso(new Date()));
   const draggingNeedle = useRef(false);
   const gridWrapRef = useRef(null);
+
+  // Auto-skaler innhold i storskjerm-modus
+  useEffect(() => {
+    const el = storskjermContentRef.current;
+    if (!el) return;
+    if (!storskjerm) {
+      el.style.zoom = '';
+      return;
+    }
+    // Mål naturlig størrelse ved zoom=1, sett deretter riktig zoom
+    el.style.zoom = '1';
+    requestAnimationFrame(() => {
+      if (!storskjermContentRef.current) return;
+      const zoom = Math.min(1,
+        window.innerWidth  / el.scrollWidth,
+        window.innerHeight / el.scrollHeight
+      );
+      el.style.zoom = String(zoom);
+    });
+  }, [storskjerm, tab, ukeMode]);
 
   // useLayoutEffect kjøres synkront etter DOM-oppdatering men FØR nettleseren tegner.
   // Bruker dette til å gjenopprette scroll etter dispatch, selv om komponenten ble re-mountet.
@@ -857,10 +879,18 @@ export default function Bemanningsplan() {
   }
 
   return (
-    <div className={`page${fullscreen ? ' bplan-fullscreen' : ''}`}>
+    <div className={`page${fullscreen ? ' bplan-fullscreen' : ''}${storskjerm ? ' bplan-storskjerm' : ''}`}>
+      {/* Storskjerm: flytende lukk-knapp */}
+      {storskjerm && (
+        <button className="bplan-storskjerm-close no-print" onClick={() => setStorskjerm(false)}>✕ Lukk storskjerm</button>
+      )}
+
       <div className="page-header">
         <h2>Bemanningsplan</h2>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn no-print" onClick={() => setStorskjerm(s => !s)} title="Storskjerm – skalert oversikt for TV/projektor">
+            {storskjerm ? '✕ Lukk' : '📺 Storskjerm'}
+          </button>
           <button className="btn no-print" onClick={() => setFullscreen(f => !f)} title={fullscreen ? 'Avslutt fullskjerm' : 'Fullskjerm – se alle ansatte'}>
             {fullscreen ? '✕ Lukk' : '⛶ Fullskjerm'}
           </button>
@@ -882,9 +912,11 @@ export default function Bemanningsplan() {
         </button>
       </div>
 
-      {tab === 'uke' && UkeVisning()}
-      {tab === 'ressurs' && RessursVisning()}
-      {tab === 'prosjekt' && ProsjektOversiktVisning()}
+      <div ref={storskjermContentRef}>
+        {tab === 'uke' && UkeVisning()}
+        {tab === 'ressurs' && RessursVisning()}
+        {tab === 'prosjekt' && ProsjektOversiktVisning()}
+      </div>
 
       {splitModal && (
         <Modal title="Del opp tildeling med pause" onClose={() => setSplitModal(null)}>
