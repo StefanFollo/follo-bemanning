@@ -1,608 +1,573 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { dateToIso, isoToDate, formatDate, uid, weekStart, overlaps } from '../store';
-import { getHolidayMap } from '../holidays';
+import { uid } from '../store';
 
-// ─── Dato-hjelp ──────────────────────────────────────────────
-const MAANED = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des'];
-const DAG_NAVN = ['Man','Tir','Ons','Tor','Fre'];
+// ─── Fag (trade categories) ───────────────────────────────────────────────────
+const FAG = {
+  tomrer:      { label: 'Tømrer',      color: '#185FA5' },
+  flis:        { label: 'Flis / mur',  color: '#BA7517' },
+  elektriker:  { label: 'Elektriker',  color: '#E24B4A' },
+  rorlegger:   { label: 'Rørlegger',   color: '#0F6E56' },
+  ventilasjon: { label: 'Ventilasjon', color: '#7F77DD' },
+  maling:      { label: 'Maling',      color: '#D4537E' },
+  ferdig:      { label: 'Ferdig',      color: '#3B6D11' },
+  pause:       { label: 'Pause',       color: '#B4B2A9' },
+  milestone:   { label: 'Milepæl',     color: '#D85A30' },
+  annet:       { label: 'Annet',       color: '#888780' },
+};
+const fc = k => FAG[k]?.color ?? '#888780';
 
-function today() { return dateToIso(new Date()); }
+const TYPE_LABEL = { small: 'Liten', medium: 'Medium', large: 'Stort' };
+const TYPE_COLOR = { small: '#1D9E75', medium: '#185FA5', large: '#993556' };
+const STATUS_OPTIONS = ['Ikke startet', 'Pågående', 'Forsinket', 'Ferdig'];
+const STATUS_COLORS  = { 'Ikke startet': '#888780', 'Pågående': '#185FA5', 'Forsinket': '#993C1D', 'Ferdig': '#1D9E75' };
+const FILTER_OPTIONS = ['Alle', 'Liten', 'Medium', 'Stort', 'Pågående', 'Ferdig'];
 
-function addDays(iso, n) {
-  const d = new Date(iso + 'T00:00:00');
-  d.setDate(d.getDate() + n);
-  return dateToIso(d);
-}
-
-function daysBetween(a, b) {
-  if (!a || !b) return 0;
-  return Math.max(0, Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000));
-}
-
-function monthsArray(fromIso, count) {
-  const out = [];
-  const d = new Date(fromIso + 'T00:00:00');
-  d.setDate(1);
-  for (let i = 0; i < count; i++) {
-    const iso = dateToIso(d).slice(0, 7);
-    out.push(iso);
-    d.setMonth(d.getMonth() + 1);
-  }
-  return out;
-}
-
-function monthEndIso(ym) {
-  const [y, m] = ym.split('-').map(Number);
-  return dateToIso(new Date(y, m, 0)); // last day of month
-}
-
-function monthStartIso(ym) { return ym + '-01'; }
-
-function getWeekNumber(iso) {
-  const d = new Date(iso + 'T00:00:00');
-  d.setHours(0,0,0,0);
-  d.setDate(d.getDate() + 3 - ((d.getDay()+6)%7));
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function nowWeekYear() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
   const w = new Date(d.getFullYear(), 0, 4);
-  return 1 + Math.round(((d-w)/86400000 - 3 + ((w.getDay()+6)%7))/7);
+  const week = 1 + Math.round(((d - w) / 86400000 - 3 + ((w.getDay() + 6) % 7)) / 7);
+  return { week, year: d.getFullYear() };
 }
 
-// Lag array av hverdager (man-fre) fra startdato over N uker
-function hverdager(fraIso, antUker) {
-  return Array.from({ length: antUker * 7 }, (_, i) => addDays(fraIso, i))
-    .filter(d => { const dow = new Date(d + 'T00:00:00').getDay(); return dow >= 1 && dow <= 5; });
+function isoToWeekYear(iso) {
+  if (!iso) return nowWeekYear();
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+  const w = new Date(d.getFullYear(), 0, 4);
+  const week = 1 + Math.round(((d - w) / 86400000 - 3 + ((w.getDay() + 6) % 7)) / 7);
+  return { week, year: d.getFullYear() };
 }
 
-// Lag array av uker (mandag-fredag, én per uke) fra startdato over N uker
-function ukeStarter(fraIso, antUker) {
-  return Array.from({ length: antUker }, (_, i) => addDays(fraIso, i * 7));
+function wkNum(bw, by, weekOffset) {
+  let w = bw + weekOffset, y = by;
+  while (w > 52) { w -= 52; y++; }
+  while (w < 1)  { w += 52; y--; }
+  return { w, y };
 }
 
-function pctInRange(iso, rangeStart, rangeDays) {
-  if (!iso) return null;
-  const diff = daysBetween(rangeStart, iso);
-  return Math.max(0, Math.min(100, (diff / rangeDays) * 100));
+function projStartWY(proj) {
+  if (proj.fdStartWeek && proj.fdStartYear)
+    return { week: proj.fdStartWeek, year: proj.fdStartYear };
+  return isoToWeekYear(proj.startDato || null);
 }
 
-function barStyle(startDato, sluttDato, rangeStart, rangeDays, color) {
-  if (!startDato || !sluttDato) return null;
-  const left = pctInRange(startDato, rangeStart, rangeDays);
-  const right = pctInRange(addDays(sluttDato, 1), rangeStart, rangeDays);
-  if (left === null || right === null || right <= left) return null;
-  return { left: left.toFixed(2) + '%', width: (right - left).toFixed(2) + '%', background: color };
-}
-
-// ─── Standardfarger per ny aktivitet ─────────────────────────
-const FARGER = ['#6366f1','#8b5cf6','#3b82f6','#06b6d4','#16a34a','#f59e0b','#ea580c','#ec4899'];
-function nesteFarge(oppgaver) {
-  const used = oppgaver.map(o => o.farge).filter(Boolean);
-  return FARGER.find(f => !used.includes(f)) || FARGER[oppgaver.length % FARGER.length];
-}
-
-// ─── Tom oppgave ─────────────────────────────────────────────
-function tomOppgave(prosjektId, erGruppe, parentId, farge, rekkefølge) {
-  return {
-    navn: '',
-    prosjektId,
-    erGruppe: !!erGruppe,
-    parentId: parentId || null,
-    startDato: today(),
-    sluttDato: addDays(today(), erGruppe ? 30 : 7),
-    farge: farge || '#6366f1',
-    fremgang: 0,
-    rekkefølge: rekkefølge || 0,
-  };
-}
-
-// ─── Modal ───────────────────────────────────────────────────
-function Modal({ title, onClose, children }) {
+// ─── ContextMenu ─────────────────────────────────────────────────────────────
+function ContextMenu({ task, x, y, onClose, onDelete, onChange }) {
+  const [name, setName] = useState(task.name);
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <h3>{title}</h3>
-          <button className="btn-icon" onClick={onClose}>✕</button>
+    <div
+      style={{
+        position: 'fixed',
+        top: Math.min(y, window.innerHeight - 300),
+        left: Math.min(x, window.innerWidth - 220),
+        zIndex: 9999, background: '#fff', border: '1px solid #ddd',
+        borderRadius: 10, padding: '8px 0', width: 210,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.22)',
+      }}
+      onMouseLeave={onClose}
+    >
+      <div style={{ padding: '4px 12px 8px', borderBottom: '1px solid #eee', marginBottom: 4 }}>
+        <p style={{ margin: '0 0 4px', fontSize: 11, color: '#666' }}>Navn</p>
+        <input value={name} onChange={e => setName(e.target.value)}
+          onBlur={() => onChange({ name })}
+          onKeyDown={e => { if (e.key === 'Enter') { onChange({ name }); onClose(); } if (e.key === 'Escape') onClose(); }}
+          style={{ width: '100%', fontSize: 12, padding: '4px 6px', borderRadius: 4, border: '1px solid #ddd', boxSizing: 'border-box' }}
+        />
+      </div>
+      <div style={{ padding: '4px 12px 8px', borderBottom: '1px solid #eee', marginBottom: 4 }}>
+        <p style={{ margin: '0 0 6px', fontSize: 11, color: '#666' }}>Fagfarge</p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {Object.entries(FAG).filter(([k]) => !['pause', 'milestone'].includes(k)).map(([k, v]) => (
+            <div key={k} title={v.label} onClick={() => onChange({ fag: k })}
+              style={{
+                width: 20, height: 20, borderRadius: '50%', background: v.color, cursor: 'pointer',
+                border: task.fag === k ? '2.5px solid #333' : '2px solid transparent',
+              }} />
+          ))}
         </div>
-        {children}
+      </div>
+      <div onClick={() => { onDelete(); onClose(); }}
+        style={{ padding: '7px 12px', fontSize: 12, color: '#993C1D', cursor: 'pointer' }}
+        onMouseEnter={e => e.currentTarget.style.background = '#FCEBEB'}
+        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+        Slett oppgave
+      </div>
+      <div onClick={onClose}
+        style={{ padding: '7px 12px', fontSize: 12, color: '#666', cursor: 'pointer' }}
+        onMouseEnter={e => e.currentTarget.style.background = '#f5f5f5'}
+        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+        Lukk
       </div>
     </div>
   );
 }
 
-// ─── Hoved-komponent ─────────────────────────────────────────
-export default function Framdriftsplan() {
-  const { state, dispatch } = useApp();
-  const [valgtProsjektId, setValgtProsjektId] = useState(() => state.prosjekter[0]?.id || null);
-  const [collapsed, setCollapsed] = useState({});
-  const [showModal, setShowModal] = useState(false);
-  const [editModal, setEditModal] = useState(null);
-  const [form, setForm] = useState(null);
-  const [ukeMode, setUkeMode] = useState('maaned'); // 'dag' | 'uke' | 'maaned'
-  const [periodeOffset, setPeriodeOffset] = useState(0);
-  const MÅNEDER_SYNLIG = 18;
-  const UKE_SYNLIG = 26;
-  const DAG_SYNLIG = 13; // uker i dag-modus
-  const activeDrag = useRef(null);
-  const gridRef = useRef(null);
+// ─── GanttChart ───────────────────────────────────────────────────────────────
+function GanttChart({ project, onUpdate }) {
+  const [tasks, setTasks] = useState(project.fdTasks || []);
+  const [zoom, setZoom] = useState(1);
+  const [newTask, setNewTask] = useState('');
+  const [newFag, setNewFag] = useState('tomrer');
+  const [selId, setSelId] = useState(null);
+  const [menu, setMenu] = useState(null);
+  const [dropIdx, setDropIdx] = useState(null);
+  const drag = useRef(null);
+  const rowDragRef = useRef(null);
 
-  const thisYear = new Date().getFullYear();
-  const HOLIDAYS = getHolidayMap(thisYear - 1, thisYear + 2);
+  useEffect(() => { setTasks(project.fdTasks || []); }, [project.id]);
 
-  const prosjekt = state.prosjekter.find(p => p.id === valgtProsjektId) || state.prosjekter[0];
-  const alleOppgaver = prosjekt ? state.oppgaver.filter(o => o.prosjektId === prosjekt.id) : [];
+  const { week: bw, year: by } = projStartWY(project);
+  const totalWeeks = project.fdTotalWeeks || 12;
+  const totalDays = Math.max(
+    ...(tasks.length ? tasks.map(t => t.start + t.dur) : [0]),
+    totalWeeks * 7
+  );
 
-  // ── Tidslinje avhengig av modus ──────────────────────────────
-  const baseWeek = weekStart(today());
+  const ROW = 36, PAD = 220;
+  const chartW = Math.max(totalDays * 18, 620) * zoom;
+  const dw = chartW / totalDays;
+  const svgH = Math.max(tasks.length * ROW + 56, 80);
 
-  // Dag-modus: hverdager over 13 uker
-  const dagStart = addDays(baseWeek, periodeOffset * 5 * DAG_SYNLIG);
-  const dagDager = hverdager(dagStart, DAG_SYNLIG);
+  const weeks = [];
+  for (let d = 0; d < totalDays; d += 7) weeks.push(d);
 
-  // Uke-modus: mandag i hver uke over 26 uker
-  const ukeStart = addDays(baseWeek, periodeOffset * UKE_SYNLIG * 7);
-  const ukeUker  = ukeStarter(ukeStart, UKE_SYNLIG);
-
-  // Måned-modus: 18 måneder
-  const mndBase = (() => {
-    const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() + periodeOffset * 6);
-    return dateToIso(d).slice(0, 7) + '-01';
-  })();
-  const måneder  = monthsArray(mndBase, MÅNEDER_SYNLIG);
-  const tlStart  = ukeMode === 'dag' ? dagDager[0]
-                 : ukeMode === 'uke' ? ukeUker[0]
-                 : mndBase;
-  const tlEnd    = ukeMode === 'dag' ? dagDager[dagDager.length - 1]
-                 : ukeMode === 'uke' ? addDays(ukeUker[ukeUker.length - 1], 4)
-                 : monthEndIso(måneder[måneder.length - 1]);
-  const tlDays   = daysBetween(tlStart, addDays(tlEnd, 1));
-
-  // "I dag"-linje
-  const todayPct = pctInRange(today(), tlStart, tlDays);
-
-  // Grupper og oppgaver sortert
-  const grupper = alleOppgaver
-    .filter(o => o.erGruppe)
-    .sort((a, b) => (a.rekkefølge || 0) - (b.rekkefølge || 0));
-  const løseAktiviteter = alleOppgaver
-    .filter(o => !o.erGruppe && !o.parentId)
-    .sort((a, b) => (a.rekkefølge || 0) - (b.rekkefølge || 0));
-
-  function barnAv(gruppeId) {
-    return alleOppgaver
-      .filter(o => !o.erGruppe && o.parentId === gruppeId)
-      .sort((a, b) => (a.rekkefølge || 0) - (b.rekkefølge || 0));
-  }
-
-  // Autobered gruppe-bar (min start → max slutt av barn)
-  function gruppeBar(g) {
-    const barn = barnAv(g.id);
-    if (barn.length === 0) return { start: g.startDato, slutt: g.sluttDato };
-    const start = barn.reduce((s, b) => b.startDato < s ? b.startDato : s, barn[0].startDato);
-    const slutt  = barn.reduce((s, b) => b.sluttDato > s ? b.sluttDato : s, barn[0].sluttDato);
-    return { start, slutt };
-  }
-
-  // ID-nummerering per prosjekt (sekvensielt)
-  const idMap = {};
-  let n = 1;
-  grupper.forEach(g => {
-    idMap[g.id] = n++;
-    barnAv(g.id).forEach(b => { idMap[b.id] = n++; });
+  const yearBands = [];
+  weeks.forEach(d => {
+    const { y } = wkNum(bw, by, Math.round(d / 7));
+    const last = yearBands[yearBands.length - 1];
+    if (!last || last.y !== y) yearBands.push({ y, s: d, e: d + 7 });
+    else last.e = d + 7;
   });
-  løseAktiviteter.forEach(a => { idMap[a.id] = n++; });
 
-  // ─── Pointer-drag: ingen setState under drag → ingen re-render → pointer capture beholdes ──
-  function startDrag(e, oppgave, type) {
-    e.preventDefault();
-    e.stopPropagation();
-    // Finn bar-elementet og bar-area for DOM-manipulasjon
-    const handleEl = e.currentTarget;
-    const barEl    = type === 'move' ? handleEl : handleEl.closest('.fd2-bar');
-    const barArea  = handleEl.closest('.fd2-bar-area');
-    if (!barEl || !barArea) return;
-    const pxPerDay = Math.max(1, barArea.offsetWidth / tlDays);
-    activeDrag.current = {
-      oppgave, type,
-      origStart: oppgave.startDato,
-      origEnd:   oppgave.sluttDato,
-      startX:    e.clientX,
-      pxPerDay,
-      barEl,
-      // lagrer original CSS for å rulle tilbake ved cancel
-      origLeft:  barEl.style.left,
-      origWidth: barEl.style.width,
-      newStart:  oppgave.startDato,
-      newEnd:    oppgave.sluttDato,
-    };
-    handleEl.setPointerCapture(e.pointerId);
-  }
+  const { week: nowWk, year: nowYr } = nowWeekYear();
+  const noff = (nowYr * 52 + nowWk) - (by * 52 + bw);
+  const nowX = (noff >= 0 && noff * 7 <= totalDays) ? noff * 7 * dw : null;
 
-  function moveDrag(e) {
-    const d = activeDrag.current;
-    if (!d) return;
-    e.preventDefault();
-    const deltaDager = Math.round((e.clientX - d.startX) / d.pxPerDay);
-    let newStart = d.origStart, newEnd = d.origEnd;
-    if (d.type === 'move') {
-      newStart = addDays(d.origStart, deltaDager);
-      newEnd   = addDays(d.origEnd,   deltaDager);
-    } else if (d.type === 'start') {
-      const k = addDays(d.origStart, deltaDager);
-      newStart = k <= d.origEnd ? k : d.origEnd;
-    } else if (d.type === 'end') {
-      const k = addDays(d.origEnd, deltaDager);
-      newEnd = k >= d.origStart ? k : d.origStart;
-    }
-    d.newStart = newStart;
-    d.newEnd   = newEnd;
-    // Flytt baren direkte i DOM – ingen React setState, ingen re-render
-    const leftPct  = (daysBetween(tlStart, newStart) / tlDays * 100).toFixed(2);
-    const widthPct = (daysBetween(newStart, addDays(newEnd, 1)) / tlDays * 100).toFixed(2);
-    d.barEl.style.left  = leftPct  + '%';
-    d.barEl.style.width = widthPct + '%';
-  }
+  const save = next => { setTasks(next); onUpdate({ fdTasks: next }); };
 
-  function endDrag(e) {
-    const d = activeDrag.current;
-    if (!d) return;
-    activeDrag.current = null;
-    // Tilbakestill inline-stil (React tar over med riktige verdier etter dispatch)
-    d.barEl.style.left  = d.origLeft;
-    d.barEl.style.width = d.origWidth;
-    dispatch({ type: 'UPDATE_OPPGAVE', payload: {
-      ...d.oppgave,
-      startDato: d.newStart,
-      sluttDato: d.newEnd,
-    }});
-  }
+  const onMouseMove = e => {
+    if (!drag.current) return;
+    const { tid, type, sx, os, od, op } = drag.current;
+    const dx = Math.round((e.clientX - sx) / dw);
+    setTasks(prev => prev.map(t => {
+      if (t.id !== tid) return t;
+      if (type === 'move')   return { ...t, start: Math.max(0, os + dx) };
+      if (type === 'resize') return { ...t, dur: Math.max(1, od + dx) };
+      if (type === 'pct') {
+        const barW = Math.max(t.dur * dw - 2, 6);
+        return { ...t, pct: Math.min(100, Math.max(0, Math.round(((e.clientX - sx) / barW * 100) + op))) };
+      }
+      return t;
+    }));
+  };
 
-  // ─── CRUD ────────────────────────────────────────────────────
-  function åpneNyGruppe() {
-    const rek = alleOppgaver.length;
-    setForm({ ...tomOppgave(prosjekt.id, true, null, '#4b5563', rek), _type: 'gruppe' });
-    setEditModal(null);
-    setShowModal(true);
-  }
+  const onMouseUp = () => {
+    if (drag.current) { drag.current = null; setTasks(prev => { onUpdate({ fdTasks: prev }); return prev; }); }
+    if (rowDragRef.current !== null) { rowDragRef.current = null; setDropIdx(null); }
+  };
 
-  function åpneNyAktivitet(parentId) {
-    const farge = nesteFarge(alleOppgaver);
-    const rek = alleOppgaver.length;
-    setForm({ ...tomOppgave(prosjekt.id, false, parentId || null, farge, rek), _type: 'aktivitet' });
-    setEditModal(null);
-    setShowModal(true);
-  }
+  const startDrag = (e, tid, type) => {
+    e.preventDefault(); e.stopPropagation();
+    const t = tasks.find(t => t.id === tid);
+    drag.current = { tid, type, sx: e.clientX, os: t.start, od: t.dur, op: t.pct ?? 0 };
+  };
 
-  function åpneRediger(oppgave) {
-    setForm({ ...oppgave, _type: oppgave.erGruppe ? 'gruppe' : 'aktivitet' });
-    setEditModal(oppgave);
-    setShowModal(true);
-  }
-
-  function lagre() {
-    if (!form.navn.trim()) return;
-    const { _type, ...data } = form;
-    if (editModal) {
-      dispatch({ type: 'UPDATE_OPPGAVE', payload: { ...data, id: editModal.id } });
-    } else {
-      dispatch({ type: 'ADD_OPPGAVE', payload: data });
-    }
-    setShowModal(false);
-  }
-
-  function slett(id) {
-    if (confirm('Slett aktiviteten?')) {
-      dispatch({ type: 'DELETE_OPPGAVE', id });
-      // Slett også eventuelle barn
-      state.oppgaver.filter(o => o.parentId === id).forEach(b =>
-        dispatch({ type: 'DELETE_OPPGAVE', id: b.id })
-      );
-      setShowModal(false);
-    }
-  }
-
-  function toggleCollapse(id) {
-    setCollapsed(c => ({ ...c, [id]: !c[id] }));
-  }
-
-  // ─── Render en bar-rad ────────────────────────────────────────
-  function BarRad({ oppgave, erGruppe, startD, sluttD }) {
-    const color    = erGruppe ? '#374151' : (oppgave.farge || '#6366f1');
-    const style    = barStyle(startD, sluttD, tlStart, tlDays, color);
-    const varighet = daysBetween(startD, sluttD) + 1;
-
-    return (
-      <div className="fd2-bar-area">
-        {todayPct !== null && (
-          <div className="fd2-today-line" style={{ left: todayPct.toFixed(2) + '%' }}>
-            <span className="fd2-today-label">I dag</span>
-          </div>
-        )}
-        {style && (
-          <div
-            className={`fd2-bar ${erGruppe ? 'fd2-bar-gruppe' : ''}`}
-            style={{ ...style, touchAction: 'none' }}
-            title={`${oppgave.navn}\n${formatDate(startD)} – ${formatDate(sluttD)}\n${varighet} dager`}
-            onPointerDown={e => startDrag(e, oppgave, 'move')}
-            onPointerMove={moveDrag}
-            onPointerUp={endDrag}
-            onPointerCancel={endDrag}
-          >
-            <div className="fd2-handle fd2-handle-l"
-              style={{ touchAction: 'none' }}
-              onPointerDown={e => { e.stopPropagation(); startDrag(e, oppgave, 'start'); }}
-              onPointerMove={moveDrag}
-              onPointerUp={endDrag}
-              onPointerCancel={endDrag}
-            >◂</div>
-            <span className="fd2-bar-tekst" style={{ pointerEvents: 'none' }}>{oppgave.navn}</span>
-            <div className="fd2-handle fd2-handle-r"
-              style={{ touchAction: 'none' }}
-              onPointerDown={e => { e.stopPropagation(); startDrag(e, oppgave, 'end'); }}
-              onPointerMove={moveDrag}
-              onPointerUp={endDrag}
-              onPointerCancel={endDrag}
-            >▸</div>
-          </div>
-        )}
-        {!style && !erGruppe && (
-          <div className="fd2-bar-ingen" onClick={() => åpneRediger(oppgave)}>
-            Ingen datoer – klikk for å sette
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ─── Render en rad ─────────────────────────────────────────
-  function Rad({ oppgave, indentert, erGruppe }) {
-    const startD = erGruppe ? gruppeBar(oppgave).start : oppgave.startDato;
-    const sluttD = erGruppe ? gruppeBar(oppgave).slutt  : oppgave.sluttDato;
-    const varighet = (startD && sluttD) ? (daysBetween(startD, sluttD) + 1) + 'd' : '–';
-    const barn = erGruppe ? barnAv(oppgave.id) : [];
-    const isOpen = !collapsed[oppgave.id];
-
-    return (
-      <>
-        <div className={`fd2-rad ${erGruppe ? 'fd2-rad-gruppe' : ''}`}>
-          {/* ID */}
-          <div className="fd2-celle fd2-celle-id">{idMap[oppgave.id]}</div>
-
-          {/* Aktivitet */}
-          <div className="fd2-celle fd2-celle-navn" style={{ paddingLeft: indentert ? 28 : 12 }}>
-            {erGruppe && (
-              <button className="fd2-toggle" onClick={() => toggleCollapse(oppgave.id)}>
-                {isOpen ? '▾' : '▸'}
-              </button>
-            )}
-            <span
-              className="fd2-navn-tekst"
-              onClick={() => åpneRediger(oppgave)}
-              title="Klikk for å redigere"
-            >
-              {oppgave.navn || <em style={{ color: '#94a3b8' }}>Uten navn</em>}
-            </span>
-            {erGruppe && (
-              <button className="fd2-legg-til-barn" onClick={() => åpneNyAktivitet(oppgave.id)} title="Legg til aktivitet i denne fasen">+</button>
-            )}
-          </div>
-
-          {/* Varighet */}
-          <div className="fd2-celle fd2-celle-varighet">{varighet}</div>
-
-          {/* Bar */}
-          <BarRad oppgave={oppgave} erGruppe={erGruppe} startD={startD} sluttD={sluttD} />
-        </div>
-
-        {/* Barn */}
-        {erGruppe && isOpen && barn.map(b => (
-          <Rad key={b.id} oppgave={b} indentert erGruppe={false} />
-        ))}
-      </>
-    );
-  }
-
-  if (state.prosjekter.length === 0) {
-    return <div className="page"><div className="empty">Ingen prosjekter. Legg til et prosjekt først.</div></div>;
-  }
+  const deleteTask = id => save(tasks.filter(t => t.id !== id));
+  const changeTask = (id, fields) => save(tasks.map(t => t.id === id ? { ...t, ...fields } : t));
+  const addTask = () => {
+    if (!newTask.trim()) return;
+    const end = tasks.length ? Math.max(...tasks.map(t => t.start + t.dur)) : 0;
+    save([...tasks, { id: uid(), name: newTask, start: end, dur: 7, pct: 0, fag: newFag }]);
+    setNewTask('');
+  };
 
   return (
-    <div className="page fd2-side">
-      {/* Topptittel */}
-      <div className="page-header" style={{ marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <h2>Fremdriftsplan</h2>
-          {/* Prosjekt-dropdown */}
-          <select
-            className="fd2-prosjekt-select"
-            value={valgtProsjektId || ''}
-            onChange={e => setValgtProsjektId(e.target.value)}
-          >
-            {state.prosjekter.map(p => (
-              <option key={p.id} value={p.id}>{p.navn}</option>
+    <div>
+      {/* Zoom + Legend */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: '#666' }}>Zoom:</span>
+        <button onClick={() => setZoom(z => Math.max(0.3, +(z - 0.2).toFixed(1)))}
+          style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid #ddd', background: '#f5f5f5', cursor: 'pointer', fontSize: 15 }}>−</button>
+        <span style={{ fontSize: 12, minWidth: 30, textAlign: 'center', color: '#666' }}>{Math.round(zoom * 100)}%</span>
+        <button onClick={() => setZoom(z => Math.min(4, +(z + 0.2).toFixed(1)))}
+          style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid #ddd', background: '#f5f5f5', cursor: 'pointer', fontSize: 15 }}>+</button>
+        <button onClick={() => setZoom(1)}
+          style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: '1px solid #ddd', background: '#f5f5f5', cursor: 'pointer', color: '#888' }}>Reset</button>
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginLeft: 4 }}>
+          {Object.entries(FAG).filter(([k]) => !['pause', 'annet', 'milestone'].includes(k)).map(([k, v]) => (
+            <span key={k} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: v.color + '22', color: v.color, border: `1px solid ${v.color}55` }}>
+              {v.label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* Gantt grid */}
+      <div style={{ display: 'flex', border: '1px solid #ddd', borderRadius: 8, overflow: 'hidden' }}>
+        {/* Left: task names */}
+        <div style={{ flexShrink: 0, width: PAD, background: '#fff', borderRight: '1px solid #ddd', zIndex: 1 }}>
+          <svg width={PAD} height={svgH} style={{ display: 'block' }}>
+            <rect x={0} y={0} width={PAD} height={40} fill="#f5f5f5" />
+            <text x={8} y={26} fontSize={11} fontWeight="500" fill="#888">Oppgave</text>
+            {tasks.map((t, i) => {
+              const y = i * ROW + 40;
+              return (
+                <g key={t.id} style={{ cursor: 'grab' }}
+                  onMouseDown={() => { rowDragRef.current = i; }}
+                  onMouseEnter={() => { if (rowDragRef.current !== null && rowDragRef.current !== i) setDropIdx(i); }}
+                  onMouseUp={() => {
+                    if (rowDragRef.current !== null && rowDragRef.current !== i) {
+                      const n = [...tasks]; const [m] = n.splice(rowDragRef.current, 1); n.splice(i, 0, m); save(n);
+                    }
+                    rowDragRef.current = null; setDropIdx(null);
+                  }}
+                  onContextMenu={e => { e.preventDefault(); setMenu({ tid: t.id, x: e.clientX, y: e.clientY }); }}>
+                  {dropIdx === i && <rect x={0} y={y} width={PAD} height={2} fill="#378ADD" />}
+                  <rect x={0} y={y} width={PAD} height={ROW} fill={selId === t.id ? 'rgba(55,138,221,0.1)' : 'transparent'} />
+                  <circle cx={9} cy={y + ROW / 2} r={4} fill={fc(t.fag)} />
+                  <text x={18} y={y + ROW / 2 + 4} fontSize={9} fill="#aaa" style={{ userSelect: 'none' }}>⠿</text>
+                  <clipPath id={`nc${t.id}`}><rect x={26} y={y} width={PAD - 30} height={ROW} /></clipPath>
+                  <text x={28} y={y + ROW / 2 + 5} fontSize={13} fill="#333" style={{ userSelect: 'none' }} clipPath={`url(#nc${t.id})`}>
+                    {t.name.length > 24 ? t.name.slice(0, 23) + '…' : t.name}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+
+        {/* Right: Gantt bars */}
+        <div style={{ overflowX: 'auto', flex: 1 }} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
+          <svg width={chartW} height={svgH} style={{ display: 'block', userSelect: 'none' }}>
+            {/* Year bands */}
+            {yearBands.map(b => (
+              <g key={b.y}>
+                <rect x={b.s * dw} y={0} width={(b.e - b.s) * dw} height={20} fill={b.y % 2 === 0 ? '#f0f0f0' : '#e8e8e8'} />
+                <text x={b.s * dw + 5} y={14} fontSize={11} fontWeight="500" fill="#555">{b.y}</text>
+              </g>
             ))}
+            {/* Week alternating bg */}
+            {weeks.map((d, i) => (
+              <rect key={d} x={d * dw} y={40} width={7 * dw} height={svgH - 40}
+                fill={i % 2 === 0 ? 'rgba(0,0,0,0.02)' : 'rgba(0,0,0,0.05)'} />
+            ))}
+            {/* Week lines + labels */}
+            {weeks.map(d => {
+              const { w } = wkNum(bw, by, Math.round(d / 7));
+              return (
+                <g key={d}>
+                  <line x1={d * dw} y1={20} x2={d * dw} y2={svgH} stroke="#ddd" strokeWidth={0.5} />
+                  <text x={d * dw + 3} y={33} fontSize={10} fill="#aaa">U{w}</text>
+                </g>
+              );
+            })}
+            {/* Task bars */}
+            {tasks.map((t, i) => {
+              const x = t.start * dw;
+              const w = Math.max(t.dur * dw - 2, 6);
+              const y = i * ROW + 40;
+              const pct = t.pct ?? 0;
+              const col = fc(t.fag);
+              const doneW = w * pct / 100;
+              const isMilestone = t.fag === 'milestone';
+              return (
+                <g key={t.id} onClick={() => setSelId(selId === t.id ? null : t.id)}>
+                  {selId === t.id && <rect x={0} y={y} width={chartW} height={ROW} fill="rgba(55,138,221,0.10)" />}
+                  {isMilestone ? (
+                    <polygon
+                      points={`${x},${y + 18} ${x + 10},${y + 6} ${x + 20},${y + 18} ${x + 10},${y + 30}`}
+                      fill={col} opacity={0.9} style={{ cursor: 'grab' }}
+                      onMouseDown={e => startDrag(e, t.id, 'move')} />
+                  ) : (
+                    <>
+                      <rect x={x} y={y + 4} width={w} height={24} rx={4} fill={col} opacity={0.55}
+                        style={{ cursor: 'grab' }} onMouseDown={e => startDrag(e, t.id, 'move')} />
+                      {doneW > 0 && (
+                        <rect x={x} y={y + 4} width={doneW} height={24} rx={4} fill={col} opacity={0.95}
+                          style={{ pointerEvents: 'none' }} />
+                      )}
+                      <clipPath id={`bc${t.id}`}><rect x={x + 2} y={y + 4} width={Math.max(w - 22, 0)} height={24} /></clipPath>
+                      <text x={x + 4} y={y + 20} fontSize={11} fill="white" fontWeight="500"
+                        style={{ pointerEvents: 'none' }} clipPath={`url(#bc${t.id})`}>{t.name}</text>
+                      {w > 36 && (
+                        <text x={x + w - 4} y={y + 20} fontSize={10} fill="white" fontWeight="500"
+                          textAnchor="end" style={{ pointerEvents: 'none' }}>{pct}%</text>
+                      )}
+                      {/* Progress drag handle */}
+                      <rect x={x + doneW - 3} y={y + 4} width={6} height={24}
+                        fill="rgba(255,255,255,0.7)" style={{ cursor: 'col-resize' }}
+                        onMouseDown={e => startDrag(e, t.id, 'pct')} />
+                      {/* Resize handle */}
+                      <rect x={x + w - 6} y={y + 4} width={6} height={24}
+                        fill="rgba(0,0,0,0.18)" style={{ cursor: 'ew-resize' }}
+                        onMouseDown={e => startDrag(e, t.id, 'resize')} />
+                    </>
+                  )}
+                </g>
+              );
+            })}
+            {/* Today line */}
+            {nowX !== null && (
+              <g>
+                <line x1={nowX} y1={20} x2={nowX} y2={svgH} stroke="#E24B4A" strokeWidth={2} strokeDasharray="4 3" />
+                <rect x={nowX - 16} y={21} width={32} height={16} rx={3} fill="#E24B4A" />
+                <text x={nowX} y={33} fontSize={10} fontWeight="500" fill="white" textAnchor="middle">U{nowWk}</text>
+              </g>
+            )}
+          </svg>
+        </div>
+      </div>
+
+      {/* Add task */}
+      <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+        <input value={newTask} onChange={e => setNewTask(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && addTask()}
+          placeholder="+ Ny oppgave..."
+          style={{ flex: 1, minWidth: 140, fontSize: 13, padding: '6px 10px', borderRadius: 6, border: '1px solid #ddd', background: '#fafafa' }} />
+        <select value={newFag} onChange={e => setNewFag(e.target.value)}
+          style={{ fontSize: 13, padding: '6px 8px', borderRadius: 6, border: '1px solid #ddd', background: '#fafafa' }}>
+          {Object.entries(FAG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+        </select>
+        <button onClick={addTask}
+          style={{ fontSize: 13, padding: '6px 14px', borderRadius: 6, border: '1px solid #ddd', background: '#fafafa', cursor: 'pointer' }}>
+          Legg til
+        </button>
+      </div>
+
+      {/* Context menu */}
+      {menu && (() => {
+        const t = tasks.find(t => t.id === menu.tid);
+        if (!t) return null;
+        return (
+          <ContextMenu task={t} x={menu.x} y={menu.y}
+            onClose={() => setMenu(null)}
+            onDelete={() => deleteTask(t.id)}
+            onChange={f => changeTask(t.id, f)} />
+        );
+      })()}
+    </div>
+  );
+}
+
+// ─── ProjectCard ──────────────────────────────────────────────────────────────
+function ProjectCard({ project, onSelect }) {
+  const pct = project.fdProgress ?? 0;
+  const fdType = project.fdType || 'medium';
+  const tc = TYPE_COLOR[fdType] ?? project.farge ?? '#185FA5';
+  const status = project.fdStatus || 'Pågående';
+  const sc = STATUS_COLORS[status] ?? '#888';
+  return (
+    <div onClick={() => onSelect(project)}
+      style={{
+        background: '#fff', border: '1px solid #e0e0e0', borderRadius: 12,
+        padding: '12px 14px', cursor: 'pointer', transition: 'border-color 0.15s',
+      }}
+      onMouseEnter={e => e.currentTarget.style.borderColor = '#aaa'}
+      onMouseLeave={e => e.currentTarget.style.borderColor = '#e0e0e0'}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+        <p style={{ margin: 0, fontWeight: 500, fontSize: 13, color: '#222' }}>{project.navn}</p>
+        <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: tc + '22', color: tc, whiteSpace: 'nowrap', marginLeft: 6 }}>
+          {TYPE_LABEL[fdType]}
+        </span>
+      </div>
+      <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: sc + '22', color: sc }}>{status}</span>
+      <div style={{ background: '#eee', borderRadius: 99, height: 4, margin: '6px 0 4px' }}>
+        <div style={{ width: pct + '%', height: 4, borderRadius: 99, background: tc }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#888' }}>
+        <span>{pct}%</span>
+        <span>{(project.fdTasks || []).length} oppgaver</span>
+      </div>
+    </div>
+  );
+}
+
+// ─── ProjectDetail ────────────────────────────────────────────────────────────
+function ProjectDetail({ project, onBack, onUpdate }) {
+  const [status, setStatus] = useState(project.fdStatus || 'Pågående');
+  const [progress, setProgress] = useState(project.fdProgress ?? 0);
+  const [note, setNote] = useState(project.fdNote || '');
+  const [startWk, setStartWk] = useState(() => projStartWY(project).week);
+  const [startYr, setStartYr] = useState(() => projStartWY(project).year);
+  const [totalWk, setTotalWk] = useState(project.fdTotalWeeks || 12);
+  const sc = STATUS_COLORS[status] ?? '#888';
+
+  useEffect(() => {
+    setStatus(project.fdStatus || 'Pågående');
+    setProgress(project.fdProgress ?? 0);
+    setNote(project.fdNote || '');
+    const wy = projStartWY(project);
+    setStartWk(wy.week);
+    setStartYr(wy.year);
+    setTotalWk(project.fdTotalWeeks || 12);
+  }, [project.id]);
+
+  const save = (extra = {}) => onUpdate({ fdStatus: status, fdProgress: progress, fdNote: note, ...extra });
+
+  return (
+    <div style={{ padding: '12px 16px' }}>
+      {/* Back + title */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+        <button onClick={onBack}
+          style={{ fontSize: 13, padding: '5px 12px', borderRadius: 6, border: '1px solid #ddd', background: 'transparent', cursor: 'pointer', color: '#666' }}>
+          ← Tilbake
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ fontSize: 14, fontWeight: 500 }}>{project.navn}</span>
+          <span style={{ fontSize: 11, padding: '2px 9px', borderRadius: 99, background: sc + '22', color: sc }}>{status}</span>
+        </div>
+      </div>
+
+      {/* Controls row */}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 12 }}>
+        <div style={{ flex: '1 1 130px' }}>
+          <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 3 }}>Status</label>
+          <select value={status} onChange={e => { setStatus(e.target.value); save({ fdStatus: e.target.value }); }}
+            style={{ width: '100%', fontSize: 12, padding: '5px 8px', borderRadius: 6, border: '1px solid #ddd', background: '#fafafa' }}>
+            {STATUS_OPTIONS.map(s => <option key={s}>{s}</option>)}
           </select>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn" onClick={åpneNyGruppe}>+ Ny fase</button>
-          <button className="btn btn-primary" onClick={() => åpneNyAktivitet(null)}>+ Ny aktivitet</button>
+        <div style={{ flex: '1 1 110px' }}>
+          <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 3 }}>Type</label>
+          <select value={project.fdType || 'medium'} onChange={e => onUpdate({ fdType: e.target.value })}
+            style={{ width: '100%', fontSize: 12, padding: '5px 8px', borderRadius: 6, border: '1px solid #ddd', background: '#fafafa' }}>
+            <option value="small">Liten</option>
+            <option value="medium">Medium</option>
+            <option value="large">Stort</option>
+          </select>
+        </div>
+        <div style={{ flex: '2 1 160px' }}>
+          <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 3 }}>Fremdrift: {progress}%</label>
+          <input type="range" min={0} max={100} step={5} value={progress}
+            onChange={e => { const v = Number(e.target.value); setProgress(v); save({ fdProgress: v }); }}
+            style={{ width: '100%' }} />
+        </div>
+        <div style={{ flex: '3 1 200px' }}>
+          <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 3 }}>Notater</label>
+          <input value={note} onChange={e => setNote(e.target.value)} onBlur={() => save()}
+            placeholder="Avvik, endringer..."
+            style={{ width: '100%', fontSize: 12, padding: '5px 8px', borderRadius: 6, border: '1px solid #ddd', background: '#fafafa', boxSizing: 'border-box' }} />
         </div>
       </div>
 
-      {/* Periode-navigasjon */}
-      <div className="uke-nav" style={{ marginBottom: 8 }}>
-        <button className="btn" onClick={() => setPeriodeOffset(o => o - 1)}>← Forrige</button>
-        <span className="uke-label">
-          {ukeMode === 'maaned'
-            ? `${MAANED[new Date(tlStart+'T00:00:00').getMonth()]} ${new Date(tlStart+'T00:00:00').getFullYear()} – ${MAANED[new Date(tlEnd+'T00:00:00').getMonth()]} ${new Date(tlEnd+'T00:00:00').getFullYear()}`
-            : `${formatDate(tlStart)} – ${formatDate(tlEnd)}`}
-        </span>
-        <button className="btn" onClick={() => setPeriodeOffset(0)}>I dag</button>
-        <button className="btn" onClick={() => setPeriodeOffset(o => o + 1)}>Neste →</button>
-        <div className="ukemode-toggle">
-          <button className={`ukemode-btn ${ukeMode==='dag'?'active':''}`} onClick={() => { setUkeMode('dag'); setPeriodeOffset(0); }}>Dager</button>
-          <button className={`ukemode-btn ${ukeMode==='uke'?'active':''}`} onClick={() => { setUkeMode('uke'); setPeriodeOffset(0); }}>Uker</button>
-          <button className={`ukemode-btn ${ukeMode==='maaned'?'active':''}`} onClick={() => { setUkeMode('maaned'); setPeriodeOffset(0); }}>Måneder</button>
+      {/* Gantt settings */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div>
+          <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 2 }}>Startuke</label>
+          <input type="number" min={1} max={52} value={startWk}
+            onChange={e => setStartWk(Number(e.target.value))}
+            onBlur={() => onUpdate({ fdStartWeek: startWk, fdStartYear: startYr })}
+            style={{ width: 64, fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #ddd' }} />
+        </div>
+        <div>
+          <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 2 }}>År</label>
+          <input type="number" min={2023} max={2030} value={startYr}
+            onChange={e => setStartYr(Number(e.target.value))}
+            onBlur={() => onUpdate({ fdStartWeek: startWk, fdStartYear: startYr })}
+            style={{ width: 74, fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #ddd' }} />
+        </div>
+        <div>
+          <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 2 }}>Totale uker</label>
+          <input type="number" min={1} max={200} value={totalWk}
+            onChange={e => setTotalWk(Number(e.target.value))}
+            onBlur={() => onUpdate({ fdTotalWeeks: totalWk })}
+            style={{ width: 74, fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #ddd' }} />
         </div>
       </div>
 
-      {/* Gantt-tabell */}
-      <div className="fd2-wrap" ref={gridRef}>
-        {/* Sticky header */}
-        <div className="fd2-header">
-          <div className="fd2-celle fd2-celle-id fd2-header-celle">ID</div>
-          <div className="fd2-celle fd2-celle-navn fd2-header-celle">Aktivitet</div>
-          <div className="fd2-celle fd2-celle-varighet fd2-header-celle">Varighet</div>
-          <div className="fd2-celle fd2-celle-tl fd2-header-celle fd2-tl-header">
-            {ukeMode === 'maaned' && <>
-              {/* Måned: år-rad + måneds-rad */}
-              <div className="fd2-tl-aar-rad">
-                {(() => {
-                  const ag = []; let g = null;
-                  måneder.forEach(m => {
-                    const aar = m.slice(0,4);
-                    if (g?.aar !== aar) { g = { aar, antall: 1 }; ag.push(g); } else g.antall++;
-                  });
-                  return ag.map(x => (
-                    <div key={x.aar} className="fd2-aar-celle" style={{ width: `${(x.antall/MÅNEDER_SYNLIG)*100}%` }}>{x.aar}</div>
-                  ));
-                })()}
-              </div>
-              <div className="fd2-tl-mnd-rad">
-                {måneder.map(m => (
-                  <div key={m} className={`fd2-mnd-celle ${m===today().slice(0,7)?'fd2-mnd-idag':''}`} style={{ width: `${100/MÅNEDER_SYNLIG}%` }}>
-                    {MAANED[parseInt(m.slice(5,7),10)-1]}
-                  </div>
-                ))}
-              </div>
-            </>}
+      {/* Gantt */}
+      <GanttChart project={project} onUpdate={onUpdate} />
 
-            {ukeMode === 'uke' && <>
-              {/* Uke: måned-rad + uke-rad */}
-              <div className="fd2-tl-aar-rad">
-                {(() => {
-                  const ag = []; let g = null;
-                  ukeUker.forEach(d => {
-                    const mnd = d.slice(0,7);
-                    if (g?.mnd !== mnd) { g = { mnd, antall: 1 }; ag.push(g); } else g.antall++;
-                  });
-                  return ag.map(x => (
-                    <div key={x.mnd} className="fd2-aar-celle" style={{ width: `${(x.antall/UKE_SYNLIG)*100}%` }}>
-                      {MAANED[parseInt(x.mnd.slice(5,7),10)-1]} {x.mnd.slice(0,4)}
-                    </div>
-                  ));
-                })()}
-              </div>
-              <div className="fd2-tl-mnd-rad">
-                {ukeUker.map((d, i) => {
-                  const erNå = weekStart(today()) === d;
-                  const hol = HOLIDAYS[d];
-                  return (
-                    <div key={d} className={`fd2-mnd-celle ${erNå?'fd2-mnd-idag':''} ${hol?'holiday-header':''}`}
-                      style={{ width: `${100/UKE_SYNLIG}%` }} title={hol||undefined}>
-                      U{getWeekNumber(d)}
-                    </div>
-                  );
-                })}
-              </div>
-            </>}
-
-            {ukeMode === 'dag' && <>
-              {/* Dag: uke-rad + dag-rad */}
-              <div className="fd2-tl-aar-rad">
-                {(() => {
-                  const ag = []; let g = null;
-                  dagDager.forEach((d, i) => {
-                    const dow = new Date(d+'T00:00:00').getDay();
-                    const wnr = getWeekNumber(d);
-                    if (dow === 1 || i === 0) { g = { wnr, antall: 1 }; ag.push(g); } else if (g) g.antall++;
-                  });
-                  return ag.map((x, i) => (
-                    <div key={i} className="fd2-aar-celle" style={{ width: `${(x.antall/dagDager.length)*100}%` }}>
-                      U{x.wnr}
-                    </div>
-                  ));
-                })()}
-              </div>
-              <div className="fd2-tl-mnd-rad">
-                {dagDager.map(d => {
-                  const dow = new Date(d+'T00:00:00').getDay();
-                  const erIdag = d === today();
-                  const hol = HOLIDAYS[d];
-                  return (
-                    <div key={d} className={`fd2-mnd-celle ${erIdag?'fd2-mnd-idag':''} ${hol?'holiday-header':''}`}
-                      style={{ width: `${100/dagDager.length}%`, minWidth: 28 }} title={hol||undefined}>
-                      <div style={{ fontSize: 9, color: '#94a3b8' }}>{DAG_NAVN[dow-1]}</div>
-                      <div>{d.slice(8)}</div>
-                    </div>
-                  );
-                })}
-              </div>
-            </>}
+      {/* Notes panels */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 12, marginTop: 16 }}>
+        {[
+          { key: 'fdNoteOrders', label: 'Bestillinger & leveranser', ph: 'Vinduer bestilt 10.04...' },
+          { key: 'fdNoteSubs',   label: 'Underentreprenører',        ph: 'Rørlegger – Ola Hansen...' },
+        ].map(({ key, label, ph }) => (
+          <div key={key} style={{ background: '#f9f9f9', borderRadius: 8, padding: '10px 12px', border: '1px solid #e0e0e0' }}>
+            <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 500 }}>{label}</p>
+            <textarea rows={4} placeholder={ph} value={project[key] || ''}
+              onChange={e => onUpdate({ [key]: e.target.value })}
+              onBlur={e => onUpdate({ [key]: e.target.value })}
+              style={{ width: '100%', fontSize: 12, lineHeight: 1.6, padding: '6px 8px', borderRadius: 6, border: '1px solid #ddd', background: '#fff', resize: 'vertical', boxSizing: 'border-box' }} />
           </div>
-        </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
-        {/* Rader */}
-        <div className="fd2-rader">
-          {grupper.map(g => <Rad key={g.id} oppgave={g} indentert={false} erGruppe={true} />)}
-          {løseAktiviteter.map(a => <Rad key={a.id} oppgave={a} indentert={false} erGruppe={false} />)}
-          {alleOppgaver.length === 0 && (
-            <div style={{ padding: '32px', color: '#94a3b8', textAlign: 'center', gridColumn: '1/-1' }}>
-              Ingen aktiviteter ennå. Klikk "+ Ny fase" eller "+ Ny aktivitet".
-            </div>
-          )}
+// ─── Main component ───────────────────────────────────────────────────────────
+export default function Framdriftsplan() {
+  const { state, dispatch } = useApp();
+  const [selectedId, setSelectedId] = useState(null);
+  const [filter, setFilter] = useState('Alle');
+
+  const updateProject = (proj, extra) => {
+    const updated = { ...proj, ...extra };
+    dispatch({ type: 'UPDATE_PROSJEKT', payload: updated });
+  };
+
+  const filtered = state.prosjekter.filter(p => {
+    if (filter === 'Alle')    return true;
+    if (filter === 'Liten')   return p.fdType === 'small';
+    if (filter === 'Medium')  return p.fdType === 'medium';
+    if (filter === 'Stort')   return p.fdType === 'large';
+    if (filter === 'Pågående') return (p.fdStatus || 'Pågående') === 'Pågående';
+    if (filter === 'Ferdig')   return p.fdStatus === 'Ferdig';
+    return true;
+  });
+
+  // Detail view
+  if (selectedId) {
+    const live = state.prosjekter.find(p => p.id === selectedId);
+    if (live) {
+      return (
+        <div className="page">
+          <ProjectDetail
+            project={live}
+            onBack={() => setSelectedId(null)}
+            onUpdate={extra => updateProject(live, extra)}
+          />
+        </div>
+      );
+    }
+  }
+
+  // List view
+  return (
+    <div className="page" style={{ padding: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+        <div>
+          <h2 style={{ fontSize: 20, fontWeight: 600, margin: 0 }}>Fremdriftsplan</h2>
+          <p style={{ fontSize: 12, color: '#888', margin: 0 }}>Follo Byggservice · {state.prosjekter.length} prosjekter</p>
+        </div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          {FILTER_OPTIONS.map(f => (
+            <button key={f} onClick={() => setFilter(f)}
+              style={{
+                fontSize: 12, padding: '4px 11px', borderRadius: 99, border: '1px solid #ddd',
+                background: filter === f ? '#185FA5' : 'transparent',
+                color: filter === f ? '#fff' : '#666', cursor: 'pointer',
+              }}>
+              {f}
+            </button>
+          ))}
         </div>
       </div>
 
-      {/* Modal */}
-      {showModal && (
-        <Modal
-          title={editModal ? 'Rediger' : form?._type === 'gruppe' ? 'Ny fase' : 'Ny aktivitet'}
-          onClose={() => setShowModal(false)}
-        >
-          <div className="form">
-            <label>{form?._type === 'gruppe' ? 'Fasenavn' : 'Aktivitetsnavn'} *</label>
-            <input
-              className="input"
-              autoFocus
-              value={form?.navn || ''}
-              onChange={e => setForm(f => ({ ...f, navn: e.target.value }))}
-              placeholder={form?._type === 'gruppe' ? 'f.eks. Grunnarbeid' : 'f.eks. Graving, Støpe plate...'}
-            />
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(190px,1fr))', gap: 8 }}>
+        {filtered.map(p => (
+          <ProjectCard key={p.id} project={p} onSelect={p => setSelectedId(p.id)} />
+        ))}
+      </div>
 
-            <div className="form-row">
-              <div>
-                <label>Startdato</label>
-                <input type="date" className="input" value={form?.startDato || ''} onChange={e => setForm(f => ({ ...f, startDato: e.target.value }))} />
-              </div>
-              <div>
-                <label>Sluttdato</label>
-                <input type="date" className="input" value={form?.sluttDato || ''} onChange={e => setForm(f => ({ ...f, sluttDato: e.target.value }))} />
-              </div>
-            </div>
-
-            {form?._type === 'aktivitet' && (
-              <>
-                <label>Farge</label>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  {FARGER.map(c => (
-                    <button key={c} type="button"
-                      style={{ width: 28, height: 28, borderRadius: 6, background: c, border: form?.farge === c ? '3px solid #1e293b' : '2px solid transparent', cursor: 'pointer' }}
-                      onClick={() => setForm(f => ({ ...f, farge: c }))}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-
-            <div className="modal-actions" style={{ marginTop: 16 }}>
-              {editModal && (
-                <button className="btn btn-danger" onClick={() => slett(editModal.id)}>Slett</button>
-              )}
-              <button className="btn" onClick={() => setShowModal(false)}>Avbryt</button>
-              <button className="btn btn-primary" onClick={lagre} disabled={!form?.navn?.trim()}>Lagre</button>
-            </div>
-          </div>
-        </Modal>
+      {filtered.length === 0 && (
+        <p style={{ color: '#94a3b8', textAlign: 'center', padding: 32 }}>Ingen prosjekter matcher filteret.</p>
       )}
     </div>
   );

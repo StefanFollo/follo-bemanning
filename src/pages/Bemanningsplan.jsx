@@ -59,6 +59,7 @@ export default function Bemanningsplan() {
   const [tab, setTab] = useState('uke');
   const [fullscreen, setFullscreen] = useState(false);
   const [storskjerm, setStorskjerm] = useState(false);
+  const [storskjermZoom, setStorskjermZoom] = useState(1);
   const storskjermContentRef = useRef(null);
   const [ukeMode, setUkeMode] = useState('dag'); // 'dag' | 'uke' | 'maaned'
   const [currentWeek, setCurrentWeek] = useState(() => weekStart(dateToIso(new Date())));
@@ -75,7 +76,7 @@ export default function Bemanningsplan() {
   const draggingNeedle = useRef(false);
   const gridWrapRef = useRef(null);
 
-  // Auto-skaler innhold i storskjerm-modus
+  // Auto-skaler innhold i storskjerm-modus (bredde-basert, ingen høyde-klemming)
   useEffect(() => {
     const el = storskjermContentRef.current;
     if (!el) return;
@@ -83,14 +84,12 @@ export default function Bemanningsplan() {
       el.style.zoom = '';
       return;
     }
-    // Mål naturlig størrelse ved zoom=1, sett deretter riktig zoom
     el.style.zoom = '1';
     requestAnimationFrame(() => {
       if (!storskjermContentRef.current) return;
-      const zoom = Math.min(1,
-        window.innerWidth  / el.scrollWidth,
-        window.innerHeight / el.scrollHeight
-      );
+      // Skaler kun etter bredde – vertikal scrolling er OK
+      const zoom = Math.min(1, window.innerWidth / el.scrollWidth);
+      setStorskjermZoom(zoom);
       el.style.zoom = String(zoom);
     });
   }, [storskjerm, tab, ukeMode]);
@@ -882,7 +881,20 @@ export default function Bemanningsplan() {
     <div className={`page${fullscreen ? ' bplan-fullscreen' : ''}${storskjerm ? ' bplan-storskjerm' : ''}`}>
       {/* Storskjerm: flytende lukk-knapp */}
       {storskjerm && (
-        <button className="bplan-storskjerm-close no-print" onClick={() => setStorskjerm(false)}>✕ Lukk storskjerm</button>
+        <div className="bplan-storskjerm-toolbar no-print">
+          <button onClick={() => {
+            const z = Math.min(2, +(storskjermZoom + 0.05).toFixed(2));
+            setStorskjermZoom(z);
+            if (storskjermContentRef.current) storskjermContentRef.current.style.zoom = String(z);
+          }}>＋</button>
+          <span>{Math.round(storskjermZoom * 100)}%</span>
+          <button onClick={() => {
+            const z = Math.max(0.1, +(storskjermZoom - 0.05).toFixed(2));
+            setStorskjermZoom(z);
+            if (storskjermContentRef.current) storskjermContentRef.current.style.zoom = String(z);
+          }}>－</button>
+          <button className="bplan-storskjerm-close" onClick={() => setStorskjerm(false)}>✕ Lukk</button>
+        </div>
       )}
 
       <div className="page-header">
