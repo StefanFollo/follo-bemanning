@@ -117,8 +117,8 @@ function GanttChart({ project, onUpdate }) {
   const [dropIdx, setDropIdx] = useState(null);
   const drag = useRef(null);
   const rowDragRef = useRef(null);
-
-  useEffect(() => { setTasks(project.fdTasks || []); }, [project.id]);
+  // Ref keeps the latest tasks value accessible in event handlers without stale closures
+  const tasksRef = useRef(tasks);
 
   const { week: bw, year: by } = projStartWY(project);
   const totalWeeks = project.fdTotalWeeks || 12;
@@ -147,26 +147,34 @@ function GanttChart({ project, onUpdate }) {
   const noff = (nowYr * 52 + nowWk) - (by * 52 + bw);
   const nowX = (noff >= 0 && noff * 7 <= totalDays) ? noff * 7 * dw : null;
 
-  const save = next => { setTasks(next); onUpdate({ fdTasks: next }); };
+  const save = next => { tasksRef.current = next; setTasks(next); onUpdate({ fdTasks: next }); };
 
   const onMouseMove = e => {
     if (!drag.current) return;
     const { tid, type, sx, os, od, op } = drag.current;
     const dx = Math.round((e.clientX - sx) / dw);
-    setTasks(prev => prev.map(t => {
-      if (t.id !== tid) return t;
-      if (type === 'move')   return { ...t, start: Math.max(0, os + dx) };
-      if (type === 'resize') return { ...t, dur: Math.max(1, od + dx) };
-      if (type === 'pct') {
-        const barW = Math.max(t.dur * dw - 2, 6);
-        return { ...t, pct: Math.min(100, Math.max(0, Math.round(((e.clientX - sx) / barW * 100) + op))) };
-      }
-      return t;
-    }));
+    setTasks(prev => {
+      const next = prev.map(t => {
+        if (t.id !== tid) return t;
+        if (type === 'move')   return { ...t, start: Math.max(0, os + dx) };
+        if (type === 'resize') return { ...t, dur: Math.max(1, od + dx) };
+        if (type === 'pct') {
+          const barW = Math.max(t.dur * dw - 2, 6);
+          return { ...t, pct: Math.min(100, Math.max(0, Math.round(((e.clientX - sx) / barW * 100) + op))) };
+        }
+        return t;
+      });
+      tasksRef.current = next;
+      return next;
+    });
   };
 
   const onMouseUp = () => {
-    if (drag.current) { drag.current = null; setTasks(prev => { onUpdate({ fdTasks: prev }); return prev; }); }
+    if (drag.current) {
+      drag.current = null;
+      // Use ref (not setState callback) so onUpdate is never called twice in StrictMode
+      onUpdate({ fdTasks: tasksRef.current });
+    }
     if (rowDragRef.current !== null) { rowDragRef.current = null; setDropIdx(null); }
   };
 

@@ -81,15 +81,17 @@ export default function Ansatte() {
     }
   }
 
-  const alleIGruppe = state.ansatte.filter(a =>
-    gruppe === 'fast' ? !a.innleie : !!a.innleie
+  let fastCount = 0, innleieCount = 0;
+  const alleIGruppe = [];
+  for (const a of state.ansatte) {
+    if (a.innleie) { innleieCount++; if (gruppe === 'innleie') alleIGruppe.push(a); }
+    else           { fastCount++;    if (gruppe === 'fast')    alleIGruppe.push(a); }
+  }
+  const searchLow = search.toLowerCase();
+  const ansatte = alleIGruppe.filter(a =>
+    (filterFag === 'alle' || a.fag === filterFag) &&
+    (!search || a.navn.toLowerCase().includes(searchLow))
   );
-  const ansatte = alleIGruppe
-    .filter(a => filterFag === 'alle' || a.fag === filterFag)
-    .filter(a => !search || a.navn.toLowerCase().includes(search.toLowerCase()));
-
-  const fastCount    = state.ansatte.filter(a => !a.innleie).length;
-  const innleieCount = state.ansatte.filter(a => !!a.innleie).length;
 
   return (
     <div className="page">
