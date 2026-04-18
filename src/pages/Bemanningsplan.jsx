@@ -62,6 +62,7 @@ export default function Bemanningsplan() {
   const [storskjermZoom, setStorskjermZoom] = useState(1);
   const storskjermContentRef = useRef(null);
   const [ukeMode, setUkeMode] = useState('dag'); // 'dag' | 'uke' | 'maaned'
+  const [ferieYearOffset, setFerieYearOffset] = useState(0);
   const [currentWeek, setCurrentWeek] = useState(() => weekStart(dateToIso(new Date())));
   const [currentMonth, setCurrentMonth] = useState(() => monthStart(dateToIso(new Date())));
   const [showModal, setShowModal] = useState(false);
@@ -728,6 +729,162 @@ export default function Bemanningsplan() {
     );
   }
 
+  // --- FERIEOVERSIKT ---
+  function FerieVisning() {
+    const today = dateToIso(new Date());
+    const FERIE_MND = 12;
+    // Use a dedicated ferie year offset (separate from currentMonth navigation)
+    const ferieBase  = addMonths(monthStart(today), (ferieYearOffset || 0) * 12);
+    const ferieMonths = Array.from({ length: FERIE_MND }, (_, i) => addMonths(ferieBase, i));
+    const ferieEnd   = monthEnd(ferieMonths[FERIE_MND - 1]);
+    const ferieYear  = ferieBase.slice(0, 4);
+
+    const sortedAnsatte = [...state.ansatte].sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+
+    // For each employee, compute ferie periods and total days in view
+    function ferieDager(t) {
+      // Count calendar days in the tildeling
+      const ms = Math.max(0, (new Date(t.sluttDato + 'T00:00:00') - new Date(t.startDato + 'T00:00:00')) / 86400000) + 1;
+      return ms;
+    }
+
+    // Bar position in the 12-month grid
+    function getBarPos(t) {
+      let si = -1, ei = -1;
+      for (let i = 0; i < FERIE_MND; i++) {
+        const mEnd = monthEnd(ferieMonths[i]);
+        if (overlaps(t.startDato, t.sluttDato, ferieMonths[i], mEnd)) {
+          if (si === -1) si = i;
+          ei = i;
+        }
+      }
+      if (si === -1) return null;
+      return {
+        left: `${(si / FERIE_MND) * 100}%`,
+        width: `${((ei - si + 1) / FERIE_MND) * 100}%`,
+      };
+    }
+
+    // Month totals (how many employees have ferie in each month)
+    const mndTotals = ferieMonths.map(m => {
+      const mEnd = monthEnd(m);
+      return state.tildelinger.filter(t =>
+        t.prosjektId === FERIE_ID && overlaps(t.startDato, t.sluttDato, m, mEnd)
+      ).length;
+    });
+
+    return (
+      <div>
+        {/* Ferie nav */}
+        <div className="uke-nav">
+          <button className="btn" onClick={() => setFerieYearOffset(o => (o || 0) - 1)}>← Forrige år</button>
+          <span className="uke-label">🏖 Ferieplan {ferieYear}</span>
+          <button className="btn" onClick={() => setFerieYearOffset(o => (o || 0) + 1)}>Neste år →</button>
+          <button className="btn" onClick={() => setFerieYearOffset(0)}>I år</button>
+          <button className="btn btn-primary no-print" onClick={() => openAddFerie()}>+ Legg til ferie</button>
+        </div>
+
+        <div className="uke-grid-wrap">
+          {/* Month header */}
+          <div className="ferie-grid">
+            <div className="uke-header-cell ferie-label-col" style={{ fontWeight: 600, fontSize: 11, color: '#94a3b8' }}>Ansatt</div>
+            {ferieMonths.map((m, i) => {
+              const isThisMonth = m.slice(0, 7) === today.slice(0, 7);
+              return (
+                <div key={m} className={`uke-header-cell ferie-month-col ${isThisMonth ? 'today' : ''}`}
+                  style={{ textAlign: 'center', fontSize: 11, fontWeight: isThisMonth ? 700 : 500 }}>
+                  {MAANED_NAVN[parseInt(m.slice(5, 7), 10) - 1]}
+                  {mndTotals[i] > 0 && (
+                    <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>{mndTotals[i]} stk</div>
+                  )}
+                </div>
+              );
+            })}
+
+            {/* Employee rows */}
+            {sortedAnsatte.map((ansatt, rowIdx) => {
+              const ferieList = state.tildelinger.filter(t =>
+                t.ansattId === ansatt.id && t.prosjektId === FERIE_ID &&
+                overlaps(t.startDato, t.sluttDato, ferieMonths[0], ferieEnd)
+              );
+              const totalDager = ferieList.reduce((s, t) => s + ferieDager(t), 0);
+
+              return (
+                <React.Fragment key={ansatt.id}>
+                  {/* Label */}
+                  <div className="uke-row-label ferie-label-col" style={{ background: rowIdx % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                    <div className="mini-avatar" style={{ background: ansatt.innleie ? '#f97316' : fagColor(ansatt.fag), flexShrink: 0 }}>
+                      {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="row-navn" style={{ fontSize: 12 }}>{ansatt.navn}</div>
+                      <div className="row-fag" style={{ color: fagColor(ansatt.fag), fontSize: 10 }}>
+                        {ansatt.innleie && <span style={{ color: '#f97316', marginRight: 2 }}>🔧</span>}
+                        {totalDager > 0
+                          ? <span style={{ color: '#16a34a', fontWeight: 600 }}>🏖 {totalDager} dager</span>
+                          : ansatt.fag}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Ferie bar row */}
+                  <div className="gantt-row ferie-bar-row"
+                    style={{
+                      gridColumn: '2 / -1',
+                      background: rowIdx % 2 === 0 ? '#fff' : '#f8fafc',
+                      cursor: 'pointer',
+                    }}
+                    onClick={e => {
+                      if (e.target === e.currentTarget || e.target.classList.contains('gantt-bg-cell')) {
+                        openAddFerie(ansatt.id);
+                      }
+                    }}
+                  >
+                    {/* Month background cells */}
+                    {ferieMonths.map((m, i) => {
+                      const isThisMonth = m.slice(0, 7) === today.slice(0, 7);
+                      return (
+                        <div key={m}
+                          className={`gantt-bg-cell${isThisMonth ? ' today-col' : ''}`}
+                          style={{ left: `${(i / FERIE_MND) * 100}%`, width: `${100 / FERIE_MND}%` }}
+                          onClick={() => openAddFerie(ansatt.id)}
+                        />
+                      );
+                    })}
+
+                    {/* Ferie bars */}
+                    {ferieList.map(t => {
+                      const pos = getBarPos(t);
+                      if (!pos) return null;
+                      const label = `${formatDate(t.startDato)} – ${formatDate(t.sluttDato)} (${ferieDager(t)} dg)`;
+                      return (
+                        <div key={t.id}
+                          className="gantt-bar gantt-bar-ferie"
+                          style={{ left: pos.left, width: pos.width }}
+                          title={label}
+                          onClick={e => {
+                            e.stopPropagation();
+                            if (window.confirm(`Slett ferie?\n${label}`)) deleteTildeling(t.id);
+                          }}
+                        >
+                          <span className="gantt-label" style={{ fontSize: 10 }}>{label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+
+        {sortedAnsatte.length === 0 && (
+          <div className="empty">Ingen ansatte registrert.</div>
+        )}
+      </div>
+    );
+  }
+
   // --- PROSJEKTOVERSIKT ---
   function ProsjektOversiktVisning() {
     const today = dateToIso(new Date());
@@ -931,12 +1088,16 @@ export default function Bemanningsplan() {
         <button className={`tab-btn ${tab === 'prosjekt' ? 'active' : ''}`} onClick={() => setTab('prosjekt')}>
           Prosjektoversikt
         </button>
+        <button className={`tab-btn ${tab === 'ferie' ? 'active' : ''}`} onClick={() => setTab('ferie')}>
+          🏖 Ferie
+        </button>
       </div>
 
       <div ref={storskjermContentRef}>
         {tab === 'uke' && UkeVisning()}
         {tab === 'ressurs' && RessursVisning()}
         {tab === 'prosjekt' && ProsjektOversiktVisning()}
+        {tab === 'ferie' && FerieVisning()}
       </div>
 
       {splitModal && (

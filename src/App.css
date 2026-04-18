@@ -461,6 +461,19 @@ body {
   pointer-events: none;
 }
 
+/* ─── Ferieoversikt ─────────────────────────────────────────────────────── */
+.ferie-grid {
+  display: grid;
+  grid-template-columns: 180px repeat(12, 1fr);
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+  min-width: 700px;
+}
+.ferie-label-col { width: 180px; min-width: 180px; }
+.ferie-month-col { min-width: 0; }
+.ferie-bar-row   { position: relative; height: 40px; }
+
 .gantt-bar-ferie {
   background: repeating-linear-gradient(
     45deg,
