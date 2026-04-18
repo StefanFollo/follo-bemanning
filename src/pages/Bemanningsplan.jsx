@@ -885,6 +885,107 @@ export default function Bemanningsplan() {
     );
   }
 
+  // --- BURSDAGSKALENDER ---
+  function BursdagVisning() {
+    const today = dateToIso(new Date());
+    const todayMM = today.slice(5, 7);
+    const todayDD = today.slice(8, 10);
+
+    // Group ansatte by birth month (bursdag format "MM-DD")
+    const byMonth = Array.from({ length: 12 }, () => []);
+    for (const a of state.ansatte) {
+      if (!a.bursdag) continue;
+      const mi = parseInt(a.bursdag.slice(0, 2), 10) - 1;
+      if (mi >= 0 && mi < 12) byMonth[mi].push(a);
+    }
+    // Sort each month by day
+    for (const arr of byMonth) arr.sort((a, b) => a.bursdag.slice(3).localeCompare(b.bursdag.slice(3)));
+
+    // Upcoming birthdays in the next 30 days
+    const upcoming = [];
+    for (let offset = 0; offset <= 30; offset++) {
+      const d = new Date(today + 'T00:00:00');
+      d.setDate(d.getDate() + offset);
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const md = `${mm}-${dd}`;
+      for (const a of state.ansatte) {
+        if (a.bursdag === md) upcoming.push({ ansatt: a, offset, md });
+      }
+    }
+
+    const totalMedBursdag = state.ansatte.filter(a => a.bursdag).length;
+
+    return (
+      <div>
+        <div className="uke-nav">
+          <span className="uke-label">🎂 Bursdagskalender</span>
+          <span style={{ fontSize: 13, color: '#94a3b8' }}>
+            {totalMedBursdag} av {state.ansatte.length} ansatte har registrert bursdag
+          </span>
+        </div>
+
+        {/* Upcoming birthdays */}
+        {upcoming.length > 0 && (
+          <div className="bursdag-upcoming">
+            {upcoming.map(({ ansatt, offset, md }) => {
+              const isToday = offset === 0;
+              const dayLabel = isToday ? 'I dag!' : offset === 1 ? 'I morgen' : `Om ${offset} dager`;
+              return (
+                <div key={ansatt.id + md} className={`bursdag-upcoming-item${isToday ? ' bursdag-today-item' : ''}`}>
+                  <span className="bursdag-upcoming-emoji">{isToday ? '🎉' : '🎂'}</span>
+                  <div className="mini-avatar" style={{ background: ansatt.innleie ? '#f97316' : fagColor(ansatt.fag), width: 28, height: 28, fontSize: 10, flexShrink: 0 }}>
+                    {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{ansatt.navn}</div>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>{ansatt.fag}</div>
+                  </div>
+                  <span className={`bursdag-upcoming-label${isToday ? ' today' : ''}`}>{dayLabel}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 12-month grid */}
+        <div className="bursdag-grid">
+          {MAANED_NAVN.map((mnd, mi) => {
+            const isThisMonth = String(mi + 1).padStart(2, '0') === todayMM;
+            const employees = byMonth[mi];
+            return (
+              <div key={mi} className={`bursdag-month-card${isThisMonth ? ' current-month' : ''}`}>
+                <div className="bursdag-month-header">{mnd}</div>
+                {employees.length === 0 ? (
+                  <div className="bursdag-empty">Ingen</div>
+                ) : (
+                  employees.map(a => {
+                    const dd = a.bursdag.slice(3);
+                    const isToday = isThisMonth && dd === todayDD;
+                    return (
+                      <div key={a.id} className={`bursdag-item${isToday ? ' bursdag-today' : ''}`}>
+                        <span className="bursdag-day">{parseInt(dd, 10)}.</span>
+                        <div className="mini-avatar" style={{ background: a.innleie ? '#f97316' : fagColor(a.fag), width: 20, height: 20, fontSize: 9, flexShrink: 0 }}>
+                          {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                        </div>
+                        <span className="bursdag-navn">{a.navn}</span>
+                        {isToday && <span>🎉</span>}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {totalMedBursdag === 0 && (
+          <div className="empty">Ingen bursdager registrert ennå. Gå til Ansatte og legg inn bursdag (dag og måned).</div>
+        )}
+      </div>
+    );
+  }
+
   // --- PROSJEKTOVERSIKT ---
   function ProsjektOversiktVisning() {
     const today = dateToIso(new Date());
@@ -1091,6 +1192,9 @@ export default function Bemanningsplan() {
         <button className={`tab-btn ${tab === 'ferie' ? 'active' : ''}`} onClick={() => setTab('ferie')}>
           🏖 Ferie
         </button>
+        <button className={`tab-btn ${tab === 'bursdag' ? 'active' : ''}`} onClick={() => setTab('bursdag')}>
+          🎂 Bursdag
+        </button>
       </div>
 
       <div ref={storskjermContentRef}>
@@ -1098,6 +1202,7 @@ export default function Bemanningsplan() {
         {tab === 'ressurs' && RessursVisning()}
         {tab === 'prosjekt' && ProsjektOversiktVisning()}
         {tab === 'ferie' && FerieVisning()}
+        {tab === 'bursdag' && BursdagVisning()}
       </div>
 
       {splitModal && (

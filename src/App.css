@@ -482,6 +482,99 @@ body {
   ) !important;
   color: white !important;
 }
+/* ─── Bursdagskalender ───────────────────────────────────────────────────── */
+.bursdag-upcoming {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.bursdag-upcoming-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 14px;
+}
+.bursdag-today-item {
+  border-color: #f59e0b;
+  background: #fffbeb;
+}
+.bursdag-upcoming-emoji { font-size: 18px; }
+.bursdag-upcoming-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #64748b;
+  background: #f1f5f9;
+  border-radius: 6px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+.bursdag-upcoming-label.today {
+  background: #f59e0b;
+  color: #fff;
+}
+
+.bursdag-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+.bursdag-month-card {
+  background: #fff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  min-height: 60px;
+}
+.bursdag-month-card.current-month {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+.bursdag-month-header {
+  font-weight: 700;
+  font-size: 12px;
+  color: #64748b;
+  margin-bottom: 6px;
+  padding-bottom: 5px;
+  border-bottom: 1px solid #e2e8f0;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.bursdag-month-card.current-month .bursdag-month-header { color: #3b82f6; border-color: #bfdbfe; }
+.bursdag-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 2px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+.bursdag-today {
+  background: #fef9c3;
+  font-weight: 600;
+}
+.bursdag-day {
+  font-variant-numeric: tabular-nums;
+  min-width: 22px;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 600;
+}
+.bursdag-navn {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bursdag-empty {
+  color: #cbd5e1;
+  font-size: 11px;
+  font-style: italic;
+}
+
 .gantt-handle {
   cursor: ew-resize;
   padding: 0 5px;

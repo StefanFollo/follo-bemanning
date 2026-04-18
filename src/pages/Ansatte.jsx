@@ -28,7 +28,15 @@ function Modal({ title, onClose, children }) {
   );
 }
 
-const EMPTY = { navn: '', fag: '', telefon: '', epost: '', innleie: false };
+const EMPTY = { navn: '', fag: '', telefon: '', epost: '', innleie: false, bursdag: '' };
+
+const MND_NAVN = ['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
+
+function bursdagLabel(bursdag) {
+  if (!bursdag) return '';
+  const [mm, dd] = bursdag.split('-');
+  return `${parseInt(dd, 10)}. ${MND_NAVN[parseInt(mm, 10) - 1]}`;
+}
 
 export default function Ansatte() {
   const { state, dispatch } = useApp();
@@ -163,6 +171,7 @@ export default function Ansatte() {
             <div className="ct-col ct-fag">Fag</div>
             <div className="ct-col ct-kontakt">Telefon</div>
             <div className="ct-col ct-kontakt">E-post</div>
+            <div className="ct-col ct-kontakt">Bursdag</div>
             <div className="ct-col ct-actions"></div>
           </div>
           {ansatte.map(a => (
@@ -185,6 +194,11 @@ export default function Ansatte() {
               </div>
               <div className="ct-col ct-kontakt">{a.telefon || <span style={{ color: '#cbd5e1' }}>–</span>}</div>
               <div className="ct-col ct-kontakt">{a.epost || <span style={{ color: '#cbd5e1' }}>–</span>}</div>
+              <div className="ct-col ct-kontakt">
+                {a.bursdag
+                  ? <span style={{ color: '#ec4899' }}>🎂 {bursdagLabel(a.bursdag)}</span>
+                  : <span style={{ color: '#cbd5e1' }}>–</span>}
+              </div>
               <div className="ct-col ct-actions">
                 <button className="btn btn-sm" onClick={() => openEdit(a)}>Rediger</button>
                 <button className="btn btn-sm btn-danger" onClick={() => handleDelete(a.id)}>Slett</button>
@@ -230,6 +244,41 @@ export default function Ansatte() {
             <input value={form.telefon} onChange={e => setForm(f => ({ ...f, telefon: e.target.value }))} placeholder="+47 000 00 000" />
             <label>E-post</label>
             <input value={form.epost} onChange={e => setForm(f => ({ ...f, epost: e.target.value }))} placeholder="navn@epost.no" />
+            <label>🎂 Bursdag (dag og måned)</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <select
+                value={form.bursdag ? form.bursdag.split('-')[0] : ''}
+                onChange={e => {
+                  const mm = e.target.value;
+                  const dd = form.bursdag ? form.bursdag.split('-')[1] || '01' : '01';
+                  setForm(f => ({ ...f, bursdag: mm ? `${mm}-${dd}` : '' }));
+                }}
+                style={{ flex: 1 }}
+              >
+                <option value="">– Velg måned –</option>
+                {MND_NAVN.map((m, i) => (
+                  <option key={i} value={String(i + 1).padStart(2, '0')}>{m}</option>
+                ))}
+              </select>
+              <select
+                value={form.bursdag ? form.bursdag.split('-')[1] || '' : ''}
+                onChange={e => {
+                  const dd = e.target.value;
+                  const mm = form.bursdag ? form.bursdag.split('-')[0] || '01' : '01';
+                  setForm(f => ({ ...f, bursdag: dd ? `${mm}-${dd}` : '' }));
+                }}
+                style={{ flex: 1 }}
+                disabled={!form.bursdag || !form.bursdag.split('-')[0]}
+              >
+                <option value="">– Velg dag –</option>
+                {Array.from({ length: 31 }, (_, i) => i + 1).map(d => (
+                  <option key={d} value={String(d).padStart(2, '0')}>{d}.</option>
+                ))}
+              </select>
+              {form.bursdag && (
+                <button type="button" className="btn" onClick={() => setForm(f => ({ ...f, bursdag: '' }))}>✕</button>
+              )}
+            </div>
             <div className="form-actions">
               <button className="btn" onClick={() => setShowModal(false)}>Avbryt</button>
               <button className="btn btn-primary" onClick={handleSave}>Lagre</button>
