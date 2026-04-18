@@ -387,7 +387,10 @@ export default function Bemanningsplan() {
             </div>
             <div>
               <div className="row-navn">{ansatt.navn}</div>
-              <div className="row-fag" style={{ color: fagColor(ansatt.fag) }}>{ansatt.fag}</div>
+              <div className="row-fag" style={{ color: fagColor(ansatt.fag) }}>
+                {ansatt.innleie && <span style={{ color: '#f97316', fontWeight: 600, marginRight: 3 }}>🔧</span>}
+                {ansatt.fag}
+              </div>
             </div>
           </div>
           <GanttRowContainer ansatt={ansatt} days={weekDays} unit="day" prosjektId={prosjektId} />
@@ -502,7 +505,10 @@ export default function Bemanningsplan() {
             </div>
             <div>
               <div className="row-navn">{ansatt.navn}</div>
-              <div className="row-fag" style={{ color: fagColor(ansatt.fag) }}>{ansatt.fag}</div>
+              <div className="row-fag" style={{ color: fagColor(ansatt.fag) }}>
+                {ansatt.innleie && <span style={{ color: '#f97316', fontWeight: 600, marginRight: 3 }}>🔧</span>}
+                {ansatt.fag}
+              </div>
             </div>
           </div>
           <GanttRowContainer ansatt={ansatt} days={WORK_DAYS_UKE} unit="day_50" prosjektId={prosjektId} />
@@ -564,7 +570,10 @@ export default function Bemanningsplan() {
             </div>
             <div>
               <div className="row-navn">{ansatt.navn}</div>
-              <div className="row-fag" style={{ color: fagColor(ansatt.fag) }}>{ansatt.fag}</div>
+              <div className="row-fag" style={{ color: fagColor(ansatt.fag) }}>
+                {ansatt.innleie && <span style={{ color: '#f97316', fontWeight: 600, marginRight: 3 }}>🔧</span>}
+                {ansatt.fag}
+              </div>
             </div>
           </div>
           <GanttRowContainer ansatt={ansatt} days={SIX_MONTHS} unit="month" prosjektId={prosjektId} />
@@ -981,7 +990,11 @@ export default function Bemanningsplan() {
           <div className="form">
             <label>Ansatt *</label>
             <select value={tilForm.ansattId} onChange={e => setTilForm(f => ({ ...f, ansattId: e.target.value }))}>
-              {state.ansatte.map(a => <option key={a.id} value={a.id}>{a.navn} ({a.fag})</option>)}
+              {state.ansatte.map(a => (
+                <option key={a.id} value={a.id}>
+                  {a.innleie ? '🔧 ' : ''}{a.navn} ({a.fag})
+                </option>
+              ))}
             </select>
 
             <label>{tilForm.prosjektId === FERIE_ID ? 'Type' : 'Prosjekt *'}</label>

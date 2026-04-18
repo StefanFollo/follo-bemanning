@@ -28,7 +28,7 @@ function Modal({ title, onClose, children }) {
   );
 }
 
-const EMPTY = { navn: '', fag: '', telefon: '', epost: '' };
+const EMPTY = { navn: '', fag: '', telefon: '', epost: '', innleie: false };
 
 export default function Ansatte() {
   const { state, dispatch } = useApp();
@@ -39,10 +39,11 @@ export default function Ansatte() {
   const [nyttFag, setNyttFag] = useState('');
   const [filterFag, setFilterFag] = useState('alle');
   const [search, setSearch] = useState('');
+  const [gruppe, setGruppe] = useState('fast'); // 'fast' | 'innleie'
 
   function openNew() {
     setEditing(null);
-    setForm({ ...EMPTY, fag: state.fag[0] || '' });
+    setForm({ ...EMPTY, fag: state.fag[0] || '', innleie: gruppe === 'innleie' });
     setShowModal(true);
   }
 
@@ -80,9 +81,15 @@ export default function Ansatte() {
     }
   }
 
-  const ansatte = state.ansatte
+  const alleIGruppe = state.ansatte.filter(a =>
+    gruppe === 'fast' ? !a.innleie : !!a.innleie
+  );
+  const ansatte = alleIGruppe
     .filter(a => filterFag === 'alle' || a.fag === filterFag)
     .filter(a => !search || a.navn.toLowerCase().includes(search.toLowerCase()));
+
+  const fastCount    = state.ansatte.filter(a => !a.innleie).length;
+  const innleieCount = state.ansatte.filter(a => !!a.innleie).length;
 
   return (
     <div className="page">
@@ -90,37 +97,63 @@ export default function Ansatte() {
         <h2>Ansatte <span className="count-badge">{state.ansatte.length}</span></h2>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={() => setShowFagModal(true)}>Administrer fag</button>
-          <button className="btn btn-primary" onClick={openNew}>+ Ny ansatt</button>
+          <button className="btn btn-primary" onClick={openNew}>
+            + {gruppe === 'innleie' ? 'Ny innleie' : 'Ny ansatt'}
+          </button>
         </div>
+      </div>
+
+      {/* Gruppe-tabs */}
+      <div className="tab-bar" style={{ marginBottom: 8 }}>
+        <button
+          className={`tab-btn ${gruppe === 'fast' ? 'active' : ''}`}
+          onClick={() => { setGruppe('fast'); setFilterFag('alle'); }}
+        >
+          👷 Fast ansatte <span className="count-badge" style={{ marginLeft: 4 }}>{fastCount}</span>
+        </button>
+        <button
+          className={`tab-btn ${gruppe === 'innleie' ? 'active' : ''}`}
+          onClick={() => { setGruppe('innleie'); setFilterFag('alle'); }}
+        >
+          🔧 Innleie <span className="count-badge" style={{ marginLeft: 4 }}>{innleieCount}</span>
+        </button>
       </div>
 
       <div className="toolbar">
         <div className="filter-bar" style={{ marginBottom: 0 }}>
           <button className={`filter-btn ${filterFag === 'alle' ? 'active' : ''}`} onClick={() => setFilterFag('alle')}>
-            Alle ({state.ansatte.length})
+            Alle ({alleIGruppe.length})
           </button>
-          {state.fag.map(f => (
-            <button
-              key={f}
-              className={`filter-btn ${filterFag === f ? 'active' : ''}`}
-              style={filterFag === f ? { background: fagColor(f), borderColor: fagColor(f) } : {}}
-              onClick={() => setFilterFag(f)}
-            >
-              <span className="fag-dot" style={{ background: fagColor(f), display: 'inline-block', marginRight: 4 }} />
-              {f} ({state.ansatte.filter(a => a.fag === f).length})
-            </button>
-          ))}
+          {state.fag.map(f => {
+            const cnt = alleIGruppe.filter(a => a.fag === f).length;
+            if (cnt === 0) return null;
+            return (
+              <button
+                key={f}
+                className={`filter-btn ${filterFag === f ? 'active' : ''}`}
+                style={filterFag === f ? { background: fagColor(f), borderColor: fagColor(f) } : {}}
+                onClick={() => setFilterFag(f)}
+              >
+                <span className="fag-dot" style={{ background: fagColor(f), display: 'inline-block', marginRight: 4 }} />
+                {f} ({cnt})
+              </button>
+            );
+          })}
         </div>
         <input
           className="search-input"
-          placeholder="Søk ansatt..."
+          placeholder={`Søk ${gruppe === 'innleie' ? 'innleie' : 'ansatt'}...`}
           value={search}
           onChange={e => setSearch(e.target.value)}
         />
       </div>
 
       {ansatte.length === 0 ? (
-        <div className="empty">Ingen ansatte funnet.</div>
+        <div className="empty">
+          {gruppe === 'innleie'
+            ? 'Ingen innleide arbeidere ennå. Klikk "+ Ny innleie" for å legge til.'
+            : 'Ingen ansatte funnet.'}
+        </div>
       ) : (
         <div className="compact-table">
           <div className="ct-header">
@@ -133,10 +166,15 @@ export default function Ansatte() {
           {ansatte.map(a => (
             <div className="ct-row" key={a.id}>
               <div className="ct-col ct-ansatt-navn">
-                <div className="ct-avatar" style={{ background: fagColor(a.fag) }}>
+                <div className="ct-avatar" style={{ background: a.innleie ? '#f97316' : fagColor(a.fag) }}>
                   {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                 </div>
-                <span className="ct-prosjekt-navn">{a.navn}</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <span className="ct-prosjekt-navn">{a.navn}</span>
+                  {a.innleie && (
+                    <span style={{ fontSize: 10, color: '#f97316', fontWeight: 600, letterSpacing: '0.03em' }}>INNLEIE</span>
+                  )}
+                </div>
               </div>
               <div className="ct-col ct-fag">
                 <span className="fag-tag" style={{ background: fagColor(a.fag) + '22', color: fagColor(a.fag), borderColor: fagColor(a.fag) + '55' }}>
@@ -155,11 +193,34 @@ export default function Ansatte() {
       )}
 
       {showModal && (
-        <Modal title={editing ? 'Rediger ansatt' : 'Ny ansatt'} onClose={() => setShowModal(false)}>
+        <Modal
+          title={editing ? (form.innleie ? 'Rediger innleie' : 'Rediger ansatt') : (form.innleie ? 'Ny innleie' : 'Ny ansatt')}
+          onClose={() => setShowModal(false)}
+        >
           <div className="form">
+            {/* Type toggle */}
+            <label>Type</label>
+            <div style={{ display: 'flex', gap: 6, marginBottom: 4 }}>
+              <button
+                type="button"
+                className={`filter-btn${!form.innleie ? ' active' : ''}`}
+                style={!form.innleie ? { background: '#1e293b', borderColor: '#1e293b', color: '#fff' } : {}}
+                onClick={() => setForm(f => ({ ...f, innleie: false }))}
+              >
+                👷 Fast ansatt
+              </button>
+              <button
+                type="button"
+                className={`filter-btn${form.innleie ? ' active' : ''}`}
+                style={form.innleie ? { background: '#f97316', borderColor: '#f97316', color: '#fff' } : {}}
+                onClick={() => setForm(f => ({ ...f, innleie: true }))}
+              >
+                🔧 Innleie
+              </button>
+            </div>
             <label>Navn *</label>
             <input value={form.navn} onChange={e => setForm(f => ({ ...f, navn: e.target.value }))} placeholder="Fullt navn" />
-            <label>Fag</label>
+            <label>Fag / Stilling</label>
             <select value={form.fag} onChange={e => setForm(f => ({ ...f, fag: e.target.value }))}>
               {state.fag.map(f => <option key={f} value={f}>{f}</option>)}
             </select>
