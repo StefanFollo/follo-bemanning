@@ -181,7 +181,7 @@ function nextAutoColor(prosjekter) {
 
 const JOBB_TYPER = ['Ny bygg', 'Tilbygg', 'Tak jobb', 'Fasade jobb', 'Bad', 'Tømrer', 'Maling', 'Rørlegger', 'Flislegging', 'Elektro', 'Rehabilitering', 'Annet'];
 
-const EMPTY = { navn: '', adresse: '', jobbType: '', startDato: '', sluttDato: '', status: 'jobber_med', beskrivelse: '', farge: PROSJEKT_PALETTE[0], belop: '', manskapAntall: '' };
+const EMPTY = { navn: '', adresse: '', jobbType: '', startDato: '', sluttDato: '', status: 'jobber_med', beskrivelse: '', farge: PROSJEKT_PALETTE[0], belop: '', manskapAntall: '', prosjektlederId: '' };
 
 // Normaliser gammel status til visningsgruppe
 function normStatus(s) {
@@ -347,6 +347,9 @@ export default function Prosjekter() {
                     const barColor = p.farge || color;
                     const belopVis = formaterBelop(p.belop);
                     const varighetVis = varighetUker(p.startDato, p.sluttDato);
+                    const prosjektleder = p.prosjektlederId
+                      ? state.ansatte.find(a => a.id === p.prosjektlederId)
+                      : null;
 
                     return (
                       <div className="ct-row" key={p.id}>
@@ -383,6 +386,11 @@ export default function Prosjekter() {
                               )}
                               {p.manskapAntall && (
                                 <span className="proj-meta-pill">👷 {p.manskapAntall} mann</span>
+                              )}
+                              {prosjektleder && (
+                                <span className="proj-meta-pill proj-meta-pl">
+                                  🧑‍💼 {prosjektleder.navn.split(' ')[0]}
+                                </span>
                               )}
                             </div>
                           </div>
@@ -430,6 +438,15 @@ export default function Prosjekter() {
             <select value={form.jobbType || ''} onChange={e => setForm(f => ({ ...f, jobbType: e.target.value }))}>
               <option value="">– Velg type –</option>
               {JOBB_TYPER.map(j => <option key={j} value={j}>{j}</option>)}
+            </select>
+            <label>Prosjektleder</label>
+            <select value={form.prosjektlederId || ''} onChange={e => setForm(f => ({ ...f, prosjektlederId: e.target.value }))}>
+              <option value="">– Ingen valgt –</option>
+              {[...state.ansatte]
+                .sort((a, b) => a.navn.localeCompare(b.navn, 'nb'))
+                .map(a => (
+                  <option key={a.id} value={a.id}>{a.navn}{a.fag ? ` (${a.fag})` : ''}</option>
+                ))}
             </select>
             <label>Status</label>
             <select value={normStatus(form.status)} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
