@@ -64,6 +64,10 @@ export default function Bemanningsplan() {
   const [ukeMode, setUkeMode] = useState('dag'); // 'dag' | 'uke' | 'maaned'
   const [ferieYearOffset, setFerieYearOffset] = useState(0);
   const [ganttPageOffset, setGanttPageOffset] = useState(0);
+  const [ansatteOrder, setAnsatteOrder] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('fbs_ansatte_order') || '[]'); } catch { return []; }
+  });
+  const oversiktDragId = useRef(null);
   const [currentWeek, setCurrentWeek] = useState(() => weekStart(dateToIso(new Date())));
   const [currentMonth, setCurrentMonth] = useState(() => monthStart(dateToIso(new Date())));
   const [showModal, setShowModal] = useState(false);
@@ -787,8 +791,29 @@ export default function Bemanningsplan() {
     }
 
     const DAY_NAMES = ['Ma', 'Ti', 'On', 'To', 'Fr'];
-    const sortedAnsatte = [...state.ansatte].sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
     const todayIdx = allDays.indexOf(today);
+
+    // Build ordered employee list (custom order or alphabetical fallback)
+    const orderedAnsatte = (() => {
+      const alpha = [...state.ansatte].sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+      if (!ansatteOrder || ansatteOrder.length === 0) return alpha;
+      const inOrder = new Set(ansatteOrder);
+      const ordered = ansatteOrder.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
+      const rest = alpha.filter(a => !inOrder.has(a.id));
+      return [...ordered, ...rest];
+    })();
+
+    // Drag-and-drop helpers (manipulate DOM directly — no state re-renders during drag)
+    function clearDragOver() {
+      document.querySelectorAll('.oversikt-row[data-dragover]').forEach(el => {
+        delete el.dataset.dragover;
+      });
+    }
+
+    function saveOrder(newOrder) {
+      setAnsatteOrder(newOrder);
+      localStorage.setItem('fbs_ansatte_order', JSON.stringify(newOrder));
+    }
 
     return (
       <div>
@@ -800,6 +825,10 @@ export default function Bemanningsplan() {
           </span>
           <button className="btn" onClick={() => setGanttPageOffset(0)}>I dag</button>
           <button className="btn" onClick={() => setGanttPageOffset(o => o + 1)}>Neste →</button>
+          {ansatteOrder.length > 0 && (
+            <button className="btn" title="Tilbakestill til alfabetisk rekkefølge"
+              onClick={() => saveOrder([])}>↺ Alfabetisk</button>
+          )}
           <button className="btn btn-primary no-print" onClick={() => openAddTildeling()}>+ Ny tildeling</button>
         </div>
 
@@ -841,18 +870,54 @@ export default function Bemanningsplan() {
             </div>
 
             {/* ── Ansatte-rader ──────────────────────────────── */}
-            {sortedAnsatte.map((ansatt, ri) => {
+            {orderedAnsatte.map((ansatt, ri) => {
               const myTils = state.tildelinger
                 .filter(t => t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, viewStart, viewEnd))
-                // render project bars first, ferie bars on top
                 .sort((a, b) => (a.prosjektId === FERIE_ID ? 1 : 0) - (b.prosjektId === FERIE_ID ? 1 : 0));
 
               return (
-                <div key={ansatt.id} className={`oversikt-row${ri % 2 === 0 ? '' : ' alt'}`}
-                  style={{ height: ROW_H }}>
+                <div key={ansatt.id}
+                  className={`oversikt-row${ri % 2 === 0 ? '' : ' alt'}`}
+                  style={{ height: ROW_H }}
+                  draggable
+                  onDragStart={e => {
+                    oversiktDragId.current = ansatt.id;
+                    e.dataTransfer.effectAllowed = 'move';
+                    e.currentTarget.classList.add('dragging');
+                  }}
+                  onDragEnd={e => {
+                    oversiktDragId.current = null;
+                    e.currentTarget.classList.remove('dragging');
+                    clearDragOver();
+                  }}
+                  onDragOver={e => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = 'move';
+                    clearDragOver();
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    e.currentTarget.dataset.dragover = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+                  }}
+                  onDragLeave={e => {
+                    if (!e.currentTarget.contains(e.relatedTarget)) delete e.currentTarget.dataset.dragover;
+                  }}
+                  onDrop={e => {
+                    e.preventDefault();
+                    delete e.currentTarget.dataset.dragover;
+                    const fromId = oversiktDragId.current;
+                    const toId   = ansatt.id;
+                    if (!fromId || fromId === toId) return;
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const pos  = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+                    const ids  = orderedAnsatte.map(a => a.id).filter(id => id !== fromId);
+                    const at   = ids.indexOf(toId) + (pos === 'after' ? 1 : 0);
+                    ids.splice(at, 0, fromId);
+                    saveOrder(ids);
+                  }}
+                >
 
                   {/* Sticky name label */}
                   <div className="oversikt-row-label" style={{ width: LABEL_W, height: ROW_H }}>
+                    <span className="oversikt-drag-handle" title="Dra for å flytte">⠿</span>
                     <div className="mini-avatar" style={{
                       background: ansatt.innleie ? '#f97316' : fagColor(ansatt.fag),
                       width: 22, height: 22, fontSize: 9, flexShrink: 0,
