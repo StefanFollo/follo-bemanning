@@ -461,6 +461,189 @@ body {
   pointer-events: none;
 }
 
+/* ─── Oversikt (multi-uke Gantt) ────────────────────────────────────────── */
+.oversikt-scroll-wrap {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: calc(100vh - 210px);
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+/* Week header row */
+.oversikt-wk-header-row {
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.oversikt-corner {
+  background: #1e293b;
+  border-right: 1px solid #334155;
+  flex-shrink: 0;
+  height: 26px;
+}
+.oversikt-wk-cell {
+  background: #1e293b;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 0 8px;
+  border-right: 2px solid #334155;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.oversikt-wk-cell.current { background: #1d4ed8; color: #fff; border-right-color: #1e40af; }
+
+/* Day header row */
+.oversikt-day-header-row {
+  display: flex;
+  position: sticky;
+  top: 26px;
+  z-index: 10;
+}
+.oversikt-day-corner {
+  background: #f8fafc;
+  border-right: 2px solid #e2e8f0;
+  border-bottom: 2px solid #e2e8f0;
+  flex-shrink: 0;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  position: sticky;
+  left: 0;
+  z-index: 11;
+}
+.oversikt-day-cell {
+  background: #f8fafc;
+  border-right: 1px solid #e2e8f0;
+  border-bottom: 2px solid #e2e8f0;
+  text-align: center;
+  font-size: 9px;
+  color: #94a3b8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  flex-shrink: 0;
+  gap: 1px;
+  line-height: 1.2;
+}
+.oversikt-day-cell.today   { background: #eff6ff; color: #2563eb; font-weight: 700; }
+.oversikt-day-cell.holiday { background: #fef2f2; color: #ef4444; }
+.oversikt-day-cell.week-last { border-right: 2px solid #cbd5e1; }
+
+/* Employee rows */
+.oversikt-row {
+  display: flex;
+  border-bottom: 1px solid #f1f5f9;
+}
+.oversikt-row.alt .oversikt-row-label,
+.oversikt-row.alt .oversikt-bars-area { background: #f8fafc; }
+
+.oversikt-row-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-right: 2px solid #e2e8f0;
+  font-size: 11px;
+  font-weight: 500;
+  color: #1e293b;
+  white-space: nowrap;
+  overflow: hidden;
+  background: #fff;
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  flex-shrink: 0;
+}
+.oversikt-row-navn {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.oversikt-row.alt .oversikt-row-label { background: #f8fafc; }
+
+.oversikt-bars-area {
+  background: #fff;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.oversikt-bg-cell {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-right: 1px solid #f1f5f9;
+  cursor: pointer;
+}
+.oversikt-bg-cell:hover    { background: rgba(37,99,235,0.04); }
+.oversikt-bg-cell.today-col   { background: rgba(37,99,235,0.06); }
+.oversikt-bg-cell.holiday-col { background: rgba(239,68,68,0.04); }
+.oversikt-bg-cell.week-last   { border-right: 2px solid #e2e8f0; }
+
+.oversikt-needle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #ef4444;
+  z-index: 3;
+  pointer-events: none;
+  transform: translateX(-50%);
+  opacity: 0.7;
+}
+
+.oversikt-bar {
+  position: absolute;
+  top: 3px;
+  height: calc(100% - 6px);
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  padding: 0 7px;
+  overflow: hidden;
+  white-space: nowrap;
+  z-index: 1;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,.18);
+  transition: filter .12s;
+}
+.oversikt-bar:hover { filter: brightness(1.12); }
+.oversikt-bar-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0,0,0,.4);
+  pointer-events: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oversikt-bar-ferie {
+  background: repeating-linear-gradient(
+    45deg,
+    #1e293b 0px, #1e293b 5px,
+    #94a3b8 5px, #94a3b8 10px
+  ) !important;
+}
+
 /* ─── Ferieoversikt ─────────────────────────────────────────────────────── */
 .ferie-grid {
   display: grid;

@@ -63,6 +63,7 @@ export default function Bemanningsplan() {
   const storskjermContentRef = useRef(null);
   const [ukeMode, setUkeMode] = useState('dag'); // 'dag' | 'uke' | 'maaned'
   const [ferieYearOffset, setFerieYearOffset] = useState(0);
+  const [ganttPageOffset, setGanttPageOffset] = useState(0);
   const [currentWeek, setCurrentWeek] = useState(() => weekStart(dateToIso(new Date())));
   const [currentMonth, setCurrentMonth] = useState(() => monthStart(dateToIso(new Date())));
   const [showModal, setShowModal] = useState(false);
@@ -729,6 +730,193 @@ export default function Bemanningsplan() {
     );
   }
 
+  // --- MULTI-UKE GANTT OVERSIKT ---
+  function OversiktVisning() {
+    const today = dateToIso(new Date());
+    const GANTT_WEEKS = 10;
+    const DAY_W = 36;   // px per weekday
+    const ROW_H = 34;   // px per employee row
+    const LABEL_W = 162;
+
+    const thisYear = new Date().getFullYear();
+    const HOLIDAYS = getHolidayMap(thisYear - 1, thisYear + 2);
+
+    // Page-based navigation: each page = GANTT_WEEKS weeks
+    const baseWeek = weekStart(addDays(today, ganttPageOffset * GANTT_WEEKS * 7));
+
+    const weeks = [];
+    for (let w = 0; w < GANTT_WEEKS; w++) {
+      const wStart = addDays(baseWeek, w * 7);
+      const wDays = [0, 1, 2, 3, 4].map(d => addDays(wStart, d));
+      weeks.push({ start: wStart, end: wDays[4], days: wDays });
+    }
+
+    const allDays = weeks.flatMap(w => w.days);
+    const viewStart = allDays[0];
+    const viewEnd   = allDays[allDays.length - 1];
+    const totalW    = allDays.length * DAY_W;
+
+    function wkNr(isoDate) {
+      const d = new Date(isoDate + 'T00:00:00');
+      d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+      const w = new Date(d.getFullYear(), 0, 4);
+      return 1 + Math.round(((d - w) / 86400000 - 3 + ((w.getDay() + 6) % 7)) / 7);
+    }
+
+    function weekLabel(wk) {
+      const sD = parseInt(wk.start.slice(8), 10);
+      const sM = parseInt(wk.start.slice(5, 7), 10) - 1;
+      const eD = parseInt(wk.end.slice(8), 10);
+      const eM = parseInt(wk.end.slice(5, 7), 10) - 1;
+      const range = sM === eM
+        ? `${sD}.–${eD}. ${MAANED_NAVN[sM].slice(0, 3).toLowerCase()}`
+        : `${sD}. ${MAANED_NAVN[sM].slice(0, 3).toLowerCase()} – ${eD}. ${MAANED_NAVN[eM].slice(0, 3).toLowerCase()}`;
+      return `${wkNr(wk.start)} · ${range}`;
+    }
+
+    // Pixel position of a tildeling bar within the allDays array
+    function barProps(t) {
+      if (!overlaps(t.startDato, t.sluttDato, viewStart, viewEnd)) return null;
+      const si = allDays.findIndex(d => d >= t.startDato);
+      let ei = -1;
+      for (let i = allDays.length - 1; i >= 0; i--) {
+        if (allDays[i] <= t.sluttDato) { ei = i; break; }
+      }
+      if (si === -1 || ei === -1 || si > ei) return null;
+      return { left: si * DAY_W + 2, width: (ei - si + 1) * DAY_W - 4 };
+    }
+
+    const DAY_NAMES = ['Ma', 'Ti', 'On', 'To', 'Fr'];
+    const sortedAnsatte = [...state.ansatte].sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+    const todayIdx = allDays.indexOf(today);
+
+    return (
+      <div>
+        {/* Navigation */}
+        <div className="uke-nav">
+          <button className="btn" onClick={() => setGanttPageOffset(o => o - 1)}>← Forrige</button>
+          <span className="uke-label">
+            Uke {wkNr(weeks[0].start)} – {wkNr(weeks[GANTT_WEEKS - 1].start)}, {weeks[0].start.slice(0, 4)}
+          </span>
+          <button className="btn" onClick={() => setGanttPageOffset(0)}>I dag</button>
+          <button className="btn" onClick={() => setGanttPageOffset(o => o + 1)}>Neste →</button>
+          <button className="btn btn-primary no-print" onClick={() => openAddTildeling()}>+ Ny tildeling</button>
+        </div>
+
+        <div className="oversikt-scroll-wrap">
+          <div style={{ minWidth: LABEL_W + totalW }}>
+
+            {/* ── Uke-header ─────────────────────────────────── */}
+            <div className="oversikt-wk-header-row">
+              <div className="oversikt-corner" style={{ width: LABEL_W }} />
+              {weeks.map((wk, wi) => {
+                const isCurrent = wk.days.includes(today);
+                return (
+                  <div key={wi}
+                    className={`oversikt-wk-cell${isCurrent ? ' current' : ''}`}
+                    style={{ width: wk.days.length * DAY_W }}>
+                    {weekLabel(wk)}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Dag-header ─────────────────────────────────── */}
+            <div className="oversikt-day-header-row">
+              <div className="oversikt-day-corner" style={{ width: LABEL_W }}>Ansatt</div>
+              {allDays.map((d, i) => {
+                const dow = (new Date(d + 'T00:00:00').getDay() + 6) % 7;
+                const isToday    = d === today;
+                const isHoliday  = !!HOLIDAYS[d];
+                const isWeekLast = dow === 4;
+                return (
+                  <div key={d}
+                    className={`oversikt-day-cell${isToday ? ' today' : ''}${isHoliday ? ' holiday' : ''}${isWeekLast ? ' week-last' : ''}`}
+                    style={{ width: DAY_W }}>
+                    <span>{DAY_NAMES[dow]}</span>
+                    <span>{parseInt(d.slice(8), 10)}</span>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ── Ansatte-rader ──────────────────────────────── */}
+            {sortedAnsatte.map((ansatt, ri) => {
+              const myTils = state.tildelinger
+                .filter(t => t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, viewStart, viewEnd))
+                // render project bars first, ferie bars on top
+                .sort((a, b) => (a.prosjektId === FERIE_ID ? 1 : 0) - (b.prosjektId === FERIE_ID ? 1 : 0));
+
+              return (
+                <div key={ansatt.id} className={`oversikt-row${ri % 2 === 0 ? '' : ' alt'}`}
+                  style={{ height: ROW_H }}>
+
+                  {/* Sticky name label */}
+                  <div className="oversikt-row-label" style={{ width: LABEL_W, height: ROW_H }}>
+                    <div className="mini-avatar" style={{
+                      background: ansatt.innleie ? '#f97316' : fagColor(ansatt.fag),
+                      width: 22, height: 22, fontSize: 9, flexShrink: 0,
+                    }}>
+                      {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                    </div>
+                    <span className="oversikt-row-navn">{ansatt.navn}</span>
+                    {ansatt.innleie && <span style={{ fontSize: 9, color: '#f97316', flexShrink: 0 }}>🔧</span>}
+                  </div>
+
+                  {/* Bar area */}
+                  <div className="oversikt-bars-area" style={{ width: totalW, height: ROW_H }}>
+                    {/* Background grid cells */}
+                    {allDays.map((d, i) => {
+                      const dow = (new Date(d + 'T00:00:00').getDay() + 6) % 7;
+                      return (
+                        <div key={d}
+                          className={`oversikt-bg-cell${d === today ? ' today-col' : ''}${HOLIDAYS[d] ? ' holiday-col' : ''}${dow === 4 ? ' week-last' : ''}`}
+                          style={{ left: i * DAY_W, width: DAY_W }}
+                          onClick={() => openAddTildeling(ansatt.id, d)}
+                        />
+                      );
+                    })}
+
+                    {/* Today needle */}
+                    {todayIdx >= 0 && (
+                      <div className="oversikt-needle" style={{ left: todayIdx * DAY_W + DAY_W / 2 }} />
+                    )}
+
+                    {/* Project / ferie bars */}
+                    {myTils.map(t => {
+                      const bp = barProps(t);
+                      if (!bp) return null;
+                      const isFerie = t.prosjektId === FERIE_ID;
+                      const proj  = isFerie ? null : state.prosjekter.find(p => p.id === t.prosjektId);
+                      const color = proj?.farge || '#6b7280';
+                      const label = isFerie ? '🏖 Ferie' : (proj?.navn || '?');
+                      return (
+                        <div key={t.id}
+                          className={`oversikt-bar${isFerie ? ' oversikt-bar-ferie' : ''}`}
+                          style={{ left: bp.left, width: bp.width, ...(isFerie ? {} : { background: color }) }}
+                          title={`${label} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
+                          onClick={e => {
+                            e.stopPropagation();
+                            if (window.confirm(`Slett «${label}»?\n${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`)) {
+                              deleteTildeling(t.id);
+                            }
+                          }}
+                        >
+                          <span className="oversikt-bar-label">{label}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // --- FERIEOVERSIKT ---
   function FerieVisning() {
     const today = dateToIso(new Date());
@@ -1183,6 +1371,9 @@ export default function Bemanningsplan() {
         <button className={`tab-btn ${tab === 'uke' ? 'active' : ''}`} onClick={() => setTab('uke')}>
           Ukeoversikt
         </button>
+        <button className={`tab-btn ${tab === 'oversikt' ? 'active' : ''}`} onClick={() => setTab('oversikt')}>
+          📋 Oversikt
+        </button>
         <button className={`tab-btn ${tab === 'ressurs' ? 'active' : ''}`} onClick={() => setTab('ressurs')}>
           Ressursallokering
         </button>
@@ -1199,6 +1390,7 @@ export default function Bemanningsplan() {
 
       <div ref={storskjermContentRef}>
         {tab === 'uke' && UkeVisning()}
+        {tab === 'oversikt' && OversiktVisning()}
         {tab === 'ressurs' && RessursVisning()}
         {tab === 'prosjekt' && ProsjektOversiktVisning()}
         {tab === 'ferie' && FerieVisning()}
