@@ -937,7 +937,9 @@ export default function Bemanningsplan() {
                         <div key={d}
                           className={`oversikt-bg-cell${d === today ? ' today-col' : ''}${HOLIDAYS[d] ? ' holiday-col' : ''}${dow === 4 ? ' week-last' : ''}`}
                           style={{ left: i * DAY_W, width: DAY_W }}
-                          onClick={() => openAddTildeling(ansatt.id, d)}
+                          onClick={() => { if (!dragRef.current) openAddTildeling(ansatt.id, d); }}
+                          onDragOver={e => { if (dragRef.current) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } }}
+                          onDrop={e => { if (dragRef.current) { e.preventDefault(); handleDrop(d, 'day'); } }}
                         />
                       );
                     })}
@@ -962,12 +964,37 @@ export default function Bemanningsplan() {
                           title={`${label} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
                           onClick={e => {
                             e.stopPropagation();
+                            if (dragRef.current) return; // ignore click after resize drag
                             if (window.confirm(`Slett «${label}»?\n${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`)) {
                               deleteTildeling(t.id);
                             }
                           }}
                         >
+                          {/* Left resize handle (start date) */}
+                          <div className="oversikt-handle oversikt-handle-l"
+                            draggable
+                            title="Dra for å endre startdato"
+                            onDragStart={e => {
+                              e.stopPropagation();
+                              dragRef.current = { tildelingId: t.id, type: 'start' };
+                              e.dataTransfer.effectAllowed = 'move';
+                            }}
+                            onDragEnd={() => { dragRef.current = null; }}
+                            onClick={e => e.stopPropagation()}
+                          />
                           <span className="oversikt-bar-label">{label}</span>
+                          {/* Right resize handle (end date) */}
+                          <div className="oversikt-handle oversikt-handle-r"
+                            draggable
+                            title="Dra for å endre sluttdato"
+                            onDragStart={e => {
+                              e.stopPropagation();
+                              dragRef.current = { tildelingId: t.id, type: 'end' };
+                              e.dataTransfer.effectAllowed = 'move';
+                            }}
+                            onDragEnd={() => { dragRef.current = null; }}
+                            onClick={e => e.stopPropagation()}
+                          />
                         </div>
                       );
                     })}
