@@ -1722,20 +1722,20 @@ body {
 
 .bef-pipeline {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-bottom: 28px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
 }
 .bef-pipeline-kort {
   background: white;
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: 10px;
+  padding: 14px 12px;
   text-align: center;
   box-shadow: 0 1px 4px rgba(0,0,0,.07);
 }
-.bef-pipeline-ikon { font-size: 24px; margin-bottom: 6px; }
-.bef-pipeline-antall { font-size: 32px; font-weight: 800; line-height: 1; }
-.bef-pipeline-label { font-size: 13px; color: #64748b; margin-top: 4px; }
+.bef-pipeline-ikon { font-size: 20px; margin-bottom: 4px; }
+.bef-pipeline-antall { font-size: 26px; font-weight: 800; line-height: 1; }
+.bef-pipeline-label { font-size: 11px; color: #64748b; margin-top: 4px; }
 
 .bef-innhold {
   display: grid;
@@ -1864,7 +1864,92 @@ body {
 
 @media (max-width: 900px) {
   .bef-innhold { grid-template-columns: 1fr; }
-  .bef-pipeline { grid-template-columns: repeat(2, 1fr); }
+  .bef-pipeline { grid-template-columns: repeat(3, 1fr); }
+  .bef-kanban { grid-template-columns: 1fr; }
+}
+
+/* View-tabs (Oversikt / Kalender) */
+.bef-view-tabs { display: flex; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+.bef-view-tab {
+  padding: 6px 14px; font-size: 13px; font-weight: 500;
+  background: #fff; border: none; cursor: pointer; color: #64748b;
+  transition: background .15s, color .15s;
+}
+.bef-view-tab:hover { background: #f8fafc; }
+.bef-view-tab.aktiv { background: #2563eb; color: #fff; }
+
+/* Kanban-layout */
+.bef-kanban {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-top: 20px;
+  align-items: start;
+}
+.bef-kolonne {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 16px;
+  min-height: 200px;
+}
+.bef-kolonne-header {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 14px; font-weight: 700;
+  border-left: 4px solid;
+  padding-left: 10px;
+  margin-bottom: 14px;
+}
+.bef-kolonne-teller {
+  background: #e2e8f0; color: #475569;
+  font-size: 11px; font-weight: 700;
+  padding: 2px 7px; border-radius: 10px;
+}
+.bef-legg-til-btn {
+  width: 100%; margin-top: 10px;
+  background: none; border: 2px dashed #cbd5e1;
+  color: #94a3b8; padding: 8px; border-radius: 8px;
+  cursor: pointer; font-size: 13px; transition: border-color .15s, color .15s;
+}
+.bef-legg-til-btn:hover { border-color: #64748b; color: #475569; }
+
+/* Kanban-kort */
+.bef-k-kort {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: box-shadow .15s, border-color .15s;
+}
+.bef-k-kort:hover { box-shadow: 0 4px 12px rgba(0,0,0,.1); border-color: #c7d2fe; }
+.bef-k-kort-topp { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+.bef-k-navn { font-weight: 700; font-size: 14px; color: #1e293b; }
+.bef-k-adresse { font-size: 12px; color: #64748b; margin-top: 1px; }
+.bef-k-status-pill {
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+  padding: 3px 8px; border-radius: 20px; flex-shrink: 0;
+}
+.bef-k-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+.bef-k-chip {
+  font-size: 11px; padding: 2px 7px; border-radius: 10px;
+  background: #f1f5f9; color: #475569;
+}
+.bef-k-chip--dato { background: #eff6ff; color: #2563eb; }
+.bef-k-chip--belop { background: #f0fdf4; color: #16a34a; }
+.bef-k-chip--ansatt { font-weight: 600; }
+.bef-k-datoer { display: flex; flex-direction: column; gap: 3px; }
+.bef-k-dato-rad { font-size: 11px; color: #64748b; }
+.bef-k-resultat { color: #0891b2; font-style: italic; }
+.bef-k-kommentar { color: #94a3b8; }
+
+/* Modal-seksjoner */
+.bef-modal-seksjon { margin-bottom: 16px; }
+.bef-modal-seksjon-tittel {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.06em; color: #94a3b8;
+  margin-bottom: 10px; padding-bottom: 6px;
+  border-bottom: 1px solid #f1f5f9;
 }
 
 /* Prosjekt meta-pills */

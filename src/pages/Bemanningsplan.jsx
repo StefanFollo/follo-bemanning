@@ -879,18 +879,8 @@ export default function Bemanningsplan() {
                 <div key={ansatt.id}
                   className={`oversikt-row${ri % 2 === 0 ? '' : ' alt'}`}
                   style={{ height: ROW_H }}
-                  draggable
-                  onDragStart={e => {
-                    oversiktDragId.current = ansatt.id;
-                    e.dataTransfer.effectAllowed = 'move';
-                    e.currentTarget.classList.add('dragging');
-                  }}
-                  onDragEnd={e => {
-                    oversiktDragId.current = null;
-                    e.currentTarget.classList.remove('dragging');
-                    clearDragOver();
-                  }}
                   onDragOver={e => {
+                    if (!oversiktDragId.current) return;
                     e.preventDefault();
                     e.dataTransfer.dropEffect = 'move';
                     clearDragOver();
@@ -917,7 +907,22 @@ export default function Bemanningsplan() {
 
                   {/* Sticky name label */}
                   <div className="oversikt-row-label" style={{ width: LABEL_W, height: ROW_H }}>
-                    <span className="oversikt-drag-handle" title="Dra for å flytte">⠿</span>
+                    <span
+                      className="oversikt-drag-handle"
+                      title="Dra for å flytte"
+                      draggable
+                      onDragStart={e => {
+                        e.stopPropagation();
+                        oversiktDragId.current = ansatt.id;
+                        e.dataTransfer.effectAllowed = 'move';
+                        e.currentTarget.closest('.oversikt-row').classList.add('dragging');
+                      }}
+                      onDragEnd={e => {
+                        oversiktDragId.current = null;
+                        e.currentTarget.closest('.oversikt-row').classList.remove('dragging');
+                        clearDragOver();
+                      }}
+                    >⠿</span>
                     <div className="mini-avatar" style={{
                       background: ansatt.innleie ? '#f97316' : fagColor(ansatt.fag),
                       width: 22, height: 22, fontSize: 9, flexShrink: 0,
@@ -938,8 +943,6 @@ export default function Bemanningsplan() {
                           className={`oversikt-bg-cell${d === today ? ' today-col' : ''}${HOLIDAYS[d] ? ' holiday-col' : ''}${dow === 4 ? ' week-last' : ''}`}
                           style={{ left: i * DAY_W, width: DAY_W }}
                           onClick={() => { if (!dragRef.current) openAddTildeling(ansatt.id, d); }}
-                          onDragOver={e => { if (dragRef.current) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; } }}
-                          onDrop={e => { if (dragRef.current) { e.preventDefault(); handleDrop(d, 'day'); } }}
                         />
                       );
                     })}
@@ -957,6 +960,7 @@ export default function Bemanningsplan() {
                       const proj  = isFerie ? null : state.prosjekter.find(p => p.id === t.prosjektId);
                       const color = proj?.farge || '#6b7280';
                       const label = isFerie ? '🏖 Ferie' : (proj?.navn || '?');
+
                       return (
                         <div key={t.id}
                           className={`oversikt-bar${isFerie ? ' oversikt-bar-ferie' : ''}`}
@@ -964,35 +968,49 @@ export default function Bemanningsplan() {
                           title={`${label} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
                           onClick={e => {
                             e.stopPropagation();
-                            if (dragRef.current) return; // ignore click after resize drag
+                            if (dragRef.current) return;
                             if (window.confirm(`Slett «${label}»?\n${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`)) {
                               deleteTildeling(t.id);
                             }
                           }}
                         >
-                          {/* Left resize handle (start date) */}
                           <div className="oversikt-handle oversikt-handle-l"
-                            draggable
                             title="Dra for å endre startdato"
-                            onDragStart={e => {
+                            onPointerDown={e => {
                               e.stopPropagation();
+                              e.preventDefault();
+                              const el = e.currentTarget;
+                              el.setPointerCapture(e.pointerId);
                               dragRef.current = { tildelingId: t.id, type: 'start' };
-                              e.dataTransfer.effectAllowed = 'move';
+                              const barsArea = el.closest('.oversikt-bars-area');
+                              el.addEventListener('pointerup', function onUp(ev) {
+                                el.removeEventListener('pointerup', onUp);
+                                if (!barsArea) { dragRef.current = null; return; }
+                                const rect = barsArea.getBoundingClientRect();
+                                const dayIdx = Math.max(0, Math.min(allDays.length - 1, Math.floor((ev.clientX - rect.left) / DAY_W)));
+                                handleDrop(allDays[dayIdx], 'day');
+                              });
                             }}
-                            onDragEnd={() => { dragRef.current = null; }}
                             onClick={e => e.stopPropagation()}
                           />
                           <span className="oversikt-bar-label">{label}</span>
-                          {/* Right resize handle (end date) */}
                           <div className="oversikt-handle oversikt-handle-r"
-                            draggable
                             title="Dra for å endre sluttdato"
-                            onDragStart={e => {
+                            onPointerDown={e => {
                               e.stopPropagation();
+                              e.preventDefault();
+                              const el = e.currentTarget;
+                              el.setPointerCapture(e.pointerId);
                               dragRef.current = { tildelingId: t.id, type: 'end' };
-                              e.dataTransfer.effectAllowed = 'move';
+                              const barsArea = el.closest('.oversikt-bars-area');
+                              el.addEventListener('pointerup', function onUp(ev) {
+                                el.removeEventListener('pointerup', onUp);
+                                if (!barsArea) { dragRef.current = null; return; }
+                                const rect = barsArea.getBoundingClientRect();
+                                const dayIdx = Math.max(0, Math.min(allDays.length - 1, Math.floor((ev.clientX - rect.left) / DAY_W)));
+                                handleDrop(allDays[dayIdx], 'day');
+                              });
                             }}
-                            onDragEnd={() => { dragRef.current = null; }}
                             onClick={e => e.stopPropagation()}
                           />
                         </div>
