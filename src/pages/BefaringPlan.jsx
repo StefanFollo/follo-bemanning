@@ -1,24 +1,22 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { uid, dateToIso, isoToDate, addDays, weekStart, overlaps } from '../store';
+import { dateToIso, addDays, weekStart, overlaps } from '../store';
 
 const JOBB_TYPER = ['Ny bygg', 'Tilbygg', 'Tak jobb', 'Fasade jobb', 'Bad', 'Tømrer', 'Maling', 'Rørlegger', 'Flislegging', 'Elektro', 'Rehabilitering', 'Annet'];
 
 const STATUS = {
-  planlagt:     { label: 'Planlagt',      farge: '#3b82f6', bg: '#eff6ff', ikon: '📋' },
-  tilbud_sendt: { label: 'Tilbud sendt',  farge: '#f59e0b', bg: '#fffbeb', ikon: '📤' },
-  godkjent:     { label: 'Godkjent',      farge: '#16a34a', bg: '#f0fdf4', ikon: '✅' },
-  tapt:         { label: 'Tapt',          farge: '#6b7280', bg: '#f9fafb', ikon: '❌' },
+  planlagt:      { label: 'Planlagt befaring',   farge: '#3b82f6', bg: '#eff6ff', ikon: '📋' },
+  tilbud_arbeid: { label: 'Tilbud under arbeid', farge: '#f59e0b', bg: '#fffbeb', ikon: '✏️' },
+  tilbud_sendt:  { label: 'Tilbud sendt',        farge: '#8b5cf6', bg: '#f5f3ff', ikon: '📤' },
+  godkjent:      { label: 'Godkjent',            farge: '#16a34a', bg: '#f0fdf4', ikon: '✅' },
+  tapt:          { label: 'Tapt',                farge: '#6b7280', bg: '#f9fafb', ikon: '❌' },
 };
 
 const PL_FARGER = ['#2563eb','#16a34a','#9333ea','#ea580c','#0891b2','#be185d','#854d0e','#0f766e','#b45309','#1d4ed8'];
-
 const MAANED_NAVN = ['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
 const DAG_NAVN_KORT = ['Man','Tir','Ons','Tor','Fre','Lør','Søn'];
 
-function monthStart(iso) {
-  return iso.slice(0, 7) + '-01';
-}
+function monthStart(iso) { return iso.slice(0, 7) + '-01'; }
 function addMonths(iso, n) {
   const d = new Date(iso + 'T00:00:00');
   d.setMonth(d.getMonth() + n);
@@ -33,9 +31,15 @@ function monthLabel(iso) {
   return MAANED_NAVN[m] + ' ' + iso.slice(0, 4);
 }
 function dayOfWeek(iso) {
-  // 0=Mon ... 6=Sun
-  const d = new Date(iso + 'T00:00:00');
-  return (d.getDay() + 6) % 7;
+  return (new Date(iso + 'T00:00:00').getDay() + 6) % 7;
+}
+function datoKort(iso) {
+  if (!iso) return '';
+  return new Date(iso + 'T00:00:00').toLocaleDateString('nb-NO', { day: '2-digit', month: 'short' });
+}
+function dagerTil(iso) {
+  if (!iso) return null;
+  return Math.round((new Date(iso + 'T00:00:00') - new Date()) / 86400000);
 }
 
 function tomModal() {
@@ -47,8 +51,12 @@ function tomModal() {
     tid: '09:00',
     status: 'planlagt',
     notat: '',
+    kommentar: '',
     prosjektlederId: '',
     estimertBelop: '',
+    tilbudFrist: '',
+    nesteKontakt: '',
+    resultat: '',
   };
 }
 
@@ -56,73 +64,58 @@ export default function BefaringPlan() {
   const { state, dispatch } = useApp();
   const befaringer = state.befaringer || [];
   const today = dateToIso(new Date());
-  const prosjektledere = state.ansatte.filter(a => a.fag === 'Prosjekt Leder');
-
-  // Gi hver prosjektleder en fast unik farge basert på indeks
-  function plFarge(plId) {
-    if (!plId) return null;
-    const idx = prosjektledere.findIndex(a => a.id === plId);
-    return PL_FARGER[idx >= 0 ? idx % PL_FARGER.length : 0];
-  }
 
   const [visModal, setVisModal] = useState(false);
-  const [redigerer, setRedigerer] = useState(null); // befaring-objekt eller null
+  const [redigerer, setRedigerer] = useState(null);
   const [form, setForm] = useState(tomModal());
-  const [visKapasitet, setVisKapasitet] = useState(null); // befaring som ble godkjent
+  const [visKapasitet, setVisKapasitet] = useState(null);
   const [visProsjektModal, setVisProsjektModal] = useState(false);
   const [prosjektNavn, setProsjektNavn] = useState('');
   const [kalMaaned, setKalMaaned] = useState(() => monthStart(today));
+  const [viewTab, setViewTab] = useState('oversikt'); // 'oversikt' | 'kalender'
 
-  // ---- Kapasitetsberegning ----
+  function ansattFarge(ansattId) {
+    if (!ansattId) return null;
+    const idx = state.ansatte.findIndex(a => a.id === ansattId);
+    return PL_FARGER[idx >= 0 ? idx % PL_FARGER.length : 0];
+  }
+
+  // ---- Kapasitet ----
   function kapasitetPerUke() {
-    const uker = [];
     const totalAnsatte = state.ansatte.length;
-    for (let w = 0; w < 16; w++) {
+    return Array.from({ length: 16 }, (_, w) => {
       const ukeStart = addDays(weekStart(today), w * 7);
-      const ukeSlut = addDays(ukeStart, 4); // man-fre
+      const ukeSlut = addDays(ukeStart, 4);
       const opptatt = new Set(
         state.tildelinger
           .filter(t => t.prosjektId !== '__FERIE__' && overlaps(t.startDato, t.sluttDato, ukeStart, ukeSlut))
           .map(t => t.ansattId)
       );
-      uker.push({
-        ukeStart,
-        ukeSlut,
-        ledige: totalAnsatte - opptatt.size,
-        totalt: totalAnsatte,
-      });
-    }
-    return uker;
+      return { ukeStart, ukeSlut, ledige: totalAnsatte - opptatt.size, totalt: totalAnsatte };
+    });
   }
 
-  // ---- Kalender-hjelp ----
+  // ---- Kalender ----
   function kalenderDager() {
-    const firstDay = dayOfWeek(kalMaaned); // 0=Man
+    const firstDay = dayOfWeek(kalMaaned);
     const antDager = daysInMonth(kalMaaned);
     const dager = [];
-    // padding før
     for (let i = 0; i < firstDay; i++) dager.push(null);
     for (let d = 1; d <= antDager; d++) {
-      const iso = kalMaaned.slice(0, 7) + '-' + String(d).padStart(2, '0');
-      dager.push(iso);
+      dager.push(kalMaaned.slice(0, 7) + '-' + String(d).padStart(2, '0'));
     }
-    // padding etter (full uker)
     while (dager.length % 7 !== 0) dager.push(null);
     return dager;
   }
 
-  function befaringerPaaDag(iso) {
-    return befaringer.filter(b => b.dato === iso);
-  }
-
   // ---- CRUD ----
-  function apneNy(dato) {
-    setForm({ ...tomModal(), dato: dato || today });
+  function apneNy(presetStatus) {
+    setForm({ ...tomModal(), ...(presetStatus ? { status: presetStatus } : {}), dato: today });
     setRedigerer(null);
     setVisModal(true);
   }
   function apneRediger(b) {
-    setForm({ ...b });
+    setForm({ ...tomModal(), ...b });
     setRedigerer(b);
     setVisModal(true);
   }
@@ -154,8 +147,7 @@ export default function BefaringPlan() {
       payload: {
         navn: prosjektNavn,
         adresse: visKapasitet?.adresse || '',
-        startDato: '',
-        sluttDato: '',
+        startDato: '', sluttDato: '',
         status: 'godkjent',
         beskrivelse: visKapasitet?.notat || '',
         farge: '#6b8fc4',
@@ -165,25 +157,97 @@ export default function BefaringPlan() {
     setVisProsjektModal(false);
   }
 
-  // ---- Teller per status ----
   const teller = Object.fromEntries(Object.keys(STATUS).map(s => [s, befaringer.filter(b => b.status === s).length]));
 
-  // ---- Kommende befaringer (sortert) ----
-  const kommende = [...befaringer]
-    .filter(b => b.status !== 'tapt' && b.status !== 'godkjent')
+  const planlagte = [...befaringer]
+    .filter(b => b.status === 'planlagt')
     .sort((a, b) => a.dato.localeCompare(b.dato));
+
+  const tilbudArbeid = [...befaringer]
+    .filter(b => b.status === 'tilbud_arbeid' || b.status === 'tilbud_sendt')
+    .sort((a, b) => (a.tilbudFrist || '9999').localeCompare(b.tilbudFrist || '9999'));
 
   const uker = kapasitetPerUke();
 
+  // ---- Kort-komponent ----
+  function BefKort({ b }) {
+    const s = STATUS[b.status] || STATUS.planlagt;
+    const ansatt = b.prosjektlederId ? state.ansatte.find(a => a.id === b.prosjektlederId) : null;
+    const belopVis = b.estimertBelop
+      ? new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(Number(b.estimertBelop))
+      : null;
+    const fristDager = dagerTil(b.tilbudFrist);
+    const fristFarge = fristDager !== null ? (fristDager < 0 ? '#dc2626' : fristDager <= 3 ? '#f59e0b' : '#16a34a') : null;
+
+    return (
+      <div className="bef-k-kort" onClick={() => apneRediger(b)}>
+        <div className="bef-k-kort-topp">
+          <div>
+            <div className="bef-k-navn">{b.kontaktNavn}</div>
+            <div className="bef-k-adresse">{b.adresse}</div>
+          </div>
+          <span className="bef-k-status-pill" style={{ background: s.bg, color: s.farge }}>
+            {s.ikon} {s.label}
+          </span>
+        </div>
+
+        <div className="bef-k-chips">
+          {b.jobbType && <span className="bef-k-chip">{b.jobbType}</span>}
+          {b.dato && b.status === 'planlagt' && (
+            <span className="bef-k-chip bef-k-chip--dato">
+              📅 {datoKort(b.dato)}{b.tid ? ` kl. ${b.tid}` : ''}
+            </span>
+          )}
+          {belopVis && <span className="bef-k-chip bef-k-chip--belop">💰 {belopVis}</span>}
+          {ansatt && (
+            <span className="bef-k-chip bef-k-chip--ansatt" style={{ background: ansattFarge(b.prosjektlederId) + '22', color: ansattFarge(b.prosjektlederId) }}>
+              👤 {ansatt.navn.split(' ')[0]}
+            </span>
+          )}
+        </div>
+
+        <div className="bef-k-datoer">
+          {b.tilbudFrist && (
+            <span className="bef-k-dato-rad" style={{ color: fristFarge }}>
+              ⏰ Tilbudsfrist: {datoKort(b.tilbudFrist)}
+              {fristDager !== null && <em> ({fristDager < 0 ? `${Math.abs(fristDager)}d over` : fristDager === 0 ? 'i dag' : `${fristDager}d`})</em>}
+            </span>
+          )}
+          {b.nesteKontakt && (
+            <span className="bef-k-dato-rad">
+              📞 Neste kontakt: {datoKort(b.nesteKontakt)}
+            </span>
+          )}
+          {b.resultat && (
+            <span className="bef-k-dato-rad bef-k-resultat">
+              📝 {b.resultat}
+            </span>
+          )}
+          {b.kommentar && (
+            <span className="bef-k-dato-rad bef-k-kommentar">
+              💬 {b.kommentar.length > 60 ? b.kommentar.slice(0, 60) + '…' : b.kommentar}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="bef-side">
-      {/* Topptittel */}
+      {/* Header */}
       <div className="page-header">
         <h2>Befaring & Tilbud</h2>
-        <button className="btn btn-primary" onClick={() => apneNy()}>+ Ny befaring</button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <div className="bef-view-tabs">
+            <button className={`bef-view-tab${viewTab === 'oversikt' ? ' aktiv' : ''}`} onClick={() => setViewTab('oversikt')}>📋 Oversikt</button>
+            <button className={`bef-view-tab${viewTab === 'kalender' ? ' aktiv' : ''}`} onClick={() => setViewTab('kalender')}>📅 Kalender</button>
+          </div>
+          <button className="btn btn-primary" onClick={() => apneNy()}>+ Ny befaring</button>
+        </div>
       </div>
 
-      {/* Pipeline-kort */}
+      {/* Pipeline */}
       <div className="bef-pipeline">
         {Object.entries(STATUS).map(([key, s]) => (
           <div key={key} className="bef-pipeline-kort" style={{ borderTop: `4px solid ${s.farge}`, background: s.bg }}>
@@ -194,156 +258,206 @@ export default function BefaringPlan() {
         ))}
       </div>
 
-      <div className="bef-innhold">
-        {/* Kalender */}
-        <div className="bef-kal-seksjon">
-          <div className="bef-kal-nav">
-            <button className="btn" onClick={() => setKalMaaned(m => addMonths(m, -1))}>←</button>
-            <span className="bef-kal-tittel">{monthLabel(kalMaaned)}</span>
-            <button className="btn" onClick={() => setKalMaaned(m => addMonths(m, 1))}>→</button>
+      {/* Oversikt-visning: to kolonner */}
+      {viewTab === 'oversikt' && (
+        <div className="bef-kanban">
+          {/* Planlagt befaring */}
+          <div className="bef-kolonne">
+            <div className="bef-kolonne-header" style={{ borderColor: STATUS.planlagt.farge, color: STATUS.planlagt.farge }}>
+              📋 Planlagt befaring
+              <span className="bef-kolonne-teller">{planlagte.length}</span>
+            </div>
+            {planlagte.length === 0 && (
+              <div className="bef-tom-melding">Ingen planlagte befaringer.</div>
+            )}
+            {planlagte.map(b => <BefKort key={b.id} b={b} />)}
+            <button className="bef-legg-til-btn" onClick={() => apneNy('planlagt')}>+ Legg til befaring</button>
           </div>
-          <div className="bef-kal-grid">
-            {DAG_NAVN_KORT.map(d => (
-              <div key={d} className="bef-kal-dagheader">{d}</div>
-            ))}
-            {kalenderDager().map((dag, i) => {
-              if (!dag) return <div key={'tom-' + i} className="bef-kal-dag bef-kal-dag--tom" />;
-              const bfs = befaringerPaaDag(dag);
-              const erIdag = dag === today;
-              return (
-                <div
-                  key={dag}
-                  className={`bef-kal-dag ${erIdag ? 'bef-kal-dag--idag' : ''}`}
-                  onClick={() => apneNy(dag)}
-                >
-                  <span className="bef-kal-dato">{dag.slice(8)}</span>
-                  {bfs.map(b => {
-                    const pl = b.prosjektlederId ? state.ansatte.find(a => a.id === b.prosjektlederId) : null;
-                    const plInitialer = pl ? pl.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : null;
-                    const chipFarge = plFarge(b.prosjektlederId) || STATUS[b.status]?.farge || '#6b7280';
-                    return (
-                      <div
-                        key={b.id}
-                        className="bef-kal-chip"
-                        style={{ background: chipFarge }}
-                        onClick={e => { e.stopPropagation(); apneRediger(b); }}
-                        title={`${b.tid ? b.tid + ' – ' : ''}${b.kontaktNavn} – ${b.adresse}${pl ? ` (${pl.navn})` : ''}`}
-                      >
-                        {b.tid && <span style={{fontSize:9, opacity:0.9}}>{b.tid} </span>}{b.kontaktNavn.split(' ')[0]}{plInitialer ? ` · ${plInitialer}` : ''}
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
+
+          {/* Tilbud under arbeid */}
+          <div className="bef-kolonne">
+            <div className="bef-kolonne-header" style={{ borderColor: STATUS.tilbud_arbeid.farge, color: STATUS.tilbud_arbeid.farge }}>
+              ✏️ Tilbud under arbeid
+              <span className="bef-kolonne-teller">{tilbudArbeid.length}</span>
+            </div>
+            {tilbudArbeid.length === 0 && (
+              <div className="bef-tom-melding">Ingen tilbud under arbeid.</div>
+            )}
+            {tilbudArbeid.map(b => <BefKort key={b.id} b={b} />)}
+            <button className="bef-legg-til-btn" onClick={() => apneNy('tilbud_arbeid')}>+ Legg til tilbud</button>
           </div>
         </div>
+      )}
 
-        {/* Kommende liste */}
-        <div className="bef-liste-seksjon">
-          <h3 className="bef-liste-tittel">Kommende befaringer</h3>
-          {kommende.length === 0 && (
-            <div className="bef-tom-melding">Ingen kommende befaringer. Trykk + Ny befaring for å legge til.</div>
-          )}
-          {kommende.map(b => {
-            const s = STATUS[b.status];
-            const pl = b.prosjektlederId ? state.ansatte.find(a => a.id === b.prosjektlederId) : null;
-            const belopVis = b.estimertBelop ? new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(Number(b.estimertBelop)) : null;
-            return (
-              <div key={b.id} className="bef-kort" onClick={() => apneRediger(b)}>
-                <div className="bef-kort-farge" style={{ background: s.farge }} />
-                <div className="bef-kort-innhold">
-                  <div className="bef-kort-navn">{b.kontaktNavn}</div>
-                  <div className="bef-kort-adresse">{b.adresse}</div>
-                  <div className="bef-kort-meta">
-                    <span className="bef-kort-dato">{new Date(b.dato + 'T00:00:00').toLocaleDateString('nb-NO', { weekday: 'short', day: '2-digit', month: 'short' })}{b.tid ? ` kl. ${b.tid}` : ''}</span>
-                    <span className="bef-kort-type">{b.jobbType}</span>
-                    {pl && <span className="bef-kort-pl">👤 {pl.navn}</span>}
-                    {belopVis && <span className="bef-kort-pl">💰 {belopVis}</span>}
+      {/* Kalender-visning */}
+      {viewTab === 'kalender' && (
+        <div className="bef-innhold">
+          <div className="bef-kal-seksjon">
+            <div className="bef-kal-nav">
+              <button className="btn" onClick={() => setKalMaaned(m => addMonths(m, -1))}>←</button>
+              <span className="bef-kal-tittel">{monthLabel(kalMaaned)}</span>
+              <button className="btn" onClick={() => setKalMaaned(m => addMonths(m, 1))}>→</button>
+            </div>
+            <div className="bef-kal-grid">
+              {DAG_NAVN_KORT.map(d => <div key={d} className="bef-kal-dagheader">{d}</div>)}
+              {kalenderDager().map((dag, i) => {
+                if (!dag) return <div key={'tom-' + i} className="bef-kal-dag bef-kal-dag--tom" />;
+                const bfs = befaringer.filter(b => b.dato === dag);
+                return (
+                  <div key={dag} className={`bef-kal-dag${dag === today ? ' bef-kal-dag--idag' : ''}`} onClick={() => apneNy()}>
+                    <span className="bef-kal-dato">{dag.slice(8)}</span>
+                    {bfs.map(b => {
+                      const ansatt = b.prosjektlederId ? state.ansatte.find(a => a.id === b.prosjektlederId) : null;
+                      const chipFarge = ansattFarge(b.prosjektlederId) || STATUS[b.status]?.farge || '#6b7280';
+                      return (
+                        <div key={b.id} className="bef-kal-chip" style={{ background: chipFarge }}
+                          onClick={e => { e.stopPropagation(); apneRediger(b); }}
+                          title={`${b.tid ? b.tid + ' – ' : ''}${b.kontaktNavn} – ${b.adresse}${ansatt ? ` (${ansatt.navn})` : ''}`}>
+                          {b.tid && <span style={{ fontSize: 9, opacity: 0.9 }}>{b.tid} </span>}
+                          {b.kontaktNavn.split(' ')[0]}
+                          {ansatt ? ` · ${ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}` : ''}
+                        </div>
+                      );
+                    })}
                   </div>
-                </div>
-                <div className="bef-kort-status" style={{ color: s.farge, background: s.bg }}>
-                  {s.ikon} {s.label}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+                );
+              })}
+            </div>
+          </div>
 
-      {/* Modal: legg til / rediger befaring */}
+          {/* Kommende liste ved siden av kalender */}
+          <div className="bef-liste-seksjon">
+            <h3 className="bef-liste-tittel">Kommende befaringer</h3>
+            {[...befaringer]
+              .filter(b => b.status !== 'tapt' && b.status !== 'godkjent')
+              .sort((a, b) => a.dato.localeCompare(b.dato))
+              .map(b => {
+                const s = STATUS[b.status] || STATUS.planlagt;
+                const ansatt = b.prosjektlederId ? state.ansatte.find(a => a.id === b.prosjektlederId) : null;
+                return (
+                  <div key={b.id} className="bef-kort" onClick={() => apneRediger(b)}>
+                    <div className="bef-kort-farge" style={{ background: s.farge }} />
+                    <div className="bef-kort-innhold">
+                      <div className="bef-kort-navn">{b.kontaktNavn}</div>
+                      <div className="bef-kort-adresse">{b.adresse}</div>
+                      <div className="bef-kort-meta">
+                        <span className="bef-kort-dato">
+                          {new Date(b.dato + 'T00:00:00').toLocaleDateString('nb-NO', { weekday: 'short', day: '2-digit', month: 'short' })}
+                          {b.tid ? ` kl. ${b.tid}` : ''}
+                        </span>
+                        <span className="bef-kort-type">{b.jobbType}</span>
+                        {ansatt && <span className="bef-kort-pl">👤 {ansatt.navn}</span>}
+                      </div>
+                    </div>
+                    <div className="bef-kort-status" style={{ color: s.farge, background: s.bg }}>
+                      {s.ikon} {s.label}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: legg til / rediger */}
       {visModal && (
         <div className="modal-backdrop" onClick={() => setVisModal(false)}>
-          <div className="modal bef-modal" onClick={e => e.stopPropagation()}>
+          <div className="modal bef-modal" style={{ maxWidth: 580 }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3>{redigerer ? 'Rediger befaring' : 'Ny befaring'}</h3>
               <button className="btn-icon" onClick={() => setVisModal(false)}>✕</button>
             </div>
             <div className="form">
-              <label>Prosjektleder (befaringsansvarlig)</label>
-              <select className="input" value={form.prosjektlederId} onChange={e => setForm(f => ({ ...f, prosjektlederId: e.target.value }))}>
-                <option value="">– Velg prosjektleder –</option>
-                {prosjektledere.map(a => (
-                  <option key={a.id} value={a.id}>{a.navn}</option>
-                ))}
-              </select>
 
-              <label>Kontaktnavn *</label>
-              <input className="input" value={form.kontaktNavn} onChange={e => setForm(f => ({ ...f, kontaktNavn: e.target.value }))} placeholder="Navn på kontaktperson / prosjekt" />
-
-              <label>Adresse *</label>
-              <input className="input" value={form.adresse} onChange={e => setForm(f => ({ ...f, adresse: e.target.value }))} placeholder="Adresse for befaring" />
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div>
-                  <label>Type jobb</label>
-                  <select className="input" value={form.jobbType} onChange={e => setForm(f => ({ ...f, jobbType: e.target.value }))}>
-                    {JOBB_TYPER.map(j => <option key={j}>{j}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label>Dato for befaring</label>
-                  <input type="date" className="input" value={form.dato} onChange={e => setForm(f => ({ ...f, dato: e.target.value }))} />
-                </div>
-                <div>
-                  <label>Tidspunkt</label>
-                  <input type="time" className="input" value={form.tid || '09:00'} onChange={e => setForm(f => ({ ...f, tid: e.target.value }))} />
+              {/* Grunninfo */}
+              <div className="bef-modal-seksjon">
+                <div className="bef-modal-seksjon-tittel">Grunninfo</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label>Kontaktnavn *</label>
+                    <input className="input" value={form.kontaktNavn} onChange={e => setForm(f => ({ ...f, kontaktNavn: e.target.value }))} placeholder="Navn på kontaktperson / prosjekt" />
+                  </div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label>Adresse *</label>
+                    <input className="input" value={form.adresse} onChange={e => setForm(f => ({ ...f, adresse: e.target.value }))} placeholder="Adresse for befaring" />
+                  </div>
+                  <div>
+                    <label>Type jobb</label>
+                    <select className="input" value={form.jobbType} onChange={e => setForm(f => ({ ...f, jobbType: e.target.value }))}>
+                      {JOBB_TYPER.map(j => <option key={j}>{j}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label>Ansvarlig person</label>
+                    <select className="input" value={form.prosjektlederId} onChange={e => setForm(f => ({ ...f, prosjektlederId: e.target.value }))}>
+                      <option value="">– Velg ansvarlig –</option>
+                      {[...state.ansatte].sort((a, b) => a.navn.localeCompare(b.navn, 'nb')).map(a => (
+                        <option key={a.id} value={a.id}>{a.navn}{a.fag ? ` (${a.fag})` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label>Dato for befaring</label>
+                    <input type="date" className="input" value={form.dato} onChange={e => setForm(f => ({ ...f, dato: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label>Tidspunkt</label>
+                    <input type="time" className="input" value={form.tid || '09:00'} onChange={e => setForm(f => ({ ...f, tid: e.target.value }))} />
+                  </div>
                 </div>
               </div>
 
-              <label>Størrelse på jobb (ca. kr)</label>
-              <input
-                className="input"
-                type="number"
-                min="0"
-                step="10000"
-                value={form.estimertBelop}
-                onChange={e => setForm(f => ({ ...f, estimertBelop: e.target.value }))}
-                placeholder="f.eks. 500000"
-              />
-
-              <label>Status</label>
-              <div className="bef-status-velger">
-                {Object.entries(STATUS).map(([key, s]) => (
-                  <button
-                    key={key}
-                    className={`bef-status-btn ${form.status === key ? 'aktiv' : ''}`}
-                    style={form.status === key ? { background: s.farge, color: '#fff', borderColor: s.farge } : { borderColor: s.farge, color: s.farge }}
-                    onClick={() => setForm(f => ({ ...f, status: key }))}
-                    type="button"
-                  >
-                    {s.ikon} {s.label}
-                  </button>
-                ))}
+              {/* Tilbud & Frister */}
+              <div className="bef-modal-seksjon">
+                <div className="bef-modal-seksjon-tittel">Tilbud & Frister</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div>
+                    <label>Størrelse på jobb (kr)</label>
+                    <input className="input" type="number" min="0" step="10000"
+                      value={form.estimertBelop} onChange={e => setForm(f => ({ ...f, estimertBelop: e.target.value }))}
+                      placeholder="f.eks. 500000" />
+                  </div>
+                  <div>
+                    <label>Frist for tilbud</label>
+                    <input type="date" className="input" value={form.tilbudFrist || ''} onChange={e => setForm(f => ({ ...f, tilbudFrist: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label>Dato neste kontakt</label>
+                    <input type="date" className="input" value={form.nesteKontakt || ''} onChange={e => setForm(f => ({ ...f, nesteKontakt: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label>Resultat</label>
+                    <input className="input" value={form.resultat || ''} onChange={e => setForm(f => ({ ...f, resultat: e.target.value }))} placeholder="f.eks. Tilbud akseptert, avventer..." />
+                  </div>
+                </div>
               </div>
 
-              <label>Notat</label>
-              <textarea className="input" rows={3} value={form.notat} onChange={e => setForm(f => ({ ...f, notat: e.target.value }))} placeholder="Notater fra befaring, prisestimater, detaljer..." />
+              {/* Status */}
+              <div className="bef-modal-seksjon">
+                <div className="bef-modal-seksjon-tittel">Status</div>
+                <div className="bef-status-velger">
+                  {Object.entries(STATUS).map(([key, s]) => (
+                    <button key={key} type="button"
+                      className={`bef-status-btn${form.status === key ? ' aktiv' : ''}`}
+                      style={form.status === key ? { background: s.farge, color: '#fff', borderColor: s.farge } : { borderColor: s.farge, color: s.farge }}
+                      onClick={() => setForm(f => ({ ...f, status: key }))}>
+                      {s.ikon} {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Kommentar */}
+              <div className="bef-modal-seksjon">
+                <div className="bef-modal-seksjon-tittel">Kommentar & Notat</div>
+                <label>Kommentar</label>
+                <textarea className="input" rows={2} value={form.kommentar || ''} onChange={e => setForm(f => ({ ...f, kommentar: e.target.value }))} placeholder="Kort kommentar / merknad..." />
+                <label style={{ marginTop: 8 }}>Notat (intern)</label>
+                <textarea className="input" rows={3} value={form.notat} onChange={e => setForm(f => ({ ...f, notat: e.target.value }))} placeholder="Notater fra befaring, prisestimater, detaljer..." />
+              </div>
 
               <div className="modal-actions">
-                {redigerer && (
-                  <button className="btn btn-danger" onClick={slett}>Slett</button>
-                )}
+                {redigerer && <button className="btn btn-danger" onClick={slett}>Slett</button>}
                 {redigerer && redigerer.status !== 'godkjent' && (
                   <button className="btn" style={{ background: '#16a34a', color: '#fff' }} onClick={() => godkjenn(redigerer)}>
                     ✅ Godkjenn tilbud
@@ -358,7 +472,7 @@ export default function BefaringPlan() {
         </div>
       )}
 
-      {/* Modal: kapasitetsoversikt etter godkjenning */}
+      {/* Modal: kapasitet */}
       {visKapasitet && (
         <div className="modal-backdrop" onClick={() => setVisKapasitet(null)}>
           <div className="modal bef-kap-modal" onClick={e => e.stopPropagation()}>
@@ -367,8 +481,7 @@ export default function BefaringPlan() {
               <button className="btn-icon" onClick={() => setVisKapasitet(null)}>✕</button>
             </div>
             <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: 14 }}>
-              Tilbud godkjent for <strong>{visKapasitet.kontaktNavn}</strong> – {visKapasitet.adresse}.<br />
-              Velg en periode med ledig kapasitet og opprett prosjekt.
+              Tilbud godkjent for <strong>{visKapasitet.kontaktNavn}</strong> – {visKapasitet.adresse}.
             </p>
             <div className="bef-kap-liste">
               {uker.map((u, i) => {
@@ -385,18 +498,14 @@ export default function BefaringPlan() {
                     <div className="bef-kap-bar-wrap">
                       <div className="bef-kap-bar" style={{ width: pst + '%', background: farge }} />
                     </div>
-                    <div className="bef-kap-tall" style={{ color: farge }}>
-                      {u.ledige} / {u.totalt} ledige
-                    </div>
+                    <div className="bef-kap-tall" style={{ color: farge }}>{u.ledige} / {u.totalt} ledige</div>
                   </div>
                 );
               })}
             </div>
             <div className="modal-actions" style={{ marginTop: 20 }}>
               <button className="btn" onClick={() => setVisKapasitet(null)}>Lukk</button>
-              <button className="btn btn-primary" onClick={() => { setVisProsjektModal(true); }}>
-                + Opprett prosjekt
-              </button>
+              <button className="btn btn-primary" onClick={() => setVisProsjektModal(true)}>+ Opprett prosjekt</button>
             </div>
           </div>
         </div>
@@ -414,9 +523,7 @@ export default function BefaringPlan() {
               <label>Prosjektnavn</label>
               <input className="input" value={prosjektNavn} onChange={e => setProsjektNavn(e.target.value)} />
               <div className="modal-actions">
-                <button className="btn btn-primary" onClick={opprettProsjekt} disabled={!prosjektNavn.trim()}>
-                  Opprett
-                </button>
+                <button className="btn btn-primary" onClick={opprettProsjekt} disabled={!prosjektNavn.trim()}>Opprett</button>
               </div>
             </div>
           </div>
