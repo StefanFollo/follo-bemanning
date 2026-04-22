@@ -934,7 +934,14 @@ export default function Bemanningsplan() {
                   </div>
 
                   {/* Bar area */}
-                  <div className="oversikt-bars-area" style={{ width: totalW, height: ROW_H }}>
+                  <div className="oversikt-bars-area" style={{ width: totalW, height: ROW_H }}
+                    onPointerUp={e => {
+                      if (!dragRef.current) return;
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const dayIdx = Math.max(0, Math.min(allDays.length - 1, Math.floor((e.clientX - rect.left) / DAY_W)));
+                      handleDrop(allDays[dayIdx], 'day');
+                    }}
+                  >
                     {/* Background grid cells */}
                     {allDays.map((d, i) => {
                       const dow = (new Date(d + 'T00:00:00').getDay() + 6) % 7;
@@ -979,17 +986,8 @@ export default function Bemanningsplan() {
                             onPointerDown={e => {
                               e.stopPropagation();
                               e.preventDefault();
-                              const el = e.currentTarget;
-                              el.setPointerCapture(e.pointerId);
+                              e.currentTarget.setPointerCapture(e.pointerId);
                               dragRef.current = { tildelingId: t.id, type: 'start' };
-                              const barsArea = el.closest('.oversikt-bars-area');
-                              el.addEventListener('pointerup', function onUp(ev) {
-                                el.removeEventListener('pointerup', onUp);
-                                if (!barsArea) { dragRef.current = null; return; }
-                                const rect = barsArea.getBoundingClientRect();
-                                const dayIdx = Math.max(0, Math.min(allDays.length - 1, Math.floor((ev.clientX - rect.left) / DAY_W)));
-                                handleDrop(allDays[dayIdx], 'day');
-                              });
                             }}
                             onClick={e => e.stopPropagation()}
                           />
@@ -999,17 +997,8 @@ export default function Bemanningsplan() {
                             onPointerDown={e => {
                               e.stopPropagation();
                               e.preventDefault();
-                              const el = e.currentTarget;
-                              el.setPointerCapture(e.pointerId);
+                              e.currentTarget.setPointerCapture(e.pointerId);
                               dragRef.current = { tildelingId: t.id, type: 'end' };
-                              const barsArea = el.closest('.oversikt-bars-area');
-                              el.addEventListener('pointerup', function onUp(ev) {
-                                el.removeEventListener('pointerup', onUp);
-                                if (!barsArea) { dragRef.current = null; return; }
-                                const rect = barsArea.getBoundingClientRect();
-                                const dayIdx = Math.max(0, Math.min(allDays.length - 1, Math.floor((ev.clientX - rect.left) / DAY_W)));
-                                handleDrop(allDays[dayIdx], 'day');
-                              });
                             }}
                             onClick={e => e.stopPropagation()}
                           />
