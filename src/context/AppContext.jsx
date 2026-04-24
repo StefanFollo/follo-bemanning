@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useEffect, useState } from 'react';
 import {
   loadState,
-  saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag, saveRorTimer, saveBefaringer,
+  saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag, saveRorTimer, saveBefaringer, saveReklamasjoner,
   loadFromCloud, saveToCloud, getLocalUpdatedAt,
   uid,
 } from '../store';
@@ -20,6 +20,7 @@ function reducer(state, action) {
       if (s.fag) saveFag(s.fag);
       if (s.rorTimer) saveRorTimer(s.rorTimer);
       if (s.befaringer) saveBefaringer(s.befaringer);
+      if (s.reklamasjoner) saveReklamasjoner(s.reklamasjoner);
       return { ...state, ...s };
     }
 
@@ -136,6 +137,23 @@ function reducer(state, action) {
       const next = (state.befaringer || []).filter(b => b.id !== action.id);
       saveBefaringer(next);
       return { ...state, befaringer: next };
+    }
+
+    // --- Reklamasjoner ---
+    case 'ADD_REKLAMASJON': {
+      const next = [...(state.reklamasjoner || []), { ...action.payload, id: uid() }];
+      saveReklamasjoner(next);
+      return { ...state, reklamasjoner: next };
+    }
+    case 'UPDATE_REKLAMASJON': {
+      const next = (state.reklamasjoner || []).map(r => r.id === action.payload.id ? { ...r, ...action.payload } : r);
+      saveReklamasjoner(next);
+      return { ...state, reklamasjoner: next };
+    }
+    case 'DELETE_REKLAMASJON': {
+      const next = (state.reklamasjoner || []).filter(r => r.id !== action.id);
+      saveReklamasjoner(next);
+      return { ...state, reklamasjoner: next };
     }
 
     // --- Fag ---

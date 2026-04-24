@@ -2363,3 +2363,51 @@ body {
   z-index: 10 !important;
   cursor: grabbing !important;
 }
+
+/* ===== REKLAMASJONER ===== */
+.rekl-kort {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 14px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: box-shadow .15s, transform .1s;
+}
+.rekl-kort:hover { box-shadow: 0 4px 14px rgba(0,0,0,.1); transform: translateY(-1px); }
+
+.rekl-kort-topp {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.rekl-kort-adresse { font-weight: 600; font-size: 14px; color: #1e293b; }
+.rekl-kort-kontakt { font-size: 12px; color: #64748b; margin-top: 2px; }
+
+.rekl-status-pill {
+  font-size: 11px; font-weight: 600;
+  padding: 3px 8px; border-radius: 20px;
+  white-space: nowrap; flex-shrink: 0;
+}
+
+.rekl-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
+.rekl-chip {
+  font-size: 11px; padding: 2px 8px; border-radius: 12px;
+  background: #f1f5f9; color: #475569; font-weight: 500;
+}
+.rekl-chip--type { background: #ede9fe; color: #7c3aed; }
+.rekl-chip--dato { background: #f0fdf4; color: #16a34a; }
+.rekl-chip--kostnad { background: #fff7ed; color: #c2410c; }
+
+.rekl-beskrivelse {
+  font-size: 12px; color: #64748b;
+  line-height: 1.5; margin-bottom: 8px;
+}
+
+.rekl-bunntekst {
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 12px;
+}
+.rekl-kommentar { color: #94a3b8; font-style: italic; }
