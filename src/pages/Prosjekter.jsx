@@ -199,7 +199,16 @@ export default function Prosjekter() {
   const [collapsed, setCollapsed] = useState({});
   const [fullscreen, setFullscreen] = useState(false);
   const [tlMode, setTlMode] = useState('maaned');
+  const [statusFilter, setStatusFilter] = useState(null);
+  const [plFilter, setPlFilter] = useState('');
   const tl = buildTimeline(tlMode);
+
+  function sumKr(arr) {
+    const total = arr.reduce((s, p) => s + (Number(p.belop) || 0), 0);
+    return total > 0
+      ? new Intl.NumberFormat('nb-NO', { maximumFractionDigits: 0 }).format(total) + ' kr'
+      : null;
+  }
 
   function openNew() {
     setEditing(null);
@@ -233,9 +242,21 @@ export default function Prosjekter() {
     setCollapsed(c => ({ ...c, [key]: !c[key] }));
   }
 
-  const alleProsjekter = state.prosjekter.filter(
-    p => !search || p.navn.toLowerCase().includes(search.toLowerCase()) || (p.adresse || '').toLowerCase().includes(search.toLowerCase())
-  );
+  const alleProsjekter = state.prosjekter.filter(p => {
+    if (search) {
+      const q = search.toLowerCase();
+      const pl = p.prosjektlederId ? state.ansatte.find(a => a.id === p.prosjektlederId) : null;
+      const match =
+        p.navn.toLowerCase().includes(q) ||
+        (p.adresse || '').toLowerCase().includes(q) ||
+        (p.jobbType || '').toLowerCase().includes(q) ||
+        (p.beskrivelse || '').toLowerCase().includes(q) ||
+        (pl?.navn || '').toLowerCase().includes(q);
+      if (!match) return false;
+    }
+    if (plFilter && p.prosjektlederId !== plFilter) return false;
+    return true;
+  });
 
   // Summary counts (normalized)
   const counts = { jobber_med: 0, godkjent: 0, aktiv: 0, fullfort: 0 };
@@ -270,35 +291,79 @@ export default function Prosjekter() {
 
       {/* Summary cards */}
       <div className="proj-summary-cards">
-        {summaryCards.map(card => (
-          <div key={card.key} className="proj-summary-card" style={{ borderTop: `3px solid ${card.color}`, background: card.bg }}>
-            <div className="proj-summary-icon">{card.icon}</div>
-            <div className="proj-summary-count" style={{ color: card.color }}>{card.count}</div>
-            <div className="proj-summary-label">{card.label}</div>
-          </div>
-        ))}
+        {summaryCards.map(card => {
+          const aktiv = statusFilter === card.key;
+          const gruppe = groups.find(g => g.key === card.key);
+          const gruppeProsjekter = gruppe ? state.prosjekter.filter(p => gruppe.statuses.includes(p.status)) : [];
+          const krSum = sumKr(gruppeProsjekter);
+          return (
+            <div
+              key={card.key}
+              className={`proj-summary-card${aktiv ? ' proj-summary-card--aktiv' : ''}`}
+              style={{
+                borderTop: `3px solid ${card.color}`,
+                background: aktiv ? card.color : card.bg,
+                cursor: 'pointer',
+                transition: 'box-shadow .15s, transform .1s',
+              }}
+              onClick={() => setStatusFilter(f => f === card.key ? null : card.key)}
+              title={aktiv ? 'Klikk for å fjerne filter' : `Filtrer på: ${card.label}`}
+            >
+              <div className="proj-summary-icon">{card.icon}</div>
+              <div className="proj-summary-count" style={{ color: aktiv ? '#fff' : card.color }}>{card.count}</div>
+              <div className="proj-summary-label" style={{ color: aktiv ? 'rgba(255,255,255,.85)' : undefined }}>{card.label}</div>
+              {krSum && <div className="proj-summary-kr" style={{ color: aktiv ? 'rgba(255,255,255,.8)' : '#16a34a' }}>{krSum}</div>}
+            </div>
+          );
+        })}
       </div>
+      {statusFilter && (
+        <div className="bef-filter-banner" style={{ marginBottom: 12 }}>
+          Viser kun: <strong>{summaryCards.find(c => c.key === statusFilter)?.label}</strong>
+          <button className="bef-filter-fjern" onClick={() => setStatusFilter(null)}>✕ Fjern filter</button>
+        </div>
+      )}
 
-      {/* Search */}
-      <div className="toolbar" style={{ marginBottom: 16 }}>
+      {/* Search + filters */}
+      <div className="toolbar" style={{ marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
         <input
           className="search-input"
-          placeholder="Søk prosjekt eller adresse..."
+          placeholder="🔍 Søk navn, adresse, type, leder..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          style={{ maxWidth: 320 }}
+          style={{ maxWidth: 300 }}
         />
-        {search && (
-          <button className="btn btn-sm" onClick={() => setSearch('')} style={{ marginLeft: 8 }}>✕ Tøm</button>
+        {(() => {
+          const plIds = [...new Set(state.prosjekter.map(p => p.prosjektlederId).filter(Boolean))];
+          if (plIds.length === 0) return null;
+          return (
+            <select
+              className="input"
+              style={{ width: 200, height: 36, fontSize: 13 }}
+              value={plFilter}
+              onChange={e => setPlFilter(e.target.value)}
+            >
+              <option value="">Alle prosjektledere</option>
+              {plIds.map(id => {
+                const a = state.ansatte.find(x => x.id === id);
+                return a ? <option key={id} value={id}>{a.navn}</option> : null;
+              })}
+            </select>
+          );
+        })()}
+        {(search || plFilter) && (
+          <button className="btn btn-sm" onClick={() => { setSearch(''); setPlFilter(''); }}>✕ Tøm filter</button>
         )}
       </div>
 
       {/* Grouped sections */}
       {groups.map(group => {
+        if (statusFilter && statusFilter !== group.key) return null;
         const prosjekter = alleProsjekter.filter(p => group.statuses.includes(p.status));
-        if (prosjekter.length === 0 && !search) return null;
+        if (prosjekter.length === 0 && !search && !plFilter && !statusFilter) return null;
         const isCollapsed = collapsed[group.key];
         const color = STATUS_COLORS[group.key];
+        const krSum = sumKr(prosjekter);
 
         return (
           <div key={group.key} className="proj-gruppe" style={{ marginBottom: 20 }}>
@@ -311,6 +376,7 @@ export default function Prosjekter() {
               <span className="proj-gruppe-icon">{group.icon}</span>
               <span className="proj-gruppe-label">{group.label}</span>
               <span className="proj-gruppe-count" style={{ background: color }}>{prosjekter.length}</span>
+              {krSum && <span className="proj-gruppe-kr">{krSum}</span>}
               <span className="proj-gruppe-chevron">{isCollapsed ? '▸' : '▾'}</span>
             </button>
 
@@ -409,6 +475,17 @@ export default function Prosjekter() {
                           ) : <span style={{ color: '#cbd5e1', fontSize: 12 }}>–</span>}
                         </div>
                         <div className="ct-col ct-actions">
+                          <select
+                            className="proj-status-select"
+                            value={normStatus(p.status)}
+                            title="Endre status"
+                            onClick={e => e.stopPropagation()}
+                            onChange={e => dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...p, status: e.target.value } })}
+                          >
+                            {SAVE_STATUSES.map(s => (
+                              <option key={s} value={s}>{SAVE_LABELS[s]}</option>
+                            ))}
+                          </select>
                           <button className="btn btn-sm" onClick={() => openEdit(p)}>Rediger</button>
                           <button className="btn btn-sm btn-danger" onClick={() => handleDelete(p.id)}>Slett</button>
                         </div>
