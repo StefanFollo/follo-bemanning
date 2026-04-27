@@ -60,6 +60,7 @@ export default function Bemanningsplan() {
   const [fullscreen, setFullscreen] = useState(false);
   const [storskjerm, setStorskjerm] = useState(false);
   const [storskjermZoom, setStorskjermZoom] = useState(1);
+  const [fagFilter, setFagFilter] = useState(null);
   const storskjermContentRef = useRef(null);
   const [ukeMode, setUkeMode] = useState('dag'); // 'dag' | 'uke' | 'maaned'
   const [ferieYearOffset, setFerieYearOffset] = useState(0);
@@ -247,9 +248,7 @@ export default function Bemanningsplan() {
     const HOLIDAYS = getHolidayMap(thisYear - 1, thisYear + 2);
     const isHoliday = (iso) => !!HOLIDAYS[iso];
     const holidayName = (iso) => HOLIDAYS[iso] || '';
-    // Én myk stålblå farge på alle prosjektbarer — ikke skarp, passer til designet
-    const PROSJEKT_BAR_FARGE = '#6b8fc4';
-    const prosjektColor = (_pid) => PROSJEKT_BAR_FARGE;
+    const prosjektColor = (pid) => state.prosjekter.find(p => p.id === pid)?.farge || '#6b8fc4';
 
     // ---- DAG-MODUS ----
     const weekEnd = addDays(currentWeek, 52 * 7 - 1);
@@ -631,15 +630,17 @@ export default function Bemanningsplan() {
           .map(t => t.ansattId)
       );
       // Ledige uten ferie → "Ikke tildelt", ledige med ferie → eget "Ferie"-avsnitt nederst
-      const ikkeTildelt = ledige.filter(a => !ferieIds.has(a.id));
-      const ferieKun    = ledige.filter(a =>  ferieIds.has(a.id));
+      const ikkeTildelt = ledige.filter(a => !ferieIds.has(a.id)).filter(a => !fagFilter || a.fag === fagFilter);
+      const ferieKun    = ledige.filter(a =>  ferieIds.has(a.id)).filter(a => !fagFilter || a.fag === fagFilter);
 
       return (
         <>
           {prosjekter.map(prosjekt => {
             const color = prosjektColor(prosjekt.id);
             const ids = [...new Set(state.tildelinger.filter(t => t.prosjektId === prosjekt.id && overlaps(t.startDato, t.sluttDato, periodeS, periodeE)).map(t => t.ansattId))];
-            const ansatte = ids.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
+            const ansatte = ids.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean)
+              .filter(a => !fagFilter || a.fag === fagFilter);
+            if (ansatte.length === 0) return null;
             return (
               <React.Fragment key={prosjekt.id}>
                 <div className="uke-prosjekt-header" style={{ gridColumn: '1 / -1', borderLeft: `4px solid ${color}` }}>
@@ -674,6 +675,26 @@ export default function Bemanningsplan() {
       );
     }
 
+    // Kapasitet denne uken
+    const kapWEnd = addDays(currentWeek, 4);
+    const kapOpptattIds = new Set(
+      state.tildelinger
+        .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, kapWEnd))
+        .map(t => t.ansattId)
+    );
+    const kapFerieIds = new Set(
+      state.tildelinger
+        .filter(t => t.prosjektId === FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, kapWEnd))
+        .map(t => t.ansattId)
+    );
+    const kapTotal   = state.ansatte.length;
+    const kapOpptatt = state.ansatte.filter(a => kapOpptattIds.has(a.id)).length;
+    const kapFerie   = state.ansatte.filter(a => kapFerieIds.has(a.id) && !kapOpptattIds.has(a.id)).length;
+    const kapLedig   = kapTotal - kapOpptatt - kapFerie;
+    const kapPst     = kapTotal > 0 ? Math.round((kapOpptatt / kapTotal) * 100) : 0;
+
+    const fagOptions = state.fag.filter(f => state.ansatte.some(a => a.fag === f));
+
     return (
       <div>
         <div className="uke-nav">
@@ -687,6 +708,40 @@ export default function Bemanningsplan() {
             <button className={`ukemode-btn ${ukeMode === 'maaned' ? 'active' : ''}`} onClick={() => setUkeMode('maaned')}>Måneder</button>
           </div>
         </div>
+
+        {/* Kapasitetsmåler – kun i dagmodus */}
+        {ukeMode === 'dag' && kapTotal > 0 && (
+          <div className="bplan-kap-banner">
+            <span className="bplan-kap-tittel">Uke {getWeekNumber(currentWeek)}</span>
+            <span className="bplan-kap-chip bplan-kap-chip--opptatt">🔨 {kapOpptatt} opptatt</span>
+            {kapFerie > 0 && <span className="bplan-kap-chip bplan-kap-chip--ferie">🏖 {kapFerie} ferie</span>}
+            <span className="bplan-kap-chip" style={{ background: kapLedig > 0 ? '#f0fdf4' : '#fef2f2', color: kapLedig > 0 ? '#16a34a' : '#dc2626' }}>
+              {kapLedig > 0 ? '✅' : '🔴'} {kapLedig} ledig
+            </span>
+            <div className="bplan-kap-bar-outer">
+              <div className="bplan-kap-bar-seg bplan-kap-bar-opptatt" style={{ width: kapPst + '%' }} />
+              <div className="bplan-kap-bar-seg bplan-kap-bar-ferie" style={{ width: (kapTotal > 0 ? kapFerie / kapTotal * 100 : 0) + '%' }} />
+            </div>
+            <span className="bplan-kap-pst">{kapPst}% utnyttet</span>
+          </div>
+        )}
+
+        {/* Fag-filter */}
+        {fagOptions.length > 1 && (
+          <div className="bplan-fag-filter">
+            <button className={`bplan-fag-pill${!fagFilter ? ' aktiv' : ''}`} onClick={() => setFagFilter(null)}>Alle</button>
+            {fagOptions.map(f => (
+              <button key={f}
+                className={`bplan-fag-pill${fagFilter === f ? ' aktiv' : ''}`}
+                style={fagFilter === f
+                  ? { background: fagColor(f), color: '#fff', borderColor: fagColor(f) }
+                  : { borderColor: fagColor(f), color: fagColor(f) }}
+                onClick={() => setFagFilter(ff => ff === f ? null : f)}>
+                {f}
+              </button>
+            ))}
+          </div>
+        )}
 
         {state.ansatte.length === 0 && <div className="empty">Ingen ansatte registrert enda.</div>}
 
@@ -815,6 +870,9 @@ export default function Bemanningsplan() {
       localStorage.setItem('fbs_ansatte_order', JSON.stringify(newOrder));
     }
 
+    const ovFagOptions = state.fag.filter(f => state.ansatte.some(a => a.fag === f));
+    const filteredAnsatte = fagFilter ? orderedAnsatte.filter(a => a.fag === fagFilter) : orderedAnsatte;
+
     return (
       <div>
         {/* Navigation */}
@@ -831,6 +889,23 @@ export default function Bemanningsplan() {
           )}
           <button className="btn btn-primary no-print" onClick={() => openAddTildeling()}>+ Ny tildeling</button>
         </div>
+
+        {/* Fag-filter */}
+        {ovFagOptions.length > 1 && (
+          <div className="bplan-fag-filter">
+            <button className={`bplan-fag-pill${!fagFilter ? ' aktiv' : ''}`} onClick={() => setFagFilter(null)}>Alle</button>
+            {ovFagOptions.map(f => (
+              <button key={f}
+                className={`bplan-fag-pill${fagFilter === f ? ' aktiv' : ''}`}
+                style={fagFilter === f
+                  ? { background: fagColor(f), color: '#fff', borderColor: fagColor(f) }
+                  : { borderColor: fagColor(f), color: fagColor(f) }}
+                onClick={() => setFagFilter(ff => ff === f ? null : f)}>
+                {f}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="oversikt-scroll-wrap">
           <div style={{ minWidth: LABEL_W + totalW }}>
@@ -869,8 +944,34 @@ export default function Bemanningsplan() {
               })}
             </div>
 
+            {/* ── Kapasitetsrad ──────────────────────────────── */}
+            <div className="oversikt-kap-row" style={{ display: 'flex', minWidth: LABEL_W + totalW }}>
+              <div className="oversikt-kap-corner" style={{ width: LABEL_W }}>Ledig</div>
+              {weeks.map((wk, wi) => {
+                const wOpptattIds = new Set(
+                  state.tildelinger
+                    .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, wk.start, wk.end))
+                    .map(t => t.ansattId)
+                );
+                const tot = state.ansatte.length;
+                const opp = state.ansatte.filter(a => wOpptattIds.has(a.id)).length;
+                const led = tot - opp;
+                const pst = tot > 0 ? Math.round((led / tot) * 100) : 0;
+                const farge = led === 0 ? '#dc2626' : led <= 2 ? '#f59e0b' : '#16a34a';
+                const isCurrent = wk.days.includes(today);
+                return (
+                  <div key={wi} className={`oversikt-kap-cell${isCurrent ? ' current' : ''}`} style={{ width: wk.days.length * DAY_W }}>
+                    <div className="oversikt-kap-bar-wrap">
+                      <div className="oversikt-kap-bar-fill" style={{ width: (100 - pst) + '%', background: '#e2e8f0' }} />
+                    </div>
+                    <span className="oversikt-kap-lbl" style={{ color: farge }}>{led}/{tot}</span>
+                  </div>
+                );
+              })}
+            </div>
+
             {/* ── Ansatte-rader ──────────────────────────────── */}
-            {orderedAnsatte.map((ansatt, ri) => {
+            {filteredAnsatte.map((ansatt, ri) => {
               const myTils = state.tildelinger
                 .filter(t => t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, viewStart, viewEnd))
                 .sort((a, b) => (a.prosjektId === FERIE_ID ? 1 : 0) - (b.prosjektId === FERIE_ID ? 1 : 0));

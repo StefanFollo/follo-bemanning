@@ -461,6 +461,76 @@ body {
   pointer-events: none;
 }
 
+/* ─── Fag-filter pills ──────────────────────────────────────────────────── */
+.bplan-fag-filter {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  padding: 8px 0 4px;
+  margin-bottom: 4px;
+}
+.bplan-fag-pill {
+  font-size: 12px; font-weight: 600;
+  padding: 3px 11px; border-radius: 20px;
+  border: 1.5px solid #e2e8f0;
+  background: #fff; color: #64748b;
+  cursor: pointer; transition: all .13s;
+}
+.bplan-fag-pill:hover { border-color: #94a3b8; color: #1e293b; }
+.bplan-fag-pill.aktiv { background: #1e293b; color: #fff; border-color: #1e293b; }
+
+/* ─── Kapasitetsmåler (banner i Ukeoversikt) ────────────────────────────── */
+.bplan-kap-banner {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  background: #f8fafc; border: 1px solid #e2e8f0;
+  border-radius: 8px; padding: 7px 14px;
+  margin-bottom: 8px; font-size: 12px;
+}
+.bplan-kap-tittel { font-weight: 700; color: #475569; }
+.bplan-kap-chip {
+  padding: 2px 9px; border-radius: 12px; font-size: 11px; font-weight: 600;
+}
+.bplan-kap-chip--opptatt { background: #eff6ff; color: #2563eb; }
+.bplan-kap-chip--ferie   { background: #fffbeb; color: #d97706; }
+.bplan-kap-bar-outer {
+  flex: 1; min-width: 80px; height: 6px; border-radius: 3px;
+  background: #e2e8f0; display: flex; overflow: hidden;
+}
+.bplan-kap-bar-seg { height: 100%; transition: width .3s; }
+.bplan-kap-bar-opptatt { background: #2563eb; }
+.bplan-kap-bar-ferie    { background: #f59e0b; }
+.bplan-kap-pst { font-size: 11px; color: #94a3b8; white-space: nowrap; }
+
+/* ─── Kapasitetsrad (Oversikt-gantt) ───────────────────────────────────── */
+.oversikt-kap-row {
+  display: flex;
+  border-bottom: 2px solid #e2e8f0;
+  background: #f8fafc;
+}
+.oversikt-kap-corner {
+  display: flex; align-items: center;
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .05em; color: #94a3b8;
+  padding: 4px 8px; flex-shrink: 0;
+  border-right: 1px solid #e2e8f0;
+}
+.oversikt-kap-cell {
+  display: flex; align-items: center; justify-content: center;
+  gap: 4px; padding: 3px 2px; border-right: 1px solid #f1f5f9;
+  min-height: 22px; position: relative;
+}
+.oversikt-kap-cell.current { background: #eff6ff; }
+.oversikt-kap-bar-wrap {
+  position: absolute; inset: 3px 2px; border-radius: 2px;
+  background: #e2e8f0; overflow: hidden;
+}
+.oversikt-kap-bar-fill {
+  position: absolute; right: 0; top: 0; bottom: 0;
+  transition: width .3s;
+}
+.oversikt-kap-lbl {
+  position: relative; font-size: 10px; font-weight: 700;
+  z-index: 1; white-space: nowrap;
+}
+
 /* ─── Oversikt (multi-uke Gantt) ────────────────────────────────────────── */
 .oversikt-scroll-wrap {
   overflow-x: auto;
