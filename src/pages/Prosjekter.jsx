@@ -201,6 +201,9 @@ export default function Prosjekter() {
   const [tlMode, setTlMode] = useState('maaned');
   const [statusFilter, setStatusFilter] = useState(null);
   const [plFilter, setPlFilter] = useState('');
+  const [expandedId, setExpandedId] = useState(null);
+  const [sortKey, setSortKey] = useState(null);
+  const [sortDir, setSortDir] = useState('asc');
   const tl = buildTimeline(tlMode);
 
   function sumKr(arr) {
@@ -208,6 +211,49 @@ export default function Prosjekter() {
     return total > 0
       ? new Intl.NumberFormat('nb-NO', { maximumFractionDigits: 0 }).format(total) + ' kr'
       : null;
+  }
+
+  function toggleSort(key) {
+    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir('asc'); }
+  }
+
+  function sortIcon(key) {
+    if (sortKey !== key) return <span className="ct-sort-icon">↕</span>;
+    return <span className="ct-sort-icon ct-sort-icon--active">{sortDir === 'asc' ? '↑' : '↓'}</span>;
+  }
+
+  function sortProsjekter(arr) {
+    if (!sortKey) return arr;
+    return [...arr].sort((a, b) => {
+      let va, vb;
+      switch (sortKey) {
+        case 'navn':      va = a.navn.toLowerCase(); vb = b.navn.toLowerCase(); break;
+        case 'startDato': va = a.startDato || ''; vb = b.startDato || ''; break;
+        case 'sluttDato': va = a.sluttDato || ''; vb = b.sluttDato || ''; break;
+        case 'belop':     va = Number(a.belop) || 0; vb = Number(b.belop) || 0; break;
+        case 'fremgang': {
+          const oppA = state.oppgaver.filter(o => o.prosjektId === a.id);
+          va = oppA.length ? oppA.reduce((s, o) => s + (o.fremgang || 0), 0) / oppA.length : -1;
+          const oppB = state.oppgaver.filter(o => o.prosjektId === b.id);
+          vb = oppB.length ? oppB.reduce((s, o) => s + (o.fremgang || 0), 0) / oppB.length : -1;
+          break;
+        }
+        default: return 0;
+      }
+      if (va < vb) return sortDir === 'asc' ? -1 : 1;
+      if (va > vb) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
+
+  function sluttDatoInfo(sluttDato, status) {
+    if (!sluttDato || status === 'fullfort') return null;
+    const dager = Math.round((new Date(sluttDato + 'T00:00:00') - new Date()) / 86400000);
+    if (dager < 0)    return { farge: '#dc2626', bg: '#fff5f5', label: `${Math.abs(dager)}d over` };
+    if (dager <= 7)   return { farge: '#dc2626', bg: '#fff5f5', label: `${dager}d igjen` };
+    if (dager <= 14)  return { farge: '#f59e0b', bg: '#fffbeb', label: `${dager}d igjen` };
+    return null;
   }
 
   function openNew() {
@@ -389,19 +435,33 @@ export default function Prosjekter() {
               ) : (
                 <div className="compact-table">
                   <div className="ct-header">
-                    <div className="ct-col ct-name">Prosjektnavn</div>
+                    <div className="ct-col ct-name">
+                      <button className="ct-sort-btn" onClick={() => toggleSort('navn')}>
+                        Prosjektnavn {sortIcon('navn')}
+                      </button>
+                    </div>
                     <div className="ct-col ct-gantt" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span>{tl.label}</span>
+                      <button className="ct-sort-btn" onClick={() => toggleSort('startDato')}>
+                        {tl.label} {sortIcon('startDato')}
+                      </button>
                       <div className="ukemode-toggle" style={{ marginLeft: 'auto' }}>
                         <button className={`ukemode-btn ${tlMode==='dag'?'active':''}`} onClick={() => setTlMode('dag')}>Dag</button>
                         <button className={`ukemode-btn ${tlMode==='uke'?'active':''}`} onClick={() => setTlMode('uke')}>Uke</button>
                         <button className={`ukemode-btn ${tlMode==='maaned'?'active':''}`} onClick={() => setTlMode('maaned')}>Måned</button>
                       </div>
                     </div>
-                    <div className="ct-col ct-progress">Fremdrift</div>
-                    <div className="ct-col ct-actions"></div>
+                    <div className="ct-col ct-progress">
+                      <button className="ct-sort-btn" onClick={() => toggleSort('fremgang')}>
+                        Fremdrift {sortIcon('fremgang')}
+                      </button>
+                    </div>
+                    <div className="ct-col ct-actions">
+                      <button className="ct-sort-btn" onClick={() => toggleSort('belop')}>
+                        💰 Beløp {sortIcon('belop')}
+                      </button>
+                    </div>
                   </div>
-                  {prosjekter.map(p => {
+                  {sortProsjekter(prosjekter).map(p => {
                     const opp = state.oppgaver.filter(o => o.prosjektId === p.id);
                     const fremgang = opp.length
                       ? Math.round(opp.reduce((s, o) => s + (o.fremgang || 0), 0) / opp.length)
@@ -416,79 +476,139 @@ export default function Prosjekter() {
                     const prosjektleder = p.prosjektlederId
                       ? state.ansatte.find(a => a.id === p.prosjektlederId)
                       : null;
+                    const varsel = sluttDatoInfo(p.sluttDato, p.status);
+                    const isExpanded = expandedId === p.id;
 
                     return (
-                      <div className="ct-row" key={p.id}>
-                        <div className="ct-col ct-name" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <span className="prosjekt-farge-dot" style={{ background: barColor }} />
-                          <div>
-                            <span className="ct-prosjekt-navn">{p.navn}</span>
-                            <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
-                              {p.adresse && <span className="ct-sub">{p.adresse}</span>}
-                              {ansatteCount > 0 && (
-                                <span className="ansatte-tooltip-wrap">
-                                  <span className="ansatte-badge">👷 {ansatteCount}</span>
-                                  <div className="ansatte-tooltip">
-                                    <div className="ansatte-tooltip-tittel">Tildelte ansatte</div>
-                                    {ansatteNavn.map(a => (
-                                      <div key={a.id} className="ansatte-tooltip-rad">
-                                        <span className="ansatte-tooltip-dot" style={{ background: FAG_COLORS[a.fag] || '#6b7280' }} />
-                                        {a.navn}
+                      <div key={p.id} className="ct-row-wrap">
+                        <div
+                          className={`ct-row${varsel ? ' ct-row--varsel' : ''}${isExpanded ? ' ct-row--expanded' : ''}`}
+                          style={{ background: varsel?.bg, cursor: 'pointer' }}
+                          onClick={() => setExpandedId(id => id === p.id ? null : p.id)}
+                        >
+                          <div className="ct-col ct-name" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span className="prosjekt-farge-dot" style={{ background: barColor }} />
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                <span className="ct-prosjekt-navn">{p.navn}</span>
+                                <span className="ct-expand-chevron">{isExpanded ? '▾' : '▸'}</span>
+                              </div>
+                              <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
+                                {p.adresse && <span className="ct-sub">{p.adresse}</span>}
+                                {ansatteCount > 0 && (
+                                  <span className="ansatte-tooltip-wrap">
+                                    <span className="ansatte-badge">👷 {ansatteCount}</span>
+                                    <div className="ansatte-tooltip">
+                                      <div className="ansatte-tooltip-tittel">Tildelte ansatte</div>
+                                      {ansatteNavn.map(a => (
+                                        <div key={a.id} className="ansatte-tooltip-rad">
+                                          <span className="ansatte-tooltip-dot" style={{ background: FAG_COLORS[a.fag] || '#6b7280' }} />
+                                          {a.navn}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </span>
+                                )}
+                                {p.startDato && (
+                                  <span style={{ fontSize: 11, color: varsel ? varsel.farge : '#94a3b8', fontWeight: varsel ? 600 : 400 }}>
+                                    {formatDate(p.startDato)}{p.sluttDato ? ` – ${formatDate(p.sluttDato)}` : ''}
+                                    {varsel && <em style={{ marginLeft: 4 }}>({varsel.label})</em>}
+                                  </span>
+                                )}
+                                {varighetVis && <span className="proj-meta-pill">⏱ {varighetVis}</span>}
+                                {belopVis && <span className="proj-meta-pill proj-meta-belop">💰 {belopVis}</span>}
+                                {p.manskapAntall && <span className="proj-meta-pill">👷 {p.manskapAntall} mann</span>}
+                                {prosjektleder && (
+                                  <span className="proj-meta-pill proj-meta-pl">
+                                    🧑‍💼 {prosjektleder.navn.split(' ')[0]}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="ct-col ct-gantt">
+                            <MiniGantt prosjekt={p} color={barColor} tlStart={tl.tlStart} tlDays={tl.tlDays} ticks={tl.ticks} />
+                          </div>
+                          <div className="ct-col ct-progress">
+                            {fremgang !== null ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <div className="progress-bar" style={{ flex: 1 }}>
+                                  <div className="progress-fill" style={{ width: fremgang + '%', background: barColor }} />
+                                </div>
+                                <span style={{ fontSize: 12, fontWeight: 600, minWidth: 30 }}>{fremgang}%</span>
+                              </div>
+                            ) : <span style={{ color: '#cbd5e1', fontSize: 12 }}>–</span>}
+                          </div>
+                          <div className="ct-col ct-actions" onClick={e => e.stopPropagation()}>
+                            <select
+                              className="proj-status-select"
+                              value={normStatus(p.status)}
+                              title="Endre status"
+                              onChange={e => dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...p, status: e.target.value } })}
+                            >
+                              {SAVE_STATUSES.map(s => (
+                                <option key={s} value={s}>{SAVE_LABELS[s]}</option>
+                              ))}
+                            </select>
+                            <button className="btn btn-sm" onClick={() => openEdit(p)}>Rediger</button>
+                            <button className="btn btn-sm btn-danger" onClick={() => handleDelete(p.id)}>Slett</button>
+                          </div>
+                        </div>
+
+                        {/* Utvidet detaljpanel */}
+                        {isExpanded && (
+                          <div className="ct-row-detail" style={{ borderLeft: `4px solid ${barColor}` }}>
+                            {p.beskrivelse && (
+                              <div className="ct-detail-seksjon">
+                                <div className="ct-detail-tittel">📝 Beskrivelse</div>
+                                <div className="ct-detail-tekst">{p.beskrivelse}</div>
+                              </div>
+                            )}
+                            <div className="ct-detail-grid">
+                              {/* Tildelinger */}
+                              <div className="ct-detail-seksjon">
+                                <div className="ct-detail-tittel">👷 Tildelinger ({tildelinger.length})</div>
+                                {tildelinger.length === 0 ? (
+                                  <div className="ct-detail-tom">Ingen tildelinger registrert</div>
+                                ) : (
+                                  tildelinger.map(t => {
+                                    const ansatt = state.ansatte.find(a => a.id === t.ansattId);
+                                    if (!ansatt) return null;
+                                    return (
+                                      <div key={t.id} className="ct-detail-rad">
+                                        <span className="ct-detail-dot" style={{ background: FAG_COLORS[ansatt.fag] || barColor }} />
+                                        <span className="ct-detail-navn">{ansatt.navn}</span>
+                                        {ansatt.fag && <span className="ct-detail-fag">{ansatt.fag}</span>}
+                                        <span className="ct-detail-dato">
+                                          {t.startDato ? formatDate(t.startDato) : '?'}
+                                          {t.sluttDato ? ` – ${formatDate(t.sluttDato)}` : ''}
+                                        </span>
                                       </div>
-                                    ))}
-                                  </div>
-                                </span>
-                              )}
-                              {p.startDato && (
-                                <span style={{ fontSize: 11, color: '#94a3b8' }}>
-                                  {formatDate(p.startDato)}{p.sluttDato ? ` – ${formatDate(p.sluttDato)}` : ''}
-                                </span>
-                              )}
-                              {varighetVis && (
-                                <span className="proj-meta-pill">⏱ {varighetVis}</span>
-                              )}
-                              {belopVis && (
-                                <span className="proj-meta-pill proj-meta-belop">💰 {belopVis}</span>
-                              )}
-                              {p.manskapAntall && (
-                                <span className="proj-meta-pill">👷 {p.manskapAntall} mann</span>
-                              )}
-                              {prosjektleder && (
-                                <span className="proj-meta-pill proj-meta-pl">
-                                  🧑‍💼 {prosjektleder.navn.split(' ')[0]}
-                                </span>
+                                    );
+                                  })
+                                )}
+                              </div>
+
+                              {/* Oppgaver */}
+                              {opp.length > 0 && (
+                                <div className="ct-detail-seksjon">
+                                  <div className="ct-detail-tittel">✅ Oppgaver ({opp.length})</div>
+                                  {opp.map(o => (
+                                    <div key={o.id} className="ct-detail-opp">
+                                      <span className="ct-detail-navn">{o.navn || o.name || o.tittel || 'Oppgave'}</span>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 100 }}>
+                                        <div className="progress-bar" style={{ flex: 1, height: 4 }}>
+                                          <div className="progress-fill" style={{ width: (o.fremgang || 0) + '%', background: barColor }} />
+                                        </div>
+                                        <span style={{ fontSize: 11, fontWeight: 600, color: '#475569', minWidth: 28 }}>{o.fremgang || 0}%</span>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
                               )}
                             </div>
                           </div>
-                        </div>
-                        <div className="ct-col ct-gantt">
-                          <MiniGantt prosjekt={p} color={barColor} tlStart={tl.tlStart} tlDays={tl.tlDays} ticks={tl.ticks} />
-                        </div>
-                        <div className="ct-col ct-progress">
-                          {fremgang !== null ? (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <div className="progress-bar" style={{ flex: 1 }}>
-                                <div className="progress-fill" style={{ width: fremgang + '%', background: barColor }} />
-                              </div>
-                              <span style={{ fontSize: 12, fontWeight: 600, minWidth: 30 }}>{fremgang}%</span>
-                            </div>
-                          ) : <span style={{ color: '#cbd5e1', fontSize: 12 }}>–</span>}
-                        </div>
-                        <div className="ct-col ct-actions">
-                          <select
-                            className="proj-status-select"
-                            value={normStatus(p.status)}
-                            title="Endre status"
-                            onClick={e => e.stopPropagation()}
-                            onChange={e => dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...p, status: e.target.value } })}
-                          >
-                            {SAVE_STATUSES.map(s => (
-                              <option key={s} value={s}>{SAVE_LABELS[s]}</option>
-                            ))}
-                          </select>
-                          <button className="btn btn-sm" onClick={() => openEdit(p)}>Rediger</button>
-                          <button className="btn btn-sm btn-danger" onClick={() => handleDelete(p.id)}>Slett</button>
-                        </div>
+                        )}
                       </div>
                     );
                   })}
