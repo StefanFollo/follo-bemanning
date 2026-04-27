@@ -2411,3 +2411,120 @@ body {
   font-size: 12px;
 }
 .rekl-kommentar { color: #94a3b8; font-style: italic; }
+
+/* ===== DASHBOARD ===== */
+.dash-side { padding: 0; }
+
+.dash-header {
+  padding: 24px 24px 16px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.dash-tittel { font-size: 24px; font-weight: 700; color: #1e293b; }
+.dash-dato   { font-size: 14px; color: #64748b; margin-top: 2px; }
+
+.dash-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+.dash-stat-kort {
+  padding: 20px 24px;
+  border-right: 1px solid #f1f5f9;
+  border-top: 4px solid #3b82f6;
+}
+.dash-stat-kort:last-child { border-right: none; }
+.dash-stat-kort--bef { border-top-color: #8b5cf6; }
+.dash-stat-kort--rekl { border-top-color: #e2e8f0; }
+.dash-stat-tall  { font-size: 32px; font-weight: 800; color: #1e293b; line-height: 1; }
+.dash-stat-label { font-size: 13px; font-weight: 600; color: #475569; margin-top: 4px; }
+.dash-stat-sub   { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  min-height: 0;
+}
+.dash-kolonne { padding: 20px 24px; display: flex; flex-direction: column; gap: 20px; }
+.dash-kolonne:first-child { border-right: 1px solid #f1f5f9; }
+
+.dash-seksjon { }
+.dash-seksjon-header {
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 13px; font-weight: 700; color: #374151;
+  margin-bottom: 12px; padding-bottom: 8px;
+  border-bottom: 2px solid #f1f5f9;
+}
+.dash-seksjon-teller {
+  font-size: 12px; font-weight: 700;
+  background: #f1f5f9; color: #475569;
+  padding: 2px 8px; border-radius: 12px;
+}
+.dash-tom { font-size: 13px; color: #94a3b8; padding: 8px 0; }
+
+/* Prosjekt-rader */
+.dash-prosjekt-rad {
+  padding: 10px 0;
+  border-bottom: 1px solid #f8fafc;
+}
+.dash-prosjekt-rad:last-child { border-bottom: none; }
+.dash-prosjekt-topp {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 8px;
+}
+.dash-proj-farge { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.dash-proj-navn  { font-size: 13px; font-weight: 600; color: #1e293b; flex: 1; }
+.dash-proj-antall { font-size: 11px; color: #94a3b8; }
+
+.dash-avatar-rad { display: flex; flex-wrap: wrap; gap: 8px; }
+.dash-avatar-wrap { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.dash-avatar-navn { font-size: 9px; color: #64748b; text-align: center; max-width: 36px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* Befaringer */
+.dash-bef-rad {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0; border-bottom: 1px solid #f8fafc;
+}
+.dash-bef-rad:last-child { border-bottom: none; }
+.dash-bef-idag { background: #eff6ff; border-radius: 8px; padding: 8px 10px; margin: 0 -10px; }
+.dash-bef-dato { font-size: 11px; font-weight: 700; color: #64748b; width: 60px; flex-shrink: 0; }
+.dash-bef-info { flex: 1; min-width: 0; }
+.dash-bef-navn   { font-size: 13px; font-weight: 600; color: #1e293b; }
+.dash-bef-adresse { font-size: 11px; color: #94a3b8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dash-bef-pill { font-size: 16px; }
+
+/* Frister */
+.dash-frist-rad {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 0; border-bottom: 1px solid #f8fafc;
+}
+.dash-frist-rad:last-child { border-bottom: none; }
+.dash-frist-info { flex: 1; min-width: 0; }
+.dash-frist-navn    { font-size: 13px; font-weight: 600; color: #1e293b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dash-frist-adresse { font-size: 11px; color: #94a3b8; }
+.dash-frist-badge {
+  font-size: 11px; font-weight: 700;
+  padding: 3px 9px; border-radius: 12px;
+  white-space: nowrap; flex-shrink: 0;
+}
+
+/* Hurtiglenker */
+.dash-hurtig-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.dash-hurtig-knapp {
+  display: flex; align-items: center; gap: 10px;
+  background: #f8fafc; border: 1px solid #e2e8f0;
+  border-radius: 10px; padding: 12px 14px;
+  cursor: pointer; text-align: left;
+  transition: background .15s, box-shadow .15s;
+}
+.dash-hurtig-knapp:hover { background: #eff6ff; border-color: #bfdbfe; box-shadow: 0 2px 8px rgba(37,99,235,.08); }
+.dash-hurtig-ikon  { font-size: 22px; }
+.dash-hurtig-label { font-size: 13px; font-weight: 600; color: #1e293b; }
+.dash-hurtig-sub   { font-size: 11px; color: #94a3b8; }
+
+@media (max-width: 900px) {
+  .dash-stats { grid-template-columns: repeat(2, 1fr); }
+  .dash-grid  { grid-template-columns: 1fr; }
+  .dash-kolonne:first-child { border-right: none; border-bottom: 1px solid #f1f5f9; }
+}
