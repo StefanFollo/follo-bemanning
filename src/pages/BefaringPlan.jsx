@@ -45,6 +45,8 @@ function dagerTil(iso) {
 function tomModal() {
   return {
     kontaktNavn: '',
+    telefon: '',
+    epost: '',
     adresse: '',
     jobbType: 'Ny bygg',
     dato: dateToIso(new Date()),
@@ -57,6 +59,7 @@ function tomModal() {
     tilbudFrist: '',
     nesteKontakt: '',
     resultat: '',
+    tapArsak: '',
   };
 }
 
@@ -73,6 +76,8 @@ export default function BefaringPlan() {
   const [prosjektForm, setProsjektForm] = useState({ navn: '', startDato: '', sluttDato: '', farge: '#6b8fc4', lagTildeling: true });
   const [kalMaaned, setKalMaaned] = useState(() => monthStart(today));
   const [viewTab, setViewTab] = useState('oversikt'); // 'oversikt' | 'kalender'
+  const [sok, setSok] = useState('');
+  const [visAvsluttede, setVisAvsluttede] = useState(false);
 
   function ansattFarge(ansattId) {
     if (!ansattId) return null;
@@ -180,13 +185,32 @@ export default function BefaringPlan() {
 
   const teller = Object.fromEntries(Object.keys(STATUS).map(s => [s, befaringer.filter(b => b.status === s).length]));
 
+  function sokFilter(b) {
+    if (!sok.trim()) return true;
+    const q = sok.toLowerCase();
+    return (
+      b.kontaktNavn?.toLowerCase().includes(q) ||
+      b.adresse?.toLowerCase().includes(q) ||
+      b.telefon?.toLowerCase().includes(q) ||
+      b.epost?.toLowerCase().includes(q) ||
+      b.jobbType?.toLowerCase().includes(q)
+    );
+  }
+
   const planlagte = [...befaringer]
     .filter(b => b.status === 'planlagt')
+    .filter(sokFilter)
     .sort((a, b) => a.dato.localeCompare(b.dato));
 
   const tilbudArbeid = [...befaringer]
     .filter(b => b.status === 'tilbud_arbeid' || b.status === 'tilbud_sendt')
+    .filter(sokFilter)
     .sort((a, b) => (a.tilbudFrist || '9999').localeCompare(b.tilbudFrist || '9999'));
+
+  const avsluttede = [...befaringer]
+    .filter(b => b.status === 'godkjent' || b.status === 'tapt')
+    .filter(sokFilter)
+    .sort((a, b) => b.dato.localeCompare(a.dato));
 
   const uker = kapasitetPerUke();
 
@@ -199,13 +223,21 @@ export default function BefaringPlan() {
       : null;
     const fristDager = dagerTil(b.tilbudFrist);
     const fristFarge = fristDager !== null ? (fristDager < 0 ? '#dc2626' : fristDager <= 3 ? '#f59e0b' : '#16a34a') : null;
+    const kontaktDager = dagerTil(b.nesteKontakt);
+    const kontaktFarge = kontaktDager !== null ? (kontaktDager < 0 ? '#dc2626' : kontaktDager <= 2 ? '#f59e0b' : '#64748b') : '#64748b';
 
     return (
       <div className="bef-k-kort" onClick={() => apneRediger(b)}>
         <div className="bef-k-kort-topp">
-          <div>
+          <div style={{ minWidth: 0 }}>
             <div className="bef-k-navn">{b.kontaktNavn}</div>
             <div className="bef-k-adresse">{b.adresse}</div>
+            {(b.telefon || b.epost) && (
+              <div className="bef-k-kontakt">
+                {b.telefon && <a href={`tel:${b.telefon}`} onClick={e => e.stopPropagation()} className="bef-k-kontakt-link">📱 {b.telefon}</a>}
+                {b.epost && <a href={`mailto:${b.epost}`} onClick={e => e.stopPropagation()} className="bef-k-kontakt-link">✉️ {b.epost}</a>}
+              </div>
+            )}
           </div>
           <span className="bef-k-status-pill" style={{ background: s.bg, color: s.farge }}>
             {s.ikon} {s.label}
@@ -235,13 +267,21 @@ export default function BefaringPlan() {
             </span>
           )}
           {b.nesteKontakt && (
-            <span className="bef-k-dato-rad">
+            <span className="bef-k-dato-rad" style={{ color: kontaktFarge, fontWeight: kontaktDager !== null && kontaktDager <= 2 ? 600 : 400 }}>
               📞 Neste kontakt: {datoKort(b.nesteKontakt)}
+              {kontaktDager !== null && kontaktDager <= 2 && (
+                <em> ({kontaktDager < 0 ? `${Math.abs(kontaktDager)}d over` : kontaktDager === 0 ? 'i dag!' : `${kontaktDager}d`})</em>
+              )}
             </span>
           )}
           {b.resultat && (
             <span className="bef-k-dato-rad bef-k-resultat">
               📝 {b.resultat}
+            </span>
+          )}
+          {b.tapArsak && b.status === 'tapt' && (
+            <span className="bef-k-dato-rad" style={{ color: '#dc2626' }}>
+              ❌ {b.tapArsak}
             </span>
           )}
           {b.kommentar && (
@@ -259,7 +299,14 @@ export default function BefaringPlan() {
       {/* Header */}
       <div className="page-header">
         <h2>Befaring & Tilbud</h2>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <input
+            className="input"
+            style={{ width: 200, height: 36 }}
+            placeholder="🔍 Søk navn, adresse, type..."
+            value={sok}
+            onChange={e => setSok(e.target.value)}
+          />
           <div className="bef-view-tabs">
             <button className={`bef-view-tab${viewTab === 'oversikt' ? ' aktiv' : ''}`} onClick={() => setViewTab('oversikt')}>📋 Oversikt</button>
             <button className={`bef-view-tab${viewTab === 'kalender' ? ' aktiv' : ''}`} onClick={() => setViewTab('kalender')}>📅 Kalender</button>
@@ -279,18 +326,16 @@ export default function BefaringPlan() {
         ))}
       </div>
 
-      {/* Oversikt-visning: to kolonner */}
+      {/* Oversikt-visning: tre kolonner */}
       {viewTab === 'oversikt' && (
-        <div className="bef-kanban">
+        <div className="bef-kanban bef-kanban--3col">
           {/* Planlagt befaring */}
           <div className="bef-kolonne">
             <div className="bef-kolonne-header" style={{ borderColor: STATUS.planlagt.farge, color: STATUS.planlagt.farge }}>
               📋 Planlagt befaring
               <span className="bef-kolonne-teller">{planlagte.length}</span>
             </div>
-            {planlagte.length === 0 && (
-              <div className="bef-tom-melding">Ingen planlagte befaringer.</div>
-            )}
+            {planlagte.length === 0 && <div className="bef-tom-melding">Ingen planlagte befaringer.</div>}
             {planlagte.map(b => <BefKort key={b.id} b={b} />)}
             <button className="bef-legg-til-btn" onClick={() => apneNy('planlagt')}>+ Legg til befaring</button>
           </div>
@@ -301,11 +346,29 @@ export default function BefaringPlan() {
               ✏️ Tilbud under arbeid
               <span className="bef-kolonne-teller">{tilbudArbeid.length}</span>
             </div>
-            {tilbudArbeid.length === 0 && (
-              <div className="bef-tom-melding">Ingen tilbud under arbeid.</div>
-            )}
+            {tilbudArbeid.length === 0 && <div className="bef-tom-melding">Ingen tilbud under arbeid.</div>}
             {tilbudArbeid.map(b => <BefKort key={b.id} b={b} />)}
             <button className="bef-legg-til-btn" onClick={() => apneNy('tilbud_arbeid')}>+ Legg til tilbud</button>
+          </div>
+
+          {/* Avsluttede: godkjent + tapt */}
+          <div className="bef-kolonne">
+            <div className="bef-kolonne-header" style={{ borderColor: '#6b7280', color: '#6b7280', cursor: 'pointer' }}
+              onClick={() => setVisAvsluttede(v => !v)}>
+              {visAvsluttede ? '🔽' : '▶️'} Avsluttede
+              <span className="bef-kolonne-teller">{avsluttede.length}</span>
+            </div>
+            {!visAvsluttede && avsluttede.length > 0 && (
+              <div className="bef-tom-melding" style={{ cursor: 'pointer' }} onClick={() => setVisAvsluttede(true)}>
+                {teller.godkjent || 0} godkjent · {teller.tapt || 0} tapt — klikk for å vise
+              </div>
+            )}
+            {visAvsluttede && (
+              <>
+                {avsluttede.length === 0 && <div className="bef-tom-melding">Ingen avsluttede befaringer.</div>}
+                {avsluttede.map(b => <BefKort key={b.id} b={b} />)}
+              </>
+            )}
           </div>
         </div>
       )}
@@ -398,6 +461,14 @@ export default function BefaringPlan() {
                     <label>Kontaktnavn *</label>
                     <input className="input" value={form.kontaktNavn} onChange={e => setForm(f => ({ ...f, kontaktNavn: e.target.value }))} placeholder="Navn på kontaktperson / prosjekt" />
                   </div>
+                  <div>
+                    <label>Telefon</label>
+                    <input className="input" type="tel" value={form.telefon || ''} onChange={e => setForm(f => ({ ...f, telefon: e.target.value }))} placeholder="f.eks. 900 12 345" />
+                  </div>
+                  <div>
+                    <label>E-post</label>
+                    <input className="input" type="email" value={form.epost || ''} onChange={e => setForm(f => ({ ...f, epost: e.target.value }))} placeholder="kunde@epost.no" />
+                  </div>
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label>Adresse *</label>
                     <input className="input" value={form.adresse} onChange={e => setForm(f => ({ ...f, adresse: e.target.value }))} placeholder="Adresse for befaring" />
@@ -467,6 +538,19 @@ export default function BefaringPlan() {
                   ))}
                 </div>
               </div>
+
+              {/* Tap-årsak (kun når status = tapt) */}
+              {form.status === 'tapt' && (
+                <div className="bef-modal-seksjon">
+                  <div className="bef-modal-seksjon-tittel" style={{ color: '#dc2626' }}>Tap-årsak</div>
+                  <input
+                    className="input"
+                    value={form.tapArsak || ''}
+                    onChange={e => setForm(f => ({ ...f, tapArsak: e.target.value }))}
+                    placeholder="Hvorfor tapte vi denne? (pris, konkurrent, endret behov...)"
+                  />
+                </div>
+              )}
 
               {/* Kommentar */}
               <div className="bef-modal-seksjon">
