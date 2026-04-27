@@ -7,10 +7,12 @@ import Framdriftsplan from './pages/Framdriftsplan';
 import RorleggerPlan from './pages/RorleggerPlan';
 import BefaringPlan from './pages/BefaringPlan';
 import Reklamasjon from './pages/Reklamasjon';
+import Dashboard from './pages/Dashboard';
 import LoginPage from './pages/LoginPage';
 import './App.css';
 
 const TABS = [
+  { id: 'dashboard', label: 'Oversikt', icon: '🏠' },
   { id: 'befaring', label: 'Befaring', icon: '🔍' },
   { id: 'reklamasjon', label: 'Reklamasjon', icon: '⚠️' },
   { id: 'prosjekter', label: 'Prosjekter', icon: '🏗' },
@@ -21,7 +23,7 @@ const TABS = [
 ];
 
 function App() {
-  const [activeTab, setActiveTab] = useState('prosjekter');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [loggedIn, setLoggedIn] = useState(() => localStorage.getItem('fbs_auth') === 'ok');
 
   if (!loggedIn) return <LoginPage onLogin={() => setLoggedIn(true)} />;
@@ -55,6 +57,7 @@ function App() {
         </header>
 
         <main className="main">
+          {activeTab === 'dashboard' && <Dashboard onNavigate={setActiveTab} />}
           {activeTab === 'befaring' && <BefaringPlan />}
           {activeTab === 'reklamasjon' && <Reklamasjon />}
           {activeTab === 'prosjekter' && <Prosjekter />}
