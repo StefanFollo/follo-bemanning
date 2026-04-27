@@ -78,6 +78,7 @@ export default function BefaringPlan() {
   const [viewTab, setViewTab] = useState('oversikt'); // 'oversikt' | 'kalender'
   const [sok, setSok] = useState('');
   const [visAvsluttede, setVisAvsluttede] = useState(false);
+  const [pipelineFilter, setPipelineFilter] = useState(null);
 
   function ansattFarge(ansattId) {
     if (!ansattId) return null;
@@ -114,8 +115,8 @@ export default function BefaringPlan() {
   }
 
   // ---- CRUD ----
-  function apneNy(presetStatus) {
-    setForm({ ...tomModal(), ...(presetStatus ? { status: presetStatus } : {}), dato: today });
+  function apneNy(presetStatus, presetDato) {
+    setForm({ ...tomModal(), ...(presetStatus ? { status: presetStatus } : {}), dato: presetDato || today });
     setRedigerer(null);
     setVisModal(true);
   }
@@ -197,19 +198,34 @@ export default function BefaringPlan() {
     );
   }
 
+  function statusFilter(b) {
+    if (!pipelineFilter) return true;
+    return b.status === pipelineFilter;
+  }
+
+  function sumKr(arr) {
+    const total = arr.reduce((s, b) => s + (Number(b.estimertBelop) || 0), 0);
+    return total > 0
+      ? new Intl.NumberFormat('nb-NO', { maximumFractionDigits: 0 }).format(total) + ' kr'
+      : null;
+  }
+
   const planlagte = [...befaringer]
     .filter(b => b.status === 'planlagt')
     .filter(sokFilter)
+    .filter(statusFilter)
     .sort((a, b) => a.dato.localeCompare(b.dato));
 
   const tilbudArbeid = [...befaringer]
     .filter(b => b.status === 'tilbud_arbeid' || b.status === 'tilbud_sendt')
     .filter(sokFilter)
+    .filter(statusFilter)
     .sort((a, b) => (a.tilbudFrist || '9999').localeCompare(b.tilbudFrist || '9999'));
 
   const avsluttede = [...befaringer]
     .filter(b => b.status === 'godkjent' || b.status === 'tapt')
     .filter(sokFilter)
+    .filter(statusFilter)
     .sort((a, b) => b.dato.localeCompare(a.dato));
 
   const uker = kapasitetPerUke();
@@ -290,6 +306,18 @@ export default function BefaringPlan() {
             </span>
           )}
         </div>
+
+        <div className="bef-k-status-bytte" onClick={e => e.stopPropagation()}>
+          <select
+            className="bef-k-status-select"
+            value={b.status}
+            onChange={e => dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, status: e.target.value } })}
+          >
+            {Object.entries(STATUS).map(([key, s]) => (
+              <option key={key} value={key}>{s.ikon} {s.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
     );
   }
@@ -317,14 +345,30 @@ export default function BefaringPlan() {
 
       {/* Pipeline */}
       <div className="bef-pipeline">
-        {Object.entries(STATUS).map(([key, s]) => (
-          <div key={key} className="bef-pipeline-kort" style={{ borderTop: `4px solid ${s.farge}`, background: s.bg }}>
-            <div className="bef-pipeline-ikon">{s.ikon}</div>
-            <div className="bef-pipeline-antall" style={{ color: s.farge }}>{teller[key] || 0}</div>
-            <div className="bef-pipeline-label">{s.label}</div>
-          </div>
-        ))}
+        {Object.entries(STATUS).map(([key, s]) => {
+          const aktiv = pipelineFilter === key;
+          return (
+            <div
+              key={key}
+              className={`bef-pipeline-kort${aktiv ? ' bef-pipeline-kort--aktiv' : ''}`}
+              style={{ borderTop: `4px solid ${s.farge}`, background: aktiv ? s.farge : s.bg, cursor: 'pointer' }}
+              onClick={() => setPipelineFilter(f => f === key ? null : key)}
+              title={aktiv ? 'Klikk for å fjerne filter' : `Filtrer på: ${s.label}`}
+            >
+              <div className="bef-pipeline-ikon">{s.ikon}</div>
+              <div className="bef-pipeline-antall" style={{ color: aktiv ? '#fff' : s.farge }}>{teller[key] || 0}</div>
+              <div className="bef-pipeline-label" style={{ color: aktiv ? '#fff' : undefined }}>{s.label}</div>
+              {aktiv && <div className="bef-pipeline-aktiv-pill">✕ fjern</div>}
+            </div>
+          );
+        })}
       </div>
+      {pipelineFilter && (
+        <div className="bef-filter-banner">
+          Viser kun: <strong>{STATUS[pipelineFilter]?.label}</strong>
+          <button className="bef-filter-fjern" onClick={() => setPipelineFilter(null)}>✕ Fjern filter</button>
+        </div>
+      )}
 
       {/* Oversikt-visning: tre kolonner */}
       {viewTab === 'oversikt' && (
@@ -332,8 +376,8 @@ export default function BefaringPlan() {
           {/* Planlagt befaring */}
           <div className="bef-kolonne">
             <div className="bef-kolonne-header" style={{ borderColor: STATUS.planlagt.farge, color: STATUS.planlagt.farge }}>
-              📋 Planlagt befaring
-              <span className="bef-kolonne-teller">{planlagte.length}</span>
+              <span>📋 Planlagt befaring <span className="bef-kolonne-teller">{planlagte.length}</span></span>
+              {sumKr(planlagte) && <span className="bef-kolonne-kr">{sumKr(planlagte)}</span>}
             </div>
             {planlagte.length === 0 && <div className="bef-tom-melding">Ingen planlagte befaringer.</div>}
             {planlagte.map(b => <BefKort key={b.id} b={b} />)}
@@ -343,8 +387,8 @@ export default function BefaringPlan() {
           {/* Tilbud under arbeid */}
           <div className="bef-kolonne">
             <div className="bef-kolonne-header" style={{ borderColor: STATUS.tilbud_arbeid.farge, color: STATUS.tilbud_arbeid.farge }}>
-              ✏️ Tilbud under arbeid
-              <span className="bef-kolonne-teller">{tilbudArbeid.length}</span>
+              <span>✏️ Tilbud under arbeid <span className="bef-kolonne-teller">{tilbudArbeid.length}</span></span>
+              {sumKr(tilbudArbeid) && <span className="bef-kolonne-kr">{sumKr(tilbudArbeid)}</span>}
             </div>
             {tilbudArbeid.length === 0 && <div className="bef-tom-melding">Ingen tilbud under arbeid.</div>}
             {tilbudArbeid.map(b => <BefKort key={b.id} b={b} />)}
@@ -355,8 +399,8 @@ export default function BefaringPlan() {
           <div className="bef-kolonne">
             <div className="bef-kolonne-header" style={{ borderColor: '#6b7280', color: '#6b7280', cursor: 'pointer' }}
               onClick={() => setVisAvsluttede(v => !v)}>
-              {visAvsluttede ? '🔽' : '▶️'} Avsluttede
-              <span className="bef-kolonne-teller">{avsluttede.length}</span>
+              <span>{visAvsluttede ? '🔽' : '▶️'} Avsluttede <span className="bef-kolonne-teller">{avsluttede.length}</span></span>
+              {visAvsluttede && sumKr(avsluttede) && <span className="bef-kolonne-kr">{sumKr(avsluttede)}</span>}
             </div>
             {!visAvsluttede && avsluttede.length > 0 && (
               <div className="bef-tom-melding" style={{ cursor: 'pointer' }} onClick={() => setVisAvsluttede(true)}>
@@ -388,7 +432,7 @@ export default function BefaringPlan() {
                 if (!dag) return <div key={'tom-' + i} className="bef-kal-dag bef-kal-dag--tom" />;
                 const bfs = befaringer.filter(b => b.dato === dag);
                 return (
-                  <div key={dag} className={`bef-kal-dag${dag === today ? ' bef-kal-dag--idag' : ''}`} onClick={() => apneNy()}>
+                  <div key={dag} className={`bef-kal-dag${dag === today ? ' bef-kal-dag--idag' : ''}`} onClick={() => apneNy(null, dag)}>
                     <span className="bef-kal-dato">{dag.slice(8)}</span>
                     {bfs.map(b => {
                       const ansatt = b.prosjektlederId ? state.ansatte.find(a => a.id === b.prosjektlederId) : null;
