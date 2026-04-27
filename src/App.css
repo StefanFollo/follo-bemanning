@@ -535,7 +535,8 @@ body {
 .oversikt-scroll-wrap {
   overflow-x: auto;
   overflow-y: auto;
-  max-height: calc(100vh - 210px);
+  height: calc(100vh - 300px);
+  min-height: 200px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
 }
@@ -980,6 +981,8 @@ body {
 .bplan-storskjerm .ukemode-btn { padding: 3px 8px; font-size: 11px; }
 /* Fjern alle scroll-begrensninger – vis hele griden */
 .bplan-storskjerm .uke-grid-wrap { max-height: none !important; overflow: visible; }
+/* Oversikt fyller hele skjermen i storskjerm (ingen header/tab-bar, bare kompakt nav + fag-filter) */
+.bplan-storskjerm .oversikt-scroll-wrap { height: calc(100vh - 90px) !important; min-height: 0; }
 
 /* Fullskjerm-modus for Bemanningsplan */
 .bplan-fullscreen {
@@ -1005,6 +1008,8 @@ body {
 .bplan-fullscreen .uke-grid-wrap {
   max-height: calc(100vh - 90px) !important;
 }
+/* Oversikt fyller hele skjermen i fullskjerm (tab-bar skjult, kompakt page-header + nav + fag-filter) */
+.bplan-fullscreen .oversikt-scroll-wrap { height: calc(100vh - 130px) !important; min-height: 0; }
 
 /* Dato-nål (drabar vertikal linje) */
 .uke-grid-wrap { position: relative; overflow-x: auto; overflow-y: auto; max-height: calc(100vh - 230px); }
