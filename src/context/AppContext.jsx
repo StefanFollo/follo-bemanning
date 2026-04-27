@@ -45,7 +45,7 @@ function reducer(state, action) {
 
     // --- Prosjekter ---
     case 'ADD_PROSJEKT': {
-      const next = [...state.prosjekter, { ...action.payload, id: uid() }];
+      const next = [...state.prosjekter, { ...action.payload, id: action.payload.id || uid() }];
       saveProsjekter(next);
       return { ...state, prosjekter: next };
     }

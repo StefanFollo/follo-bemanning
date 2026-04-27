@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { dateToIso, addDays, weekStart, overlaps } from '../store';
+import { dateToIso, addDays, weekStart, overlaps, PROSJEKT_PALETTE, uid } from '../store';
 
 const JOBB_TYPER = ['Ny bygg', 'Tilbygg', 'Tak jobb', 'Fasade jobb', 'Bad', 'Tømrer', 'Maling', 'Rørlegger', 'Flislegging', 'Elektro', 'Rehabilitering', 'Annet'];
 
@@ -70,7 +70,7 @@ export default function BefaringPlan() {
   const [form, setForm] = useState(tomModal());
   const [visKapasitet, setVisKapasitet] = useState(null);
   const [visProsjektModal, setVisProsjektModal] = useState(false);
-  const [prosjektNavn, setProsjektNavn] = useState('');
+  const [prosjektForm, setProsjektForm] = useState({ navn: '', startDato: '', sluttDato: '', farge: '#6b8fc4', lagTildeling: true });
   const [kalMaaned, setKalMaaned] = useState(() => monthStart(today));
   const [viewTab, setViewTab] = useState('oversikt'); // 'oversikt' | 'kalender'
 
@@ -138,21 +138,42 @@ export default function BefaringPlan() {
     dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, status: 'godkjent' } });
     setVisModal(false);
     setVisKapasitet(b);
-    setProsjektNavn(b.kontaktNavn + (b.adresse ? ' – ' + b.adresse : ''));
+    const nextFarge = PROSJEKT_PALETTE[state.prosjekter.length % PROSJEKT_PALETTE.length];
+    setProsjektForm({
+      navn: b.kontaktNavn + (b.adresse ? ' – ' + b.adresse : ''),
+      startDato: today,
+      sluttDato: '',
+      farge: nextFarge,
+      lagTildeling: !!b.prosjektlederId,
+    });
   }
   function opprettProsjekt() {
-    if (!prosjektNavn.trim()) return;
+    if (!prosjektForm.navn.trim()) return;
+    const prosjektId = uid();
     dispatch({
       type: 'ADD_PROSJEKT',
       payload: {
-        navn: prosjektNavn,
+        id: prosjektId,
+        navn: prosjektForm.navn,
         adresse: visKapasitet?.adresse || '',
-        startDato: '', sluttDato: '',
-        status: 'godkjent',
-        beskrivelse: visKapasitet?.notat || '',
-        farge: '#6b8fc4',
+        startDato: prosjektForm.startDato,
+        sluttDato: prosjektForm.sluttDato,
+        status: 'aktiv',
+        beskrivelse: [visKapasitet?.notat, visKapasitet?.kommentar].filter(Boolean).join('\n\n') || '',
+        farge: prosjektForm.farge,
       },
     });
+    if (prosjektForm.lagTildeling && visKapasitet?.prosjektlederId && prosjektForm.startDato) {
+      dispatch({
+        type: 'ADD_TILDELING',
+        payload: {
+          ansattId: visKapasitet.prosjektlederId,
+          prosjektId,
+          startDato: prosjektForm.startDato,
+          sluttDato: prosjektForm.sluttDato || addDays(prosjektForm.startDato, 13),
+        },
+      });
+    }
     setVisKapasitet(null);
     setVisProsjektModal(false);
   }
@@ -514,16 +535,94 @@ export default function BefaringPlan() {
       {/* Modal: opprett prosjekt */}
       {visProsjektModal && (
         <div className="modal-backdrop" onClick={() => setVisProsjektModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()}>
+          <div className="modal bef-modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Opprett prosjekt</h3>
+              <h3>🏗 Opprett prosjekt fra befaring</h3>
               <button className="btn-icon" onClick={() => setVisProsjektModal(false)}>✕</button>
             </div>
             <div className="form">
-              <label>Prosjektnavn</label>
-              <input className="input" value={prosjektNavn} onChange={e => setProsjektNavn(e.target.value)} />
+              {/* Forhåndsvisning av befaringsdata */}
+              {visKapasitet && (
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13 }}>
+                  <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>Fra befaring:</div>
+                  <div style={{ color: '#64748b' }}>📍 {visKapasitet.adresse}</div>
+                  {visKapasitet.jobbType && <div style={{ color: '#64748b' }}>🔨 {visKapasitet.jobbType}</div>}
+                  {visKapasitet.estimertBelop && (
+                    <div style={{ color: '#64748b' }}>
+                      💰 {new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(Number(visKapasitet.estimertBelop))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="bef-modal-seksjon">
+                <div className="bef-modal-seksjon-tittel">Prosjektdetaljer</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label>Prosjektnavn *</label>
+                    <input className="input" value={prosjektForm.navn}
+                      onChange={e => setProsjektForm(f => ({ ...f, navn: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label>Startdato</label>
+                    <input type="date" className="input" value={prosjektForm.startDato}
+                      onChange={e => setProsjektForm(f => ({ ...f, startDato: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label>Sluttdato</label>
+                    <input type="date" className="input" value={prosjektForm.sluttDato}
+                      onChange={e => setProsjektForm(f => ({ ...f, sluttDato: e.target.value }))} />
+                  </div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label>Farge</label>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 4 }}>
+                      {PROSJEKT_PALETTE.map(c => (
+                        <button key={c} type="button"
+                          onClick={() => setProsjektForm(f => ({ ...f, farge: c }))}
+                          style={{
+                            width: 28, height: 28, borderRadius: '50%', background: c, border: 'none',
+                            cursor: 'pointer', outline: prosjektForm.farge === c ? `3px solid ${c}` : 'none',
+                            outlineOffset: 2, transform: prosjektForm.farge === c ? 'scale(1.2)' : 'scale(1)',
+                            transition: 'transform .15s',
+                          }} />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Automatisk tildeling */}
+              {visKapasitet?.prosjektlederId && (
+                <div className="bef-modal-seksjon">
+                  <div className="bef-modal-seksjon-tittel">Ansvarlig person</div>
+                  {(() => {
+                    const ansatt = state.ansatte.find(a => a.id === visKapasitet.prosjektlederId);
+                    return ansatt ? (
+                      <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13 }}>
+                        <input type="checkbox" checked={prosjektForm.lagTildeling}
+                          onChange={e => setProsjektForm(f => ({ ...f, lagTildeling: e.target.checked }))} />
+                        <span>
+                          Tildel <strong>{ansatt.navn}</strong> til prosjektet automatisk
+                          {prosjektForm.startDato && (
+                            <span style={{ color: '#64748b' }}>
+                              {' '}(fra {new Date(prosjektForm.startDato + 'T00:00:00').toLocaleDateString('nb-NO', { day: '2-digit', month: 'short' })}
+                              {prosjektForm.sluttDato
+                                ? ` til ${new Date(prosjektForm.sluttDato + 'T00:00:00').toLocaleDateString('nb-NO', { day: '2-digit', month: 'short' })}`
+                                : ' i 2 uker'})
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    ) : null;
+                  })()}
+                </div>
+              )}
+
               <div className="modal-actions">
-                <button className="btn btn-primary" onClick={opprettProsjekt} disabled={!prosjektNavn.trim()}>Opprett</button>
+                <button className="btn" onClick={() => setVisProsjektModal(false)}>Avbryt</button>
+                <button className="btn btn-primary" onClick={opprettProsjekt} disabled={!prosjektForm.navn.trim()}>
+                  🏗 Opprett prosjekt
+                </button>
               </div>
             </div>
           </div>
