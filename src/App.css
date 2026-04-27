@@ -1865,7 +1865,8 @@ body {
 @media (max-width: 900px) {
   .bef-innhold { grid-template-columns: 1fr; }
   .bef-pipeline { grid-template-columns: repeat(3, 1fr); }
-  .bef-kanban { grid-template-columns: 1fr; }
+  .bef-kanban,
+  .bef-kanban--3col { grid-template-columns: 1fr; }
 }
 
 /* View-tabs (Oversikt / Kalender) */
@@ -1886,6 +1887,7 @@ body {
   margin-top: 20px;
   align-items: start;
 }
+.bef-kanban--3col { grid-template-columns: 1fr 1fr 1fr; }
 .bef-kolonne {
   background: #f8fafc;
   border-radius: 12px;
@@ -1942,6 +1944,13 @@ body {
 .bef-k-dato-rad { font-size: 11px; color: #64748b; }
 .bef-k-resultat { color: #0891b2; font-style: italic; }
 .bef-k-kommentar { color: #94a3b8; }
+.bef-k-kontakt { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.bef-k-kontakt-link {
+  font-size: 11px; color: #2563eb; text-decoration: none;
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 1px 0;
+}
+.bef-k-kontakt-link:hover { text-decoration: underline; }
 
 /* Modal-seksjoner */
 .bef-modal-seksjon { margin-bottom: 16px; }
