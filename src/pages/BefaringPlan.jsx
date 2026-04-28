@@ -78,7 +78,6 @@ export default function BefaringPlan() {
   const [kalMaaned, setKalMaaned] = useState(() => monthStart(today));
   const [viewTab, setViewTab] = useState('oversikt'); // 'oversikt' | 'kalender'
   const [sok, setSok] = useState('');
-  const [visAvsluttede, setVisAvsluttede] = useState(false);
   const [pipelineFilter, setPipelineFilter] = useState(null);
 
   function ansattFarge(ansattId) {
@@ -240,13 +239,19 @@ export default function BefaringPlan() {
     .sort((a, b) => a.dato.localeCompare(b.dato));
 
   const tilbudArbeid = [...befaringer]
-    .filter(b => b.status === 'tilbud_arbeid' || b.status === 'tilbud_sendt')
+    .filter(b => b.status === 'tilbud_arbeid')
     .filter(sokFilter)
     .filter(statusFilter)
     .sort((a, b) => (a.tilbudFrist || '9999').localeCompare(b.tilbudFrist || '9999'));
 
-  const avsluttede = [...befaringer]
-    .filter(b => b.status === 'godkjent' || b.status === 'tapt')
+  const tilbudSendt = [...befaringer]
+    .filter(b => b.status === 'tilbud_sendt')
+    .filter(sokFilter)
+    .filter(statusFilter)
+    .sort((a, b) => (a.tilbudFrist || '9999').localeCompare(b.tilbudFrist || '9999'));
+
+  const godkjente = [...befaringer]
+    .filter(b => b.status === 'godkjent')
     .filter(sokFilter)
     .filter(statusFilter)
     .sort((a, b) => b.dato.localeCompare(a.dato));
@@ -410,9 +415,9 @@ export default function BefaringPlan() {
         </div>
       )}
 
-      {/* Oversikt-visning: tre kolonner */}
+      {/* Oversikt-visning: fire kolonner */}
       {viewTab === 'oversikt' && (
-        <div className="bef-kanban bef-kanban--3col">
+        <div className="bef-kanban bef-kanban--4col">
           {/* Planlagt befaring */}
           <div className="bef-kolonne">
             <div className="bef-kolonne-header" style={{ borderColor: STATUS.planlagt.farge, color: STATUS.planlagt.farge }}>
@@ -435,24 +440,24 @@ export default function BefaringPlan() {
             <button className="bef-legg-til-btn" onClick={() => apneNy('tilbud_arbeid')}>+ Legg til tilbud</button>
           </div>
 
-          {/* Avsluttede: godkjent + tapt */}
+          {/* Tilbud sendt */}
           <div className="bef-kolonne">
-            <div className="bef-kolonne-header" style={{ borderColor: '#6b7280', color: '#6b7280', cursor: 'pointer' }}
-              onClick={() => setVisAvsluttede(v => !v)}>
-              <span>{visAvsluttede ? '🔽' : '▶️'} Avsluttede <span className="bef-kolonne-teller">{avsluttede.length}</span></span>
-              {visAvsluttede && sumKr(avsluttede) && <span className="bef-kolonne-kr">{sumKr(avsluttede)}</span>}
+            <div className="bef-kolonne-header" style={{ borderColor: STATUS.tilbud_sendt.farge, color: STATUS.tilbud_sendt.farge }}>
+              <span>📤 Tilbud sendt <span className="bef-kolonne-teller">{tilbudSendt.length}</span></span>
+              {sumKr(tilbudSendt) && <span className="bef-kolonne-kr">{sumKr(tilbudSendt)}</span>}
             </div>
-            {!visAvsluttede && avsluttede.length > 0 && (
-              <div className="bef-tom-melding" style={{ cursor: 'pointer' }} onClick={() => setVisAvsluttede(true)}>
-                {teller.godkjent || 0} godkjent · {teller.tapt || 0} tapt — klikk for å vise
-              </div>
-            )}
-            {visAvsluttede && (
-              <>
-                {avsluttede.length === 0 && <div className="bef-tom-melding">Ingen avsluttede befaringer.</div>}
-                {avsluttede.map(b => <BefKort key={b.id} b={b} />)}
-              </>
-            )}
+            {tilbudSendt.length === 0 && <div className="bef-tom-melding">Ingen tilbud sendt.</div>}
+            {tilbudSendt.map(b => <BefKort key={b.id} b={b} />)}
+          </div>
+
+          {/* Godkjent */}
+          <div className="bef-kolonne">
+            <div className="bef-kolonne-header" style={{ borderColor: STATUS.godkjent.farge, color: STATUS.godkjent.farge }}>
+              <span>✅ Godkjent <span className="bef-kolonne-teller">{godkjente.length}</span></span>
+              {sumKr(godkjente) && <span className="bef-kolonne-kr">{sumKr(godkjente)}</span>}
+            </div>
+            {godkjente.length === 0 && <div className="bef-tom-melding">Ingen godkjente tilbud.</div>}
+            {godkjente.map(b => <BefKort key={b.id} b={b} />)}
           </div>
         </div>
       )}

@@ -2048,7 +2048,8 @@ body {
   .bef-innhold { grid-template-columns: 1fr; }
   .bef-pipeline { grid-template-columns: repeat(3, 1fr); }
   .bef-kanban,
-  .bef-kanban--3col { grid-template-columns: 1fr; }
+  .bef-kanban--3col,
+  .bef-kanban--4col { grid-template-columns: 1fr; }
 }
 
 /* View-tabs (Oversikt / Kalender) */
@@ -2070,6 +2071,7 @@ body {
   align-items: start;
 }
 .bef-kanban--3col { grid-template-columns: 1fr 1fr 1fr; }
+.bef-kanban--4col { grid-template-columns: repeat(4, 1fr); }
 .bef-kolonne {
   background: #f8fafc;
   border-radius: 12px;
