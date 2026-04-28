@@ -162,11 +162,15 @@ export default function BefaringPlan() {
         id: prosjektId,
         navn: prosjektForm.navn,
         adresse: visKapasitet?.adresse || '',
+        jobbType: visKapasitet?.jobbType || '',
+        belop: visKapasitet?.estimertBelop || '',
+        prosjektlederId: visKapasitet?.prosjektlederId || '',
         startDato: prosjektForm.startDato,
         sluttDato: prosjektForm.sluttDato,
         status: 'aktiv',
         beskrivelse: [visKapasitet?.notat, visKapasitet?.kommentar].filter(Boolean).join('\n\n') || '',
         farge: prosjektForm.farge,
+        befaringId: visKapasitet?.id || '',
       },
     });
     if (prosjektForm.lagTildeling && visKapasitet?.prosjektlederId && prosjektForm.startDato) {
@@ -180,8 +184,26 @@ export default function BefaringPlan() {
         },
       });
     }
+    // Merk befaringen som konvertert til prosjekt
+    if (visKapasitet) {
+      dispatch({ type: 'UPDATE_BEFARING', payload: { ...visKapasitet, prosjektId } });
+    }
     setVisKapasitet(null);
     setVisProsjektModal(false);
+  }
+
+  // Åpne prosjekt-modal direkte fra et godkjent kort (uten kapasitet-mellomsteg)
+  function apneProsjektModal(b) {
+    const nextFarge = PROSJEKT_PALETTE[state.prosjekter.length % PROSJEKT_PALETTE.length];
+    setVisKapasitet(b);
+    setProsjektForm({
+      navn: b.kontaktNavn + (b.adresse ? ' – ' + b.adresse : ''),
+      startDato: today,
+      sluttDato: '',
+      farge: nextFarge,
+      lagTildeling: !!b.prosjektlederId,
+    });
+    setVisProsjektModal(true);
   }
 
   const teller = Object.fromEntries(Object.keys(STATUS).map(s => [s, befaringer.filter(b => b.status === s).length]));
@@ -318,6 +340,18 @@ export default function BefaringPlan() {
             ))}
           </select>
         </div>
+
+        {b.status === 'godkjent' && (
+          <div className="bef-k-prosjekt-rad" onClick={e => e.stopPropagation()}>
+            {b.prosjektId ? (
+              <span className="bef-k-prosjekt-badge">🏗 Prosjekt opprettet</span>
+            ) : (
+              <button className="bef-k-opprett-btn" onClick={() => apneProsjektModal(b)}>
+                🏗 Opprett prosjekt
+              </button>
+            )}
+          </div>
+        )}
       </div>
     );
   }

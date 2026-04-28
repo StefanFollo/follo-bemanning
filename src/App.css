@@ -1243,6 +1243,12 @@ body {
   font-size: 12px; padding: 3px 0;
 }
 
+/* Fra-befaring seksjon i prosjekt-detalj */
+.ct-detail-fra-befaring {
+  background: #f0fdf4; border: 1px solid #bbf7d0;
+  border-radius: 6px; padding: 8px 12px; margin-bottom: 4px;
+}
+
 .ct-col { min-width: 0; }
 .ct-name { flex: 2; display: flex; flex-direction: column; gap: 1px; }
 .ct-ansatt-navn { flex: 2; display: flex; align-items: center; gap: 10px; }
@@ -2127,6 +2133,19 @@ body {
   width: 100%; font-size: 12px; padding: 4px 6px;
   border: 1px solid #e2e8f0; border-radius: 6px;
   background: #f8fafc; color: #475569; cursor: pointer;
+}
+
+/* Konverter-til-prosjekt rad på godkjente kort */
+.bef-k-prosjekt-rad { margin-top: 8px; padding-top: 8px; border-top: 1px solid #dcfce7; }
+.bef-k-opprett-btn {
+  width: 100%; padding: 6px 10px; font-size: 12px; font-weight: 600;
+  background: #16a34a; color: #fff; border: none; border-radius: 6px;
+  cursor: pointer; transition: background .15s;
+}
+.bef-k-opprett-btn:hover { background: #15803d; }
+.bef-k-prosjekt-badge {
+  display: block; text-align: center; font-size: 12px; font-weight: 600;
+  color: #16a34a; padding: 4px 0;
 }
 .bef-k-status-select:hover { border-color: #94a3b8; }
 

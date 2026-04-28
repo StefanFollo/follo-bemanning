@@ -558,6 +558,26 @@ export default function Prosjekter() {
                         {/* Utvidet detaljpanel */}
                         {isExpanded && (
                           <div className="ct-row-detail" style={{ borderLeft: `4px solid ${barColor}` }}>
+                            {/* Fra befaring */}
+                            {p.befaringId && (() => {
+                              const bef = (state.befaringer || []).find(b => b.id === p.befaringId);
+                              if (!bef) return null;
+                              return (
+                                <div className="ct-detail-seksjon ct-detail-fra-befaring">
+                                  <div className="ct-detail-tittel">📋 Fra befaring</div>
+                                  <div className="ct-detail-rad">
+                                    <span className="ct-detail-navn">{bef.kontaktNavn}</span>
+                                    {bef.adresse && <span className="ct-detail-fag">📍 {bef.adresse}</span>}
+                                    {bef.jobbType && <span className="ct-detail-fag">{bef.jobbType}</span>}
+                                    {bef.estimertBelop && (
+                                      <span className="ct-detail-fag" style={{ color: '#16a34a' }}>
+                                        💰 {new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(Number(bef.estimertBelop))}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })()}
                             {p.beskrivelse && (
                               <div className="ct-detail-seksjon">
                                 <div className="ct-detail-tittel">📝 Beskrivelse</div>
