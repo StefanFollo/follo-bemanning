@@ -274,8 +274,8 @@ export default function BefaringPlan() {
       <div className="bef-k-kort" onClick={() => apneRediger(b)}>
         <div className="bef-k-kort-topp">
           <div style={{ minWidth: 0 }}>
-            <div className="bef-k-navn">{b.kontaktNavn}</div>
-            <div className="bef-k-adresse">{b.adresse}</div>
+            <div className="bef-k-navn">{b.adresse}</div>
+            <div className="bef-k-adresse">{b.kontaktNavn}</div>
             {(b.telefon || b.epost) && (
               <div className="bef-k-kontakt">
                 {b.telefon && <a href={`tel:${b.telefon}`} onClick={e => e.stopPropagation()} className="bef-k-kontakt-link">📱 {b.telefon}</a>}
