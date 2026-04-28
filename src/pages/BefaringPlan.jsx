@@ -58,6 +58,7 @@ function tomModal() {
     estimertBelop: '',
     tilbudFrist: '',
     nesteKontakt: '',
+    oensketOppstart: '',
     resultat: '',
     tapArsak: '',
   };
@@ -147,7 +148,7 @@ export default function BefaringPlan() {
     const nextFarge = PROSJEKT_PALETTE[state.prosjekter.length % PROSJEKT_PALETTE.length];
     setProsjektForm({
       navn: b.kontaktNavn + (b.adresse ? ' – ' + b.adresse : ''),
-      startDato: today,
+      startDato: b.oensketOppstart || today,
       sluttDato: '',
       farge: nextFarge,
       lagTildeling: !!b.prosjektlederId,
@@ -198,7 +199,7 @@ export default function BefaringPlan() {
     setVisKapasitet(b);
     setProsjektForm({
       navn: b.kontaktNavn + (b.adresse ? ' – ' + b.adresse : ''),
-      startDato: today,
+      startDato: b.oensketOppstart || today,
       sluttDato: '',
       farge: nextFarge,
       lagTildeling: !!b.prosjektlederId,
@@ -310,6 +311,11 @@ export default function BefaringPlan() {
               {kontaktDager !== null && kontaktDager <= 2 && (
                 <em> ({kontaktDager < 0 ? `${Math.abs(kontaktDager)}d over` : kontaktDager === 0 ? 'i dag!' : `${kontaktDager}d`})</em>
               )}
+            </span>
+          )}
+          {b.oensketOppstart && (
+            <span className="bef-k-dato-rad" style={{ color: '#0891b2', fontWeight: 500 }}>
+              🚀 Ønsket oppstart: {datoKort(b.oensketOppstart)}
             </span>
           )}
           {b.resultat && (
@@ -596,6 +602,10 @@ export default function BefaringPlan() {
                     <input type="date" className="input" value={form.nesteKontakt || ''} onChange={e => setForm(f => ({ ...f, nesteKontakt: e.target.value }))} />
                   </div>
                   <div>
+                    <label>Ønsket oppstartsdato</label>
+                    <input type="date" className="input" value={form.oensketOppstart || ''} onChange={e => setForm(f => ({ ...f, oensketOppstart: e.target.value }))} />
+                  </div>
+                  <div>
                     <label>Resultat</label>
                     <input className="input" value={form.resultat || ''} onChange={e => setForm(f => ({ ...f, resultat: e.target.value }))} placeholder="f.eks. Tilbud akseptert, avventer..." />
                   </div>
@@ -712,6 +722,11 @@ export default function BefaringPlan() {
                   {visKapasitet.estimertBelop && (
                     <div style={{ color: '#64748b' }}>
                       💰 {new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(Number(visKapasitet.estimertBelop))}
+                    </div>
+                  )}
+                  {visKapasitet.oensketOppstart && (
+                    <div style={{ color: '#0891b2', fontWeight: 500 }}>
+                      🚀 Ønsket oppstart: {datoKort(visKapasitet.oensketOppstart)}
                     </div>
                   )}
                 </div>
