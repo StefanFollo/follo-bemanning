@@ -33,6 +33,121 @@ const STEDDY_BEFARINGER = [
   { kontaktNavn:'Tomas Vik', adresse:'Bjørnemyrveien 30, 1415 Oppegård', jobbType:'Bad', estimertBelop:'340000', status:'godkjent', dato:'2026-05-17', notat:'Totalrenovering bad\nProsjektnr: 919867', kommentar:'', telefon:'', epost:'', prosjektlederId:'', tilbudFrist:'', nesteKontakt:'', oensketOppstart:'', resultat:'', tapArsak:'', tid:'' },
 ];
 
+// ProResult mannskap-import uke 18–21 2026 (27. apr – 15. mai)
+// [ansattSøk, prosjektSøk, nyProsjektNavn, startDato, sluttDato]
+const PRORESULT_WK18_21 = [
+  ['Glenn',           'Stølsveien 12B',     null,                    '2026-04-27', '2026-05-15'],
+  ['Leif Anders',     'Stølsveien 12B',     null,                    '2026-04-27', '2026-05-15'],
+  ['Mario',           'Stølsveien 12B',     null,                    '2026-05-01', '2026-05-15'],
+  ['Andrius Jauniskis','Fiolveien',         null,                    '2026-04-27', '2026-05-15'],
+  ['Ernst Kristian',  'Fiolveien',          null,                    '2026-04-27', '2026-05-15'],
+  ['Alexis',          'Fiolveien',          null,                    '2026-04-27', '2026-05-15'],
+  ['Arturas',         'Hareveien 14',       null,                    '2026-04-27', '2026-04-29'],
+  ['Arturas',         'Fiolveien',          null,                    '2026-05-01', '2026-05-15'],
+  ['Petros',          'Fiolveien',          null,                    '2026-04-27', '2026-05-13'],
+  ['Petros',          'Lindemansveien 59',  null,                    '2026-05-14', '2026-05-15'],
+  ['Helena',          'Hareveien 14',       null,                    '2026-04-27', '2026-05-10'],
+  ['Helena',          'Stangåsveien 16B',   'Stangåsveien 16B',      '2026-05-11', '2026-05-15'],
+  ['Rytis Jauniskis', 'Ellingsrudveien 43', null,                    '2026-04-27', '2026-04-29'],
+  ['Rytis Jauniskis', 'Hareveien 14',       null,                    '2026-05-01', '2026-05-10'],
+  ['Rytis Jauniskis', 'Stangåsveien 16B',   'Stangåsveien 16B',      '2026-05-11', '2026-05-15'],
+  ['Sigurd',          'Ellingsrudveien 43', null,                    '2026-04-27', '2026-04-29'],
+  ['Sigurd',          'erkehage',           'Bjerkehageveien 17C',   '2026-05-01', '2026-05-15'],
+  ['Brage',           'erkehage',           'Bjerkehageveien 17C',   '2026-04-27', '2026-05-15'],
+  ['Kristoffer',      'erkehage',           'Bjerkehageveien 17C',   '2026-04-27', '2026-05-15'],
+  ['Martins',         'Steinhammerveien 6B',null,                    '2026-04-27', '2026-05-05'],
+  ['Pyrros',          'Steinhammerveien 6B',null,                    '2026-04-27', '2026-05-05'],
+  ['Rytis Jackevicius','Steinhammerveien 6B',null,                   '2026-04-27', '2026-04-27'],
+  ['Rytis Jackevicius','Sandbukta 4',       null,                    '2026-05-06', '2026-05-15'],
+  ['Tomas Strumilas', 'Sandbukta 4',        null,                    '2026-04-27', '2026-05-15'],
+  ['Malin',           'skogveien',          'Sæterskogveien 4',      '2026-04-27', '2026-05-05'],
+  ['Malin',           'Haukeliveien 72',    'Haukeliveien 72',        '2026-05-06', '2026-05-15'],
+  ['Aleksej',         'Bjørnemyrveien 30',  'Bjørnemyrveien 30',     '2026-05-01', '2026-05-05'],
+  ['Aleksej',         'Kappveien',          'Kappveien 24',          '2026-05-06', '2026-05-10'],
+  ['Kenneth',         'Kappveien',          'Kappveien 24',          '2026-05-06', '2026-05-10'],
+  ['Imad',            'Danfo',              'Danfo',                  '2026-04-27', '2026-04-29'],
+  ['Imad',            'Lindemansveien 59',  null,                    '2026-05-01', '2026-05-15'],
+  ['Muhammed',        'Danfo',              'Danfo',                  '2026-04-27', '2026-04-29'],
+  ['Muhammed',        'Lindemansveien 59',  null,                    '2026-05-01', '2026-05-15'],
+  ['Tommy',           'Danfo',              'Danfo',                  '2026-04-27', '2026-04-29'],
+  ['Tommy',           'Lindemansveien 59',  null,                    '2026-05-01', '2026-05-15'],
+  ['Serhii',          'Lindemansveien 59',  null,                    '2026-04-27', '2026-05-15'],
+];
+
+// ProResult mannskap-import uke 22–41 2026 (25. mai – 9. okt)
+// [ansattSøk, prosjektSøk, nyProsjektNavn, startDato, sluttDato]
+const PRORESULT_WK22_41 = [
+  ['Aleksej',          'Solbråtanveien',    'Solbråtanveien 44D', '2026-05-29', '2026-06-06'],
+  ['Aleksej',          'Skullerudbakken',   null,                 '2026-08-02', '2026-08-11'],
+  ['Aleksej',          'Skullerudbakken',   null,                 '2026-08-20', '2026-08-30'],
+  ['Alexis',           'Fiolveien',         null,                 '2026-05-29', '2026-06-16'],
+  ['Andrius Jauniskis','Fiolveien',         null,                 '2026-05-29', '2026-06-16'],
+  ['Arturas',          'Fiolveien',         null,                 '2026-05-29', '2026-06-06'],
+  ['Arturas',          'Solbråtanveien',    'Solbråtanveien 44D', '2026-06-07', '2026-06-16'],
+  ['Arturas',          'Solbråtanveien',    'Solbråtanveien 44D', '2026-06-25', '2026-06-29'],
+  ['Brage',            'erkehage',          null,                 '2026-05-29', '2026-06-16'],
+  ['Brage',            'erkehage',          null,                 '2026-06-25', '2026-06-29'],
+  ['Brage',            'Søndre Moer',       null,                 '2026-08-02', '2026-08-08'],
+  ['Brage',            'Søndre Moer',       null,                 '2026-08-20', '2026-09-08'],
+  ['Brage',            'Søndre Moer',       null,                 '2026-09-17', '2026-09-21'],
+  ['Ernst Kristian',   'Fiolveien',         null,                 '2026-05-29', '2026-06-01'],
+  ['Glenn',            'Stølsveien 12B',    null,                 '2026-05-29', '2026-06-16'],
+  ['Glenn',            'Stølsveien 12B',    null,                 '2026-06-25', '2026-06-29'],
+  ['Glenn',            'Skullerudbakken',   null,                 '2026-08-02', '2026-08-11'],
+  ['Glenn',            'Skullerudbakken',   null,                 '2026-08-20', '2026-08-30'],
+  ['Helena',           'Stangåsveien',      null,                 '2026-05-29', '2026-06-16'],
+  ['Helena',           'Stangåsveien',      null,                 '2026-06-25', '2026-06-29'],
+  ['Helena',           'Solbråtanveien',    'Solbråtanveien 44D', '2026-08-02', '2026-08-11'],
+  ['Helena',           'Solbråtanveien',    'Solbråtanveien 44D', '2026-08-20', '2026-08-30'],
+  ['Imad',             'Lindemansveien 59', null,                 '2026-05-29', '2026-06-16'],
+  ['Imad',             'Lindemansveien 59', null,                 '2026-06-25', '2026-06-29'],
+  ['Kenneth',          'Stangåsveien',      null,                 '2026-05-29', '2026-06-01'],
+  ['Kristoffer',       'erkehage',          null,                 '2026-05-29', '2026-06-16'],
+  ['Kristoffer',       'erkehage',          null,                 '2026-06-25', '2026-06-29'],
+  ['Kristoffer',       'Kråkstadveien',     'Kråkstadveien 98',  '2026-08-02', '2026-08-11'],
+  ['Kristoffer',       'Kråkstadveien',     'Kråkstadveien 98',  '2026-08-20', '2026-08-30'],
+  ['Leif Anders',      'Stølsveien 12B',    null,                 '2026-05-29', '2026-06-16'],
+  ['Leif Anders',      'Stølsveien 12B',    null,                 '2026-06-25', '2026-06-29'],
+  ['Leif Anders',      'Kråkstadveien',     'Kråkstadveien 98',  '2026-08-02', '2026-08-11'],
+  ['Leif Anders',      'Kråkstadveien',     'Kråkstadveien 98',  '2026-08-20', '2026-08-30'],
+  ['Malin',            'Haukeliveien',      null,                 '2026-05-29', '2026-06-01'],
+  ['Mario',            'Stølsveien 12B',    null,                 '2026-05-29', '2026-06-16'],
+  ['Mario',            'Stølsveien 12B',    null,                 '2026-06-25', '2026-06-29'],
+  ['Mario',            'Skullerudbakken',   null,                 '2026-08-02', '2026-08-11'],
+  ['Mario',            'Skullerudbakken',   null,                 '2026-08-20', '2026-08-30'],
+  ['Martins',          'Kråkstadveien',     'Kråkstadveien 98',  '2026-08-02', '2026-08-11'],
+  ['Martins',          'Kråkstadveien',     'Kråkstadveien 98',  '2026-08-20', '2026-08-30'],
+  ['Muhammed',         'Danfo',             null,                 '2026-05-29', '2026-06-03'],
+  ['Muhammed',         'Lindemansveien 59', null,                 '2026-06-04', '2026-06-16'],
+  ['Muhammed',         'Lindemansveien 59', null,                 '2026-06-25', '2026-06-29'],
+  ['Petros',           'Lindemansveien 59', null,                 '2026-05-29', '2026-06-16'],
+  ['Petros',           'Lindemansveien 59', null,                 '2026-06-25', '2026-06-29'],
+  ['Pyrros',           'Solbråtanveien',    'Solbråtanveien 44D', '2026-05-29', '2026-06-01'],
+  ['Pyrros',           'Kråkstadveien',     'Kråkstadveien 98',  '2026-08-02', '2026-08-11'],
+  ['Pyrros',           'Kråkstadveien',     'Kråkstadveien 98',  '2026-08-20', '2026-08-30'],
+  ['Rytis Jackevicius','Stølsveien 12B',    null,                 '2026-05-29', '2026-06-01'],
+  ['Rytis Jackevicius','OBE',               'OBE',                '2026-06-02', '2026-06-16'],
+  ['Rytis Jackevicius','OBE',               'OBE',                '2026-06-25', '2026-06-29'],
+  ['Rytis Jauniskis',  'Stangåsveien',      null,                 '2026-05-29', '2026-06-01'],
+  ['Rytis Jauniskis',  'Solbråtanveien',    'Solbråtanveien 44D', '2026-06-02', '2026-06-16'],
+  ['Rytis Jauniskis',  'Solbråtanveien',    'Solbråtanveien 44D', '2026-06-25', '2026-06-29'],
+  ['Rytis Jauniskis',  'Kråkstadveien',     'Kråkstadveien 98',  '2026-08-02', '2026-08-11'],
+  ['Rytis Jauniskis',  'Kråkstadveien',     'Kråkstadveien 98',  '2026-08-20', '2026-08-30'],
+  ['Serhii',           'Lindemansveien 59', null,                 '2026-05-29', '2026-06-16'],
+  ['Serhii',           'Lindemansveien 59', null,                 '2026-06-25', '2026-06-29'],
+  ['Sigurd',           'erkehage',          null,                 '2026-05-29', '2026-06-16'],
+  ['Sigurd',           'erkehage',          null,                 '2026-06-25', '2026-06-29'],
+  ['Sigurd',           'Søndre Moer',       null,                 '2026-08-02', '2026-08-08'],
+  ['Sigurd',           'Søndre Moer',       null,                 '2026-08-20', '2026-09-08'],
+  ['Sigurd',           'Søndre Moer',       null,                 '2026-09-17', '2026-09-21'],
+  ['Tomas Strumilas',  'Sandbukta 4',       null,                 '2026-05-29', '2026-06-16'],
+  ['Tomas Strumilas',  'Sandbukta 4',       null,                 '2026-06-25', '2026-06-29'],
+  ['Tommy',            'Lindemansveien 59', null,                 '2026-05-29', '2026-06-16'],
+  ['Tommy',            'Lindemansveien 59', null,                 '2026-06-25', '2026-06-29'],
+  ['Rytis 2',          'OBE',               'OBE',                '2026-05-29', '2026-06-16'],
+  ['Rytis 2',          'OBE',               'OBE',                '2026-06-25', '2026-06-29'],
+];
+
 const DEFAULT_FAG = ['Bas Tømrer', 'Montør', 'Lærling Tømrer', 'Maler', 'Rørlegger', 'Tømrer', 'Flislegger', 'Prosjektleder'];
 
 function mkId(n) { return 'seed' + n; }
@@ -163,6 +278,82 @@ export function loadState() {
     const medId = STEDDY_BEFARINGER.map(b => ({ ...b, id: Math.random().toString(36).slice(2) + Date.now().toString(36) }));
     save('fbs_befaringer', [...existingBef, ...medId]);
     localStorage.setItem('fbs_steddy_import_done', '1');
+  }
+
+  // One-time migration: ProResult mannskap uke 18–21 2026
+  if (!localStorage.getItem('fbs_proresult_wk18_done')) {
+    const ansatte = load('fbs_ansatte', SEED_ANSATTE);
+    let prosjekter = load('fbs_prosjekter', SEED_PROSJEKTER);
+    const tildelinger = load('fbs_tildelinger', []);
+
+    function findAnsatt(soek) {
+      const s = soek.toLowerCase();
+      return ansatte.find(a => a.navn.toLowerCase().includes(s));
+    }
+
+    function findOrCreateProsjekt(soek, createNavn) {
+      const s = soek.toLowerCase();
+      let p = prosjekter.find(proj => proj.navn.toLowerCase().includes(s));
+      if (!p) {
+        const nyNavn = createNavn || soek;
+        p = { id: Math.random().toString(36).slice(2) + Date.now().toString(36), navn: nyNavn, adresse: '', startDato: '', sluttDato: '', status: 'aktiv', beskrivelse: '', farge: PROJ_PALETTE[prosjekter.length % PROJ_PALETTE.length] };
+        prosjekter = [...prosjekter, p];
+      }
+      return p;
+    }
+
+    const nyeTildelinger = [];
+    PRORESULT_WK18_21.forEach(([ansattSoek, prosjektSoek, nyProsjektNavn, startDato, sluttDato]) => {
+      const ansatt = findAnsatt(ansattSoek);
+      if (!ansatt) return;
+      const prosjekt = findOrCreateProsjekt(prosjektSoek, nyProsjektNavn);
+      const finnesAllerede = tildelinger.some(t => t.ansattId === ansatt.id && t.prosjektId === prosjekt.id && t.startDato === startDato);
+      if (!finnesAllerede) {
+        nyeTildelinger.push({ id: Math.random().toString(36).slice(2) + Date.now().toString(36), ansattId: ansatt.id, prosjektId: prosjekt.id, startDato, sluttDato });
+      }
+    });
+
+    save('fbs_prosjekter', prosjekter);
+    save('fbs_tildelinger', [...tildelinger, ...nyeTildelinger]);
+    localStorage.setItem('fbs_proresult_wk18_done', '1');
+  }
+
+  // One-time migration: ProResult mannskap uke 22–41 2026
+  if (!localStorage.getItem('fbs_proresult_wk22_done')) {
+    const ansatte = load('fbs_ansatte', SEED_ANSATTE);
+    let prosjekter = load('fbs_prosjekter', SEED_PROSJEKTER);
+    const tildelinger = load('fbs_tildelinger', []);
+
+    function findAnsatt2(soek) {
+      const s = soek.toLowerCase();
+      return ansatte.find(a => a.navn.toLowerCase().includes(s));
+    }
+
+    function findOrCreateProsjekt2(soek, createNavn) {
+      const s = soek.toLowerCase();
+      let p = prosjekter.find(proj => proj.navn.toLowerCase().includes(s));
+      if (!p) {
+        const nyNavn = createNavn || soek;
+        p = { id: Math.random().toString(36).slice(2) + Date.now().toString(36), navn: nyNavn, adresse: '', startDato: '', sluttDato: '', status: 'aktiv', beskrivelse: '', farge: PROJ_PALETTE[prosjekter.length % PROJ_PALETTE.length] };
+        prosjekter = [...prosjekter, p];
+      }
+      return p;
+    }
+
+    const nyeTildelinger2 = [];
+    PRORESULT_WK22_41.forEach(([ansattSoek, prosjektSoek, nyProsjektNavn, startDato, sluttDato]) => {
+      const ansatt = findAnsatt2(ansattSoek);
+      if (!ansatt) return;
+      const prosjekt = findOrCreateProsjekt2(prosjektSoek, nyProsjektNavn);
+      const finnesAllerede = tildelinger.some(t => t.ansattId === ansatt.id && t.prosjektId === prosjekt.id && t.startDato === startDato);
+      if (!finnesAllerede) {
+        nyeTildelinger2.push({ id: Math.random().toString(36).slice(2) + Date.now().toString(36), ansattId: ansatt.id, prosjektId: prosjekt.id, startDato, sluttDato });
+      }
+    });
+
+    save('fbs_prosjekter', prosjekter);
+    save('fbs_tildelinger', [...tildelinger, ...nyeTildelinger2]);
+    localStorage.setItem('fbs_proresult_wk22_done', '1');
   }
 
   return {
