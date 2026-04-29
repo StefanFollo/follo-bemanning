@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useEffect, useState } from 'react';
 import {
   loadState,
-  saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag, saveRorTimer, saveBefaringer, saveReklamasjoner,
+  saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag, saveRorTimer, saveBefaringer, saveReklamasjoner, saveServiceJobber,
   loadFromCloud, saveToCloud, getLocalUpdatedAt,
   uid,
 } from '../store';
@@ -21,6 +21,7 @@ function reducer(state, action) {
       if (s.rorTimer) saveRorTimer(s.rorTimer);
       if (s.befaringer) saveBefaringer(s.befaringer);
       if (s.reklamasjoner) saveReklamasjoner(s.reklamasjoner);
+      if (s.serviceJobber) saveServiceJobber(s.serviceJobber);
       return { ...state, ...s };
     }
 
@@ -154,6 +155,23 @@ function reducer(state, action) {
       const next = (state.reklamasjoner || []).filter(r => r.id !== action.id);
       saveReklamasjoner(next);
       return { ...state, reklamasjoner: next };
+    }
+
+    // --- Service-jobber ---
+    case 'ADD_SERVICE_JOBB': {
+      const next = [...(state.serviceJobber || []), { ...action.payload, id: uid() }];
+      saveServiceJobber(next);
+      return { ...state, serviceJobber: next };
+    }
+    case 'UPDATE_SERVICE_JOBB': {
+      const next = (state.serviceJobber || []).map(s => s.id === action.payload.id ? { ...s, ...action.payload } : s);
+      saveServiceJobber(next);
+      return { ...state, serviceJobber: next };
+    }
+    case 'DELETE_SERVICE_JOBB': {
+      const next = (state.serviceJobber || []).filter(s => s.id !== action.id);
+      saveServiceJobber(next);
+      return { ...state, serviceJobber: next };
     }
 
     // --- Fag ---

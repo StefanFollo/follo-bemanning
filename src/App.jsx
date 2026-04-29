@@ -7,6 +7,7 @@ import Framdriftsplan from './pages/Framdriftsplan';
 import RorleggerPlan from './pages/RorleggerPlan';
 import BefaringPlan from './pages/BefaringPlan';
 import Reklamasjon from './pages/Reklamasjon';
+import Service from './pages/Service';
 import Dashboard from './pages/Dashboard';
 import LoginPage from './pages/LoginPage';
 import './App.css';
@@ -15,6 +16,7 @@ const TABS = [
   { id: 'dashboard', label: 'Oversikt', icon: '🏠' },
   { id: 'befaring', label: 'Befaring', icon: '🔍' },
   { id: 'reklamasjon', label: 'Reklamasjon', icon: '⚠️' },
+  { id: 'service', label: 'Service', icon: '⚡' },
   { id: 'prosjekter', label: 'Prosjekter', icon: '🏗' },
   { id: 'ansatte', label: 'Ansatte', icon: '👷' },
   { id: 'bemanningsplan', label: 'Bemanningsplan', icon: '📅' },
@@ -60,6 +62,7 @@ function App() {
           {activeTab === 'dashboard' && <Dashboard onNavigate={setActiveTab} />}
           {activeTab === 'befaring' && <BefaringPlan />}
           {activeTab === 'reklamasjon' && <Reklamasjon />}
+          {activeTab === 'service' && <Service />}
           {activeTab === 'prosjekter' && <Prosjekter />}
           {activeTab === 'ansatte' && <Ansatte />}
           {activeTab === 'bemanningsplan' && <Bemanningsplan />}

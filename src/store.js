@@ -133,6 +133,7 @@ export function loadState() {
     rorTimer: load('fbs_ror_timer', []),
     befaringer: load('fbs_befaringer', []),
     reklamasjoner: load('fbs_reklamasjoner', []),
+    serviceJobber: load('fbs_service_jobber', []),
   };
 }
 
@@ -144,6 +145,7 @@ export function saveFag(data) { save('fbs_fag', data); }
 export function saveRorTimer(data) { save('fbs_ror_timer', data); }
 export function saveBefaringer(data) { save('fbs_befaringer', data); }
 export function saveReklamasjoner(data) { save('fbs_reklamasjoner', data); }
+export function saveServiceJobber(data) { save('fbs_service_jobber', data); }
 
 export function uid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
