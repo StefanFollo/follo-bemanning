@@ -56,6 +56,8 @@ function Modal({ title, onClose, children }) {
 
 export default function Bemanningsplan() {
   const { state, dispatch } = useApp();
+  // Ansatte som er med i bemanningsplan-kapasitetsberegningen
+  const planAnsatte = state.ansatte.filter(a => !a.utenforBemanningsplan);
   const [tab, setTab] = useState('uke');
   const [fullscreen, setFullscreen] = useState(false);
   const [storskjerm, setStorskjerm] = useState(false);
@@ -262,7 +264,7 @@ export default function Bemanningsplan() {
     const dagTildeltIds = new Set(
       state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd)).map(t => t.ansattId)
     );
-    const dagLedige = state.ansatte.filter(a => !dagTildeltIds.has(a.id));
+    const dagLedige = planAnsatte.filter(a => !dagTildeltIds.has(a.id));
 
     // Shared Gantt row container — renders continuous bars with drag handles
     // prosjektId: vis kun dette prosjektets bars normalt; andre prosjekter vises som opptatt-bar
@@ -474,7 +476,7 @@ export default function Bemanningsplan() {
     const ukeTildeltIds = new Set(
       state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd)).map(t => t.ansattId)
     );
-    const ukeLedige = state.ansatte.filter(a => !ukeTildeltIds.has(a.id));
+    const ukeLedige = planAnsatte.filter(a => !ukeTildeltIds.has(a.id));
 
     // Needle helpers
     function getNeedleLeft(day) {
@@ -564,7 +566,7 @@ export default function Bemanningsplan() {
     const maanedTildeltIds = new Set(
       state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentMonth, maanedPeriodeEnd)).map(t => t.ansattId)
     );
-    const maanedLedige = state.ansatte.filter(a => !maanedTildeltIds.has(a.id));
+    const maanedLedige = planAnsatte.filter(a => !maanedTildeltIds.has(a.id));
 
     function MaanedAnsattRad({ ansatt, prosjektId }) {
       return (
@@ -687,9 +689,9 @@ export default function Bemanningsplan() {
         .filter(t => t.prosjektId === FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, kapWEnd))
         .map(t => t.ansattId)
     );
-    const kapTotal   = state.ansatte.length;
-    const kapOpptatt = state.ansatte.filter(a => kapOpptattIds.has(a.id)).length;
-    const kapFerie   = state.ansatte.filter(a => kapFerieIds.has(a.id) && !kapOpptattIds.has(a.id)).length;
+    const kapTotal   = planAnsatte.length;
+    const kapOpptatt = planAnsatte.filter(a => kapOpptattIds.has(a.id)).length;
+    const kapFerie   = planAnsatte.filter(a => kapFerieIds.has(a.id) && !kapOpptattIds.has(a.id)).length;
     const kapLedig   = kapTotal - kapOpptatt - kapFerie;
     const kapPst     = kapTotal > 0 ? Math.round((kapOpptatt / kapTotal) * 100) : 0;
 
@@ -953,8 +955,8 @@ export default function Bemanningsplan() {
                     .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, wk.start, wk.end))
                     .map(t => t.ansattId)
                 );
-                const tot = state.ansatte.length;
-                const opp = state.ansatte.filter(a => wOpptattIds.has(a.id)).length;
+                const tot = planAnsatte.length;
+                const opp = planAnsatte.filter(a => wOpptattIds.has(a.id)).length;
                 const led = tot - opp;
                 const pst = tot > 0 ? Math.round((led / tot) * 100) : 0;
                 const farge = led === 0 ? '#dc2626' : led <= 2 ? '#f59e0b' : '#16a34a';
@@ -1470,7 +1472,7 @@ export default function Bemanningsplan() {
         )}
 
         {state.fag.map(fag => {
-          const fagAnsatte = state.ansatte.filter(a => a.fag === fag);
+          const fagAnsatte = planAnsatte.filter(a => a.fag === fag);
           if (fagAnsatte.length === 0) return null;
           return (
             <div key={fag} className="ressurs-gruppe">

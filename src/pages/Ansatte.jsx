@@ -28,7 +28,7 @@ function Modal({ title, onClose, children }) {
   );
 }
 
-const EMPTY = { navn: '', fag: '', telefon: '', epost: '', innleie: false, bursdag: '' };
+const EMPTY = { navn: '', fag: '', telefon: '', epost: '', innleie: false, bursdag: '', utenforBemanningsplan: false };
 
 const MND_NAVN = ['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
 
@@ -185,6 +185,9 @@ export default function Ansatte() {
                   {a.innleie && (
                     <span style={{ fontSize: 10, color: '#f97316', fontWeight: 600, letterSpacing: '0.03em' }}>INNLEIE</span>
                   )}
+                  {a.utenforBemanningsplan && (
+                    <span style={{ fontSize: 10, color: '#b45309', fontWeight: 600, letterSpacing: '0.03em' }}>KONTOR / ADMIN</span>
+                  )}
                 </div>
               </div>
               <div className="ct-col ct-fag">
@@ -278,6 +281,38 @@ export default function Ansatte() {
               {form.bursdag && (
                 <button type="button" className="btn" onClick={() => setForm(f => ({ ...f, bursdag: '' }))}>✕</button>
               )}
+            </div>
+            <label style={{ marginTop: 8 }}>Bemanningsplan</label>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '10px 12px',
+                borderRadius: 8,
+                background: form.utenforBemanningsplan ? '#fef9ec' : '#f0fdf4',
+                border: `1px solid ${form.utenforBemanningsplan ? '#fde68a' : '#bbf7d0'}`,
+                cursor: 'pointer',
+                userSelect: 'none',
+              }}
+              onClick={() => setForm(f => ({ ...f, utenforBemanningsplan: !f.utenforBemanningsplan }))}
+            >
+              <div style={{
+                width: 36, height: 20, borderRadius: 10,
+                background: form.utenforBemanningsplan ? '#f59e0b' : '#16a34a',
+                position: 'relative', transition: 'background .2s',
+              }}>
+                <div style={{
+                  position: 'absolute', top: 2, left: form.utenforBemanningsplan ? 18 : 2,
+                  width: 16, height: 16, borderRadius: '50%', background: '#fff',
+                  transition: 'left .2s',
+                }} />
+              </div>
+              <span style={{ fontSize: 13, color: '#374151' }}>
+                {form.utenforBemanningsplan
+                  ? '⚠️ Ikke i bemanningsplan (kontor / admin)'
+                  : '✅ Inkludert i bemanningsplan'}
+              </span>
             </div>
             <div className="form-actions">
               <button className="btn" onClick={() => setShowModal(false)}>Avbryt</button>

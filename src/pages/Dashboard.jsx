@@ -48,6 +48,9 @@ export default function Dashboard({ onNavigate }) {
   const ukeStartI = weekStart(today);
   const ukeSluttI = addDays(ukeStartI, 6);
 
+  // Ansatte som er med i bemanningsplan-kapasitetsberegningen
+  const planAnsatte = state.ansatte.filter(a => !a.utenforBemanningsplan);
+
   // ── Dagens bemanning ───────────────────────────────────────
   const FERIE_ID = '__FERIE__';
   const dagensProsjektIds = new Set(
@@ -81,7 +84,7 @@ export default function Dashboard({ onNavigate }) {
       .filter(t => overlaps(t.startDato, t.sluttDato, today, today))
       .map(t => t.ansattId)
   );
-  const ledigeIdag = state.ansatte.filter(a => !opptattIds.has(a.id));
+  const ledigeIdag = planAnsatte.filter(a => !opptattIds.has(a.id));
 
   // ── Nøkkeltall ─────────────────────────────────────────────
   const aktiveProsj = state.prosjekter.filter(p => p.status === 'aktiv' || !p.status).length;
@@ -129,7 +132,7 @@ export default function Dashboard({ onNavigate }) {
       {/* ── Nøkkeltall ── */}
       <div className="dash-stats">
         <div className="dash-stat-kort">
-          <div className="dash-stat-tall">{state.ansatte.length}</div>
+          <div className="dash-stat-tall">{planAnsatte.length}</div>
           <div className="dash-stat-label">Ansatte totalt</div>
           <div className="dash-stat-sub">{opptattIds.size} på jobb i dag</div>
         </div>
