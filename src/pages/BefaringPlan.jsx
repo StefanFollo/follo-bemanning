@@ -355,7 +355,20 @@ export default function BefaringPlan() {
         {b.status === 'godkjent' && (
           <div className="bef-k-prosjekt-rad" onClick={e => e.stopPropagation()}>
             {b.prosjektId ? (
-              <span className="bef-k-prosjekt-badge">🏗 Prosjekt opprettet</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span className="bef-k-prosjekt-badge">🏗 Prosjekt opprettet</span>
+                <button
+                  className="btn btn-sm"
+                  style={{ fontSize: 11, padding: '2px 8px', color: '#dc2626', borderColor: '#fca5a5', background: '#fff5f5' }}
+                  onClick={() => {
+                    if (!confirm('Angre prosjektoppretting? Dette sletter prosjektet (og tilknyttede tildelinger) og sender befaringen tilbake til "Godkjent".')) return;
+                    dispatch({ type: 'DELETE_PROSJEKT', id: b.prosjektId });
+                    dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, prosjektId: undefined } });
+                  }}
+                >
+                  ↩ Angre
+                </button>
+              </div>
             ) : (
               <button className="bef-k-opprett-btn" onClick={() => apneProsjektModal(b)}>
                 🏗 Opprett prosjekt
