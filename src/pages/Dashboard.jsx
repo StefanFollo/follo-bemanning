@@ -42,7 +42,7 @@ function dagerTil(iso) {
 }
 
 export default function Dashboard({ onNavigate }) {
-  const { state } = useApp();
+  const { state, dispatch } = useApp();
   const today = dateToIso(new Date());
   const todayDate = new Date(today + 'T00:00:00');
   const ukeStartI = weekStart(today);
@@ -283,6 +283,22 @@ export default function Dashboard({ onNavigate }) {
                     <div className="dash-frist-info">
                       <div className="dash-frist-navn">{b.kontaktNavn || b.adresse}</div>
                       <div className="dash-frist-adresse">{b.adresse}</div>
+                      <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                        <button
+                          className="btn btn-sm"
+                          style={{ fontSize: 11, padding: '2px 8px', background: '#f0fdf4', color: '#16a34a', borderColor: '#bbf7d0' }}
+                          onClick={() => dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, status: 'godkjent' } })}
+                        >
+                          ✅ Godkjent
+                        </button>
+                        <button
+                          className="btn btn-sm"
+                          style={{ fontSize: 11, padding: '2px 8px', background: '#f9fafb', color: '#6b7280', borderColor: '#e2e8f0' }}
+                          onClick={() => dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, status: 'tapt' } })}
+                        >
+                          ❌ Tapt
+                        </button>
+                      </div>
                     </div>
                     <div className="dash-frist-badge" style={{ background: farge + '1a', color: farge }}>
                       {b.dager < 0
@@ -329,6 +345,51 @@ export default function Dashboard({ onNavigate }) {
               </div>
             )}
           </div>
+
+          {/* Statistikk tilbud */}
+          {(() => {
+            const befaringer = state.befaringer || [];
+            const totalt = befaringer.filter(b => b.status !== 'planlagt').length;
+            const vunnet = befaringer.filter(b => b.status === 'godkjent').length;
+            const tapt = befaringer.filter(b => b.status === 'tapt').length;
+            const aktive = befaringer.filter(b => b.status === 'tilbud_arbeid' || b.status === 'tilbud_sendt').length;
+            const vinnRate = totalt > 0 ? Math.round((vunnet / (vunnet + tapt)) * 100) : null;
+            const sumVunnet = befaringer
+              .filter(b => b.status === 'godkjent' && b.estimertBelop)
+              .reduce((s, b) => s + Number(b.estimertBelop), 0);
+            const sumTapt = befaringer
+              .filter(b => b.status === 'tapt' && b.estimertBelop)
+              .reduce((s, b) => s + Number(b.estimertBelop), 0);
+            const fmtKr = n => n > 0 ? new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(n) : null;
+            return (
+              <div className="dash-seksjon">
+                <div className="dash-seksjon-header">
+                  <span>📊 Tilbudsstatistikk</span>
+                  {vinnRate !== null && (
+                    <span className="dash-seksjon-teller" style={{ color: vinnRate >= 50 ? '#16a34a' : '#f59e0b' }}>
+                      {vinnRate}% vinnrate
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <div style={{ flex: 1, minWidth: 80, background: '#f0fdf4', borderRadius: 8, padding: '8px 12px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: '#16a34a' }}>{vunnet}</div>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>Vunnet</div>
+                    {fmtKr(sumVunnet) && <div style={{ fontSize: 10, color: '#16a34a', marginTop: 2 }}>{fmtKr(sumVunnet)}</div>}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 80, background: '#fff7ed', borderRadius: 8, padding: '8px 12px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: '#f59e0b' }}>{aktive}</div>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>Under arbeid</div>
+                  </div>
+                  <div style={{ flex: 1, minWidth: 80, background: '#f9fafb', borderRadius: 8, padding: '8px 12px', textAlign: 'center' }}>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: '#6b7280' }}>{tapt}</div>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>Tapt</div>
+                    {fmtKr(sumTapt) && <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>{fmtKr(sumTapt)}</div>}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Rask navigasjon */}
           <div className="dash-seksjon">

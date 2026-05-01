@@ -364,7 +364,7 @@ export default function Bemanningsplan() {
               <div key={t.id}
                 className={`gantt-bar${isFerie ? ' gantt-bar-ferie' : ''}`}
                 style={{ left: pos.left, width: pos.width, ...(isFerie ? {} : { background: prosjektColor(t.prosjektId) }) }}
-                onClick={e => { e.stopPropagation(); if (window.confirm(`Slett «${barLabel}»?\n${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`)) deleteTildeling(t.id); }}
+                onClick={e => { e.stopPropagation(); deleteTildeling(t.id); }}
                 title={`${barLabel} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
               >
                 {pos.isFirst
@@ -373,7 +373,7 @@ export default function Bemanningsplan() {
                 <span className="gantt-label">{barLabel}</span>
                 <div className="gantt-actions">
                   <button onClick={e => { e.stopPropagation(); setSplitModal(t); setSplitForm({ gapStart: '', gapEnd: '' }); }} title="Del opp">✂</button>
-                  <button onClick={e => { e.stopPropagation(); if (window.confirm(`Slett «${p?.navn}»?`)) deleteTildeling(t.id); }} title="Slett">✕</button>
+                  <button onClick={e => { e.stopPropagation(); deleteTildeling(t.id); }} title="Slett">✕</button>
                 </div>
                 {pos.isLast
                   ? <div className="gantt-handle gantt-handle-r" draggable onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'end' }; }}>▸</div>
@@ -1079,9 +1079,7 @@ export default function Bemanningsplan() {
                           onClick={e => {
                             e.stopPropagation();
                             if (dragRef.current) return;
-                            if (window.confirm(`Slett «${label}»?\n${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`)) {
-                              deleteTildeling(t.id);
-                            }
+                            deleteTildeling(t.id);
                           }}
                         >
                           <div className="oversikt-handle oversikt-handle-l"
@@ -1254,7 +1252,7 @@ export default function Bemanningsplan() {
                           title={label}
                           onClick={e => {
                             e.stopPropagation();
-                            if (window.confirm(`Slett ferie?\n${label}`)) deleteTildeling(t.id);
+                            deleteTildeling(t.id);
                           }}
                         >
                           <span className="gantt-label" style={{ fontSize: 10 }}>{label}</span>

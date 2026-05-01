@@ -284,6 +284,10 @@ export default function Prosjekter() {
     }
   }
 
+  function handleFullfor(id) {
+    dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...state.prosjekter.find(p => p.id === id), status: 'fullfort' } });
+  }
+
   function toggleCollapse(key) {
     setCollapsed(c => ({ ...c, [key]: !c[key] }));
   }
@@ -551,6 +555,16 @@ export default function Prosjekter() {
                               ))}
                             </select>
                             <button className="btn btn-sm" onClick={() => openEdit(p)}>Rediger</button>
+                            {(p.status === 'aktiv' || !p.status) && (
+                              <button
+                                className="btn btn-sm"
+                                style={{ background: '#f0fdf4', color: '#16a34a', borderColor: '#bbf7d0' }}
+                                onClick={e => { e.stopPropagation(); handleFullfor(p.id); }}
+                                title="Merk som fullført"
+                              >
+                                ✓ Fullfør
+                              </button>
+                            )}
                             <button className="btn btn-sm btn-danger" onClick={() => handleDelete(p.id)}>Slett</button>
                           </div>
                         </div>
