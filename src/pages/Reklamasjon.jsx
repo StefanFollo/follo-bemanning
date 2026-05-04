@@ -92,6 +92,109 @@ export default function Reklamasjon() {
     }
   }
 
+  function printPDF(r) {
+    const ansatt = r.ansvarligId ? state.ansatte.find(a => a.id === r.ansvarligId) : null;
+    const prosjekt = r.prosjektId ? state.prosjekter.find(p => p.id === r.prosjektId) : null;
+    const tittel = prosjekt ? prosjekt.navn : (r.adresse || '–');
+    const w = window.open('', '_blank');
+    w.document.write(`<!DOCTYPE html><html><head>
+      <meta charset="utf-8">
+      <title>Reklamasjon – ${tittel}</title>
+      <style>
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:Arial,sans-serif;font-size:13px;color:#111;padding:28px}
+        .hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #dc2626;padding-bottom:10px;margin-bottom:18px}
+        .logo{font-size:22px;font-weight:700;color:#dc2626}
+        .sub{font-size:11px;color:#666;margin-top:2px}
+        .tittel{font-size:16px;font-weight:700;text-align:right;color:#dc2626}
+        .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;margin-bottom:16px}
+        .full{grid-column:1/-1}
+        .felt{border-bottom:1px solid #e5e7eb;padding-bottom:5px}
+        .lbl{font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px}
+        .val{font-size:13px;font-weight:500;min-height:17px}
+        .besk{background:#f9f9f9;border:1px solid #e0e0e0;border-radius:4px;padding:10px 12px;min-height:64px;font-size:13px;line-height:1.6;white-space:pre-wrap;margin-bottom:16px}
+        .avkr{display:flex;gap:28px;margin-top:16px}
+        .avkr-item{display:flex;align-items:center;gap:8px;font-size:13px}
+        .cb{width:16px;height:16px;border:1.5px solid #555;display:inline-block;flex-shrink:0;border-radius:2px}
+        .sign{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:20px;padding-top:14px;border-top:1px solid #ccc}
+        .sign-linje{border-bottom:1px solid #888;height:34px}
+        .sign-lbl{font-size:10px;color:#999;margin-top:4px}
+        @media print{body{padding:10px}}
+      </style>
+    </head><body>
+      <div class="hdr">
+        <div>
+          <div class="logo">FolloByggService</div>
+          <div class="sub">Reklamasjonshåndtering</div>
+        </div>
+        <div>
+          <div class="tittel">REKLAMASJON</div>
+          <div class="sub" style="text-align:right">Utskrift: ${new Date().toLocaleDateString('nb-NO')}</div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="felt full">
+          <div class="lbl">Prosjekt / Adresse</div>
+          <div class="val" style="font-size:16px">${tittel}</div>
+        </div>
+        <div class="felt">
+          <div class="lbl">Kontaktperson (klager)</div>
+          <div class="val">${r.kontaktNavn || '–'}</div>
+        </div>
+        <div class="felt">
+          <div class="lbl">Type reklamasjon</div>
+          <div class="val">${r.type || '–'}</div>
+        </div>
+        <div class="felt">
+          <div class="lbl">Dato meldt inn</div>
+          <div class="val">${r.dato ? new Date(r.dato + 'T00:00:00').toLocaleDateString('nb-NO') : '–'}</div>
+        </div>
+        <div class="felt">
+          <div class="lbl">Frist for utbedring</div>
+          <div class="val">${r.frist ? new Date(r.frist + 'T00:00:00').toLocaleDateString('nb-NO') : '–'}</div>
+        </div>
+        <div class="felt">
+          <div class="lbl">Ansvarlig for utbedring</div>
+          <div class="val">${ansatt ? ansatt.navn : '–'}</div>
+        </div>
+        <div class="felt">
+          <div class="lbl">Status</div>
+          <div class="val">${r.status ? { ny: 'Ny', under_arbeid: 'Under utbedring', utbedret: 'Utbedret', avvist: 'Avvist', lukket: 'Lukket' }[r.status] || r.status : '–'}</div>
+        </div>
+        <div class="felt">
+          <div class="lbl">Kostnad for utbedring</div>
+          <div class="val">${r.kostnad ? new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(Number(r.kostnad)) : '–'}</div>
+        </div>
+      </div>
+
+      <div class="lbl" style="margin-bottom:5px">Beskrivelse / Hva kunden klager på</div>
+      <div class="besk">${r.beskrivelse || '(Ingen beskrivelse)'}</div>
+
+      ${r.kommentar ? `<div class="lbl" style="margin-bottom:5px">Kommentar / Hva er gjort</div><div class="besk">${r.kommentar}</div>` : ''}
+
+      <div class="avkr">
+        <div class="avkr-item"><div class="cb"></div> Utbedret</div>
+        <div class="avkr-item"><div class="cb"></div> Kunde godkjent</div>
+        <div class="avkr-item"><div class="cb"></div> Dokumentert med foto</div>
+      </div>
+
+      <div class="sign">
+        <div>
+          <div class="sign-linje"></div>
+          <div class="sign-lbl">Utført av (signatur)</div>
+        </div>
+        <div>
+          <div class="sign-linje"></div>
+          <div class="sign-lbl">Dato</div>
+        </div>
+      </div>
+    </body></html>`);
+    w.document.close();
+    w.focus();
+    setTimeout(() => w.print(), 400);
+  }
+
   // Teller per status
   const teller = Object.fromEntries(
     Object.keys(REKL_STATUS).map(s => [s, reklamasjoner.filter(r => r.status === s).length])
@@ -341,6 +444,12 @@ export default function Reklamasjon() {
 
               <div className="modal-actions">
                 {redigerer && <button className="btn btn-danger" onClick={slett}>Slett</button>}
+                {redigerer && (
+                  <button className="btn" onClick={() => printPDF(redigerer)} title="Skriv ut / lagre som PDF">
+                    🖨️ PDF
+                  </button>
+                )}
+                <button className="btn" onClick={() => setVisModal(false)}>Avbryt</button>
                 <button className="btn btn-primary" onClick={lagre}
                   disabled={!form.adresse.trim() && !form.prosjektId}>
                   Lagre
