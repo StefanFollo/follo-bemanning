@@ -38,6 +38,8 @@ function tomForm() {
     prosjektId: '',
     adresse: '',
     kontaktNavn: '',
+    telefon: '',
+    epost: '',
     type: 'Tømrer',
     beskrivelse: '',
     dato: dateToIso(new Date()),
@@ -141,6 +143,14 @@ export default function Reklamasjon() {
         <div class="felt">
           <div class="lbl">Kontaktperson (klager)</div>
           <div class="val">${r.kontaktNavn || '–'}</div>
+        </div>
+        <div class="felt">
+          <div class="lbl">Telefon</div>
+          <div class="val">${r.telefon || '–'}</div>
+        </div>
+        <div class="felt">
+          <div class="lbl">E-post</div>
+          <div class="val">${r.epost || '–'}</div>
         </div>
         <div class="felt">
           <div class="lbl">Type reklamasjon</div>
@@ -248,6 +258,7 @@ export default function Reklamasjon() {
         <div className="rekl-chips">
           <span className="rekl-chip rekl-chip--type">{r.type}</span>
           <span className="rekl-chip rekl-chip--dato">📅 {datoKort(r.dato)}</span>
+          {r.telefon && <span className="rekl-chip">📞 {r.telefon}</span>}
           {ansatt && (
             <span className="rekl-chip" style={{ background: ansattFarge(r.ansvarligId) + '22', color: ansattFarge(r.ansvarligId) }}>
               🔨 {ansatt.navn.split(' ')[0]}
@@ -377,6 +388,14 @@ export default function Reklamasjon() {
                   <div>
                     <label>Kontaktperson (klager)</label>
                     <input className="input" value={form.kontaktNavn} onChange={e => setForm(f => ({ ...f, kontaktNavn: e.target.value }))} placeholder="Navn på kunde/kontakt" />
+                  </div>
+                  <div>
+                    <label>Telefon</label>
+                    <input className="input" value={form.telefon || ''} onChange={e => setForm(f => ({ ...f, telefon: e.target.value }))} placeholder="Kundens telefon" />
+                  </div>
+                  <div>
+                    <label>E-post</label>
+                    <input className="input" value={form.epost || ''} onChange={e => setForm(f => ({ ...f, epost: e.target.value }))} placeholder="Kundens e-post" />
                   </div>
                   <div>
                     <label>Type reklamasjon</label>
