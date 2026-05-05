@@ -231,14 +231,12 @@ export default function Bemanningsplan() {
 
   function handleSplitSave() {
     const t = splitModal;
-    const { gapStart, gapEnd } = splitForm;
-    if (!gapStart || !gapEnd || gapStart > gapEnd) return;
-    const parts = [];
-    if (gapStart > t.startDato)
-      parts.push({ ansattId: t.ansattId, prosjektId: t.prosjektId, startDato: t.startDato, sluttDato: addDays(gapStart, -1) });
-    if (gapEnd < t.sluttDato)
-      parts.push({ ansattId: t.ansattId, prosjektId: t.prosjektId, startDato: addDays(gapEnd, 1), sluttDato: t.sluttDato });
-    if (parts.length === 0) return;
+    const { gapStart } = splitForm;
+    if (!gapStart || gapStart <= t.startDato || gapStart > t.sluttDato) return;
+    const parts = [
+      { ansattId: t.ansattId, prosjektId: t.prosjektId, startDato: t.startDato, sluttDato: addDays(gapStart, -1) },
+      { ansattId: t.ansattId, prosjektId: t.prosjektId, startDato: gapStart, sluttDato: t.sluttDato },
+    ];
     dispatch({ type: 'SPLIT_TILDELING', id: t.id, parts });
     setSplitModal(null);
   }
@@ -364,7 +362,7 @@ export default function Bemanningsplan() {
               <div key={t.id}
                 className={`gantt-bar${isFerie ? ' gantt-bar-ferie' : ''}`}
                 style={{ left: pos.left, width: pos.width, ...(isFerie ? {} : { background: prosjektColor(t.prosjektId) }) }}
-                onClick={e => { e.stopPropagation(); deleteTildeling(t.id); }}
+                onClick={e => e.stopPropagation()}
                 title={`${barLabel} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
               >
                 {pos.isFirst
@@ -1598,45 +1596,35 @@ export default function Bemanningsplan() {
       </div>
 
       {splitModal && (
-        <Modal title="Del opp tildeling med pause" onClose={() => setSplitModal(null)}>
+        <Modal title="✂ Del opp tildeling" onClose={() => setSplitModal(null)}>
           <div className="form">
-            <div style={{ background: '#f1f5f9', borderRadius: 8, padding: '10px 14px', marginBottom: 12 }}>
+            <div style={{ background: '#f1f5f9', borderRadius: 8, padding: '10px 14px', marginBottom: 14 }}>
               <div style={{ fontWeight: 600, marginBottom: 2 }}>
                 {state.prosjekter.find(p => p.id === splitModal.prosjektId)?.navn}
               </div>
               <div style={{ color: '#64748b', fontSize: 13 }}>
-                {state.ansatte.find(a => a.id === splitModal.ansattId)?.navn} · {formatDate(splitModal.startDato)} – {formatDate(splitModal.sluttDato)}
+                {state.ansatte.find(a => a.id === splitModal.ansattId)?.navn}
+                {' · '}{formatDate(splitModal.startDato)} – {formatDate(splitModal.sluttDato)}
               </div>
             </div>
             <p style={{ color: '#64748b', fontSize: 13, marginBottom: 12 }}>
-              Angi perioden ansatt <b>ikke</b> er på prosjektet. Tildelingen splittes i to rundt denne pausen.
+              Velg hvilken dato del 2 skal starte. Tildelingen deles i to — du kan deretter dra kantene for å justere.
             </p>
-            <div className="form-row">
-              <div>
-                <label>Pause fra *</label>
-                <input type="date" value={splitForm.gapStart}
-                  min={splitModal.startDato} max={splitModal.sluttDato}
-                  onChange={e => setSplitForm(f => ({ ...f, gapStart: e.target.value }))} />
-              </div>
-              <div>
-                <label>Pause til *</label>
-                <input type="date" value={splitForm.gapEnd}
-                  min={splitForm.gapStart || splitModal.startDato} max={splitModal.sluttDato}
-                  onChange={e => setSplitForm(f => ({ ...f, gapEnd: e.target.value }))} />
-              </div>
-            </div>
-            {splitForm.gapStart && splitForm.gapEnd && splitForm.gapStart <= splitForm.gapEnd && (
-              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, padding: '8px 12px', fontSize: 13, marginTop: 4 }}>
-                Resultat: {splitForm.gapStart > splitModal.startDato ? `Del 1: ${formatDate(splitModal.startDato)} – ${formatDate(addDays(splitForm.gapStart, -1))}` : ''}
-                {splitForm.gapStart > splitModal.startDato && splitForm.gapEnd < splitModal.sluttDato ? ' · ' : ''}
-                {splitForm.gapEnd < splitModal.sluttDato ? `Del 2: ${formatDate(addDays(splitForm.gapEnd, 1))} – ${formatDate(splitModal.sluttDato)}` : ''}
+            <label>Del 2 starter *</label>
+            <input type="date" value={splitForm.gapStart}
+              min={addDays(splitModal.startDato, 1)} max={splitModal.sluttDato}
+              onChange={e => setSplitForm(f => ({ ...f, gapStart: e.target.value }))} />
+            {splitForm.gapStart && splitForm.gapStart > splitModal.startDato && splitForm.gapStart <= splitModal.sluttDato && (
+              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, padding: '8px 12px', fontSize: 13, marginTop: 8, display: 'flex', gap: 12 }}>
+                <span>📅 Del 1: <b>{formatDate(splitModal.startDato)} – {formatDate(addDays(splitForm.gapStart, -1))}</b></span>
+                <span>📅 Del 2: <b>{formatDate(splitForm.gapStart)} – {formatDate(splitModal.sluttDato)}</b></span>
               </div>
             )}
             <div className="form-actions">
               <button className="btn" onClick={() => setSplitModal(null)}>Avbryt</button>
               <button className="btn btn-primary" onClick={handleSplitSave}
-                disabled={!splitForm.gapStart || !splitForm.gapEnd || splitForm.gapStart > splitForm.gapEnd}>
-                Del opp
+                disabled={!splitForm.gapStart || splitForm.gapStart <= splitModal.startDato || splitForm.gapStart > splitModal.sluttDato}>
+                ✂ Del opp
               </button>
             </div>
           </div>
