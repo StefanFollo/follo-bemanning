@@ -75,8 +75,7 @@ export default function Bemanningsplan() {
   const [currentMonth, setCurrentMonth] = useState(() => monthStart(dateToIso(new Date())));
   const [showModal, setShowModal] = useState(false);
   const [tilForm, setTilForm] = useState({ ansattId: '', prosjektId: '', startDato: '', sluttDato: '' });
-  const [splitModal, setSplitModal] = useState(null); // tildeling object
-  const [splitForm, setSplitForm] = useState({ gapStart: '', gapEnd: '' });
+  const [barMenu, setBarMenu] = useState(null); // { t, splitDay, x, y }
   const dragRef = useRef(null);
   const scrollRestoreRef = useRef(null); // lagrer scroll-posisjoner mellom dispatch og useLayoutEffect
 
@@ -173,6 +172,21 @@ export default function Bemanningsplan() {
     dispatch({ type: 'DELETE_TILDELING', id });
   }
 
+  function openBarMenu(t, splitDay, x, y) {
+    setBarMenu({ t, splitDay, x, y });
+  }
+
+  function handleSplitAtDay(t, splitDay) {
+    if (!splitDay || splitDay <= t.startDato || splitDay > t.sluttDato) return;
+    dispatch({
+      type: 'SPLIT_TILDELING', id: t.id,
+      parts: [
+        { ansattId: t.ansattId, prosjektId: t.prosjektId, startDato: t.startDato, sluttDato: addDays(splitDay, -1) },
+        { ansattId: t.ansattId, prosjektId: t.prosjektId, startDato: splitDay,    sluttDato: t.sluttDato },
+      ],
+    });
+  }
+
   function daysDiff(a, b) {
     return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
   }
@@ -227,18 +241,6 @@ export default function Bemanningsplan() {
         dispatchKeepScroll({ type: 'UPDATE_TILDELING', payload: { ...t, startDato: newStart } });
       }
     }
-  }
-
-  function handleSplitSave() {
-    const t = splitModal;
-    const { gapStart } = splitForm;
-    if (!gapStart || gapStart <= t.startDato || gapStart > t.sluttDato) return;
-    const parts = [
-      { ansattId: t.ansattId, prosjektId: t.prosjektId, startDato: t.startDato, sluttDato: addDays(gapStart, -1) },
-      { ansattId: t.ansattId, prosjektId: t.prosjektId, startDato: gapStart, sluttDato: t.sluttDato },
-    ];
-    dispatch({ type: 'SPLIT_TILDELING', id: t.id, parts });
-    setSplitModal(null);
   }
 
   // --- UKE-VISNING ---
@@ -362,15 +364,18 @@ export default function Bemanningsplan() {
               <div key={t.id}
                 className={`gantt-bar${isFerie ? ' gantt-bar-ferie' : ''}`}
                 style={{ left: pos.left, width: pos.width, ...(isFerie ? {} : { background: prosjektColor(t.prosjektId) }) }}
-                onClick={e => e.stopPropagation()}
-                title={`${barLabel} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
+                onClick={e => {
+                  e.stopPropagation();
+                  const mid = addDays(t.startDato, Math.max(1, Math.floor(daysDiff(t.startDato, t.sluttDato) / 2)));
+                  openBarMenu(t, mid, e.clientX, e.clientY);
+                }}
+                title={`${barLabel} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)} — klikk for valg`}
               >
                 {pos.isFirst
                   ? <div className="gantt-handle gantt-handle-l" draggable onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'start' }; }}>◂</div>
                   : <div className="gantt-handle-spacer" />}
                 <span className="gantt-label">{barLabel}</span>
                 <div className="gantt-actions">
-                  <button onClick={e => { e.stopPropagation(); setSplitModal(t); setSplitForm({ gapStart: '', gapEnd: '' }); }} title="Del opp">✂</button>
                   <button onClick={e => { e.stopPropagation(); deleteTildeling(t.id); }} title="Slett">✕</button>
                 </div>
                 {pos.isLast
@@ -1073,11 +1078,16 @@ export default function Bemanningsplan() {
                         <div key={t.id}
                           className={`oversikt-bar${isFerie ? ' oversikt-bar-ferie' : ''}`}
                           style={{ left: bp.left, width: bp.width, ...(isFerie ? {} : { background: color }) }}
-                          title={`${label} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
+                          title={`${label} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)} — klikk for valg`}
                           onClick={e => {
                             e.stopPropagation();
                             if (dragRef.current) return;
-                            deleteTildeling(t.id);
+                            const area = e.currentTarget.closest('.oversikt-bars-area');
+                            const rect = area ? area.getBoundingClientRect() : e.currentTarget.getBoundingClientRect();
+                            const dayIdx = Math.max(0, Math.min(allDays.length - 1, Math.floor((e.clientX - rect.left) / DAY_W)));
+                            const clickedDay = allDays[dayIdx];
+                            const splitDay = clickedDay > t.startDato ? clickedDay : addDays(t.startDato, 1);
+                            openBarMenu(t, splitDay, e.clientX, e.clientY);
                           }}
                         >
                           <div className="oversikt-handle oversikt-handle-l"
@@ -1595,40 +1605,63 @@ export default function Bemanningsplan() {
         {tab === 'bursdag' && BursdagVisning()}
       </div>
 
-      {splitModal && (
-        <Modal title="✂ Del opp tildeling" onClose={() => setSplitModal(null)}>
-          <div className="form">
-            <div style={{ background: '#f1f5f9', borderRadius: 8, padding: '10px 14px', marginBottom: 14 }}>
-              <div style={{ fontWeight: 600, marginBottom: 2 }}>
-                {state.prosjekter.find(p => p.id === splitModal.prosjektId)?.navn}
-              </div>
-              <div style={{ color: '#64748b', fontSize: 13 }}>
-                {state.ansatte.find(a => a.id === splitModal.ansattId)?.navn}
-                {' · '}{formatDate(splitModal.startDato)} – {formatDate(splitModal.sluttDato)}
-              </div>
+      {barMenu && (
+        <>
+          <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={() => setBarMenu(null)} />
+          <div style={{
+            position: 'fixed',
+            top: Math.min(barMenu.y + 8, window.innerHeight - 200),
+            left: Math.min(barMenu.x, window.innerWidth - 220),
+            zIndex: 9999,
+            background: '#fff',
+            border: '1px solid #e0e0e0',
+            borderRadius: 10,
+            boxShadow: '0 4px 20px rgba(0,0,0,0.16)',
+            padding: '12px 14px',
+            minWidth: 210,
+          }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>
+              {barMenu.t.prosjektId === FERIE_ID
+                ? '🏖 Ferie / Fri'
+                : state.prosjekter.find(p => p.id === barMenu.t.prosjektId)?.navn || '–'}
             </div>
-            <p style={{ color: '#64748b', fontSize: 13, marginBottom: 12 }}>
-              Velg hvilken dato del 2 skal starte. Tildelingen deles i to — du kan deretter dra kantene for å justere.
-            </p>
-            <label>Del 2 starter *</label>
-            <input type="date" value={splitForm.gapStart}
-              min={addDays(splitModal.startDato, 1)} max={splitModal.sluttDato}
-              onChange={e => setSplitForm(f => ({ ...f, gapStart: e.target.value }))} />
-            {splitForm.gapStart && splitForm.gapStart > splitModal.startDato && splitForm.gapStart <= splitModal.sluttDato && (
-              <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, padding: '8px 12px', fontSize: 13, marginTop: 8, display: 'flex', gap: 12 }}>
-                <span>📅 Del 1: <b>{formatDate(splitModal.startDato)} – {formatDate(addDays(splitForm.gapStart, -1))}</b></span>
-                <span>📅 Del 2: <b>{formatDate(splitForm.gapStart)} – {formatDate(splitModal.sluttDato)}</b></span>
-              </div>
-            )}
-            <div className="form-actions">
-              <button className="btn" onClick={() => setSplitModal(null)}>Avbryt</button>
-              <button className="btn btn-primary" onClick={handleSplitSave}
-                disabled={!splitForm.gapStart || splitForm.gapStart <= splitModal.startDato || splitForm.gapStart > splitModal.sluttDato}>
+            <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 10 }}>
+              {state.ansatte.find(a => a.id === barMenu.t.ansattId)?.navn}
+              {' · '}{formatDate(barMenu.t.startDato)} – {formatDate(barMenu.t.sluttDato)}
+            </div>
+
+            <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 10, marginBottom: 10 }}>
+              <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4 }}>✂ Del fra dato</label>
+              <input type="date"
+                value={barMenu.splitDay}
+                min={addDays(barMenu.t.startDato, 1)}
+                max={barMenu.t.sluttDato}
+                onChange={e => setBarMenu(m => ({ ...m, splitDay: e.target.value }))}
+                style={{ width: '100%', padding: '5px 8px', borderRadius: 6, border: '1px solid #ddd', fontSize: 13, marginBottom: 6, boxSizing: 'border-box' }}
+              />
+              {barMenu.splitDay > barMenu.t.startDato && barMenu.splitDay <= barMenu.t.sluttDato && (
+                <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 6 }}>
+                  Del 1: til <b>{formatDate(addDays(barMenu.splitDay, -1))}</b>
+                  {' · '}Del 2: fra <b>{formatDate(barMenu.splitDay)}</b>
+                </div>
+              )}
+              <button
+                disabled={!barMenu.splitDay || barMenu.splitDay <= barMenu.t.startDato || barMenu.splitDay > barMenu.t.sluttDato}
+                onClick={() => { handleSplitAtDay(barMenu.t, barMenu.splitDay); setBarMenu(null); }}
+                style={{ width: '100%', padding: '7px', borderRadius: 6, border: 'none', background: '#185FA5', color: '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 500, marginBottom: 6, opacity: (!barMenu.splitDay || barMenu.splitDay <= barMenu.t.startDato) ? 0.4 : 1 }}
+              >
                 ✂ Del opp
               </button>
             </div>
+
+            <button
+              onClick={() => { deleteTildeling(barMenu.t.id); setBarMenu(null); }}
+              style={{ width: '100%', padding: '6px', borderRadius: 6, border: '1px solid #fca5a5', background: '#fff', color: '#dc2626', fontSize: 12, cursor: 'pointer' }}
+            >
+              ✕ Slett tildeling
+            </button>
           </div>
-        </Modal>
+        </>
       )}
 
       {showModal && (
