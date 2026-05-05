@@ -35,7 +35,9 @@ export default function RorleggerPlan() {
   const [editTimer, setEditTimer] = useState(null); // null = new, object = edit
   const [form, setForm] = useState({
     ansattId: '',
+    modus: 'prosjekt', // 'prosjekt' | 'fritekst'
     prosjektId: '',
+    fritekst: '',
     dato: '',
     startTid: '08:00',
     sluttTid: '12:00',
@@ -47,6 +49,7 @@ export default function RorleggerPlan() {
   const rorleggere = state.ansatte.filter(a => a.fag === 'Rørlegger');
 
   function prosjektColor(pid) {
+    if (!pid) return '#6b7280';
     const p = state.prosjekter.find(p => p.id === pid);
     if (p?.farge) return p.farge;
     const idx = state.prosjekter.findIndex(p => p.id === pid);
@@ -57,7 +60,9 @@ export default function RorleggerPlan() {
     setEditTimer(null);
     setForm({
       ansattId: ansattId || (rorleggere[0]?.id || ''),
+      modus: 'prosjekt',
       prosjektId: state.prosjekter[0]?.id || '',
+      fritekst: '',
       dato: dato || today,
       startTid: '08:00',
       sluttTid: '12:00',
@@ -68,17 +73,36 @@ export default function RorleggerPlan() {
 
   function openEdit(t) {
     setEditTimer(t);
-    setForm({ ansattId: t.ansattId, prosjektId: t.prosjektId, dato: t.dato, startTid: t.startTid, sluttTid: t.sluttTid, notat: t.notat || '' });
+    setForm({
+      ansattId: t.ansattId,
+      modus: t.fritekst ? 'fritekst' : 'prosjekt',
+      prosjektId: t.prosjektId || '',
+      fritekst: t.fritekst || '',
+      dato: t.dato,
+      startTid: t.startTid,
+      sluttTid: t.sluttTid,
+      notat: t.notat || '',
+    });
     setShowModal(true);
   }
 
   function handleSave() {
-    if (!form.ansattId || !form.prosjektId || !form.dato || !form.startTid || !form.sluttTid) return;
+    const jobOk = form.modus === 'fritekst' ? !!form.fritekst.trim() : !!form.prosjektId;
+    if (!form.ansattId || !jobOk || !form.dato || !form.startTid || !form.sluttTid) return;
     if (form.startTid >= form.sluttTid) return;
+    const payload = {
+      ansattId: form.ansattId,
+      prosjektId: form.modus === 'prosjekt' ? form.prosjektId : '',
+      fritekst: form.modus === 'fritekst' ? form.fritekst.trim() : '',
+      dato: form.dato,
+      startTid: form.startTid,
+      sluttTid: form.sluttTid,
+      notat: form.notat,
+    };
     if (editTimer) {
-      dispatch({ type: 'UPDATE_ROR_TIMER', payload: { ...editTimer, ...form } });
+      dispatch({ type: 'UPDATE_ROR_TIMER', payload: { ...editTimer, ...payload } });
     } else {
-      dispatch({ type: 'ADD_ROR_TIMER', payload: form });
+      dispatch({ type: 'ADD_ROR_TIMER', payload });
     }
     setShowModal(false);
   }
@@ -211,16 +235,17 @@ export default function RorleggerPlan() {
                         {/* Assignment bars */}
                         {bars.map(t => {
                           const p = state.prosjekter.find(pr => pr.id === t.prosjektId);
+                          const jobNavn = t.fritekst || p?.navn || '?';
                           const barStyle = getBarStyle(t.startTid, t.sluttTid, t.row, totalRows);
                           return (
                             <div key={t.id}
                               className="ror-bar"
                               style={{ ...barStyle, background: prosjektColor(t.prosjektId) }}
-                              title={`${p?.navn || '–'}\n${t.startTid} – ${t.sluttTid}${t.notat ? '\n' + t.notat : ''}`}
+                              title={`${jobNavn}\n${t.startTid} – ${t.sluttTid}${t.notat ? '\n' + t.notat : ''}`}
                               onClick={e => { e.stopPropagation(); openEdit(t); }}
                             >
                               <span className="ror-bar-label">{t.startTid}–{t.sluttTid}</span>
-                              <span className="ror-bar-prosjekt">{p?.navn || '?'}</span>
+                              <span className="ror-bar-prosjekt">{jobNavn}</span>
                             </div>
                           );
                         })}
@@ -266,9 +291,37 @@ export default function RorleggerPlan() {
 
             <div className="form-group">
               <label>Prosjekt / oppdrag</label>
-              <select value={form.prosjektId} onChange={e => setForm(f => ({ ...f, prosjektId: e.target.value }))}>
-                {state.prosjekter.map(p => <option key={p.id} value={p.id}>{p.navn}</option>)}
-              </select>
+              <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ flex: 1, background: form.modus === 'prosjekt' ? '#2563eb' : '', color: form.modus === 'prosjekt' ? 'white' : '', fontSize: 13 }}
+                  onClick={() => setForm(f => ({ ...f, modus: 'prosjekt' }))}
+                >
+                  Fra prosjektliste
+                </button>
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ flex: 1, background: form.modus === 'fritekst' ? '#2563eb' : '', color: form.modus === 'fritekst' ? 'white' : '', fontSize: 13 }}
+                  onClick={() => setForm(f => ({ ...f, modus: 'fritekst' }))}
+                >
+                  Fri tekst
+                </button>
+              </div>
+              {form.modus === 'prosjekt' ? (
+                <select value={form.prosjektId} onChange={e => setForm(f => ({ ...f, prosjektId: e.target.value }))}>
+                  {state.prosjekter.map(p => <option key={p.id} value={p.id}>{p.navn}</option>)}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  placeholder="Beskriv oppdraget, f.eks. «Privat kunde – bytte varmtvannsbereder»"
+                  value={form.fritekst}
+                  onChange={e => setForm(f => ({ ...f, fritekst: e.target.value }))}
+                  autoFocus
+                />
+              )}
             </div>
 
             <div className="form-group">
@@ -306,7 +359,7 @@ export default function RorleggerPlan() {
 
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
               <button className="btn btn-primary" onClick={handleSave}
-                disabled={!form.ansattId || !form.prosjektId || !form.dato || form.startTid >= form.sluttTid}>
+                disabled={!form.ansattId || (form.modus === 'prosjekt' ? !form.prosjektId : !form.fritekst.trim()) || !form.dato || form.startTid >= form.sluttTid}>
                 {editTimer ? 'Lagre endringer' : 'Legg til'}
               </button>
               {editTimer && (
