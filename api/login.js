@@ -32,7 +32,7 @@ export default async function handler(req, res) {
     // Ikke la Redis-feil stoppe innlogging
   }
 
-  if (!username || !password || username.trim() !== APP_USER || password !== APP_PASS) {
+  if (!username || !password || username.trim().toLowerCase() !== APP_USER.toLowerCase() || password !== APP_PASS) {
     return res.status(401).json({ error: 'Feil brukernavn eller passord.' });
   }
 
