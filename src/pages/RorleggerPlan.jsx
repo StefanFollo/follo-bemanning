@@ -38,6 +38,9 @@ export default function RorleggerPlan() {
     modus: 'prosjekt', // 'prosjekt' | 'fritekst'
     prosjektId: '',
     fritekst: '',
+    kontakt: '',
+    telefon: '',
+    adresse: '',
     dato: '',
     startTid: '08:00',
     sluttTid: '12:00',
@@ -63,6 +66,9 @@ export default function RorleggerPlan() {
       modus: 'prosjekt',
       prosjektId: state.prosjekter[0]?.id || '',
       fritekst: '',
+      kontakt: '',
+      telefon: '',
+      adresse: '',
       dato: dato || today,
       startTid: '08:00',
       sluttTid: '12:00',
@@ -78,6 +84,9 @@ export default function RorleggerPlan() {
       modus: t.fritekst ? 'fritekst' : 'prosjekt',
       prosjektId: t.prosjektId || '',
       fritekst: t.fritekst || '',
+      kontakt: t.kontakt || '',
+      telefon: t.telefon || '',
+      adresse: t.adresse || '',
       dato: t.dato,
       startTid: t.startTid,
       sluttTid: t.sluttTid,
@@ -94,6 +103,9 @@ export default function RorleggerPlan() {
       ansattId: form.ansattId,
       prosjektId: form.modus === 'prosjekt' ? form.prosjektId : '',
       fritekst: form.modus === 'fritekst' ? form.fritekst.trim() : '',
+      kontakt: form.modus === 'fritekst' ? form.kontakt.trim() : '',
+      telefon: form.modus === 'fritekst' ? form.telefon.trim() : '',
+      adresse: form.adresse.trim(),
       dato: form.dato,
       startTid: form.startTid,
       sluttTid: form.sluttTid,
@@ -241,7 +253,7 @@ export default function RorleggerPlan() {
                             <div key={t.id}
                               className="ror-bar"
                               style={{ ...barStyle, background: prosjektColor(t.prosjektId) }}
-                              title={`${jobNavn}\n${t.startTid} – ${t.sluttTid}${t.notat ? '\n' + t.notat : ''}`}
+                              title={[jobNavn, t.adresse, t.kontakt, t.telefon, `${t.startTid} – ${t.sluttTid}`, t.notat].filter(Boolean).join('\n')}
                               onClick={e => { e.stopPropagation(); openEdit(t); }}
                             >
                               <span className="ror-bar-label">{t.startTid}–{t.sluttTid}</span>
@@ -316,12 +328,33 @@ export default function RorleggerPlan() {
               ) : (
                 <input
                   type="text"
-                  placeholder="Beskriv oppdraget, f.eks. «Privat kunde – bytte varmtvannsbereder»"
+                  placeholder="Kort jobbtittel, f.eks. «Bytte varmtvannsbereder»"
                   value={form.fritekst}
                   onChange={e => setForm(f => ({ ...f, fritekst: e.target.value }))}
                   autoFocus
                 />
               )}
+            </div>
+
+            {form.modus === 'fritekst' && (
+              <div style={{ display: 'flex', gap: 12 }}>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>Kontaktperson</label>
+                  <input type="text" placeholder="Navn på kunde / kontakt"
+                    value={form.kontakt} onChange={e => setForm(f => ({ ...f, kontakt: e.target.value }))} />
+                </div>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label>Telefon</label>
+                  <input type="tel" placeholder="Mobilnummer"
+                    value={form.telefon} onChange={e => setForm(f => ({ ...f, telefon: e.target.value }))} />
+                </div>
+              </div>
+            )}
+
+            <div className="form-group">
+              <label>Adresse</label>
+              <input type="text" placeholder="Arbeidsstedsadresse"
+                value={form.adresse} onChange={e => setForm(f => ({ ...f, adresse: e.target.value }))} />
             </div>
 
             <div className="form-group">
@@ -352,9 +385,14 @@ export default function RorleggerPlan() {
             )}
 
             <div className="form-group">
-              <label>Notat (valgfritt)</label>
-              <input type="text" placeholder="f.eks. ta med stoppekran" value={form.notat}
-                onChange={e => setForm(f => ({ ...f, notat: e.target.value }))} />
+              <label>Beskrivelse / notat</label>
+              <textarea
+                rows={4}
+                placeholder="Beskriv jobben, hva som trengs, spesielle hensyn osv."
+                value={form.notat}
+                onChange={e => setForm(f => ({ ...f, notat: e.target.value }))}
+                style={{ resize: 'vertical', fontFamily: 'inherit', fontSize: 14 }}
+              />
             </div>
 
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
