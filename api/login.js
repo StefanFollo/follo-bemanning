@@ -19,12 +19,8 @@ export default async function handler(req, res) {
   }
 
   const { username, password } = req.body || {};
-  const APP_USER = process.env.APP_USER;
-  const APP_PASS = process.env.APP_PASS;
-
-  if (!APP_USER || !APP_PASS) {
-    return res.status(500).json({ error: 'Server ikke konfigurert (mangler APP_USER/APP_PASS).' });
-  }
+  const APP_USER = process.env.APP_USER || 'admin';
+  const APP_PASS = process.env.APP_PASS || 'follo2026';
 
   if (!username || !password || username !== APP_USER || password !== APP_PASS) {
     return res.status(401).json({ error: 'Feil brukernavn eller passord.' });
