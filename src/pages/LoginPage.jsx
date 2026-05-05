@@ -1,26 +1,32 @@
 import { useState } from 'react';
 
-const APP_USER = import.meta.env.VITE_APP_USER || 'admin';
-const APP_PASS = import.meta.env.VITE_APP_PASS || 'follo2026';
-
 export default function LoginPage({ onLogin }) {
   const [form, setForm] = useState({ user: '', pass: '' });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
     setLoading(true);
     setError('');
-    setTimeout(() => {
-      if (form.user.trim() === APP_USER && form.pass === APP_PASS) {
-        localStorage.setItem('fbs_auth', 'ok');
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: form.user.trim(), password: form.pass }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        localStorage.setItem('fbs_token', data.token);
+        localStorage.removeItem('fbs_auth'); // fjern gammel nøkkel
         onLogin();
       } else {
-        setError('Feil brukernavn eller passord.');
+        setError(data.error || 'Innlogging feilet.');
       }
-      setLoading(false);
-    }, 400);
+    } catch {
+      setError('Nettverksfeil — er du tilkoblet internett?');
+    }
+    setLoading(false);
   }
 
   return (
@@ -55,7 +61,7 @@ export default function LoginPage({ onLogin }) {
 
           {error && <div className="login-error">{error}</div>}
 
-          <button type="submit" className="login-btn" disabled={loading}>
+          <button type="submit" className="login-btn" disabled={loading || !form.user || !form.pass}>
             {loading ? 'Logger inn…' : 'Logg inn'}
           </button>
         </form>

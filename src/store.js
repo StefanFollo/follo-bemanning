@@ -427,9 +427,15 @@ export function overlaps(aStart, aEnd, bStart, bEnd) {
 }
 
 // Cloud sync via Vercel KV
+function getToken() { return localStorage.getItem('fbs_token') || ''; }
+
 export async function loadFromCloud() {
+  const token = getToken();
+  if (!token) return null;
   try {
-    const res = await fetch('/api/state');
+    const res = await fetch('/api/state', {
+      headers: { 'Authorization': `Bearer ${token}` },
+    });
     if (!res.ok) return null;
     const data = await res.json();
     return Object.keys(data).length > 0 ? data : null;
@@ -439,10 +445,15 @@ export async function loadFromCloud() {
 }
 
 export async function saveToCloud(state) {
+  const token = getToken();
+  if (!token) return;
   try {
     await fetch('/api/state', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
       body: JSON.stringify({ ...state, _updatedAt: getLocalUpdatedAt() }),
     });
   } catch {

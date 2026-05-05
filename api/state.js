@@ -5,7 +5,18 @@ const redis = new Redis({
   token: process.env.KV_REST_API_TOKEN,
 });
 
+async function isAuthorized(req) {
+  const token = (req.headers.authorization || '').replace('Bearer ', '').trim();
+  if (!token) return false;
+  const session = await redis.get(`fbs_session:${token}`);
+  return !!session;
+}
+
 export default async function handler(req, res) {
+  if (!await isAuthorized(req)) {
+    return res.status(401).json({ error: 'Ikke autorisert' });
+  }
+
   if (req.method === 'GET') {
     try {
       const state = await redis.get('fbs_state');

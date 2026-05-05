@@ -26,7 +26,22 @@ const TABS = [
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [loggedIn, setLoggedIn] = useState(() => localStorage.getItem('fbs_auth') === 'ok');
+  const [loggedIn, setLoggedIn] = useState(() => !!localStorage.getItem('fbs_token'));
+
+  async function handleLogout() {
+    const token = localStorage.getItem('fbs_token');
+    localStorage.removeItem('fbs_token');
+    localStorage.removeItem('fbs_auth');
+    setLoggedIn(false);
+    if (token) {
+      try {
+        await fetch('/api/logout', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+      } catch { /* ignorer nettverksfeil */ }
+    }
+  }
 
   if (!loggedIn) return <LoginPage onLogin={() => setLoggedIn(true)} />;
 
@@ -52,7 +67,7 @@ function App() {
                 <span>{tab.label}</span>
               </button>
             ))}
-            <button className="nav-btn logout-btn" onClick={() => { localStorage.removeItem('fbs_auth'); setLoggedIn(false); }} title="Logg ut">
+            <button className="nav-btn logout-btn" onClick={handleLogout} title="Logg ut">
               🚪 Logg ut
             </button>
           </nav>
