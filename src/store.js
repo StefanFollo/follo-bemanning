@@ -363,6 +363,7 @@ export function loadState() {
     oppgaver: load('fbs_oppgaver', []),
     fag: load('fbs_fag', DEFAULT_FAG),
     rorTimer: load('fbs_ror_timer', []),
+    rorPlaner: load('fbs_ror_planer', []),
     befaringer: load('fbs_befaringer', []),
     reklamasjoner: load('fbs_reklamasjoner', []),
     serviceJobber: load('fbs_service_jobber', []),
@@ -375,6 +376,7 @@ export function saveTildelinger(data) { save('fbs_tildelinger', data); }
 export function saveOppgaver(data) { save('fbs_oppgaver', data); }
 export function saveFag(data) { save('fbs_fag', data); }
 export function saveRorTimer(data) { save('fbs_ror_timer', data); }
+export function saveRorPlaner(data) { save('fbs_ror_planer', data); }
 export function saveBefaringer(data) { save('fbs_befaringer', data); }
 export function saveReklamasjoner(data) { save('fbs_reklamasjoner', data); }
 export function saveServiceJobber(data) { save('fbs_service_jobber', data); }

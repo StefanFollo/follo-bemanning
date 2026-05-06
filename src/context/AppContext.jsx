@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useEffect, useState } from 'react';
 import {
   loadState,
-  saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag, saveRorTimer, saveBefaringer, saveReklamasjoner, saveServiceJobber,
+  saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag, saveRorTimer, saveRorPlaner, saveBefaringer, saveReklamasjoner, saveServiceJobber,
   loadFromCloud, saveToCloud, getLocalUpdatedAt,
   uid,
 } from '../store';
@@ -19,6 +19,7 @@ function reducer(state, action) {
       if (s.oppgaver) saveOppgaver(s.oppgaver);
       if (s.fag) saveFag(s.fag);
       if (s.rorTimer) saveRorTimer(s.rorTimer);
+      if (s.rorPlaner) saveRorPlaner(s.rorPlaner);
       if (s.befaringer) saveBefaringer(s.befaringer);
       if (s.reklamasjoner) saveReklamasjoner(s.reklamasjoner);
       if (s.serviceJobber) saveServiceJobber(s.serviceJobber);
@@ -121,6 +122,30 @@ function reducer(state, action) {
       const next = (state.rorTimer || []).filter(t => t.id !== action.id);
       saveRorTimer(next);
       return { ...state, rorTimer: next };
+    }
+
+    // --- Rørlegger planer (dato-spenn, bemanningsplan-stil) ---
+    case 'ADD_ROR_PLAN': {
+      const next = [...(state.rorPlaner || []), { ...action.payload, id: uid() }];
+      saveRorPlaner(next);
+      return { ...state, rorPlaner: next };
+    }
+    case 'UPDATE_ROR_PLAN': {
+      const next = (state.rorPlaner || []).map(p => p.id === action.payload.id ? { ...p, ...action.payload } : p);
+      saveRorPlaner(next);
+      return { ...state, rorPlaner: next };
+    }
+    case 'DELETE_ROR_PLAN': {
+      const next = (state.rorPlaner || []).filter(p => p.id !== action.id);
+      saveRorPlaner(next);
+      return { ...state, rorPlaner: next };
+    }
+    case 'SPLIT_ROR_PLAN': {
+      const next = (state.rorPlaner || [])
+        .filter(p => p.id !== action.id)
+        .concat(action.parts.map(part => ({ ...part, id: uid() })));
+      saveRorPlaner(next);
+      return { ...state, rorPlaner: next };
     }
 
     // --- Befaringer ---
