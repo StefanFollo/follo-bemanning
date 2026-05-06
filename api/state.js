@@ -23,7 +23,7 @@ export default async function handler(req, res) {
       res.status(500).json({ error: e.message });
     }
   } else if (req.method === 'POST') {
-    if (session.role && session.role !== 'admin') {
+    if (session.role && session.role !== 'admin' && session.role !== 'kontor') {
       return res.status(403).json({ error: 'Kun administratorer kan lagre endringer.' });
     }
     try {

@@ -88,7 +88,7 @@ export default async function handler(req, res) {
     const { email, navn, role, ansattId } = body || {};
 
     if (!email || !role) return res.status(400).json({ error: 'E-post og rolle er påkrevd.' });
-    if (!['admin', 'ansatt'].includes(role)) return res.status(400).json({ error: 'Ugyldig rolle.' });
+    if (!['admin', 'kontor', 'rorlegger', 'ansatt'].includes(role)) return res.status(400).json({ error: 'Ugyldig rolle.' });
 
     const emailKey = email.trim().toLowerCase();
     const existing = await redis.get(`fbs_user:${emailKey}`);

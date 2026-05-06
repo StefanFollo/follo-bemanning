@@ -27,6 +27,20 @@ const ADMIN_TABS = [
   { id: 'brukere', label: 'Brukere', icon: '👥' },
 ];
 
+const KONTOR_TABS = [
+  { id: 'dashboard', label: 'Oversikt', icon: '🏠' },
+  { id: 'befaring', label: 'Befaring', icon: '🔍' },
+  { id: 'reklamasjon', label: 'Reklamasjon', icon: '⚠️' },
+  { id: 'service', label: 'Service', icon: '⚡' },
+  { id: 'prosjekter', label: 'Prosjekter', icon: '🏗' },
+  { id: 'ansatte', label: 'Ansatte', icon: '👷' },
+  { id: 'framdrift', label: 'Framdrift', icon: '📊' },
+];
+
+const RORLEGGER_TABS = [
+  { id: 'rorlegger', label: 'Rørlegger', icon: '🔧' },
+];
+
 const ANSATT_TABS = [
   { id: 'bemanningsplan', label: 'Bemanningsplan', icon: '📅' },
 ];
@@ -75,6 +89,7 @@ function App() {
     setUserNavn(namn || '');
     setLoggedIn(true);
     if (r === 'ansatt') setActiveTab('bemanningsplan');
+    else if (r === 'rorlegger') setActiveTab('rorlegger');
     else setActiveTab('dashboard');
   }
 
@@ -93,7 +108,12 @@ function App() {
   if (!loggedIn) return <LoginPage onLogin={handleLogin} />;
 
   const isAdmin = role === 'admin';
-  const TABS = isAdmin ? ADMIN_TABS : ANSATT_TABS;
+  const isKontor = role === 'kontor';
+  const isRorlegger = role === 'rorlegger';
+  const TABS = isAdmin ? ADMIN_TABS
+             : isKontor ? KONTOR_TABS
+             : isRorlegger ? RORLEGGER_TABS
+             : ANSATT_TABS;
 
   return (
     <AppProvider>
@@ -119,7 +139,9 @@ function App() {
             ))}
             <div className="nav-user">
               {userNavn && <span className="nav-user-name">{userNavn}</span>}
-              <span className={`nav-role-badge nav-role-${role}`}>{isAdmin ? 'Admin' : 'Ansatt'}</span>
+              <span className={`nav-role-badge nav-role-${role}`}>
+                {isAdmin ? 'Admin' : isKontor ? 'Kontor' : isRorlegger ? 'Rørlegger' : 'Ansatt'}
+              </span>
             </div>
             <button className="nav-btn logout-btn" onClick={handleLogout} title="Logg ut">
               🚪 Logg ut
@@ -128,15 +150,15 @@ function App() {
         </header>
 
         <main className="main">
-          {activeTab === 'dashboard' && isAdmin && <Dashboard onNavigate={setActiveTab} />}
-          {activeTab === 'befaring' && isAdmin && <BefaringPlan />}
-          {activeTab === 'reklamasjon' && isAdmin && <Reklamasjon />}
-          {activeTab === 'service' && isAdmin && <Service />}
-          {activeTab === 'prosjekter' && isAdmin && <Prosjekter />}
-          {activeTab === 'ansatte' && isAdmin && <Ansatte />}
-          {activeTab === 'bemanningsplan' && <Bemanningsplan readOnly={!isAdmin} />}
-          {activeTab === 'rorlegger' && isAdmin && <RorleggerPlan />}
-          {activeTab === 'framdrift' && isAdmin && <Framdriftsplan />}
+          {activeTab === 'dashboard' && (isAdmin || isKontor) && <Dashboard onNavigate={setActiveTab} />}
+          {activeTab === 'befaring' && (isAdmin || isKontor) && <BefaringPlan />}
+          {activeTab === 'reklamasjon' && (isAdmin || isKontor) && <Reklamasjon />}
+          {activeTab === 'service' && (isAdmin || isKontor) && <Service />}
+          {activeTab === 'prosjekter' && (isAdmin || isKontor) && <Prosjekter />}
+          {activeTab === 'ansatte' && (isAdmin || isKontor) && <Ansatte />}
+          {activeTab === 'bemanningsplan' && (isAdmin || role === 'ansatt') && <Bemanningsplan readOnly={!isAdmin} />}
+          {activeTab === 'rorlegger' && (isAdmin || isKontor || isRorlegger) && <RorleggerPlan />}
+          {activeTab === 'framdrift' && (isAdmin || isKontor) && <Framdriftsplan />}
           {activeTab === 'brukere' && isAdmin && <AdminUsers />}
         </main>
 

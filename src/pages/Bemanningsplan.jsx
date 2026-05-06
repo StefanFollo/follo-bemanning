@@ -57,7 +57,7 @@ function Modal({ title, onClose, children }) {
 export default function Bemanningsplan({ readOnly = false }) {
   const { state, dispatch } = useApp();
   // Ansatte som er med i bemanningsplan-kapasitetsberegningen
-  const planAnsatte = state.ansatte.filter(a => !a.utenforBemanningsplan);
+  const planAnsatte = state.ansatte.filter(a => !a.utenforBemanningsplan && a.fag !== 'Rørlegger');
   const [tab, setTab] = useState('uke');
   const [fullscreen, setFullscreen] = useState(false);
   const [storskjerm, setStorskjerm] = useState(false);

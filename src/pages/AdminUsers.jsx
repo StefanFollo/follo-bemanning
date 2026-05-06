@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 
-const ROLE_LABELS = { admin: 'Administrator', ansatt: 'Ansatt (lesetilgang)' };
-const ROLE_COLORS = { admin: '#1e3a5f', ansatt: '#16a34a' };
+const ROLE_LABELS = { admin: 'Administrator', kontor: 'Kontor', rorlegger: 'Rørlegger', ansatt: 'Ansatt (lesetilgang)' };
+const ROLE_COLORS = { admin: '#1e3a5f', kontor: '#7c3aed', rorlegger: '#0891b2', ansatt: '#16a34a' };
 
 function authHeader() {
   const token = localStorage.getItem('fbs_token') || '';
@@ -176,11 +176,14 @@ export default function AdminUsers() {
                 <label>Rolle *</label>
                 <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
                   <option value="ansatt">Ansatt – kun lesetilgang (Bemanningsplan)</option>
+                  <option value="kontor">Kontor – alt unntatt Bemanningsplan</option>
+                  <option value="rorlegger">Rørlegger – kun Rørlegger-siden</option>
                   <option value="admin">Administrator – full tilgang</option>
                 </select>
                 <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
-                  {form.role === 'admin'
-                    ? '🔑 Kan se og endre alt – prosjektledere, anleggsledere, bas'
+                  {form.role === 'admin' ? '🔑 Kan se og endre alt'
+                    : form.role === 'kontor' ? '🏢 Ser alt unntatt Bemanningsplan'
+                    : form.role === 'rorlegger' ? '🔧 Kun tilgang til Rørlegger-siden'
                     : '👁 Kan kun se Bemanningsplanen – vanlige ansatte'}
                 </div>
               </div>
@@ -236,9 +239,11 @@ export default function AdminUsers() {
                   <select
                     value={u.role}
                     onChange={e => handleRoleChange(u.email, e.target.value)}
-                    style={{ fontSize: 13, padding: '4px 8px', borderRadius: 6, border: '1px solid #e5e7eb', color: ROLE_COLORS[u.role], fontWeight: 600 }}
+                    style={{ fontSize: 13, padding: '4px 8px', borderRadius: 6, border: '1px solid #e5e7eb', color: ROLE_COLORS[u.role] || '#374151', fontWeight: 600 }}
                   >
                     <option value="admin">Administrator</option>
+                    <option value="kontor">Kontor</option>
+                    <option value="rorlegger">Rørlegger</option>
                     <option value="ansatt">Ansatt</option>
                   </select>
                   {!u.hasPassword && (
@@ -275,7 +280,9 @@ export default function AdminUsers() {
       <div style={{ marginTop: 32, background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 10, padding: '16px 20px', fontSize: 13, color: '#0c4a6e' }}>
         <strong>ℹ Slik fungerer tilgangene:</strong>
         <ul style={{ margin: '8px 0 0', paddingLeft: 20, lineHeight: 2 }}>
-          <li><strong>Administrator</strong> – Full tilgang: bemanningsplan, prosjekter, befaring, reklamasjon, service, ansatte, rørlegger</li>
+          <li><strong>Administrator</strong> – Full tilgang: alle sider inkl. Bemanningsplan og Brukerstyring</li>
+          <li><strong>Kontor</strong> – Tilgang til alt unntatt Bemanningsplan (oversikt, befaring, reklamasjon, service, prosjekter, ansatte, framdrift)</li>
+          <li><strong>Rørlegger</strong> – Kun tilgang til Rørlegger-siden</li>
           <li><strong>Ansatt</strong> – Kun lesetilgang til Bemanningsplan (kan se hvem som jobber hvor)</li>
         </ul>
         <p style={{ margin: '8px 0 0' }}>Nye brukere mottar en e-post med en lenke for å sette passordet sitt. Passordet krever minst 8 tegn, stor bokstav, tall og spesialtegn.</p>
