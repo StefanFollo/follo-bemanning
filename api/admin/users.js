@@ -115,7 +115,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       ok: true,
-      inviteUrl: emailResult.skipped ? inviteUrl : undefined,
+      inviteUrl: (emailResult.skipped || emailResult.error) ? inviteUrl : undefined,
       emailSent: !!emailResult.sent,
     });
   }

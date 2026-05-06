@@ -138,7 +138,7 @@ export default function AdminUsers() {
 
       {inviteUrl && (
         <div style={{ background: '#fef9c3', border: '1px solid #fbbf24', borderRadius: 8, padding: '12px 16px', marginBottom: 16, fontSize: 13 }}>
-          <strong>🛠 Dev-modus</strong> — Ingen e-post sendt (RESEND_API_KEY ikke konfigurert).<br />
+          <strong>⚠ E-post ikke sendt</strong> — Domenet er ikke verifisert i Resend ennå.<br />
           Del denne lenken manuelt med brukeren:<br />
           <a href={inviteUrl} style={{ color: '#1e3a5f', wordBreak: 'break-all' }}>{inviteUrl}</a>
         </div>
