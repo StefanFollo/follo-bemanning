@@ -75,6 +75,25 @@ body {
 }
 .login-btn:hover:not(:disabled) { background: #d97706; transform: translateY(-1px); }
 .login-btn:disabled { opacity: .6; cursor: not-allowed; }
+.login-link-btn {
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 0;
+  text-align: center;
+  text-decoration: underline;
+  transition: color .15s;
+}
+.login-link-btn:hover { color: #1e3a5f; }
+
+/* Nav user info */
+.nav-user { display: flex; align-items: center; gap: 8px; margin-left: 8px; padding-left: 12px; border-left: 1px solid rgba(255,255,255,.15); }
+.nav-user-name { font-size: 13px; color: rgba(255,255,255,.8); font-weight: 500; }
+.nav-role-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; letter-spacing: .3px; }
+.nav-role-admin { background: #f59e0b; color: #1e293b; }
+.nav-role-ansatt { background: #16a34a; color: white; }
 
 /* Logout button */
 .logout-btn { margin-left: 8px; border-left: 1px solid rgba(255,255,255,.15); padding-left: 16px; }

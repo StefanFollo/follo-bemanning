@@ -54,7 +54,7 @@ function Modal({ title, onClose, children }) {
   );
 }
 
-export default function Bemanningsplan() {
+export default function Bemanningsplan({ readOnly = false }) {
   const { state, dispatch } = useApp();
   // Ansatte som er med i bemanningsplan-kapasitetsberegningen
   const planAnsatte = state.ansatte.filter(a => !a.utenforBemanningsplan);
@@ -321,7 +321,7 @@ export default function Bemanningsplan() {
             handleDrop(days[idx], unit === 'month' ? 'month' : 'day');
           }}
           onClick={e => {
-            if (e.target === e.currentTarget || e.target.classList.contains('gantt-bg-cell')) {
+            if (!readOnly && (e.target === e.currentTarget || e.target.classList.contains('gantt-bg-cell'))) {
               openAddTildeling(ansatt.id, days[getIdxFromEvent(e)]);
             }
           }}
@@ -892,7 +892,7 @@ export default function Bemanningsplan() {
             <button className="btn" title="Tilbakestill til alfabetisk rekkefølge"
               onClick={() => saveOrder([])}>↺ Alfabetisk</button>
           )}
-          <button className="btn btn-primary no-print" onClick={() => openAddTildeling()}>+ Ny tildeling</button>
+          {!readOnly && <button className="btn btn-primary no-print" onClick={() => openAddTildeling()}>+ Ny tildeling</button>}
         </div>
 
         {/* Fag-filter */}
@@ -1055,7 +1055,7 @@ export default function Bemanningsplan() {
                         <div key={d}
                           className={`oversikt-bg-cell${d === today ? ' today-col' : ''}${HOLIDAYS[d] ? ' holiday-col' : ''}${dow === 4 ? ' week-last' : ''}`}
                           style={{ left: i * DAY_W, width: DAY_W }}
-                          onClick={() => { if (!dragRef.current) openAddTildeling(ansatt.id, d); }}
+                          onClick={() => { if (!readOnly && !dragRef.current) openAddTildeling(ansatt.id, d); }}
                         />
                       );
                     })}
@@ -1177,7 +1177,7 @@ export default function Bemanningsplan() {
           <span className="uke-label">🏖 Ferieplan {ferieYear}</span>
           <button className="btn" onClick={() => setFerieYearOffset(o => (o || 0) + 1)}>Neste år →</button>
           <button className="btn" onClick={() => setFerieYearOffset(0)}>I år</button>
-          <button className="btn btn-primary no-print" onClick={() => openAddFerie()}>+ Legg til ferie</button>
+          {!readOnly && <button className="btn btn-primary no-print" onClick={() => openAddFerie()}>+ Legg til ferie</button>}
         </div>
 
         <div className="uke-grid-wrap">
@@ -1231,7 +1231,7 @@ export default function Bemanningsplan() {
                       cursor: 'pointer',
                     }}
                     onClick={e => {
-                      if (e.target === e.currentTarget || e.target.classList.contains('gantt-bg-cell')) {
+                      if (!readOnly && (e.target === e.currentTarget || e.target.classList.contains('gantt-bg-cell'))) {
                         openAddFerie(ansatt.id);
                       }
                     }}
@@ -1243,7 +1243,7 @@ export default function Bemanningsplan() {
                         <div key={m}
                           className={`gantt-bg-cell${isThisMonth ? ' today-col' : ''}`}
                           style={{ left: `${(i / FERIE_MND) * 100}%`, width: `${100 / FERIE_MND}%` }}
-                          onClick={() => openAddFerie(ansatt.id)}
+                          onClick={() => { if (!readOnly) openAddFerie(ansatt.id); }}
                         />
                       );
                     })}
@@ -1570,8 +1570,8 @@ export default function Bemanningsplan() {
             {fullscreen ? '✕ Lukk' : '⛶ Fullskjerm'}
           </button>
           <button className="btn no-print" onClick={() => window.print()} title="Skriv ut / Lagre som PDF">🖨 PDF</button>
-          <button className="btn no-print" onClick={() => openAddFerie()} title="Registrer ferie eller fri">🏖 Ferie</button>
-          <button className="btn btn-primary no-print" onClick={() => openAddTildeling()}>+ Ny tildeling</button>
+          {!readOnly && <button className="btn no-print" onClick={() => openAddFerie()} title="Registrer ferie eller fri">🏖 Ferie</button>}
+          {!readOnly && <button className="btn btn-primary no-print" onClick={() => openAddTildeling()}>+ Ny tildeling</button>}
         </div>
       </div>
 

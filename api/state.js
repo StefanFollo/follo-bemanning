@@ -5,17 +5,15 @@ const redis = new Redis({
   token: process.env.KV_REST_API_TOKEN,
 });
 
-async function isAuthorized(req) {
+async function getSession(req) {
   const token = (req.headers.authorization || '').replace('Bearer ', '').trim();
-  if (!token) return false;
-  const session = await redis.get(`fbs_session:${token}`);
-  return !!session;
+  if (!token) return null;
+  return await redis.get(`fbs_session:${token}`);
 }
 
 export default async function handler(req, res) {
-  if (!await isAuthorized(req)) {
-    return res.status(401).json({ error: 'Ikke autorisert' });
-  }
+  const session = await getSession(req);
+  if (!session) return res.status(401).json({ error: 'Ikke autorisert' });
 
   if (req.method === 'GET') {
     try {
@@ -25,6 +23,9 @@ export default async function handler(req, res) {
       res.status(500).json({ error: e.message });
     }
   } else if (req.method === 'POST') {
+    if (session.role && session.role !== 'admin') {
+      return res.status(403).json({ error: 'Kun administratorer kan lagre endringer.' });
+    }
     try {
       await redis.set('fbs_state', req.body);
       res.status(200).json({ ok: true });
