@@ -150,7 +150,7 @@ function reducer(state, action) {
 
     // --- Befaringer ---
     case 'ADD_BEFARING': {
-      const next = [...(state.befaringer || []), { ...action.payload, id: uid() }];
+      const next = [...(state.befaringer || []), { ...action.payload, id: action.payload.id || uid() }];
       saveBefaringer(next);
       return { ...state, befaringer: next };
     }

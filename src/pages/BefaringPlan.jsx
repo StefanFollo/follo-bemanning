@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { dateToIso, addDays, weekStart, overlaps, PROSJEKT_PALETTE, uid } from '../store';
 
@@ -72,6 +72,25 @@ export default function BefaringPlan() {
   const [visModal, setVisModal] = useState(false);
   const [redigerer, setRedigerer] = useState(null);
   const [form, setForm] = useState(tomModal());
+  const [autoSaveSts, setAutoSaveSts] = useState(null); // null | 'saving' | 'saved'
+  const autoSaveRef  = useRef(null);
+  const isFirstRender = useRef(true);
+
+  // Auto-save når man redigerer eksisterende befaring
+  useEffect(() => {
+    if (!redigerer || !visModal) return;
+    // Hopp over første render (modal nettopp åpnet)
+    if (isFirstRender.current) { isFirstRender.current = false; return; }
+    if (!form.kontaktNavn.trim() || !form.adresse.trim()) return;
+    setAutoSaveSts('saving');
+    if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
+    autoSaveRef.current = setTimeout(() => {
+      dispatch({ type: 'UPDATE_BEFARING', payload: { ...form, id: redigerer.id } });
+      setAutoSaveSts('saved');
+      autoSaveRef.current = setTimeout(() => setAutoSaveSts(null), 2200);
+    }, 700);
+    return () => { if (autoSaveRef.current) clearTimeout(autoSaveRef.current); };
+  }, [form]); // eslint-disable-line react-hooks/exhaustive-deps
   const [visKapasitet, setVisKapasitet] = useState(null);
   const [visProsjektModal, setVisProsjektModal] = useState(false);
   const [prosjektForm, setProsjektForm] = useState({ navn: '', startDato: '', sluttDato: '', farge: '#6b8fc4', lagTildeling: true });
@@ -118,21 +137,34 @@ export default function BefaringPlan() {
   function apneNy(presetStatus, presetDato) {
     setForm({ ...tomModal(), ...(presetStatus ? { status: presetStatus } : {}), dato: presetDato || today });
     setRedigerer(null);
+    setAutoSaveSts(null);
+    isFirstRender.current = true;
     setVisModal(true);
   }
   function apneRediger(b) {
     setForm({ ...tomModal(), ...b });
     setRedigerer(b);
+    setAutoSaveSts(null);
+    isFirstRender.current = true;
     setVisModal(true);
   }
   function lagre() {
     if (!form.kontaktNavn.trim() || !form.adresse.trim()) return;
     if (redigerer) {
+      // Manuell lagring i edit-modus: avbryt eventuell auto-save og lagre nå
+      if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
       dispatch({ type: 'UPDATE_BEFARING', payload: { ...form, id: redigerer.id } });
+      setVisModal(false);
     } else {
-      dispatch({ type: 'ADD_BEFARING', payload: form });
+      // Ny befaring: opprett og bytt til edit-modus (auto-save tar over)
+      const nyId = uid();
+      dispatch({ type: 'ADD_BEFARING', payload: { ...form, id: nyId } });
+      const nyBef = { ...form, id: nyId };
+      setRedigerer(nyBef);
+      setAutoSaveSts(null);
+      isFirstRender.current = true;
+      // Modalen forblir åpen i edit-modus
     }
-    setVisModal(false);
   }
   function slett() {
     if (redigerer && window.confirm('Slett denne befaringen?')) {
@@ -551,6 +583,18 @@ export default function BefaringPlan() {
           <div className="modal bef-modal" style={{ maxWidth: 580 }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3>{redigerer ? 'Rediger befaring' : 'Ny befaring'}</h3>
+              {/* Auto-save indikator */}
+              {redigerer && (
+                <span style={{
+                  fontSize: 12, marginRight: 8,
+                  color: autoSaveSts === 'saved' ? '#16a34a' : autoSaveSts === 'saving' ? '#f59e0b' : '#94a3b8',
+                  display: 'flex', alignItems: 'center', gap: 4, transition: 'color 0.3s',
+                }}>
+                  {autoSaveSts === 'saving' && <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⏳</span>}
+                  {autoSaveSts === 'saved'  && '✓'}
+                  {autoSaveSts === 'saving' ? 'Lagrer…' : autoSaveSts === 'saved' ? 'Lagret automatisk' : 'Auto-lagring på'}
+                </span>
+              )}
               <button className="btn-icon" onClick={() => setVisModal(false)}>✕</button>
             </div>
             <div className="form">
@@ -674,9 +718,21 @@ export default function BefaringPlan() {
                     ✅ Godkjenn tilbud
                   </button>
                 )}
-                <button className="btn btn-primary" onClick={lagre} disabled={!form.kontaktNavn.trim() || !form.adresse.trim()}>
-                  Lagre
-                </button>
+                {redigerer ? (
+                  // Edit-modus: alt lagres automatisk, knappen lukker bare modalen
+                  <button className="btn btn-primary" onClick={() => {
+                    if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
+                    dispatch({ type: 'UPDATE_BEFARING', payload: { ...form, id: redigerer.id } });
+                    setVisModal(false);
+                  }}>
+                    Lukk
+                  </button>
+                ) : (
+                  // Ny befaring: opprett og bytt til edit-modus
+                  <button className="btn btn-primary" onClick={lagre} disabled={!form.kontaktNavn.trim() || !form.adresse.trim()}>
+                    Opprett befaring
+                  </button>
+                )}
               </div>
             </div>
           </div>
