@@ -5,6 +5,19 @@ import { getHolidayMap } from '../holidays';
 
 const DAG_NAVN    = ['Man', 'Tir', 'Ons', 'Tor', 'Fre'];
 const MAANED_NAVN = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des'];
+const BEF_FARGE = {
+  planlagt:      '#3b82f6',
+  tilbud_arbeid: '#f59e0b',
+  tilbud_sendt:  '#8b5cf6',
+  godkjent:      '#16a34a',
+  tapt:          '#9ca3af',
+};
+function befaringFarge(status) { return BEF_FARGE[status] || '#3b82f6'; }
+function tidPluss1t(tid) {
+  if (!tid) return '10:00';
+  const [h, m] = tid.split(':').map(Number);
+  return `${String(Math.min(16, h + 1)).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
 const DAY_START_H = 7;
 const DAY_END_H   = 17;
 const DAY_HOURS   = DAY_END_H - DAY_START_H;
@@ -372,6 +385,12 @@ export default function RorleggerPlan() {
                   t.dato >= ganttDays[0] && t.dato <= ganttDays[ganttDays.length - 1]
                 )
               : [];
+            // Befaringer der denne rørleggeren er ansvarlig
+            const rowBefaringer = (state.befaringer || []).filter(b => {
+              if (b.prosjektlederId !== ansatt.id) return false;
+              if (ukeMode === 'maaned') return b.dato >= ganttDays[0] && b.dato <= monthEnd(ganttDays[ganttDays.length - 1]);
+              return b.dato >= ganttDays[0] && b.dato <= ganttDays[ganttDays.length - 1];
+            });
 
             return (
               <React.Fragment key={ansatt.id}>
@@ -461,6 +480,39 @@ export default function RorleggerPlan() {
                       </div>
                     );
                   })}
+
+                  {/* Befaring-chips */}
+                  {rowBefaringer.map(b => {
+                    const farge = befaringFarge(b.status);
+                    const n     = ganttDays.length;
+                    let chipIdx;
+                    if (ukeMode === 'maaned') {
+                      chipIdx = ganttDays.findIndex(m => b.dato.slice(0, 7) === m.slice(0, 7));
+                    } else {
+                      chipIdx = ganttDays.indexOf(b.dato);
+                    }
+                    if (chipIdx === -1) return null;
+                    return (
+                      <div key={b.id + '-bef'}
+                        style={{
+                          position: 'absolute',
+                          left:   `calc(${(chipIdx / n) * 100}% + 3px)`,
+                          width:  `calc(${(1 / n) * 100}% - 6px)`,
+                          top: 3, height: 16,
+                          background:   farge,
+                          borderRadius: 3,
+                          fontSize: 9, color: 'white', fontWeight: 600,
+                          display: 'flex', alignItems: 'center', gap: 2, padding: '0 4px',
+                          overflow: 'hidden', whiteSpace: 'nowrap',
+                          zIndex: 3, cursor: 'default',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                        }}
+                        title={`🔍 Befaring\n${b.kontaktNavn} — ${b.adresse}\n${b.dato}${b.tid ? ' kl. ' + b.tid : ''}${b.jobbType ? '\nType: ' + b.jobbType : ''}${b.notat ? '\n' + b.notat : ''}`}
+                      >
+                        🔍 {b.tid || ''}
+                      </div>
+                    );
+                  })}
                 </div>
               </React.Fragment>
             );
@@ -527,8 +579,14 @@ export default function RorleggerPlan() {
                   </div>
                 </td>
                 {weekDays.map(dato => {
-                  const dayTimers           = (state.rorTimer || []).filter(t => t.ansattId === ansatt.id && t.dato === dato);
-                  const { bars, totalRows } = layoutBars(dayTimers);
+                  const dayTimers = (state.rorTimer || []).filter(t => t.ansattId === ansatt.id && t.dato === dato);
+                  const dayBef    = (state.befaringer || []).filter(b => b.prosjektlederId === ansatt.id && b.dato === dato && b.tid);
+                  // Kombiner rorTimer og befaringer i layout (befaringer er 1 time)
+                  const allBars   = [
+                    ...dayTimers.map(t => ({ ...t, _type: 'timer' })),
+                    ...dayBef.map(b => ({ ...b, _type: 'befaring', startTid: b.tid, sluttTid: tidPluss1t(b.tid) })),
+                  ];
+                  const { bars, totalRows } = layoutBars(allBars);
                   const cellHeight          = Math.max(44, totalRows * 28);
                   return (
                     <td key={dato}
@@ -541,6 +599,20 @@ export default function RorleggerPlan() {
                           <div key={h} className="ror-hour-line" style={{ left: `${((h - DAY_START_H) / DAY_HOURS) * 100}%` }} />
                         ))}
                         {bars.map(t => {
+                          if (t._type === 'befaring') {
+                            const farge = befaringFarge(t.status);
+                            return (
+                              <div key={t.id + '-bef'}
+                                className="ror-bar"
+                                style={{ ...getTimerBarStyle(t.startTid, t.sluttTid, t.row, totalRows), background: farge, opacity: 0.9, backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,0.15) 4px,rgba(255,255,255,0.15) 8px)' }}
+                                title={`🔍 Befaring\n${t.kontaktNavn} — ${t.adresse}\nkl. ${t.tid}${t.jobbType ? '\nType: ' + t.jobbType : ''}${t.notat ? '\n' + t.notat : ''}`}
+                                onClick={e => e.stopPropagation()}
+                              >
+                                <span className="ror-bar-label">🔍 {t.tid}</span>
+                                <span className="ror-bar-prosjekt">{t.kontaktNavn || t.adresse}</span>
+                              </div>
+                            );
+                          }
                           const jobNavn = t.fritekst || state.prosjekter.find(pr => pr.id === t.prosjektId)?.navn || '?';
                           return (
                             <div key={t.id}
@@ -565,7 +637,11 @@ export default function RorleggerPlan() {
       </div>
 
       <div style={{ marginTop: 8, fontSize: 12, color: '#94a3b8' }}>
-        Klikk på en celle for å legge til timeoppgave. Klikk på bar for å redigere eller slette.
+        Klikk på en celle for å legge til timeoppgave. Klikk på bar for å redigere.
+        <span style={{ marginLeft: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ display: 'inline-block', width: 14, height: 10, background: '#3b82f6', borderRadius: 2, backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,0.25) 3px,rgba(255,255,255,0.25) 6px)' }} />
+          = Befaring (redigeres under Befaring-fanen)
+        </span>
       </div>
 
       {/* ══ PLAN-MODAL (ukesplan) ══ */}
