@@ -259,6 +259,12 @@ function save(key, value) {
   localStorage.setItem('fbs_updated_at', Date.now().toString());
 }
 
+// Brukes kun i migrasjoner – skriver data uten å oppdatere fbs_updated_at,
+// slik at sky-data ikke blir overskrevet av seed/migrasjons-data ved første oppstart.
+function saveRaw(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
 export function getLocalUpdatedAt() {
   return parseInt(localStorage.getItem('fbs_updated_at') || '0', 10);
 }
@@ -268,7 +274,7 @@ export function loadState() {
   const existing = load('fbs_tildelinger', null);
   const seeded = localStorage.getItem('fbs_tildelinger_seeded');
   if (!seeded && (!existing || existing.length === 0)) {
-    save('fbs_tildelinger', SEED_TILDELINGER);
+    saveRaw('fbs_tildelinger', SEED_TILDELINGER);
     localStorage.setItem('fbs_tildelinger_seeded', '1');
   }
 
@@ -276,7 +282,7 @@ export function loadState() {
   if (!localStorage.getItem('fbs_steddy_import_done')) {
     const existingBef = load('fbs_befaringer', []);
     const medId = STEDDY_BEFARINGER.map(b => ({ ...b, id: Math.random().toString(36).slice(2) + Date.now().toString(36) }));
-    save('fbs_befaringer', [...existingBef, ...medId]);
+    saveRaw('fbs_befaringer', [...existingBef, ...medId]);
     localStorage.setItem('fbs_steddy_import_done', '1');
   }
 
@@ -313,8 +319,8 @@ export function loadState() {
       }
     });
 
-    save('fbs_prosjekter', prosjekter);
-    save('fbs_tildelinger', [...tildelinger, ...nyeTildelinger]);
+    saveRaw('fbs_prosjekter', prosjekter);
+    saveRaw('fbs_tildelinger', [...tildelinger, ...nyeTildelinger]);
     localStorage.setItem('fbs_proresult_wk18_done', '1');
   }
 
@@ -351,8 +357,8 @@ export function loadState() {
       }
     });
 
-    save('fbs_prosjekter', prosjekter);
-    save('fbs_tildelinger', [...tildelinger, ...nyeTildelinger2]);
+    saveRaw('fbs_prosjekter', prosjekter);
+    saveRaw('fbs_tildelinger', [...tildelinger, ...nyeTildelinger2]);
     localStorage.setItem('fbs_proresult_wk22_done', '1');
   }
 

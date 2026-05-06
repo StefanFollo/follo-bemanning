@@ -27,7 +27,23 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: 'Kun administratorer kan lagre endringer.' });
     }
     try {
-      await redis.set('fbs_state', req.body);
+      // Sikkerhetssperre: ikke tillat lagring som reduserer befaringer drastisk
+      // (beskytter mot at seed-data ved ny browser-oppstart overskriver sky-data)
+      const newState = req.body;
+      const currentState = await redis.get('fbs_state');
+      if (currentState && Array.isArray(currentState.befaringer) && Array.isArray(newState.befaringer)) {
+        const currentCount = currentState.befaringer.length;
+        const newCount = newState.befaringer.length;
+        // Blokker hvis ny tilstand har mer enn 5 færre befaringer enn eksisterende
+        if (newCount < currentCount - 5) {
+          return res.status(409).json({
+            error: `Konflikt: forsøker å lagre ${newCount} befaringer, men det finnes ${currentCount} i skyen. Last inn siden på nytt.`,
+            currentCount,
+            newCount,
+          });
+        }
+      }
+      await redis.set('fbs_state', newState);
       res.status(200).json({ ok: true });
     } catch (e) {
       res.status(500).json({ error: e.message });
