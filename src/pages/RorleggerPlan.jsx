@@ -4,13 +4,9 @@ import { weekStart, addDays, isoToDate, dateToIso, formatDate, overlaps } from '
 import { getHolidayMap } from '../holidays';
 
 const DAG_NAVN = ['Man', 'Tir', 'Ons', 'Tor', 'Fre'];
-const DAG_NAVN_FULL = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
-const PLAN_DAY_W = 44; // px per dag i ukesplan-gantt
-const MAANED_NAVN = ['jan','feb','mar','apr','mai','jun','jul','aug','sep','okt','nov','des'];
-const DAY_START_H = 7;   // 07:00
-const DAY_END_H = 17;    // 17:00
-const DAY_HOURS = DAY_END_H - DAY_START_H;
-
+const DAY_START_H = 7;
+const DAY_END_H   = 17;
+const DAY_HOURS   = DAY_END_H - DAY_START_H;
 const FALLBACK_COLORS = ['#2563eb','#16a34a','#dc2626','#9333ea','#ea580c','#0891b2','#be185d','#854d0e'];
 
 function getWeekNumber(dateStr) {
@@ -28,140 +24,59 @@ function tidToDecimal(tid) {
 
 export default function RorleggerPlan() {
   const { state, dispatch } = useApp();
-  const today = dateToIso(new Date());
+  const today    = dateToIso(new Date());
   const thisYear = new Date().getFullYear();
   const HOLIDAYS = getHolidayMap(thisYear - 1, thisYear + 2);
 
+  // Felles uke-navigasjon for BEGGE seksjoner
   const [currentWeek, setCurrentWeek] = useState(() => weekStart(today));
-  const [planWeek, setPlanWeek] = useState(() => weekStart(today));
 
-  // Ukesplan (bemanningsplan-stil) state
+  // Ukesplan (gantt) state
   const [showPlanModal, setShowPlanModal] = useState(false);
-  const [editPlan, setEditPlan] = useState(null);
-  const [planForm, setPlanForm] = useState({
-    ansattId: '',
-    modus: 'prosjekt',
-    prosjektId: '',
-    fritekst: '',
-    startDato: '',
-    sluttDato: '',
+  const [editPlan, setEditPlan]           = useState(null);
+  const [planForm, setPlanForm]           = useState({
+    ansattId: '', modus: 'prosjekt', prosjektId: '', fritekst: '',
+    startDato: '', sluttDato: '',
   });
 
-  const [showModal, setShowModal] = useState(false);
-  const [editTimer, setEditTimer] = useState(null); // null = new, object = edit
-  const [form, setForm] = useState({
-    ansattId: '',
-    modus: 'prosjekt', // 'prosjekt' | 'fritekst'
-    prosjektId: '',
-    fritekst: '',
-    kontakt: '',
-    telefon: '',
-    adresse: '',
-    dato: '',
-    startTid: '08:00',
-    sluttTid: '12:00',
-    notat: '',
+  // Timeplan (daglig timegrid) state
+  const [showModal, setShowModal]   = useState(false);
+  const [editTimer, setEditTimer]   = useState(null);
+  const [form, setForm]             = useState({
+    ansattId: '', modus: 'prosjekt', prosjektId: '', fritekst: '',
+    kontakt: '', telefon: '', adresse: '',
+    dato: '', startTid: '08:00', sluttTid: '12:00', notat: '',
   });
 
+  // Kun rørleggere (+ andre ansatte kan velges i modal)
+  const rorleggere = state.ansatte.filter(a => a.fag === 'Rørlegger');
+
+  // Man–Fre for gjeldende uke — delt mellom gantt og timegrid
   const weekDays = Array.from({ length: 5 }, (_, i) => addDays(currentWeek, i));
 
-  const rorleggere = state.ansatte.filter(a => a.fag === 'Rørlegger');
+  const navLabel = `Uke ${getWeekNumber(currentWeek)}: ${formatDate(currentWeek)} – ${formatDate(addDays(currentWeek, 4))}`;
 
   function prosjektColor(pid) {
     if (!pid) return '#6b7280';
-    const p = state.prosjekter.find(p => p.id === pid);
+    const p   = state.prosjekter.find(p => p.id === pid);
     if (p?.farge) return p.farge;
     const idx = state.prosjekter.findIndex(p => p.id === pid);
     return FALLBACK_COLORS[Math.max(0, idx) % FALLBACK_COLORS.length];
   }
 
-  function openNew(ansattId, dato) {
-    setEditTimer(null);
-    setForm({
-      ansattId: ansattId || (rorleggere[0]?.id || ''),
-      modus: 'prosjekt',
-      prosjektId: state.prosjekter[0]?.id || '',
-      fritekst: '',
-      kontakt: '',
-      telefon: '',
-      adresse: '',
-      dato: dato || today,
-      startTid: '08:00',
-      sluttTid: '12:00',
-      notat: '',
-    });
-    setShowModal(true);
-  }
-
-  function openEdit(t) {
-    setEditTimer(t);
-    setForm({
-      ansattId: t.ansattId,
-      modus: t.fritekst ? 'fritekst' : 'prosjekt',
-      prosjektId: t.prosjektId || '',
-      fritekst: t.fritekst || '',
-      kontakt: t.kontakt || '',
-      telefon: t.telefon || '',
-      adresse: t.adresse || '',
-      dato: t.dato,
-      startTid: t.startTid,
-      sluttTid: t.sluttTid,
-      notat: t.notat || '',
-    });
-    setShowModal(true);
-  }
-
-  function handleSave() {
-    const jobOk = form.modus === 'fritekst' ? !!form.fritekst.trim() : !!form.prosjektId;
-    if (!form.ansattId || !jobOk || !form.dato || !form.startTid || !form.sluttTid) return;
-    if (form.startTid >= form.sluttTid) return;
-    const payload = {
-      ansattId: form.ansattId,
-      prosjektId: form.modus === 'prosjekt' ? form.prosjektId : '',
-      fritekst: form.modus === 'fritekst' ? form.fritekst.trim() : '',
-      kontakt: form.modus === 'fritekst' ? form.kontakt.trim() : '',
-      telefon: form.modus === 'fritekst' ? form.telefon.trim() : '',
-      adresse: form.adresse.trim(),
-      dato: form.dato,
-      startTid: form.startTid,
-      sluttTid: form.sluttTid,
-      notat: form.notat,
-    };
-    if (editTimer) {
-      dispatch({ type: 'UPDATE_ROR_TIMER', payload: { ...editTimer, ...payload } });
-    } else {
-      dispatch({ type: 'ADD_ROR_TIMER', payload });
-    }
-    setShowModal(false);
-  }
-
-  function handleDelete(id) {
-    if (window.confirm(`Slett oppdraget?`)) {
-      dispatch({ type: 'DELETE_ROR_TIMER', id });
-    }
-  }
-
-  // --- Ukesplan (gantt) ---
-  const planDays = Array.from({ length: 14 }, (_, i) => addDays(planWeek, i))
-    .filter(d => { const dow = new Date(d + 'T00:00:00').getDay(); return dow >= 1 && dow <= 5; });
-
-  function planNavLabel() {
-    const w1 = getWeekNumber(planDays[0]);
-    const w2 = getWeekNumber(planDays[planDays.length - 1]);
-    return `Uke ${w1}–${w2}`;
-  }
-
+  // ──────────────────────────────────────────────
+  // UKESPLAN – gantt-hjelpefunksjoner
+  // ──────────────────────────────────────────────
   function openNewPlan(ansattId, dato) {
     setEditPlan(null);
-    const start = dato || planWeek;
-    const end = dato ? addDays(dato, 4) : addDays(planWeek, 4);
+    const start = dato || currentWeek;
     setPlanForm({
       ansattId: ansattId || (rorleggere[0]?.id || ''),
       modus: 'prosjekt',
       prosjektId: state.prosjekter[0]?.id || '',
       fritekst: '',
       startDato: start,
-      sluttDato: end,
+      sluttDato: addDays(start, 4),
     });
     setShowPlanModal(true);
   }
@@ -169,12 +84,12 @@ export default function RorleggerPlan() {
   function openEditPlan(p) {
     setEditPlan(p);
     setPlanForm({
-      ansattId: p.ansattId,
-      modus: p.fritekst ? 'fritekst' : 'prosjekt',
+      ansattId:   p.ansattId,
+      modus:      p.fritekst ? 'fritekst' : 'prosjekt',
       prosjektId: p.prosjektId || '',
-      fritekst: p.fritekst || '',
-      startDato: p.startDato,
-      sluttDato: p.sluttDato,
+      fritekst:   p.fritekst  || '',
+      startDato:  p.startDato,
+      sluttDato:  p.sluttDato,
     });
     setShowPlanModal(true);
   }
@@ -184,17 +99,13 @@ export default function RorleggerPlan() {
     if (!planForm.ansattId || !jobOk || !planForm.startDato || !planForm.sluttDato) return;
     if (planForm.startDato > planForm.sluttDato) return;
     const payload = {
-      ansattId: planForm.ansattId,
+      ansattId:   planForm.ansattId,
       prosjektId: planForm.modus === 'prosjekt' ? planForm.prosjektId : '',
-      fritekst: planForm.modus === 'fritekst' ? planForm.fritekst.trim() : '',
-      startDato: planForm.startDato,
-      sluttDato: planForm.sluttDato,
+      fritekst:   planForm.modus === 'fritekst' ? planForm.fritekst.trim() : '',
+      startDato:  planForm.startDato,
+      sluttDato:  planForm.sluttDato,
     };
-    if (editPlan) {
-      dispatch({ type: 'UPDATE_ROR_PLAN', payload: { ...editPlan, ...payload } });
-    } else {
-      dispatch({ type: 'ADD_ROR_PLAN', payload });
-    }
+    dispatch({ type: editPlan ? 'UPDATE_ROR_PLAN' : 'ADD_ROR_PLAN', payload: editPlan ? { ...editPlan, ...payload } : payload });
     setShowPlanModal(false);
   }
 
@@ -205,227 +116,279 @@ export default function RorleggerPlan() {
     }
   }
 
-  // Beregn bar-posisjon i gantt (returnerer null hvis utenfor synlig område)
-  function planBarStyle(plan) {
-    const startIdx = planDays.findIndex(d => d >= plan.startDato);
-    let endIdx = -1;
-    for (let i = planDays.length - 1; i >= 0; i--) {
-      if (planDays[i] <= plan.sluttDato) { endIdx = i; break; }
+  // Beregn bar-posisjon i gantten (returnerer left/width som %-strenger)
+  function getBarPos(startDato, sluttDato) {
+    let si = -1, ei = -1;
+    for (let i = 0; i < weekDays.length; i++) {
+      if (weekDays[i] >= startDato && weekDays[i] <= sluttDato) {
+        if (si === -1) si = i;
+        ei = i;
+      }
     }
-    if (startIdx === -1 || endIdx === -1 || startIdx > endIdx) return null;
+    if (si === -1) return null;
+    const n = weekDays.length;
     return {
-      position: 'absolute',
-      left: startIdx * PLAN_DAY_W + 3,
-      width: (endIdx - startIdx + 1) * PLAN_DAY_W - 6,
-      top: 5, height: 30,
-      borderRadius: 5,
-      zIndex: 1,
-      cursor: 'pointer',
-      overflow: 'hidden',
-      display: 'flex', alignItems: 'center', padding: '0 8px',
-      color: 'white', fontSize: 12, fontWeight: 600,
-      whiteSpace: 'nowrap',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+      left:    `${(si / n) * 100}%`,
+      width:   `${((ei - si + 1) / n) * 100}%`,
+      isFirst: startDato >= weekDays[0],
+      isLast:  sluttDato <= weekDays[weekDays.length - 1],
     };
   }
 
-  // Bar positioning within the day timeline
+  // ──────────────────────────────────────────────
+  // TIMEPLAN – hjelpefunksjoner
+  // ──────────────────────────────────────────────
+  function openNew(ansattId, dato) {
+    setEditTimer(null);
+    setForm({
+      ansattId: ansattId || (rorleggere[0]?.id || ''),
+      modus: 'prosjekt',
+      prosjektId: state.prosjekter[0]?.id || '',
+      fritekst: '', kontakt: '', telefon: '', adresse: '',
+      dato: dato || today,
+      startTid: '08:00', sluttTid: '12:00', notat: '',
+    });
+    setShowModal(true);
+  }
+
+  function openEdit(t) {
+    setEditTimer(t);
+    setForm({
+      ansattId:   t.ansattId,
+      modus:      t.fritekst ? 'fritekst' : 'prosjekt',
+      prosjektId: t.prosjektId || '',
+      fritekst:   t.fritekst  || '',
+      kontakt:    t.kontakt   || '',
+      telefon:    t.telefon   || '',
+      adresse:    t.adresse   || '',
+      dato: t.dato, startTid: t.startTid, sluttTid: t.sluttTid, notat: t.notat || '',
+    });
+    setShowModal(true);
+  }
+
+  function handleSave() {
+    const jobOk = form.modus === 'fritekst' ? !!form.fritekst.trim() : !!form.prosjektId;
+    if (!form.ansattId || !jobOk || !form.dato || !form.startTid || !form.sluttTid) return;
+    if (form.startTid >= form.sluttTid) return;
+    const payload = {
+      ansattId:   form.ansattId,
+      prosjektId: form.modus === 'prosjekt' ? form.prosjektId : '',
+      fritekst:   form.modus === 'fritekst' ? form.fritekst.trim() : '',
+      kontakt:    form.modus === 'fritekst' ? form.kontakt.trim() : '',
+      telefon:    form.modus === 'fritekst' ? form.telefon.trim() : '',
+      adresse:    form.adresse.trim(),
+      dato: form.dato, startTid: form.startTid, sluttTid: form.sluttTid, notat: form.notat,
+    };
+    dispatch({ type: editTimer ? 'UPDATE_ROR_TIMER' : 'ADD_ROR_TIMER', payload: editTimer ? { ...editTimer, ...payload } : payload });
+    setShowModal(false);
+  }
+
+  function handleDelete(id) {
+    if (window.confirm('Slett oppdraget?')) {
+      dispatch({ type: 'DELETE_ROR_TIMER', id });
+      setShowModal(false);
+    }
+  }
+
   function getBarStyle(startTid, sluttTid, row = 0, totalRows = 1) {
-    const s = tidToDecimal(startTid);
-    const e = tidToDecimal(sluttTid);
-    const clampedS = Math.max(DAY_START_H, Math.min(DAY_END_H, s));
-    const clampedE = Math.max(DAY_START_H, Math.min(DAY_END_H, e));
-    const left = ((clampedS - DAY_START_H) / DAY_HOURS) * 100;
-    const width = ((clampedE - clampedS) / DAY_HOURS) * 100;
-    const rowH = 100 / totalRows;
-    const top = row * rowH;
-    return {
-      left: `${left}%`,
-      width: `${Math.max(0, width)}%`,
-      top: `${top}%`,
-      height: `${rowH}%`,
-    };
+    const s       = tidToDecimal(startTid);
+    const e       = tidToDecimal(sluttTid);
+    const clampS  = Math.max(DAY_START_H, Math.min(DAY_END_H, s));
+    const clampE  = Math.max(DAY_START_H, Math.min(DAY_END_H, e));
+    const left    = ((clampS - DAY_START_H) / DAY_HOURS) * 100;
+    const width   = ((clampE - clampS)      / DAY_HOURS) * 100;
+    const rowH    = 100 / totalRows;
+    return { left: `${left}%`, width: `${Math.max(0, width)}%`, top: `${row * rowH}%`, height: `${rowH}%` };
   }
 
-  // Stack overlapping bars vertically in a cell
   function layoutBars(timers) {
-    // Sort by start time
     const sorted = [...timers].sort((a, b) => a.startTid.localeCompare(b.startTid));
-    // Assign rows to avoid overlap
-    const rows = [];
+    const rows   = [];
     const assigned = sorted.map(t => {
-      const tS = tidToDecimal(t.startTid);
-      const tE = tidToDecimal(t.sluttTid);
+      const tS = tidToDecimal(t.startTid), tE = tidToDecimal(t.sluttTid);
       let row = 0;
       while (rows[row] !== undefined && rows[row] > tS) row++;
       rows[row] = tE;
       return { ...t, row };
     });
-    const totalRows = Math.max(1, rows.length);
-    return { bars: assigned, totalRows };
+    return { bars: assigned, totalRows: Math.max(1, rows.length) };
   }
-
-  const navLabel = `Uke ${getWeekNumber(currentWeek)}: ${formatDate(currentWeek)} – ${formatDate(addDays(currentWeek, 4))}`;
 
   const hourTicks = Array.from({ length: DAY_HOURS + 1 }, (_, i) => DAY_START_H + i);
 
+  // ──────────────────────────────────────────────
+  // RENDER
+  // ──────────────────────────────────────────────
   return (
     <div>
 
-      {/* ===== UKESPLAN (Bemanningsplan-stil) ===== */}
-      <div style={{ marginBottom: 28 }}>
-        <h3 style={{ margin: '0 0 10px', fontSize: 15, color: '#0f172a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ background: '#06b6d4', color: 'white', borderRadius: 4, padding: '2px 8px', fontSize: 12 }}>UKESPLAN</span>
-          Planlegging over dager / uker
-        </h3>
-
-        <div className="uke-nav">
-          <button className="btn" onClick={() => setPlanWeek(w => addDays(w, -7))}>← Forrige</button>
-          <div className="uke-label">{planNavLabel()}</div>
-          <button className="btn" onClick={() => setPlanWeek(weekStart(today))}>I dag</button>
-          <button className="btn" onClick={() => setPlanWeek(w => addDays(w, 7))}>Neste →</button>
-          <button className="btn no-print" style={{ marginLeft: 12, background: '#06b6d4', color: 'white' }}
-            onClick={() => openNewPlan()}>+ Legg til plan</button>
-        </div>
-
-        <div style={{ overflowX: 'auto' }}>
-          <table className="ror-table" style={{ tableLayout: 'fixed', minWidth: 180 + planDays.length * PLAN_DAY_W }}>
-            <thead>
-              <tr>
-                <th style={{ width: 180 }}></th>
-                {/* Uke-overskrifter */}
-                {(() => {
-                  const weeks = [];
-                  let curWn = null, count = 0, keyD = null;
-                  planDays.forEach((d, i) => {
-                    const wn = getWeekNumber(d);
-                    if (wn !== curWn) {
-                      if (curWn !== null) weeks.push({ label: `Uke ${curWn}`, count, key: keyD });
-                      curWn = wn; count = 1; keyD = d;
-                    } else { count++; }
-                    if (i === planDays.length - 1) weeks.push({ label: `Uke ${wn}`, count, key: d });
-                  });
-                  return weeks.map(w => (
-                    <th key={w.key} colSpan={w.count}
-                      style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, background: '#f1f5f9', padding: '3px 0', color: '#475569' }}>
-                      {w.label}
-                    </th>
-                  ));
-                })()}
-              </tr>
-              <tr>
-                <th className="ror-th-name">Rørlegger</th>
-                {planDays.map(d => {
-                  const isToday = d === today;
-                  const hol = HOLIDAYS[d];
-                  const dow = new Date(d + 'T00:00:00').getDay();
-                  return (
-                    <th key={d} style={{
-                      width: PLAN_DAY_W, fontSize: 11, fontWeight: 600, textAlign: 'center',
-                      background: isToday ? '#dbeafe' : hol ? '#fef2f2' : '',
-                      color: hol ? '#dc2626' : '#64748b', padding: '3px 2px',
-                    }}>
-                      {DAG_NAVN[dow - 1]}<br />{d.slice(8)}.{d.slice(5, 7)}
-                    </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {rorleggere.length === 0 && (
-                <tr><td colSpan={planDays.length + 1} className="empty">Ingen rørleggere registrert.</td></tr>
-              )}
-              {rorleggere.map(ansatt => {
-                const rowPlaner = (state.rorPlaner || []).filter(p =>
-                  p.ansattId === ansatt.id &&
-                  overlaps(p.startDato, p.sluttDato, planDays[0], planDays[planDays.length - 1])
-                );
-                return (
-                  <tr key={ansatt.id}>
-                    <td className="ror-td-name">
-                      <div className="mini-avatar" style={{ background: '#06b6d4', width: 28, height: 28, fontSize: 11, flexShrink: 0 }}>
-                        {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                      </div>
-                      <div style={{ marginLeft: 6, fontSize: 13 }}>{ansatt.navn}</div>
-                    </td>
-                    <td colSpan={planDays.length} style={{ padding: 0, position: 'relative', height: 40 }}>
-                      {/* Klikkbare dag-celler bak barene */}
-                      <div style={{ display: 'flex', height: '100%', position: 'absolute', inset: 0 }}>
-                        {planDays.map(d => (
-                          <div key={d}
-                            style={{ flex: `0 0 ${PLAN_DAY_W}px`, cursor: 'pointer', borderLeft: '1px solid #e2e8f0', background: d === today ? '#eff6ff66' : '' }}
-                            onClick={() => openNewPlan(ansatt.id, d)}
-                          />
-                        ))}
-                      </div>
-                      {/* Plan-barer */}
-                      {rowPlaner.map(plan => {
-                        const bs = planBarStyle(plan);
-                        if (!bs) return null;
-                        const jobNavn = plan.fritekst || state.prosjekter.find(p => p.id === plan.prosjektId)?.navn || '?';
-                        return (
-                          <div key={plan.id}
-                            style={{ ...bs, background: prosjektColor(plan.prosjektId) }}
-                            title={`${jobNavn}\n${formatDate(plan.startDato)} – ${formatDate(plan.sluttDato)}`}
-                            onClick={e => { e.stopPropagation(); openEditPlan(plan); }}
-                          >
-                            {jobNavn}
-                          </div>
-                        );
-                      })}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 6 }}>
-          Klikk på en dag for å legge til plan. Klikk på en bar for å redigere.
-        </div>
-      </div>
-
-      <hr style={{ border: 'none', borderTop: '2px solid #e2e8f0', margin: '0 0 24px' }} />
-
-      {/* ===== TIMEPLAN (daglig timevisning) ===== */}
-      <h3 style={{ margin: '0 0 10px', fontSize: 15, color: '#0f172a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ background: '#8b5cf6', color: 'white', borderRadius: 4, padding: '2px 8px', fontSize: 12 }}>TIMEPLAN</span>
-        Daglig timefordeling (07–17)
-      </h3>
-
-      {/* Nav */}
+      {/* ── FELLES NAVIGASJON ── */}
       <div className="uke-nav">
         <button className="btn" onClick={() => setCurrentWeek(w => addDays(w, -7))}>← Forrige</button>
         <div className="uke-label">{navLabel}</div>
         <button className="btn" onClick={() => setCurrentWeek(weekStart(today))}>I dag</button>
         <button className="btn" onClick={() => setCurrentWeek(w => addDays(w, 7))}>Neste →</button>
-        <button className="btn no-print" style={{ marginLeft: 12, background: '#06b6d4', color: 'white' }}
-          onClick={() => openNew()}>+ Legg til oppdrag</button>
+        <button className="btn no-print"
+          style={{ marginLeft: 12, background: '#06b6d4', color: 'white' }}
+          onClick={() => openNewPlan()}>+ Plan</button>
+        <button className="btn no-print"
+          style={{ background: '#8b5cf6', color: 'white' }}
+          onClick={() => openNew()}>+ Oppdrag</button>
       </div>
 
       {rorleggere.length === 0 && (
         <div className="empty">Ingen ansatte med fag «Rørlegger» registrert. Legg til under Ansatte-fanen.</div>
       )}
 
-      {/* Time grid */}
+      {/* ══════════════════════════════════════════
+          UKESPLAN  —  identisk med Bemanningsplan
+          ══════════════════════════════════════════ */}
+      <div className="uke-grid-wrap" style={{ marginBottom: 0 }}>
+        <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(${weekDays.length}, 1fr)` }}>
+
+          {/* Dag-header */}
+          <div className="uke-header-cell"></div>
+          {weekDays.map((dag, i) => {
+            const hol = HOLIDAYS[dag];
+            return (
+              <div key={dag}
+                className={`uke-header-cell${dag === today ? ' today' : ''}${hol ? ' holiday-header' : ''}`}
+                style={{ fontSize: 11, padding: '4px 2px', textAlign: 'center' }}
+                title={hol || undefined}>
+                <div style={{ fontWeight: i === 0 ? 700 : 400 }}>{DAG_NAVN[i]}</div>
+                <div className="dag-dato" style={{ fontSize: 10 }}>{dag.slice(8)}.{dag.slice(5, 7)}</div>
+                {hol && <div className="holiday-label">{hol.split(' ')[0]}</div>}
+              </div>
+            );
+          })}
+
+          {/* Rad per rørlegger */}
+          {rorleggere.map(ansatt => {
+            const rowPlaner = (state.rorPlaner || []).filter(p =>
+              p.ansattId === ansatt.id &&
+              overlaps(p.startDato, p.sluttDato, weekDays[0], weekDays[weekDays.length - 1])
+            );
+            const rowTimer = (state.rorTimer || []).filter(t =>
+              t.ansattId === ansatt.id && weekDays.includes(t.dato)
+            );
+
+            return (
+              <React.Fragment key={ansatt.id}>
+                {/* Navn-kolonne */}
+                <div className="uke-row-label">
+                  <div className="mini-avatar" style={{ background: '#06b6d4' }}>
+                    {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <div className="row-navn">{ansatt.navn}</div>
+                    <div className="row-fag" style={{ color: '#06b6d4' }}>Rørlegger</div>
+                  </div>
+                </div>
+
+                {/* Gantt-rad */}
+                <div
+                  className="gantt-row"
+                  style={{ gridColumn: '2 / -1' }}
+                  onClick={e => {
+                    if (e.target === e.currentTarget || e.target.classList.contains('gantt-bg-cell')) {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      const idx  = Math.min(weekDays.length - 1, Math.max(0, Math.floor((e.clientX - rect.left) / (rect.width / weekDays.length))));
+                      openNewPlan(ansatt.id, weekDays[idx]);
+                    }
+                  }}
+                >
+                  {/* Bakgrunnsceller */}
+                  {weekDays.map((d, i) => (
+                    <div key={d}
+                      className={`gantt-bg-cell${d === today ? ' today-col' : ''}${HOLIDAYS[d] ? ' holiday-col' : ''}`}
+                      style={{ left: `${(i / weekDays.length) * 100}%`, width: `${100 / weekDays.length}%` }}
+                    />
+                  ))}
+
+                  {/* rorPlaner-barer */}
+                  {rowPlaner.map(plan => {
+                    const pos = getBarPos(plan.startDato, plan.sluttDato);
+                    if (!pos) return null;
+                    const jobNavn = plan.fritekst || state.prosjekter.find(p => p.id === plan.prosjektId)?.navn || '?';
+                    return (
+                      <div key={plan.id}
+                        className="gantt-bar"
+                        style={{ left: pos.left, width: pos.width, background: prosjektColor(plan.prosjektId) }}
+                        title={`${jobNavn} · ${formatDate(plan.startDato)} – ${formatDate(plan.sluttDato)}`}
+                        onClick={e => { e.stopPropagation(); openEditPlan(plan); }}
+                      >
+                        <span className="gantt-label">{jobNavn}</span>
+                        <div className="gantt-actions">
+                          <button onClick={e => { e.stopPropagation(); handleDeletePlan(plan.id); }} title="Slett">✕</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  {/* rorTimer-chips (timeoppgaver) — vises som små tagger nederst i raden */}
+                  {rowTimer.map(t => {
+                    const dayIdx = weekDays.indexOf(t.dato);
+                    if (dayIdx === -1) return null;
+                    const jobNavn = t.fritekst || state.prosjekter.find(p => p.id === t.prosjektId)?.navn || '?';
+                    const n       = weekDays.length;
+                    return (
+                      <div key={t.id}
+                        style={{
+                          position: 'absolute',
+                          left:   `calc(${(dayIdx / n) * 100}% + 3px)`,
+                          width:  `calc(${(1 / n) * 100}% - 6px)`,
+                          bottom: 3, height: 16,
+                          background: prosjektColor(t.prosjektId),
+                          opacity: 0.85,
+                          borderRadius: 3,
+                          fontSize: 9, color: 'white', fontWeight: 600,
+                          display: 'flex', alignItems: 'center', padding: '0 4px',
+                          overflow: 'hidden', whiteSpace: 'nowrap',
+                          zIndex: 2, cursor: 'pointer',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
+                        }}
+                        title={`${jobNavn}: ${t.startTid}–${t.sluttTid}${t.adresse ? '\n' + t.adresse : ''}`}
+                        onClick={e => { e.stopPropagation(); openEdit(t); }}
+                      >
+                        {t.startTid}–{t.sluttTid}
+                      </div>
+                    );
+                  })}
+                </div>
+              </React.Fragment>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{ fontSize: 12, color: '#94a3b8', margin: '4px 0 20px' }}>
+        Klikk i gantten for å legge til plan (flerdag). Klikk på bar for å redigere. Timeoppgaver vises som små chips nederst.
+      </div>
+
+      {/* ══════════════════════════════════════════
+          TIMEPLAN  —  daglig timefordeling 07–17
+          ══════════════════════════════════════════ */}
+      <h3 style={{ margin: '0 0 10px', fontSize: 14, color: '#475569', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ background: '#8b5cf6', color: 'white', borderRadius: 4, padding: '2px 8px', fontSize: 11 }}>TIMEPLAN</span>
+        Daglig timefordeling 07–17
+      </h3>
+
       <div className="ror-grid-wrap">
         <table className="ror-table">
           <thead>
             <tr>
               <th className="ror-th-name">Rørlegger</th>
               {weekDays.map((d, i) => {
-                const isToday = d === today;
                 const hol = HOLIDAYS[d];
                 return (
-                  <th key={d} className={`ror-th-day${isToday ? ' ror-today' : ''}${hol ? ' holiday-header' : ''}`}>
-                    <div style={{ fontWeight: 700 }}>{DAG_NAVN_FULL[i]}</div>
+                  <th key={d} className={`ror-th-day${d === today ? ' ror-today' : ''}${hol ? ' holiday-header' : ''}`}>
+                    <div style={{ fontWeight: 700 }}>{DAG_NAVN[i]}</div>
                     <div style={{ fontSize: 11, color: '#64748b' }}>{d.slice(8)}.{d.slice(5, 7)}</div>
                     {hol && <div style={{ fontSize: 10, color: '#dc2626' }}>{hol}</div>}
                   </th>
                 );
               })}
             </tr>
-            {/* Hour ruler row */}
             <tr>
               <td className="ror-ruler-label">
                 <span style={{ fontSize: 10, color: '#94a3b8' }}>07 – 17</span>
@@ -455,31 +418,26 @@ export default function RorleggerPlan() {
                   </div>
                 </td>
                 {weekDays.map(dato => {
-                  const dayTimers = (state.rorTimer || []).filter(t => t.ansattId === ansatt.id && t.dato === dato);
+                  const dayTimers         = (state.rorTimer || []).filter(t => t.ansattId === ansatt.id && t.dato === dato);
                   const { bars, totalRows } = layoutBars(dayTimers);
-                  const cellHeight = Math.max(44, totalRows * 28);
-                  const isToday = dato === today;
+                  const cellHeight        = Math.max(44, totalRows * 28);
                   return (
                     <td key={dato}
-                      className={`ror-td-day${isToday ? ' ror-today' : ''}`}
+                      className={`ror-td-day${dato === today ? ' ror-today' : ''}`}
                       style={{ height: cellHeight + 8 }}
                       onClick={() => openNew(ansatt.id, dato)}
                     >
                       <div className="ror-timeline" style={{ height: cellHeight }}>
-                        {/* Background hour lines */}
                         {hourTicks.map(h => (
                           <div key={h} className="ror-hour-line" style={{ left: `${((h - DAY_START_H) / DAY_HOURS) * 100}%` }} />
                         ))}
-                        {/* Assignment bars */}
                         {bars.map(t => {
-                          const p = state.prosjekter.find(pr => pr.id === t.prosjektId);
-                          const jobNavn = t.fritekst || p?.navn || '?';
-                          const barStyle = getBarStyle(t.startTid, t.sluttTid, t.row, totalRows);
+                          const jobNavn = t.fritekst || state.prosjekter.find(pr => pr.id === t.prosjektId)?.navn || '?';
                           return (
                             <div key={t.id}
                               className="ror-bar"
-                              style={{ ...barStyle, background: prosjektColor(t.prosjektId) }}
-                              title={[jobNavn, t.adresse, t.kontakt, t.telefon, `${t.startTid} – ${t.sluttTid}`, t.notat].filter(Boolean).join('\n')}
+                              style={{ ...getBarStyle(t.startTid, t.sluttTid, t.row, totalRows), background: prosjektColor(t.prosjektId) }}
+                              title={[jobNavn, t.adresse, t.kontakt, t.telefon, `${t.startTid}–${t.sluttTid}`, t.notat].filter(Boolean).join('\n')}
                               onClick={e => { e.stopPropagation(); openEdit(t); }}
                             >
                               <span className="ror-bar-label">{t.startTid}–{t.sluttTid}</span>
@@ -497,12 +455,11 @@ export default function RorleggerPlan() {
         </table>
       </div>
 
-      {/* Legend */}
-      <div style={{ marginTop: 16, fontSize: 12, color: '#94a3b8' }}>
-        Klikk på en celle for å legge til oppdrag. Klikk på en bar for å redigere eller slette.
+      <div style={{ marginTop: 8, fontSize: 12, color: '#94a3b8' }}>
+        Klikk på en celle for å legge til timeoppgave. Klikk på bar for å redigere eller slette.
       </div>
 
-      {/* Plan-modal (ukesplan) */}
+      {/* ══ PLAN-MODAL (ukesplan) ══ */}
       {showPlanModal && (
         <div className="modal-backdrop" onClick={() => setShowPlanModal(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -516,12 +473,10 @@ export default function RorleggerPlan() {
               <select value={planForm.ansattId} onChange={e => setPlanForm(f => ({ ...f, ansattId: e.target.value }))}>
                 {rorleggere.map(a => <option key={a.id} value={a.id}>{a.navn}</option>)}
                 {state.ansatte.filter(a => a.fag !== 'Rørlegger').length > 0 && (
-                  <>
-                    <option disabled>──────────</option>
+                  <><option disabled>──────────</option>
                     {state.ansatte.filter(a => a.fag !== 'Rørlegger').map(a => (
                       <option key={a.id} value={a.id}>{a.navn} ({a.fag})</option>
-                    ))}
-                  </>
+                    ))}</>
                 )}
               </select>
             </div>
@@ -529,25 +484,21 @@ export default function RorleggerPlan() {
             <div className="form-group">
               <label>Prosjekt / oppdrag</label>
               <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                <button type="button" className="btn"
-                  style={{ flex: 1, background: planForm.modus === 'prosjekt' ? '#2563eb' : '', color: planForm.modus === 'prosjekt' ? 'white' : '', fontSize: 13 }}
-                  onClick={() => setPlanForm(f => ({ ...f, modus: 'prosjekt' }))}>
-                  Fra prosjektliste
-                </button>
-                <button type="button" className="btn"
-                  style={{ flex: 1, background: planForm.modus === 'fritekst' ? '#2563eb' : '', color: planForm.modus === 'fritekst' ? 'white' : '', fontSize: 13 }}
-                  onClick={() => setPlanForm(f => ({ ...f, modus: 'fritekst' }))}>
-                  Fri tekst
-                </button>
+                {['prosjekt', 'fritekst'].map(m => (
+                  <button key={m} type="button" className="btn"
+                    style={{ flex: 1, background: planForm.modus === m ? '#2563eb' : '', color: planForm.modus === m ? 'white' : '', fontSize: 13 }}
+                    onClick={() => setPlanForm(f => ({ ...f, modus: m }))}>
+                    {m === 'prosjekt' ? 'Fra prosjektliste' : 'Fri tekst'}
+                  </button>
+                ))}
               </div>
-              {planForm.modus === 'prosjekt' ? (
-                <select value={planForm.prosjektId} onChange={e => setPlanForm(f => ({ ...f, prosjektId: e.target.value }))}>
-                  {state.prosjekter.map(p => <option key={p.id} value={p.id}>{p.navn}</option>)}
-                </select>
-              ) : (
-                <input type="text" placeholder="Beskriv oppdraget" value={planForm.fritekst} autoFocus
-                  onChange={e => setPlanForm(f => ({ ...f, fritekst: e.target.value }))} />
-              )}
+              {planForm.modus === 'prosjekt'
+                ? <select value={planForm.prosjektId} onChange={e => setPlanForm(f => ({ ...f, prosjektId: e.target.value }))}>
+                    {state.prosjekter.map(p => <option key={p.id} value={p.id}>{p.navn}</option>)}
+                  </select>
+                : <input type="text" placeholder="Beskriv oppdraget" value={planForm.fritekst} autoFocus
+                    onChange={e => setPlanForm(f => ({ ...f, fritekst: e.target.value }))} />
+              }
             </div>
 
             <div style={{ display: 'flex', gap: 12 }}>
@@ -573,9 +524,7 @@ export default function RorleggerPlan() {
               </button>
               {editPlan && (
                 <button className="btn" style={{ color: '#dc2626', borderColor: '#fecaca' }}
-                  onClick={() => handleDeletePlan(editPlan.id)}>
-                  Slett
-                </button>
+                  onClick={() => handleDeletePlan(editPlan.id)}>Slett</button>
               )}
               <button className="btn" onClick={() => setShowPlanModal(false)}>Avbryt</button>
             </div>
@@ -583,7 +532,7 @@ export default function RorleggerPlan() {
         </div>
       )}
 
-      {/* Timegrid-modal (oppdrag) */}
+      {/* ══ TIMEGRID-MODAL (oppdrag) ══ */}
       {showModal && (
         <div className="modal-backdrop" onClick={() => setShowModal(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
@@ -596,14 +545,11 @@ export default function RorleggerPlan() {
               <label>Rørlegger</label>
               <select value={form.ansattId} onChange={e => setForm(f => ({ ...f, ansattId: e.target.value }))}>
                 {rorleggere.map(a => <option key={a.id} value={a.id}>{a.navn}</option>)}
-                {/* Also allow other ansatte */}
                 {state.ansatte.filter(a => a.fag !== 'Rørlegger').length > 0 && (
-                  <>
-                    <option disabled>──────────</option>
+                  <><option disabled>──────────</option>
                     {state.ansatte.filter(a => a.fag !== 'Rørlegger').map(a => (
                       <option key={a.id} value={a.id}>{a.navn} ({a.fag})</option>
-                    ))}
-                  </>
+                    ))}</>
                 )}
               </select>
             </div>
@@ -611,36 +557,22 @@ export default function RorleggerPlan() {
             <div className="form-group">
               <label>Prosjekt / oppdrag</label>
               <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                <button
-                  type="button"
-                  className="btn"
-                  style={{ flex: 1, background: form.modus === 'prosjekt' ? '#2563eb' : '', color: form.modus === 'prosjekt' ? 'white' : '', fontSize: 13 }}
-                  onClick={() => setForm(f => ({ ...f, modus: 'prosjekt' }))}
-                >
-                  Fra prosjektliste
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  style={{ flex: 1, background: form.modus === 'fritekst' ? '#2563eb' : '', color: form.modus === 'fritekst' ? 'white' : '', fontSize: 13 }}
-                  onClick={() => setForm(f => ({ ...f, modus: 'fritekst' }))}
-                >
-                  Fri tekst
-                </button>
+                {['prosjekt', 'fritekst'].map(m => (
+                  <button key={m} type="button" className="btn"
+                    style={{ flex: 1, background: form.modus === m ? '#2563eb' : '', color: form.modus === m ? 'white' : '', fontSize: 13 }}
+                    onClick={() => setForm(f => ({ ...f, modus: m }))}>
+                    {m === 'prosjekt' ? 'Fra prosjektliste' : 'Fri tekst'}
+                  </button>
+                ))}
               </div>
-              {form.modus === 'prosjekt' ? (
-                <select value={form.prosjektId} onChange={e => setForm(f => ({ ...f, prosjektId: e.target.value }))}>
-                  {state.prosjekter.map(p => <option key={p.id} value={p.id}>{p.navn}</option>)}
-                </select>
-              ) : (
-                <input
-                  type="text"
-                  placeholder="Kort jobbtittel, f.eks. «Bytte varmtvannsbereder»"
-                  value={form.fritekst}
-                  onChange={e => setForm(f => ({ ...f, fritekst: e.target.value }))}
-                  autoFocus
-                />
-              )}
+              {form.modus === 'prosjekt'
+                ? <select value={form.prosjektId} onChange={e => setForm(f => ({ ...f, prosjektId: e.target.value }))}>
+                    {state.prosjekter.map(p => <option key={p.id} value={p.id}>{p.navn}</option>)}
+                  </select>
+                : <input type="text" placeholder="Kort jobbtittel, f.eks. «Bytte varmtvannsbereder»"
+                    value={form.fritekst} autoFocus
+                    onChange={e => setForm(f => ({ ...f, fritekst: e.target.value }))} />
+              }
             </div>
 
             {form.modus === 'fritekst' && (
@@ -666,7 +598,8 @@ export default function RorleggerPlan() {
 
             <div className="form-group">
               <label>Dato</label>
-              <input type="date" value={form.dato} onChange={e => setForm(f => ({ ...f, dato: e.target.value }))} />
+              <input type="date" value={form.dato}
+                onChange={e => setForm(f => ({ ...f, dato: e.target.value }))} />
             </div>
 
             <div style={{ display: 'flex', gap: 12 }}>
@@ -693,13 +626,9 @@ export default function RorleggerPlan() {
 
             <div className="form-group">
               <label>Beskrivelse / notat</label>
-              <textarea
-                rows={4}
-                placeholder="Beskriv jobben, hva som trengs, spesielle hensyn osv."
-                value={form.notat}
-                onChange={e => setForm(f => ({ ...f, notat: e.target.value }))}
-                style={{ resize: 'vertical', fontFamily: 'inherit', fontSize: 14 }}
-              />
+              <textarea rows={4} placeholder="Beskriv jobben, hva som trengs, spesielle hensyn osv."
+                value={form.notat} onChange={e => setForm(f => ({ ...f, notat: e.target.value }))}
+                style={{ resize: 'vertical', fontFamily: 'inherit', fontSize: 14 }} />
             </div>
 
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
@@ -709,15 +638,14 @@ export default function RorleggerPlan() {
               </button>
               {editTimer && (
                 <button className="btn" style={{ color: '#dc2626', borderColor: '#fecaca' }}
-                  onClick={() => { handleDelete(editTimer.id); setShowModal(false); }}>
-                  Slett
-                </button>
+                  onClick={() => handleDelete(editTimer.id)}>Slett</button>
               )}
               <button className="btn" onClick={() => setShowModal(false)}>Avbryt</button>
             </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }
