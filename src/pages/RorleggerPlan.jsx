@@ -3,7 +3,8 @@ import { useApp } from '../context/AppContext';
 import { weekStart, addDays, isoToDate, dateToIso, formatDate, overlaps } from '../store';
 import { getHolidayMap } from '../holidays';
 
-const DAG_NAVN = ['Man', 'Tir', 'Ons', 'Tor', 'Fre'];
+const DAG_NAVN    = ['Man', 'Tir', 'Ons', 'Tor', 'Fre'];
+const MAANED_NAVN = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des'];
 const DAY_START_H = 7;
 const DAY_END_H   = 17;
 const DAY_HOURS   = DAY_END_H - DAY_START_H;
@@ -16,10 +17,23 @@ function getWeekNumber(dateStr) {
   const week1 = new Date(d.getFullYear(), 0, 4);
   return 1 + Math.round(((d - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
 }
-
 function tidToDecimal(tid) {
   const [h, m] = tid.split(':').map(Number);
   return h + m / 60;
+}
+function monthStart(iso) { return iso.slice(0, 7) + '-01'; }
+function addMonths(iso, n) {
+  const d = new Date(iso + 'T00:00:00');
+  d.setMonth(d.getMonth() + n);
+  return d.toISOString().slice(0, 7) + '-01';
+}
+function monthEnd(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  d.setMonth(d.getMonth() + 1); d.setDate(0);
+  return d.toISOString().slice(0, 10);
+}
+function monthLabel(iso) {
+  return MAANED_NAVN[parseInt(iso.slice(5, 7), 10) - 1] + ' ' + iso.slice(0, 4);
 }
 
 export default function RorleggerPlan() {
@@ -28,40 +42,94 @@ export default function RorleggerPlan() {
   const thisYear = new Date().getFullYear();
   const HOLIDAYS = getHolidayMap(thisYear - 1, thisYear + 2);
 
-  // Felles uke-navigasjon for BEGGE seksjoner
-  const [currentWeek, setCurrentWeek] = useState(() => weekStart(today));
+  // Navigasjon
+  const [currentWeek,  setCurrentWeek]  = useState(() => weekStart(today));
+  const [currentMonth, setCurrentMonth] = useState(() => monthStart(today));
+  const [ukeMode,      setUkeMode]      = useState('dag'); // 'dag' | 'uke' | 'maaned'
 
-  // Ukesplan (gantt) state
+  // Ukesplan (gantt) modal
   const [showPlanModal, setShowPlanModal] = useState(false);
-  const [editPlan, setEditPlan]           = useState(null);
-  const [planForm, setPlanForm]           = useState({
-    ansattId: '', modus: 'prosjekt', prosjektId: '', fritekst: '',
-    startDato: '', sluttDato: '',
+  const [editPlan,      setEditPlan]      = useState(null);
+  const [planForm,      setPlanForm]      = useState({
+    ansattId: '', modus: 'prosjekt', prosjektId: '', fritekst: '', startDato: '', sluttDato: '',
   });
 
-  // Timeplan (daglig timegrid) state
-  const [showModal, setShowModal]   = useState(false);
-  const [editTimer, setEditTimer]   = useState(null);
-  const [form, setForm]             = useState({
+  // Timeplan (daglig timegrid) modal
+  const [showModal,  setShowModal]  = useState(false);
+  const [editTimer,  setEditTimer]  = useState(null);
+  const [form,       setForm]       = useState({
     ansattId: '', modus: 'prosjekt', prosjektId: '', fritekst: '',
     kontakt: '', telefon: '', adresse: '',
     dato: '', startTid: '08:00', sluttTid: '12:00', notat: '',
   });
 
-  // Kun rørleggere (+ andre ansatte kan velges i modal)
   const rorleggere = state.ansatte.filter(a => a.fag === 'Rørlegger');
 
-  // Man–Fre for gjeldende uke — delt mellom gantt og timegrid
+  // ──────────────────────────────────────────────
+  // GANTT – data per modus
+  // ──────────────────────────────────────────────
+
+  // dag: 5 arbeidsdager (gjeldende uke) — synkronisert med timegriden
   const weekDays = Array.from({ length: 5 }, (_, i) => addDays(currentWeek, i));
 
-  const navLabel = `Uke ${getWeekNumber(currentWeek)}: ${formatDate(currentWeek)} – ${formatDate(addDays(currentWeek, 4))}`;
+  // uke: 52 uker × 5 dager = 260 arbeidsdager fra gjeldende uke
+  const WORK_DAYS_52 = [];
+  for (let w = 0; w < 52; w++)
+    for (let d = 0; d < 5; d++)
+      WORK_DAYS_52.push(addDays(currentWeek, w * 7 + d));
+
+  // maaned: 18 måneder fra gjeldende måned
+  const SIX_MONTHS_18 = Array.from({ length: 18 }, (_, i) => addMonths(currentMonth, i));
+
+  const ganttDays = ukeMode === 'dag' ? weekDays
+                  : ukeMode === 'uke' ? WORK_DAYS_52
+                  : SIX_MONTHS_18;
+  const ganttUnit = ukeMode === 'maaned' ? 'month' : 'day';
+
+  // Navigasjon
+  function handlePrev()  {
+    if (ukeMode === 'maaned') setCurrentMonth(m => addMonths(m, -1));
+    else setCurrentWeek(w => addDays(w, -7));
+  }
+  function handleNext()  {
+    if (ukeMode === 'maaned') setCurrentMonth(m => addMonths(m, 1));
+    else setCurrentWeek(w => addDays(w, 7));
+  }
+  function handleToday() {
+    if (ukeMode === 'maaned') setCurrentMonth(monthStart(today));
+    else setCurrentWeek(weekStart(today));
+  }
+
+  const navLabel = ukeMode === 'dag'
+    ? `Uke ${getWeekNumber(currentWeek)}: ${formatDate(currentWeek)} – ${formatDate(addDays(currentWeek, 4))}`
+    : ukeMode === 'uke'
+    ? `${formatDate(currentWeek)} – ${formatDate(addDays(currentWeek, 51 * 7 + 4))}`
+    : `${monthLabel(SIX_MONTHS_18[0])} – ${monthLabel(SIX_MONTHS_18[17])}`;
 
   function prosjektColor(pid) {
     if (!pid) return '#6b7280';
-    const p   = state.prosjekter.find(p => p.id === pid);
+    const p = state.prosjekter.find(p => p.id === pid);
     if (p?.farge) return p.farge;
     const idx = state.prosjekter.findIndex(p => p.id === pid);
     return FALLBACK_COLORS[Math.max(0, idx) % FALLBACK_COLORS.length];
+  }
+
+  // Bar-posisjon i gantt (fungerer for alle tre moduser)
+  function getBarPos(startDato, sluttDato) {
+    const days = ganttDays;
+    const n    = days.length;
+    let si = -1, ei = -1;
+    for (let i = 0; i < n; i++) {
+      const hit = ganttUnit === 'month'
+        ? overlaps(startDato, sluttDato, days[i], monthEnd(days[i]))
+        : (days[i] >= startDato && days[i] <= sluttDato);
+      if (hit) { if (si === -1) si = i; ei = i; }
+    }
+    if (si === -1) return null;
+    return {
+      left:  `${(si / n) * 100}%`,
+      width: `${((ei - si + 1) / n) * 100}%`,
+    };
   }
 
   // ──────────────────────────────────────────────
@@ -71,12 +139,12 @@ export default function RorleggerPlan() {
     setEditPlan(null);
     const start = dato || currentWeek;
     setPlanForm({
-      ansattId: ansattId || (rorleggere[0]?.id || ''),
-      modus: 'prosjekt',
+      ansattId:   ansattId || (rorleggere[0]?.id || ''),
+      modus:      'prosjekt',
       prosjektId: state.prosjekter[0]?.id || '',
-      fritekst: '',
-      startDato: start,
-      sluttDato: addDays(start, 4),
+      fritekst:   '',
+      startDato:  start,
+      sluttDato:  addDays(start, 4),
     });
     setShowPlanModal(true);
   }
@@ -105,7 +173,8 @@ export default function RorleggerPlan() {
       startDato:  planForm.startDato,
       sluttDato:  planForm.sluttDato,
     };
-    dispatch({ type: editPlan ? 'UPDATE_ROR_PLAN' : 'ADD_ROR_PLAN', payload: editPlan ? { ...editPlan, ...payload } : payload });
+    dispatch({ type: editPlan ? 'UPDATE_ROR_PLAN' : 'ADD_ROR_PLAN',
+               payload: editPlan ? { ...editPlan, ...payload } : payload });
     setShowPlanModal(false);
   }
 
@@ -116,25 +185,6 @@ export default function RorleggerPlan() {
     }
   }
 
-  // Beregn bar-posisjon i gantten (returnerer left/width som %-strenger)
-  function getBarPos(startDato, sluttDato) {
-    let si = -1, ei = -1;
-    for (let i = 0; i < weekDays.length; i++) {
-      if (weekDays[i] >= startDato && weekDays[i] <= sluttDato) {
-        if (si === -1) si = i;
-        ei = i;
-      }
-    }
-    if (si === -1) return null;
-    const n = weekDays.length;
-    return {
-      left:    `${(si / n) * 100}%`,
-      width:   `${((ei - si + 1) / n) * 100}%`,
-      isFirst: startDato >= weekDays[0],
-      isLast:  sluttDato <= weekDays[weekDays.length - 1],
-    };
-  }
-
   // ──────────────────────────────────────────────
   // TIMEPLAN – hjelpefunksjoner
   // ──────────────────────────────────────────────
@@ -142,11 +192,9 @@ export default function RorleggerPlan() {
     setEditTimer(null);
     setForm({
       ansattId: ansattId || (rorleggere[0]?.id || ''),
-      modus: 'prosjekt',
-      prosjektId: state.prosjekter[0]?.id || '',
+      modus: 'prosjekt', prosjektId: state.prosjekter[0]?.id || '',
       fritekst: '', kontakt: '', telefon: '', adresse: '',
-      dato: dato || today,
-      startTid: '08:00', sluttTid: '12:00', notat: '',
+      dato: dato || today, startTid: '08:00', sluttTid: '12:00', notat: '',
     });
     setShowModal(true);
   }
@@ -179,7 +227,8 @@ export default function RorleggerPlan() {
       adresse:    form.adresse.trim(),
       dato: form.dato, startTid: form.startTid, sluttTid: form.sluttTid, notat: form.notat,
     };
-    dispatch({ type: editTimer ? 'UPDATE_ROR_TIMER' : 'ADD_ROR_TIMER', payload: editTimer ? { ...editTimer, ...payload } : payload });
+    dispatch({ type: editTimer ? 'UPDATE_ROR_TIMER' : 'ADD_ROR_TIMER',
+               payload: editTimer ? { ...editTimer, ...payload } : payload });
     setShowModal(false);
   }
 
@@ -190,15 +239,17 @@ export default function RorleggerPlan() {
     }
   }
 
-  function getBarStyle(startTid, sluttTid, row = 0, totalRows = 1) {
-    const s       = tidToDecimal(startTid);
-    const e       = tidToDecimal(sluttTid);
-    const clampS  = Math.max(DAY_START_H, Math.min(DAY_END_H, s));
-    const clampE  = Math.max(DAY_START_H, Math.min(DAY_END_H, e));
-    const left    = ((clampS - DAY_START_H) / DAY_HOURS) * 100;
-    const width   = ((clampE - clampS)      / DAY_HOURS) * 100;
-    const rowH    = 100 / totalRows;
-    return { left: `${left}%`, width: `${Math.max(0, width)}%`, top: `${row * rowH}%`, height: `${rowH}%` };
+  function getTimerBarStyle(startTid, sluttTid, row = 0, totalRows = 1) {
+    const s     = tidToDecimal(startTid), e = tidToDecimal(sluttTid);
+    const cS    = Math.max(DAY_START_H, Math.min(DAY_END_H, s));
+    const cE    = Math.max(DAY_START_H, Math.min(DAY_END_H, e));
+    const rowH  = 100 / totalRows;
+    return {
+      left:   `${((cS - DAY_START_H) / DAY_HOURS) * 100}%`,
+      width:  `${Math.max(0, ((cE - cS) / DAY_HOURS) * 100)}%`,
+      top:    `${row * rowH}%`,
+      height: `${rowH}%`,
+    };
   }
 
   function layoutBars(timers) {
@@ -217,6 +268,58 @@ export default function RorleggerPlan() {
   const hourTicks = Array.from({ length: DAY_HOURS + 1 }, (_, i) => DAY_START_H + i);
 
   // ──────────────────────────────────────────────
+  // Gantt-header per modus
+  // ──────────────────────────────────────────────
+  function GanttHeader() {
+    const days = ganttDays;
+    const n    = days.length;
+
+    if (ukeMode === 'maaned') {
+      return (
+        <>
+          <div className="uke-header-cell"></div>
+          {days.map(m => (
+            <div key={m}
+              className={`uke-header-cell${m.slice(0, 7) === today.slice(0, 7) ? ' today' : ''}`}
+              style={{ fontSize: 11, padding: '4px 2px', textAlign: 'center' }}>
+              <div style={{ fontWeight: 700 }}>{monthLabel(m)}</div>
+            </div>
+          ))}
+        </>
+      );
+    }
+
+    // dag & uke: viser dager
+    return (
+      <>
+        <div className="uke-header-cell"></div>
+        {days.map((dag, i) => {
+          const hol        = HOLIDAYS[dag];
+          const dow        = new Date(dag + 'T00:00:00').getDay(); // 1=Man…5=Fre
+          const isMonday   = dow === 1;
+          const weekNum    = getWeekNumber(dag);
+          const isCurWeek  = weekStart(dag) === weekStart(today);
+          return (
+            <div key={dag}
+              className={`uke-header-cell${dag === today ? ' today' : ''}${isMonday ? ' week-start-col' : ''}${hol ? ' holiday-header' : ''}`}
+              style={{ fontSize: 11, padding: '4px 2px', textAlign: 'center' }}
+              title={hol || undefined}>
+              {isMonday && (
+                <div style={{ fontSize: 10, fontWeight: 700, color: isCurWeek ? '#2563eb' : '#94a3b8', lineHeight: 1.2 }}>
+                  U{weekNum}
+                </div>
+              )}
+              <div style={{ fontWeight: isMonday ? 700 : 400 }}>{DAG_NAVN[dow - 1]}</div>
+              <div className="dag-dato" style={{ fontSize: 10 }}>{dag.slice(8)}.{dag.slice(5, 7)}</div>
+              {hol && <div className="holiday-label">{hol.split(' ')[0]}</div>}
+            </div>
+          );
+        })}
+      </>
+    );
+  }
+
+  // ──────────────────────────────────────────────
   // RENDER
   // ──────────────────────────────────────────────
   return (
@@ -224,12 +327,20 @@ export default function RorleggerPlan() {
 
       {/* ── FELLES NAVIGASJON ── */}
       <div className="uke-nav">
-        <button className="btn" onClick={() => setCurrentWeek(w => addDays(w, -7))}>← Forrige</button>
+        <button className="btn" onClick={handlePrev}>← Forrige</button>
         <div className="uke-label">{navLabel}</div>
-        <button className="btn" onClick={() => setCurrentWeek(weekStart(today))}>I dag</button>
-        <button className="btn" onClick={() => setCurrentWeek(w => addDays(w, 7))}>Neste →</button>
+        <button className="btn" onClick={handleToday}>I dag</button>
+        <button className="btn" onClick={handleNext}>Neste →</button>
+
+        {/* Modus-toggle identisk med Bemanningsplan */}
+        <div className="ukemode-toggle">
+          <button className={`ukemode-btn${ukeMode === 'dag'    ? ' active' : ''}`} onClick={() => setUkeMode('dag')}>Dager</button>
+          <button className={`ukemode-btn${ukeMode === 'uke'    ? ' active' : ''}`} onClick={() => setUkeMode('uke')}>Uker</button>
+          <button className={`ukemode-btn${ukeMode === 'maaned' ? ' active' : ''}`} onClick={() => setUkeMode('maaned')}>Måneder</button>
+        </div>
+
         <button className="btn no-print"
-          style={{ marginLeft: 12, background: '#06b6d4', color: 'white' }}
+          style={{ marginLeft: 8, background: '#06b6d4', color: 'white' }}
           onClick={() => openNewPlan()}>+ Plan</button>
         <button className="btn no-print"
           style={{ background: '#8b5cf6', color: 'white' }}
@@ -244,37 +355,26 @@ export default function RorleggerPlan() {
           UKESPLAN  —  identisk med Bemanningsplan
           ══════════════════════════════════════════ */}
       <div className="uke-grid-wrap" style={{ marginBottom: 0 }}>
-        <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(${weekDays.length}, 1fr)` }}>
+        <div className="uke-grid"
+          style={{ gridTemplateColumns: `180px repeat(${ganttDays.length}, 1fr)` }}>
 
-          {/* Dag-header */}
-          <div className="uke-header-cell"></div>
-          {weekDays.map((dag, i) => {
-            const hol = HOLIDAYS[dag];
-            return (
-              <div key={dag}
-                className={`uke-header-cell${dag === today ? ' today' : ''}${hol ? ' holiday-header' : ''}`}
-                style={{ fontSize: 11, padding: '4px 2px', textAlign: 'center' }}
-                title={hol || undefined}>
-                <div style={{ fontWeight: i === 0 ? 700 : 400 }}>{DAG_NAVN[i]}</div>
-                <div className="dag-dato" style={{ fontSize: 10 }}>{dag.slice(8)}.{dag.slice(5, 7)}</div>
-                {hol && <div className="holiday-label">{hol.split(' ')[0]}</div>}
-              </div>
-            );
-          })}
+          <GanttHeader />
 
-          {/* Rad per rørlegger */}
           {rorleggere.map(ansatt => {
+            const viewEnd   = ukeMode === 'maaned' ? monthEnd(ganttDays[ganttDays.length - 1]) : ganttDays[ganttDays.length - 1];
             const rowPlaner = (state.rorPlaner || []).filter(p =>
-              p.ansattId === ansatt.id &&
-              overlaps(p.startDato, p.sluttDato, weekDays[0], weekDays[weekDays.length - 1])
+              p.ansattId === ansatt.id && overlaps(p.startDato, p.sluttDato, ganttDays[0], viewEnd)
             );
-            const rowTimer = (state.rorTimer || []).filter(t =>
-              t.ansattId === ansatt.id && weekDays.includes(t.dato)
-            );
+            // rorTimer vises bare i dag/uke-modus (enkeltdager)
+            const rowTimer = ukeMode !== 'maaned'
+              ? (state.rorTimer || []).filter(t =>
+                  t.ansattId === ansatt.id &&
+                  t.dato >= ganttDays[0] && t.dato <= ganttDays[ganttDays.length - 1]
+                )
+              : [];
 
             return (
               <React.Fragment key={ansatt.id}>
-                {/* Navn-kolonne */}
                 <div className="uke-row-label">
                   <div className="mini-avatar" style={{ background: '#06b6d4' }}>
                     {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
@@ -285,25 +385,32 @@ export default function RorleggerPlan() {
                   </div>
                 </div>
 
-                {/* Gantt-rad */}
-                <div
-                  className="gantt-row"
-                  style={{ gridColumn: '2 / -1' }}
+                <div className="gantt-row" style={{ gridColumn: '2 / -1' }}
                   onClick={e => {
                     if (e.target === e.currentTarget || e.target.classList.contains('gantt-bg-cell')) {
                       const rect = e.currentTarget.getBoundingClientRect();
-                      const idx  = Math.min(weekDays.length - 1, Math.max(0, Math.floor((e.clientX - rect.left) / (rect.width / weekDays.length))));
-                      openNewPlan(ansatt.id, weekDays[idx]);
+                      const idx  = Math.min(ganttDays.length - 1, Math.max(0,
+                        Math.floor((e.clientX - rect.left) / (rect.width / ganttDays.length))
+                      ));
+                      const d = ganttDays[idx];
+                      openNewPlan(ansatt.id, ukeMode === 'maaned' ? d : d);
                     }
                   }}
                 >
                   {/* Bakgrunnsceller */}
-                  {weekDays.map((d, i) => (
-                    <div key={d}
-                      className={`gantt-bg-cell${d === today ? ' today-col' : ''}${HOLIDAYS[d] ? ' holiday-col' : ''}`}
-                      style={{ left: `${(i / weekDays.length) * 100}%`, width: `${100 / weekDays.length}%` }}
-                    />
-                  ))}
+                  {ganttDays.map((d, i) => {
+                    const isMonday  = ukeMode !== 'maaned' && new Date(d + 'T00:00:00').getDay() === 1;
+                    const isToday   = ukeMode === 'maaned'
+                      ? d.slice(0, 7) === today.slice(0, 7)
+                      : d === today;
+                    const isHol     = ukeMode !== 'maaned' && !!HOLIDAYS[d];
+                    return (
+                      <div key={d}
+                        className={`gantt-bg-cell${isToday ? ' today-col' : ''}${isMonday ? ' week-start-col' : ''}${isHol ? ' holiday-col' : ''}`}
+                        style={{ left: `${(i / ganttDays.length) * 100}%`, width: `${100 / ganttDays.length}%` }}
+                      />
+                    );
+                  })}
 
                   {/* rorPlaner-barer */}
                   {rowPlaner.map(plan => {
@@ -325,12 +432,12 @@ export default function RorleggerPlan() {
                     );
                   })}
 
-                  {/* rorTimer-chips (timeoppgaver) — vises som små tagger nederst i raden */}
+                  {/* rorTimer-chips (vises i dag/uke-modus) */}
                   {rowTimer.map(t => {
-                    const dayIdx = weekDays.indexOf(t.dato);
+                    const dayIdx = ganttDays.indexOf(t.dato);
                     if (dayIdx === -1) return null;
+                    const n       = ganttDays.length;
                     const jobNavn = t.fritekst || state.prosjekter.find(p => p.id === t.prosjektId)?.navn || '?';
-                    const n       = weekDays.length;
                     return (
                       <div key={t.id}
                         style={{
@@ -338,14 +445,14 @@ export default function RorleggerPlan() {
                           left:   `calc(${(dayIdx / n) * 100}% + 3px)`,
                           width:  `calc(${(1 / n) * 100}% - 6px)`,
                           bottom: 3, height: 16,
-                          background: prosjektColor(t.prosjektId),
-                          opacity: 0.85,
+                          background:   prosjektColor(t.prosjektId),
+                          opacity:      0.85,
                           borderRadius: 3,
                           fontSize: 9, color: 'white', fontWeight: 600,
                           display: 'flex', alignItems: 'center', padding: '0 4px',
                           overflow: 'hidden', whiteSpace: 'nowrap',
                           zIndex: 2, cursor: 'pointer',
-                          boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
                         }}
                         title={`${jobNavn}: ${t.startTid}–${t.sluttTid}${t.adresse ? '\n' + t.adresse : ''}`}
                         onClick={e => { e.stopPropagation(); openEdit(t); }}
@@ -362,15 +469,17 @@ export default function RorleggerPlan() {
       </div>
 
       <div style={{ fontSize: 12, color: '#94a3b8', margin: '4px 0 20px' }}>
-        Klikk i gantten for å legge til plan (flerdag). Klikk på bar for å redigere. Timeoppgaver vises som små chips nederst.
+        Klikk i gantten for å legge til plan. Klikk på bar for å redigere.
+        {ukeMode === 'dag' && ' Timeoppgaver vises som chips nederst.'}
       </div>
 
       {/* ══════════════════════════════════════════
           TIMEPLAN  —  daglig timefordeling 07–17
+          (alltid gjeldende uke, synkronisert)
           ══════════════════════════════════════════ */}
       <h3 style={{ margin: '0 0 10px', fontSize: 14, color: '#475569', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
         <span style={{ background: '#8b5cf6', color: 'white', borderRadius: 4, padding: '2px 8px', fontSize: 11 }}>TIMEPLAN</span>
-        Daglig timefordeling 07–17
+        Daglig timefordeling 07–17 — Uke {getWeekNumber(currentWeek)}
       </h3>
 
       <div className="ror-grid-wrap">
@@ -418,9 +527,9 @@ export default function RorleggerPlan() {
                   </div>
                 </td>
                 {weekDays.map(dato => {
-                  const dayTimers         = (state.rorTimer || []).filter(t => t.ansattId === ansatt.id && t.dato === dato);
+                  const dayTimers           = (state.rorTimer || []).filter(t => t.ansattId === ansatt.id && t.dato === dato);
                   const { bars, totalRows } = layoutBars(dayTimers);
-                  const cellHeight        = Math.max(44, totalRows * 28);
+                  const cellHeight          = Math.max(44, totalRows * 28);
                   return (
                     <td key={dato}
                       className={`ror-td-day${dato === today ? ' ror-today' : ''}`}
@@ -436,7 +545,7 @@ export default function RorleggerPlan() {
                           return (
                             <div key={t.id}
                               className="ror-bar"
-                              style={{ ...getBarStyle(t.startTid, t.sluttTid, t.row, totalRows), background: prosjektColor(t.prosjektId) }}
+                              style={{ ...getTimerBarStyle(t.startTid, t.sluttTid, t.row, totalRows), background: prosjektColor(t.prosjektId) }}
                               title={[jobNavn, t.adresse, t.kontakt, t.telefon, `${t.startTid}–${t.sluttTid}`, t.notat].filter(Boolean).join('\n')}
                               onClick={e => { e.stopPropagation(); openEdit(t); }}
                             >
