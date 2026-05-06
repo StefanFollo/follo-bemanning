@@ -74,7 +74,7 @@ export default async function handler(req, res) {
   const result = await sendResetEmail(emailKey, user.navn, resetUrl);
 
   // In dev/no-email mode, return the URL so admin can share it manually
-  if (result.skipped) {
+  if (result.skipped || result.error) {
     return res.status(200).json({ ok: true, devResetUrl: resetUrl });
   }
 
