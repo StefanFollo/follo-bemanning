@@ -5,6 +5,22 @@ import { getHolidayMap } from '../holidays';
 
 const DAG_NAVN    = ['Man', 'Tir', 'Ons', 'Tor', 'Fre'];
 const MAANED_NAVN = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des'];
+
+const BEF_STATUS = {
+  planlagt:      { label: 'Planlagt befaring',   farge: '#3b82f6', bg: '#eff6ff', ikon: '📋' },
+  tilbud_arbeid: { label: 'Tilbud under arbeid', farge: '#f59e0b', bg: '#fffbeb', ikon: '✏️' },
+  tilbud_sendt:  { label: 'Tilbud sendt',        farge: '#8b5cf6', bg: '#f5f3ff', ikon: '📤' },
+  godkjent:      { label: 'Godkjent',            farge: '#16a34a', bg: '#f0fdf4', ikon: '✅' },
+  tapt:          { label: 'Tapt',                farge: '#6b7280', bg: '#f9fafb', ikon: '❌' },
+};
+function datoKort(iso) {
+  if (!iso) return '';
+  return new Date(iso + 'T00:00:00').toLocaleDateString('nb-NO', { day: '2-digit', month: 'short' });
+}
+function dagerTil(iso) {
+  if (!iso) return null;
+  return Math.round((new Date(iso + 'T00:00:00') - new Date()) / 86400000);
+}
 const BEF_FARGE = {
   planlagt:      '#3b82f6',
   tilbud_arbeid: '#f59e0b',
@@ -643,6 +659,138 @@ export default function RorleggerPlan() {
           = Befaring (redigeres under Befaring-fanen)
         </span>
       </div>
+
+      {/* ══════════════════════════════════════════
+          BEFARINGER  —  kort-oversikt per rørlegger
+          ══════════════════════════════════════════ */}
+      {(() => {
+        // Alle befaringer tilhørende rørleggerne på denne siden
+        const rorIds = new Set(rorleggere.map(r => r.id));
+        const mineBef = (state.befaringer || []).filter(b => rorIds.has(b.prosjektlederId));
+        if (mineBef.length === 0) return null;
+
+        return (
+          <div style={{ marginTop: 28 }}>
+            <h3 style={{ margin: '0 0 14px', fontSize: 14, color: '#475569', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ background: '#3b82f6', color: 'white', borderRadius: 4, padding: '2px 8px', fontSize: 11 }}>BEFARINGER</span>
+              Befaringsoversikt for rørleggere
+            </h3>
+
+            {rorleggere.map(ansatt => {
+              const bef = (state.befaringer || [])
+                .filter(b => b.prosjektlederId === ansatt.id && b.status !== 'tapt')
+                .sort((a, b) => (a.dato || '').localeCompare(b.dato || ''));
+              if (bef.length === 0) return null;
+
+              return (
+                <div key={ansatt.id} style={{ marginBottom: 20 }}>
+                  {/* Rørlegger-navn som seksjonstittel */}
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 8,
+                    marginBottom: 10, paddingBottom: 6,
+                    borderBottom: '2px solid #e2e8f0',
+                  }}>
+                    <div className="mini-avatar" style={{ background: '#06b6d4', width: 26, height: 26, fontSize: 10, flexShrink: 0 }}>
+                      {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                    </div>
+                    <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{ansatt.navn}</span>
+                    <span style={{ fontSize: 12, color: '#94a3b8' }}>{bef.length} befaring{bef.length !== 1 ? 'er' : ''}</span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
+                    {bef.map(b => {
+                      const s           = BEF_STATUS[b.status] || BEF_STATUS.planlagt;
+                      const fristDager  = dagerTil(b.tilbudFrist);
+                      const fristFarge  = fristDager !== null ? (fristDager < 0 ? '#dc2626' : fristDager <= 3 ? '#f59e0b' : '#16a34a') : null;
+                      const kontDager   = dagerTil(b.nesteKontakt);
+                      const kontFarge   = kontDager  !== null ? (kontDager  < 0 ? '#dc2626' : kontDager  <= 2 ? '#f59e0b' : '#64748b') : '#64748b';
+                      const belopVis    = b.estimertBelop
+                        ? new Intl.NumberFormat('nb-NO', { maximumFractionDigits: 0 }).format(Number(b.estimertBelop)) + ' kr'
+                        : null;
+
+                      return (
+                        <div key={b.id} className="bef-k-kort" style={{ cursor: 'default' }}>
+                          {/* Topp: adresse + status */}
+                          <div className="bef-k-kort-topp">
+                            <div style={{ minWidth: 0 }}>
+                              <div className="bef-k-navn">{b.adresse}</div>
+                              <div className="bef-k-adresse">{b.kontaktNavn}</div>
+                              {(b.telefon || b.epost) && (
+                                <div className="bef-k-kontakt">
+                                  {b.telefon && <a href={`tel:${b.telefon}`} className="bef-k-kontakt-link">📱 {b.telefon}</a>}
+                                  {b.epost   && <a href={`mailto:${b.epost}`} className="bef-k-kontakt-link">✉️ {b.epost}</a>}
+                                </div>
+                              )}
+                            </div>
+                            <span className="bef-k-status-pill" style={{ background: s.bg, color: s.farge, whiteSpace: 'nowrap' }}>
+                              {s.ikon} {s.label}
+                            </span>
+                          </div>
+
+                          {/* Chips */}
+                          <div className="bef-k-chips">
+                            {b.jobbType && <span className="bef-k-chip">{b.jobbType}</span>}
+                            {b.dato && (
+                              <span className="bef-k-chip bef-k-chip--dato">
+                                📅 {datoKort(b.dato)}{b.tid ? ` kl. ${b.tid}` : ''}
+                              </span>
+                            )}
+                            {belopVis && <span className="bef-k-chip bef-k-chip--belop">💰 {belopVis}</span>}
+                          </div>
+
+                          {/* Datoer og kommentar */}
+                          <div className="bef-k-datoer">
+                            {b.tilbudFrist && (
+                              <span className="bef-k-dato-rad" style={{ color: fristFarge }}>
+                                ⏰ Tilbudsfrist: {datoKort(b.tilbudFrist)}
+                                {fristDager !== null && <em> ({fristDager < 0 ? `${Math.abs(fristDager)}d over` : fristDager === 0 ? 'i dag' : `${fristDager}d`})</em>}
+                              </span>
+                            )}
+                            {b.nesteKontakt && (
+                              <span className="bef-k-dato-rad" style={{ color: kontFarge, fontWeight: kontDager !== null && kontDager <= 2 ? 600 : 400 }}>
+                                📞 Neste kontakt: {datoKort(b.nesteKontakt)}
+                                {kontDager !== null && kontDager <= 2 && (
+                                  <em> ({kontDager < 0 ? `${Math.abs(kontDager)}d over` : kontDager === 0 ? 'i dag!' : `${kontDager}d`})</em>
+                                )}
+                              </span>
+                            )}
+                            {b.oensketOppstart && (
+                              <span className="bef-k-dato-rad" style={{ color: '#0891b2', fontWeight: 500 }}>
+                                🚀 Ønsket oppstart: {datoKort(b.oensketOppstart)}
+                              </span>
+                            )}
+                            {b.resultat && (
+                              <span className="bef-k-dato-rad bef-k-resultat">📝 {b.resultat}</span>
+                            )}
+                            {b.kommentar && (
+                              <span className="bef-k-dato-rad bef-k-kommentar">
+                                💬 {b.kommentar.length > 80 ? b.kommentar.slice(0, 80) + '…' : b.kommentar}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Status-dropdown — kan endre status direkte */}
+                          <div className="bef-k-status-bytte">
+                            <select
+                              className="bef-k-status-select"
+                              value={b.status}
+                              onChange={e => dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, status: e.target.value } })}
+                            >
+                              {Object.entries(BEF_STATUS).map(([key, sv]) => (
+                                <option key={key} value={key}>{sv.ikon} {sv.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* ══ PLAN-MODAL (ukesplan) ══ */}
       {showPlanModal && (
