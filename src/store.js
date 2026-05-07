@@ -258,20 +258,57 @@ function load(key, fallback) {
   }
 }
 
-function save(key, value) {
+const FIELD_MAP = {
+  ansatte:      'fbs_ansatte',
+  prosjekter:   'fbs_prosjekter',
+  tildelinger:  'fbs_tildelinger',
+  oppgaver:     'fbs_oppgaver',
+  fag:          'fbs_fag',
+  rorTimer:     'fbs_ror_timer',
+  rorPlaner:    'fbs_ror_planer',
+  befaringer:   'fbs_befaringer',
+  reklamasjoner:'fbs_reklamasjoner',
+  serviceJobber:'fbs_service_jobber',
+};
+
+function save(key, value, field) {
   localStorage.setItem(key, JSON.stringify(value));
-  // Oppdater lokal timestamp slik at sky-data aldri overskriver nyere lokal data
-  localStorage.setItem('fbs_updated_at', Date.now().toString());
+  const now = Date.now().toString();
+  localStorage.setItem('fbs_updated_at', now);
+  if (field) localStorage.setItem(`fbs_ts_${field}`, now);
 }
 
-// Brukes kun i migrasjoner – skriver data uten å oppdatere fbs_updated_at,
-// slik at sky-data ikke blir overskrevet av seed/migrasjons-data ved første oppstart.
+// Brukes kun i migrasjoner – skriver data uten å oppdatere timestamps
 function saveRaw(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
 export function getLocalUpdatedAt() {
   return parseInt(localStorage.getItem('fbs_updated_at') || '0', 10);
+}
+
+export function getFieldTs(field) {
+  return parseInt(localStorage.getItem(`fbs_ts_${field}`) || '0', 10);
+}
+
+export function getAllFieldTs() {
+  const ts = {};
+  for (const f of Object.keys(FIELD_MAP)) ts[f] = getFieldTs(f);
+  return ts;
+}
+
+// Merge local state with cloud state field by field — never lose data
+export function mergeWithCloud(localState, cloudState) {
+  const cloudFieldTs = cloudState._fieldTs || {};
+  const merged = { ...localState };
+  for (const field of Object.keys(FIELD_MAP)) {
+    const localTs = getFieldTs(field);
+    const cloudTs = cloudFieldTs[field] || cloudState._updatedAt || 0;
+    if (cloudTs > localTs && cloudState[field] !== undefined) {
+      merged[field] = cloudState[field];
+    }
+  }
+  return merged;
 }
 
 export function loadState() {
@@ -381,16 +418,16 @@ export function loadState() {
   };
 }
 
-export function saveAnsatte(data) { save('fbs_ansatte', data); }
-export function saveProsjekter(data) { save('fbs_prosjekter', data); }
-export function saveTildelinger(data) { save('fbs_tildelinger', data); }
-export function saveOppgaver(data) { save('fbs_oppgaver', data); }
-export function saveFag(data) { save('fbs_fag', data); }
-export function saveRorTimer(data) { save('fbs_ror_timer', data); }
-export function saveRorPlaner(data) { save('fbs_ror_planer', data); }
-export function saveBefaringer(data) { save('fbs_befaringer', data); }
-export function saveReklamasjoner(data) { save('fbs_reklamasjoner', data); }
-export function saveServiceJobber(data) { save('fbs_service_jobber', data); }
+export function saveAnsatte(data)       { save('fbs_ansatte',        data, 'ansatte'); }
+export function saveProsjekter(data)    { save('fbs_prosjekter',     data, 'prosjekter'); }
+export function saveTildelinger(data)   { save('fbs_tildelinger',    data, 'tildelinger'); }
+export function saveOppgaver(data)      { save('fbs_oppgaver',       data, 'oppgaver'); }
+export function saveFag(data)           { save('fbs_fag',            data, 'fag'); }
+export function saveRorTimer(data)      { save('fbs_ror_timer',      data, 'rorTimer'); }
+export function saveRorPlaner(data)     { save('fbs_ror_planer',     data, 'rorPlaner'); }
+export function saveBefaringer(data)    { save('fbs_befaringer',     data, 'befaringer'); }
+export function saveReklamasjoner(data) { save('fbs_reklamasjoner',  data, 'reklamasjoner'); }
+export function saveServiceJobber(data) { save('fbs_service_jobber', data, 'serviceJobber'); }
 
 export function uid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -468,7 +505,7 @@ export async function saveToCloud(state) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
-      body: JSON.stringify({ ...state, _updatedAt: getLocalUpdatedAt() }),
+      body: JSON.stringify({ ...state, _updatedAt: getLocalUpdatedAt(), _fieldTs: getAllFieldTs() }),
     });
     if (res.status === 409) {
       const data = await res.json().catch(() => ({}));

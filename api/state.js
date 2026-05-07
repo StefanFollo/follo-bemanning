@@ -66,6 +66,20 @@ export default async function handler(req, res) {
           }
         }
       }
+      // Rullerende backup: bevar siste 5 lagringer i 7 dager
+      try {
+        const b4 = await redis.get('fbs_backup_4');
+        if (b4) await redis.set('fbs_backup_5', b4, { ex: 7 * 24 * 3600 });
+        const b3 = await redis.get('fbs_backup_3');
+        if (b3) await redis.set('fbs_backup_4', b3, { ex: 7 * 24 * 3600 });
+        const b2 = await redis.get('fbs_backup_2');
+        if (b2) await redis.set('fbs_backup_3', b2, { ex: 7 * 24 * 3600 });
+        const b1 = await redis.get('fbs_backup_1');
+        if (b1) await redis.set('fbs_backup_2', b1, { ex: 7 * 24 * 3600 });
+        const current = await redis.get('fbs_state');
+        if (current) await redis.set('fbs_backup_1', { ...current, _backedUpAt: Date.now() }, { ex: 7 * 24 * 3600 });
+      } catch { /* backup-feil stopper ikke lagring */ }
+
       await redis.set('fbs_state', newState);
       res.status(200).json({ ok: true });
     } catch (e) {

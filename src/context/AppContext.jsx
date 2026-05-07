@@ -2,7 +2,7 @@ import { createContext, useContext, useReducer, useEffect, useState } from 'reac
 import {
   loadState,
   saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag, saveRorTimer, saveRorPlaner, saveBefaringer, saveReklamasjoner, saveServiceJobber,
-  loadFromCloud, saveToCloud, getLocalUpdatedAt,
+  loadFromCloud, saveToCloud, getLocalUpdatedAt, getFieldTs, mergeWithCloud,
   uid,
 } from '../store';
 
@@ -233,32 +233,28 @@ export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, null, loadState);
   const [cloudReady, setCloudReady] = useState(false);
 
-  // Last inn fra sky ved oppstart – men kun hvis sky-data er nyere enn lokale data
+  // Last inn fra sky ved oppstart – flet inn felt-for-felt basert på tidsstempel
   useEffect(() => {
     loadFromCloud().then(cloudState => {
       if (cloudState) {
-        const cloudUpdatedAt = cloudState._updatedAt || 0;
-        const localUpdatedAt = getLocalUpdatedAt();
-        // Bruk sky-data kun hvis: ingen lokal timestamp (første gang) ELLER sky er nyere
-        if (localUpdatedAt === 0 || cloudUpdatedAt > localUpdatedAt) {
-          dispatch({ type: 'LOAD_STATE', payload: cloudState });
-        }
+        const merged = mergeWithCloud(state, cloudState);
+        dispatch({ type: 'LOAD_STATE', payload: merged });
       }
       setCloudReady(true);
     });
   }, []);
 
   // Auto-lagre til sky 1 sekund etter siste endring.
-  // Ved 409-konflikt: kun oppdater tildelinger fra sky (ikke overskriver befaringer e.l.)
+  // Ved 409-konflikt: flet inn kun feltene sky har nyere data for
   useEffect(() => {
     if (!cloudReady) return;
     const timer = setTimeout(async () => {
       const result = await saveToCloud(state);
       if (result === 'conflict') {
         const cloudState = await loadFromCloud();
-        if (cloudState && cloudState.tildelinger) {
-          // Bare oppdater tildelinger fra sky – bevar alt annet lokalt
-          dispatch({ type: 'PATCH_TILDELINGER', tildelinger: cloudState.tildelinger });
+        if (cloudState) {
+          const merged = mergeWithCloud(state, cloudState);
+          dispatch({ type: 'LOAD_STATE', payload: merged });
         }
       }
     }, 1000);

@@ -1,6 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 
+function formatTs(ts) {
+  if (!ts) return '–';
+  const d = new Date(ts);
+  return d.toLocaleString('nb-NO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 const ROLE_LABELS = { admin: 'Administrator', kontor: 'Kontor', rorlegger: 'Rørlegger', ansatt: 'Ansatt (lesetilgang)' };
 const ROLE_COLORS = { admin: '#1e3a5f', kontor: '#7c3aed', rorlegger: '#0891b2', ansatt: '#16a34a' };
 
@@ -19,6 +25,9 @@ export default function AdminUsers() {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
   const [inviteUrl, setInviteUrl] = useState('');
+  const [backups, setBackups] = useState([]);
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [backupMsg, setBackupMsg] = useState('');
 
   async function loadUsers() {
     setLoading(true);
@@ -32,7 +41,37 @@ export default function AdminUsers() {
     setLoading(false);
   }
 
-  useEffect(() => { loadUsers(); }, []);
+  useEffect(() => { loadUsers(); loadBackups(); }, []);
+
+  async function loadBackups() {
+    setBackupLoading(true);
+    try {
+      const res = await fetch('/api/backup', { headers: authHeader() });
+      if (res.ok) {
+        const data = await res.json();
+        setBackups(data.backups || []);
+      }
+    } catch { /* silent */ }
+    setBackupLoading(false);
+  }
+
+  async function handleRestore(slot) {
+    if (!confirm(`Gjenopprette backup ${slot}? Nåværende data lagres som backup 1 før restore.`)) return;
+    setBackupMsg('');
+    try {
+      const res = await fetch('/api/backup', {
+        method: 'POST',
+        headers: authHeader(),
+        body: JSON.stringify({ slot }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setBackupMsg(`Backup ${slot} gjenopprettet! Last inn siden på nytt for å se endringene.`);
+      await loadBackups();
+    } catch (e) {
+      setBackupMsg('Feil: ' + e.message);
+    }
+  }
 
   async function handleCreate(e) {
     e.preventDefault();
@@ -286,6 +325,63 @@ export default function AdminUsers() {
           <li><strong>Ansatt</strong> – Kun lesetilgang til Bemanningsplan (kan se hvem som jobber hvor)</li>
         </ul>
         <p style={{ margin: '8px 0 0' }}>Nye brukere mottar en e-post med en lenke for å sette passordet sitt. Passordet krever minst 8 tegn, stor bokstav, tall og spesialtegn.</p>
+      </div>
+
+      {/* Sikkerhetskopier */}
+      <div style={{ marginTop: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <h3 style={{ margin: 0, fontSize: 17, color: '#1e3a5f' }}>Sikkerhetskopier</h3>
+          <button
+            className="btn-secondary"
+            style={{ fontSize: 13 }}
+            onClick={loadBackups}
+            disabled={backupLoading}
+          >
+            {backupLoading ? 'Laster…' : 'Last inn sikkerhetskopier'}
+          </button>
+        </div>
+
+        {backupMsg && (
+          <div style={{ background: backupMsg.startsWith('Feil') ? '#fee2e2' : '#dcfce7', border: `1px solid ${backupMsg.startsWith('Feil') ? '#fca5a5' : '#86efac'}`, borderRadius: 8, padding: '10px 16px', marginBottom: 12, fontSize: 14, color: backupMsg.startsWith('Feil') ? '#991b1b' : '#166534' }}>
+            {backupMsg}
+          </div>
+        )}
+
+        {backups.length === 0 ? (
+          <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: '16px', fontSize: 13, color: '#6b7280', textAlign: 'center' }}>
+            {backupLoading ? 'Laster sikkerhetskopier…' : 'Ingen sikkerhetskopier tilgjengelig ennå. Lagring skjer automatisk ved hver endring.'}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {backups.map(b => (
+              <div key={b.slot} style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 8, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 16 }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#1e3a5f', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
+                  {b.slot}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>Backup {b.slot}</div>
+                  <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
+                    Tidspunkt: {formatTs(b.backedUpAt)}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#6b7280' }}>
+                    {b.befaringer} befaringer &bull; {b.tildelinger} tildelinger &bull; {b.ansatte} ansatte &bull; {b.prosjekter} prosjekter
+                  </div>
+                </div>
+                <button
+                  className="btn-secondary"
+                  style={{ fontSize: 13, flexShrink: 0 }}
+                  onClick={() => handleRestore(b.slot)}
+                >
+                  Gjenopprett
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ marginTop: 12, fontSize: 12, color: '#9ca3af' }}>
+          Systemet lagrer automatisk de 5 siste versjonene av alle data (slettes etter 7 dager). Kun administratorer kan gjenopprette.
+        </div>
       </div>
     </div>
   );
