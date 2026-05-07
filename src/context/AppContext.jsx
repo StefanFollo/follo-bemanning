@@ -91,6 +91,11 @@ function reducer(state, action) {
       saveTildelinger(withMerged);
       return { ...state, tildelinger: withMerged };
     }
+    case 'PATCH_TILDELINGER': {
+      // Oppdater KUN tildelinger fra sky – aldri befaringer, ansatte, prosjekter e.l.
+      saveTildelinger(action.tildelinger);
+      return { ...state, tildelinger: action.tildelinger };
+    }
     case 'DELETE_TILDELING': {
       const next = state.tildelinger.filter(t => t.id !== action.id);
       saveTildelinger(next);
@@ -244,14 +249,17 @@ export function AppProvider({ children }) {
   }, []);
 
   // Auto-lagre til sky 1 sekund etter siste endring.
-  // Ved 409-konflikt (lokal data er bak sky): last inn sky-data automatisk.
+  // Ved 409-konflikt: kun oppdater tildelinger fra sky (ikke overskriver befaringer e.l.)
   useEffect(() => {
     if (!cloudReady) return;
     const timer = setTimeout(async () => {
       const result = await saveToCloud(state);
       if (result === 'conflict') {
         const cloudState = await loadFromCloud();
-        if (cloudState) dispatch({ type: 'LOAD_STATE', payload: cloudState });
+        if (cloudState && cloudState.tildelinger) {
+          // Bare oppdater tildelinger fra sky – bevar alt annet lokalt
+          dispatch({ type: 'PATCH_TILDELINGER', tildelinger: cloudState.tildelinger });
+        }
       }
     }, 1000);
     return () => clearTimeout(timer);
