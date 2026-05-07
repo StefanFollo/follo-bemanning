@@ -31,16 +31,39 @@ export default async function handler(req, res) {
       // (beskytter mot at seed-data ved ny browser-oppstart overskriver sky-data)
       const newState = req.body;
       const currentState = await redis.get('fbs_state');
-      if (currentState && Array.isArray(currentState.befaringer) && Array.isArray(newState.befaringer)) {
-        const currentCount = currentState.befaringer.length;
-        const newCount = newState.befaringer.length;
-        // Blokker hvis ny tilstand har mer enn 5 færre befaringer enn eksisterende
-        if (newCount < currentCount - 5) {
-          return res.status(409).json({
-            error: `Konflikt: forsøker å lagre ${newCount} befaringer, men det finnes ${currentCount} i skyen. Last inn siden på nytt.`,
-            currentCount,
-            newCount,
-          });
+      if (currentState) {
+        // Befaringer: blokker hvis mer enn 5 færre
+        if (Array.isArray(currentState.befaringer) && Array.isArray(newState.befaringer)) {
+          const cur = currentState.befaringer.length;
+          const nxt = newState.befaringer.length;
+          if (nxt < cur - 5) {
+            return res.status(409).json({
+              error: `Konflikt: forsøker å lagre ${nxt} befaringer, men det finnes ${cur} i skyen. Last inn siden på nytt.`,
+              field: 'befaringer', currentCount: cur, newCount: nxt,
+            });
+          }
+        }
+        // Tildelinger: blokker hvis mer enn 10 færre (1 merge = -1, så 10 gir god margin)
+        if (Array.isArray(currentState.tildelinger) && Array.isArray(newState.tildelinger)) {
+          const cur = currentState.tildelinger.length;
+          const nxt = newState.tildelinger.length;
+          if (nxt < cur - 10) {
+            return res.status(409).json({
+              error: `Konflikt: forsøker å lagre ${nxt} tildelinger, men det finnes ${cur} i skyen. Last inn siden på nytt.`,
+              field: 'tildelinger', currentCount: cur, newCount: nxt,
+            });
+          }
+        }
+        // Ansatte: blokker hvis mer enn 3 færre
+        if (Array.isArray(currentState.ansatte) && Array.isArray(newState.ansatte)) {
+          const cur = currentState.ansatte.length;
+          const nxt = newState.ansatte.length;
+          if (nxt < cur - 3) {
+            return res.status(409).json({
+              error: `Konflikt: forsøker å lagre ${nxt} ansatte, men det finnes ${cur} i skyen. Last inn siden på nytt.`,
+              field: 'ansatte', currentCount: cur, newCount: nxt,
+            });
+          }
         }
       }
       await redis.set('fbs_state', newState);

@@ -456,7 +456,7 @@ export async function saveToCloud(state) {
   const token = getToken();
   if (!token) return;
   try {
-    await fetch('/api/state', {
+    const res = await fetch('/api/state', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -464,6 +464,16 @@ export async function saveToCloud(state) {
       },
       body: JSON.stringify({ ...state, _updatedAt: getLocalUpdatedAt() }),
     });
+    if (res.status === 409) {
+      const data = await res.json().catch(() => ({}));
+      console.warn('[FBS] Sky-lagring blokkert:', data.error);
+      // Varsle brukeren én gang (unngå gjentatte alerts)
+      if (!saveToCloud._konfliktVarslet) {
+        saveToCloud._konfliktVarslet = true;
+        setTimeout(() => { saveToCloud._konfliktVarslet = false; }, 30000);
+        alert(`⚠️ Lagring blokkert: ${data.error || 'Konflikt med sky-data.'}\n\nLast inn siden på nytt (F5) for å synkronisere.`);
+      }
+    }
   } catch {
     // localStorage er backup
   }
