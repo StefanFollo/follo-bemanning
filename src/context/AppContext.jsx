@@ -243,10 +243,17 @@ export function AppProvider({ children }) {
     });
   }, []);
 
-  // Auto-lagre til sky 1 sekund etter siste endring
+  // Auto-lagre til sky 1 sekund etter siste endring.
+  // Ved 409-konflikt (lokal data er bak sky): last inn sky-data automatisk.
   useEffect(() => {
     if (!cloudReady) return;
-    const timer = setTimeout(() => saveToCloud(state), 1000);
+    const timer = setTimeout(async () => {
+      const result = await saveToCloud(state);
+      if (result === 'conflict') {
+        const cloudState = await loadFromCloud();
+        if (cloudState) dispatch({ type: 'LOAD_STATE', payload: cloudState });
+      }
+    }, 1000);
     return () => clearTimeout(timer);
   }, [state, cloudReady]);
 
