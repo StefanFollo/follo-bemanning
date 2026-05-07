@@ -5,6 +5,7 @@ export default function LoginPage({ onLogin }) {
   const [form, setForm] = useState({ email: '', pass: '' });
   const [forgotEmail, setForgotEmail] = useState('');
   const [devResetUrl, setDevResetUrl] = useState('');
+  const [showPass, setShowPass] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -132,13 +133,23 @@ export default function LoginPage({ onLogin }) {
           </div>
           <div className="login-field">
             <label>Passord</label>
-            <input
-              type="password"
-              autoComplete="current-password"
-              placeholder="Passord"
-              value={form.pass}
-              onChange={e => setForm(f => ({ ...f, pass: e.target.value }))}
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                type={showPass ? 'text' : 'password'}
+                autoComplete="current-password"
+                placeholder="Passord"
+                value={form.pass}
+                onChange={e => setForm(f => ({ ...f, pass: e.target.value }))}
+                style={{ paddingRight: 44 }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPass(v => !v)}
+                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#6b7280' }}
+              >
+                {showPass ? '🙈' : '👁'}
+              </button>
+            </div>
           </div>
           {error && <div className="login-error">{error}</div>}
           <button type="submit" className="login-btn" disabled={loading || !form.email || !form.pass}>
