@@ -239,18 +239,46 @@ export default function Bemanningsplan({ readOnly = false }) {
                   : unit === 'month' ? monthEnd(targetDay)
                   : targetDay;
       if (newEnd >= t.startDato) {
-        if (t.prosjektId !== FERIE_ID && harKonflikt(t.ansattId, t.startDato, newEnd, t.id)) {
-          alert(`${navn} er allerede tildelt et annet prosjekt i denne perioden.`);
-          return;
+        if (t.prosjektId !== FERIE_ID) {
+          const mergeCandidate = state.tildelinger.find(n =>
+            n.id !== t.id && n.ansattId === t.ansattId && n.prosjektId === t.prosjektId &&
+            overlaps(t.startDato, newEnd, n.startDato, n.sluttDato)
+          );
+          if (mergeCandidate) {
+            const mergedEnd = mergeCandidate.sluttDato > newEnd ? mergeCandidate.sluttDato : newEnd;
+            dispatchKeepScroll({
+              type: 'MERGE_TILDELINGER', id1: t.id, id2: mergeCandidate.id,
+              merged: { ansattId: t.ansattId, prosjektId: t.prosjektId, startDato: t.startDato, sluttDato: mergedEnd },
+            });
+            return;
+          }
+          if (harKonflikt(t.ansattId, t.startDato, newEnd, t.id)) {
+            alert(`${navn} er allerede tildelt et annet prosjekt i denne perioden.`);
+            return;
+          }
         }
         dispatchKeepScroll({ type: 'UPDATE_TILDELING', payload: { ...t, sluttDato: newEnd } });
       }
     } else if (d.type === 'start') {
       const newStart = targetDay;
       if (newStart <= t.sluttDato) {
-        if (t.prosjektId !== FERIE_ID && harKonflikt(t.ansattId, newStart, t.sluttDato, t.id)) {
-          alert(`${navn} er allerede tildelt et annet prosjekt i denne perioden.`);
-          return;
+        if (t.prosjektId !== FERIE_ID) {
+          const mergeCandidate = state.tildelinger.find(n =>
+            n.id !== t.id && n.ansattId === t.ansattId && n.prosjektId === t.prosjektId &&
+            overlaps(newStart, t.sluttDato, n.startDato, n.sluttDato)
+          );
+          if (mergeCandidate) {
+            const mergedStart = mergeCandidate.startDato < newStart ? mergeCandidate.startDato : newStart;
+            dispatchKeepScroll({
+              type: 'MERGE_TILDELINGER', id1: t.id, id2: mergeCandidate.id,
+              merged: { ansattId: t.ansattId, prosjektId: t.prosjektId, startDato: mergedStart, sluttDato: t.sluttDato },
+            });
+            return;
+          }
+          if (harKonflikt(t.ansattId, newStart, t.sluttDato, t.id)) {
+            alert(`${navn} er allerede tildelt et annet prosjekt i denne perioden.`);
+            return;
+          }
         }
         dispatchKeepScroll({ type: 'UPDATE_TILDELING', payload: { ...t, startDato: newStart } });
       }
