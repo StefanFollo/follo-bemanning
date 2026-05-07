@@ -187,6 +187,20 @@ export default function Bemanningsplan({ readOnly = false }) {
     });
   }
 
+  function handleMergeWith(t, neighbor) {
+    dispatch({
+      type: 'MERGE_TILDELINGER',
+      id1: t.id,
+      id2: neighbor.id,
+      merged: {
+        ansattId: t.ansattId,
+        prosjektId: t.prosjektId,
+        startDato: t.startDato < neighbor.startDato ? t.startDato : neighbor.startDato,
+        sluttDato: t.sluttDato > neighbor.sluttDato ? t.sluttDato : neighbor.sluttDato,
+      },
+    });
+  }
+
   function daysDiff(a, b) {
     return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
   }
@@ -1653,6 +1667,31 @@ export default function Bemanningsplan({ readOnly = false }) {
                 ✂ Del opp
               </button>
             </div>
+
+            {(() => {
+              const t = barMenu.t;
+              const naboer = state.tildelinger.filter(n =>
+                n.id !== t.id &&
+                n.ansattId === t.ansattId &&
+                n.prosjektId === t.prosjektId &&
+                (n.sluttDato === addDays(t.startDato, -1) || n.startDato === addDays(t.sluttDato, 1))
+              );
+              if (naboer.length === 0) return null;
+              return (
+                <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 10, marginBottom: 10 }}>
+                  <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 6 }}>⟷ Slå sammen med</label>
+                  {naboer.map(n => (
+                    <button key={n.id}
+                      onClick={() => { handleMergeWith(t, n); setBarMenu(null); }}
+                      style={{ width: '100%', padding: '6px', borderRadius: 6, border: '1px solid #d1fae5', background: '#f0fdf4', color: '#16a34a', fontSize: 12, cursor: 'pointer', marginBottom: 4, textAlign: 'left' }}
+                    >
+                      ⟷ {n.sluttDato === addDays(t.startDato, -1) ? '← ' : '→ '}
+                      {formatDate(n.startDato)} – {formatDate(n.sluttDato)}
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
 
             <button
               onClick={() => { deleteTildeling(barMenu.t.id); setBarMenu(null); }}

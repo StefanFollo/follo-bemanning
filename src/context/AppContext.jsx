@@ -84,6 +84,13 @@ function reducer(state, action) {
       saveTildelinger(withParts);
       return { ...state, tildelinger: withParts };
     }
+    case 'MERGE_TILDELINGER': {
+      // Remove both originals, add one merged
+      const without = state.tildelinger.filter(t => t.id !== action.id1 && t.id !== action.id2);
+      const withMerged = [...without, { ...action.merged, id: uid() }];
+      saveTildelinger(withMerged);
+      return { ...state, tildelinger: withMerged };
+    }
     case 'DELETE_TILDELING': {
       const next = state.tildelinger.filter(t => t.id !== action.id);
       saveTildelinger(next);
