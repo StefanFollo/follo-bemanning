@@ -302,7 +302,7 @@ export default function Bemanningsplan({ readOnly = false }) {
         .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd))
         .map(t => t.prosjektId)
     )];
-    const dagProsjekter = dagProsjektIds.map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean);
+    const dagProsjekter = dagProsjektIds.map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
     const dagTildeltIds = new Set(
       state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd)).map(t => t.ansattId)
     );
@@ -517,7 +517,7 @@ export default function Bemanningsplan({ readOnly = false }) {
         .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd))
         .map(t => t.prosjektId)
     )];
-    const ukeProsjekter = ukeProsjektIds.map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean);
+    const ukeProsjekter = ukeProsjektIds.map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
     const ukeTildeltIds = new Set(
       state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd)).map(t => t.ansattId)
     );
@@ -607,7 +607,7 @@ export default function Bemanningsplan({ readOnly = false }) {
         .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentMonth, maanedPeriodeEnd))
         .map(t => t.prosjektId)
     )];
-    const maanedProsjekter = maanedProsjektIds.map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean);
+    const maanedProsjekter = maanedProsjektIds.map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
     const maanedTildeltIds = new Set(
       state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentMonth, maanedPeriodeEnd)).map(t => t.ansattId)
     );
@@ -1428,7 +1428,7 @@ export default function Bemanningsplan({ readOnly = false }) {
   // --- PROSJEKTOVERSIKT ---
   function ProsjektOversiktVisning() {
     const today = dateToIso(new Date());
-    const aktive = state.prosjekter.filter(p => p.status === 'aktiv' || !p.status);
+    const aktive = state.prosjekter.filter(p => p.status === 'aktiv' || !p.status).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
 
     return (
       <div className="proj-oversikt-wrap">

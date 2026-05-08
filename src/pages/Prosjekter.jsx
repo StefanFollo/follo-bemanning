@@ -202,7 +202,7 @@ export default function Prosjekter() {
   const [statusFilter, setStatusFilter] = useState(null);
   const [plFilter, setPlFilter] = useState('');
   const [expandedId, setExpandedId] = useState(null);
-  const [sortKey, setSortKey] = useState(null);
+  const [sortKey, setSortKey] = useState('navn');
   const [sortDir, setSortDir] = useState('asc');
   const tl = buildTimeline(tlMode);
 
