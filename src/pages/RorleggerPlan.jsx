@@ -92,7 +92,7 @@ export default function RorleggerPlan() {
     dato: '', startTid: '08:00', sluttTid: '12:00', notat: '',
   });
 
-  const rorleggere = state.ansatte.filter(a => a.fag === 'Rørlegger');
+  const rorleggere = state.ansatte.filter(a => a.fag === 'Rørlegger').sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
 
   // ──────────────────────────────────────────────
   // GANTT – data per modus
@@ -807,7 +807,7 @@ export default function RorleggerPlan() {
                 {rorleggere.map(a => <option key={a.id} value={a.id}>{a.navn}</option>)}
                 {state.ansatte.filter(a => a.fag !== 'Rørlegger').length > 0 && (
                   <><option disabled>──────────</option>
-                    {state.ansatte.filter(a => a.fag !== 'Rørlegger').map(a => (
+                    {[...state.ansatte].filter(a => a.fag !== 'Rørlegger').sort((a, b) => a.navn.localeCompare(b.navn, 'nb')).map(a => (
                       <option key={a.id} value={a.id}>{a.navn} ({a.fag})</option>
                     ))}</>
                 )}
@@ -827,7 +827,7 @@ export default function RorleggerPlan() {
               </div>
               {planForm.modus === 'prosjekt'
                 ? <select value={planForm.prosjektId} onChange={e => setPlanForm(f => ({ ...f, prosjektId: e.target.value }))}>
-                    {state.prosjekter.map(p => <option key={p.id} value={p.id}>{p.navn}</option>)}
+                    {[...state.prosjekter].sort((a, b) => a.navn.localeCompare(b.navn, 'nb')).map(p => <option key={p.id} value={p.id}>{p.navn}</option>)}
                   </select>
                 : <input type="text" placeholder="Beskriv oppdraget" value={planForm.fritekst} autoFocus
                     onChange={e => setPlanForm(f => ({ ...f, fritekst: e.target.value }))} />
@@ -880,7 +880,7 @@ export default function RorleggerPlan() {
                 {rorleggere.map(a => <option key={a.id} value={a.id}>{a.navn}</option>)}
                 {state.ansatte.filter(a => a.fag !== 'Rørlegger').length > 0 && (
                   <><option disabled>──────────</option>
-                    {state.ansatte.filter(a => a.fag !== 'Rørlegger').map(a => (
+                    {[...state.ansatte].filter(a => a.fag !== 'Rørlegger').sort((a, b) => a.navn.localeCompare(b.navn, 'nb')).map(a => (
                       <option key={a.id} value={a.id}>{a.navn} ({a.fag})</option>
                     ))}</>
                 )}
@@ -900,7 +900,7 @@ export default function RorleggerPlan() {
               </div>
               {form.modus === 'prosjekt'
                 ? <select value={form.prosjektId} onChange={e => setForm(f => ({ ...f, prosjektId: e.target.value }))}>
-                    {state.prosjekter.map(p => <option key={p.id} value={p.id}>{p.navn}</option>)}
+                    {[...state.prosjekter].sort((a, b) => a.navn.localeCompare(b.navn, 'nb')).map(p => <option key={p.id} value={p.id}>{p.navn}</option>)}
                   </select>
                 : <input type="text" placeholder="Kort jobbtittel, f.eks. «Bytte varmtvannsbereder»"
                     value={form.fritekst} autoFocus

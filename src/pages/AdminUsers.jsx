@@ -150,7 +150,7 @@ export default function AdminUsers() {
     }
   }
 
-  const ansatte = state.ansatte || [];
+  const ansatte = [...(state.ansatte || [])].sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 16px' }}>

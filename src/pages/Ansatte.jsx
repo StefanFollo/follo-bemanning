@@ -91,7 +91,8 @@ export default function Ansatte() {
 
   let fastCount = 0, innleieCount = 0;
   const alleIGruppe = [];
-  for (const a of state.ansatte) {
+  const sortedAnsatte = [...state.ansatte].sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  for (const a of sortedAnsatte) {
     if (a.innleie) { innleieCount++; if (gruppe === 'innleie') alleIGruppe.push(a); }
     else           { fastCount++;    if (gruppe === 'fast')    alleIGruppe.push(a); }
   }

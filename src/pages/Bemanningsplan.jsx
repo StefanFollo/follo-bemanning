@@ -1737,7 +1737,7 @@ export default function Bemanningsplan({ readOnly = false }) {
           <div className="form">
             <label>Ansatt *</label>
             <select value={tilForm.ansattId} onChange={e => setTilForm(f => ({ ...f, ansattId: e.target.value }))}>
-              {state.ansatte.map(a => (
+              {[...state.ansatte].sort((a, b) => a.navn.localeCompare(b.navn, 'nb')).map(a => (
                 <option key={a.id} value={a.id}>
                   {a.innleie ? '🔧 ' : ''}{a.navn} ({a.fag})
                 </option>
@@ -1747,7 +1747,7 @@ export default function Bemanningsplan({ readOnly = false }) {
             <label>{tilForm.prosjektId === FERIE_ID ? 'Type' : 'Prosjekt *'}</label>
             <select value={tilForm.prosjektId} onChange={e => setTilForm(f => ({ ...f, prosjektId: e.target.value }))}>
               <option value={FERIE_ID}>🏖 Ferie / Fri</option>
-              {state.prosjekter.map(p => <option key={p.id} value={p.id}>{p.navn}</option>)}
+              {[...state.prosjekter].sort((a, b) => a.navn.localeCompare(b.navn, 'nb')).map(p => <option key={p.id} value={p.id}>{p.navn}</option>)}
             </select>
 
             <div className="form-row">
