@@ -685,7 +685,7 @@ export default function Bemanningsplan({ readOnly = false }) {
           {prosjekter.map(prosjekt => {
             const color = prosjektColor(prosjekt.id);
             const ids = [...new Set(state.tildelinger.filter(t => t.prosjektId === prosjekt.id && overlaps(t.startDato, t.sluttDato, periodeS, periodeE)).map(t => t.ansattId))];
-            const ansatte = ids.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean)
+            const ansatte = ids.map(id => planAnsatte.find(a => a.id === id)).filter(Boolean)
               .filter(a => !fagFilter || a.fag === fagFilter);
             if (ansatte.length === 0) return null;
             return (
@@ -740,7 +740,7 @@ export default function Bemanningsplan({ readOnly = false }) {
     const kapLedig   = kapTotal - kapOpptatt - kapFerie;
     const kapPst     = kapTotal > 0 ? Math.round((kapOpptatt / kapTotal) * 100) : 0;
 
-    const fagOptions = state.fag.filter(f => state.ansatte.some(a => a.fag === f));
+    const fagOptions = state.fag.filter(f => planAnsatte.some(a => a.fag === f));
 
     return (
       <div>
@@ -896,11 +896,12 @@ export default function Bemanningsplan({ readOnly = false }) {
     const todayIdx = allDays.indexOf(today);
 
     // Build ordered employee list (custom order or alphabetical fallback)
+    // Uses planAnsatte so utenforBemanningsplan employees are excluded
     const orderedAnsatte = (() => {
-      const alpha = [...state.ansatte].sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+      const alpha = [...planAnsatte].sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
       if (!ansatteOrder || ansatteOrder.length === 0) return alpha;
       const inOrder = new Set(ansatteOrder);
-      const ordered = ansatteOrder.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
+      const ordered = ansatteOrder.map(id => planAnsatte.find(a => a.id === id)).filter(Boolean);
       const rest = alpha.filter(a => !inOrder.has(a.id));
       return [...ordered, ...rest];
     })();
@@ -917,7 +918,7 @@ export default function Bemanningsplan({ readOnly = false }) {
       localStorage.setItem('fbs_ansatte_order', JSON.stringify(newOrder));
     }
 
-    const ovFagOptions = state.fag.filter(f => state.ansatte.some(a => a.fag === f));
+    const ovFagOptions = state.fag.filter(f => planAnsatte.some(a => a.fag === f));
     const filteredAnsatte = fagFilter ? orderedAnsatte.filter(a => a.fag === fagFilter) : orderedAnsatte;
 
     return (
