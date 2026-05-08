@@ -895,15 +895,23 @@ export default function Bemanningsplan({ readOnly = false }) {
     const DAY_NAMES = ['Ma', 'Ti', 'On', 'To', 'Fr'];
     const todayIdx = allDays.indexOf(today);
 
-    // Build ordered employee list (custom order or alphabetical fallback)
-    // Uses planAnsatte so utenforBemanningsplan employees are excluded
+    // Fast ansatte (A–Å) alltid før innleie (A–Å).
+    // Innenfor hver gruppe respekteres evt. drag-rekkefølge; nye ansatte
+    // som ikke er i den lagrede rekkefølgen havner alphabetisk i sin gruppe.
     const orderedAnsatte = (() => {
-      const alpha = [...planAnsatte].sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
-      if (!ansatteOrder || ansatteOrder.length === 0) return alpha;
+      const fast    = [...planAnsatte].filter(a => !a.innleie).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+      const innleie = [...planAnsatte].filter(a =>  a.innleie).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+      if (!ansatteOrder || ansatteOrder.length === 0) return [...fast, ...innleie];
       const inOrder = new Set(ansatteOrder);
-      const ordered = ansatteOrder.map(id => planAnsatte.find(a => a.id === id)).filter(Boolean);
-      const rest = alpha.filter(a => !inOrder.has(a.id));
-      return [...ordered, ...rest];
+      const ordFast = [
+        ...ansatteOrder.map(id => fast.find(a => a.id === id)).filter(Boolean),
+        ...fast.filter(a => !inOrder.has(a.id)),
+      ];
+      const ordInnleie = [
+        ...ansatteOrder.map(id => innleie.find(a => a.id === id)).filter(Boolean),
+        ...innleie.filter(a => !inOrder.has(a.id)),
+      ];
+      return [...ordFast, ...ordInnleie];
     })();
 
     // Drag-and-drop helpers (manipulate DOM directly — no state re-renders during drag)
