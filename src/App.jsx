@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { AppProvider } from './context/AppContext';
+import { useApp } from './context/AppContext';
+import { saveToCloud } from './store';
 import Prosjekter from './pages/Prosjekter';
 import Ansatte from './pages/Ansatte';
 import Bemanningsplan from './pages/Bemanningsplan';
@@ -54,6 +56,43 @@ function clearResetToken() {
   const url = new URL(window.location.href);
   url.searchParams.delete('reset');
   window.history.replaceState({}, '', url.pathname + (url.search !== '?' ? url.search : ''));
+}
+
+function SaveButton() {
+  const { state } = useApp();
+  const [status, setStatus] = useState('idle'); // 'idle' | 'saving' | 'ok' | 'error'
+
+  async function handleSave() {
+    if (status === 'saving') return;
+    setStatus('saving');
+    const result = await saveToCloud(state);
+    setStatus(result === 'error' ? 'error' : 'ok');
+    setTimeout(() => setStatus('idle'), 2500);
+  }
+
+  const label = status === 'saving' ? '⏳ Lagrer...'
+              : status === 'ok'     ? '✅ Lagret!'
+              : status === 'error'  ? '❌ Feil'
+              :                       '💾 Lagre nå';
+
+  return (
+    <button
+      className="nav-btn"
+      style={{
+        background: status === 'ok' ? '#16a34a' : status === 'error' ? '#dc2626' : '#2563eb',
+        color: '#fff',
+        borderColor: 'transparent',
+        fontWeight: 600,
+        transition: 'background .3s',
+        opacity: status === 'saving' ? 0.7 : 1,
+      }}
+      onClick={handleSave}
+      disabled={status === 'saving'}
+      title="Lagre og sikkerhetskopier alle data til skyen nå"
+    >
+      {label}
+    </button>
+  );
 }
 
 function App() {
@@ -143,6 +182,7 @@ function App() {
                 {isAdmin ? 'Admin' : isKontor ? 'Kontor' : isRorlegger ? 'Rørlegger' : 'Ansatt'}
               </span>
             </div>
+            {(isAdmin || isKontor) && <SaveButton />}
             <button className="nav-btn logout-btn" onClick={handleLogout} title="Logg ut">
               🚪 Logg ut
             </button>
