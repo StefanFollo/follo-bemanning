@@ -68,7 +68,7 @@ export default function Bemanningsplan({ readOnly = false }) {
   const [ferieYearOffset, setFerieYearOffset] = useState(0);
   const [ganttPageOffset, setGanttPageOffset] = useState(0);
   const [ansatteOrder, setAnsatteOrder] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('fbs_ansatte_order') || '[]'); } catch { return []; }
+    try { return JSON.parse(localStorage.getItem('fbs_ansatte_order_v2') || '[]'); } catch { return []; }
   });
   const oversiktDragId = useRef(null);
   const [currentWeek, setCurrentWeek] = useState(() => weekStart(dateToIso(new Date())));
@@ -923,7 +923,7 @@ export default function Bemanningsplan({ readOnly = false }) {
 
     function saveOrder(newOrder) {
       setAnsatteOrder(newOrder);
-      localStorage.setItem('fbs_ansatte_order', JSON.stringify(newOrder));
+      localStorage.setItem('fbs_ansatte_order_v2', JSON.stringify(newOrder));
     }
 
     const ovFagOptions = state.fag.filter(f => planAnsatte.some(a => a.fag === f));
