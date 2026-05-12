@@ -1,6 +1,6 @@
 import { createContext, useContext, useReducer, useEffect, useState } from 'react';
 import {
-  loadState,
+  loadState, FIELD_MAP,
   saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag, saveRorTimer, saveRorPlaner, saveBefaringer, saveReklamasjoner, saveServiceJobber,
   loadFromCloud, saveToCloud, getLocalUpdatedAt, getFieldTs, mergeWithCloud,
   uid,
@@ -11,18 +11,18 @@ const AppContext = createContext(null);
 function reducer(state, action) {
   switch (action.type) {
     // --- Last inn fra sky ---
+    // Use _effectiveFieldTs (from mergeWithCloud) to preserve original timestamps.
+    // Never call saveX() here — those set fbs_ts_* = NOW which creates phantom-newer
+    // timestamps that would cause other devices to lose their newer edits on next sync.
     case 'LOAD_STATE': {
-      const { _updatedAt, ...s } = action.payload;
-      if (s.ansatte) saveAnsatte(s.ansatte);
-      if (s.prosjekter) saveProsjekter(s.prosjekter);
-      if (s.tildelinger) saveTildelinger(s.tildelinger);
-      if (s.oppgaver) saveOppgaver(s.oppgaver);
-      if (s.fag) saveFag(s.fag);
-      if (s.rorTimer) saveRorTimer(s.rorTimer);
-      if (s.rorPlaner) saveRorPlaner(s.rorPlaner);
-      if (s.befaringer) saveBefaringer(s.befaringer);
-      if (s.reklamasjoner) saveReklamasjoner(s.reklamasjoner);
-      if (s.serviceJobber) saveServiceJobber(s.serviceJobber);
+      const { _updatedAt, _effectiveFieldTs, ...s } = action.payload;
+      for (const [field, lsKey] of Object.entries(FIELD_MAP)) {
+        if (s[field] !== undefined) {
+          localStorage.setItem(lsKey, JSON.stringify(s[field]));
+          const ts = _effectiveFieldTs?.[field];
+          if (ts) localStorage.setItem(`fbs_ts_${field}`, String(ts));
+        }
+      }
       return { ...state, ...s };
     }
 

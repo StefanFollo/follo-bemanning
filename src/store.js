@@ -258,7 +258,7 @@ function load(key, fallback) {
   }
 }
 
-const FIELD_MAP = {
+export const FIELD_MAP = {
   ansatte:      'fbs_ansatte',
   prosjekter:   'fbs_prosjekter',
   tildelinger:  'fbs_tildelinger',
@@ -297,17 +297,23 @@ export function getAllFieldTs() {
   return ts;
 }
 
-// Merge local state with cloud state field by field — never lose data
+// Merge local state with cloud state field by field — never lose data.
+// Returns merged state with _effectiveFieldTs so LOAD_STATE can persist correct timestamps.
 export function mergeWithCloud(localState, cloudState) {
   const cloudFieldTs = cloudState._fieldTs || {};
   const merged = { ...localState };
+  const effectiveFieldTs = {};
   for (const field of Object.keys(FIELD_MAP)) {
     const localTs = getFieldTs(field);
     const cloudTs = cloudFieldTs[field] || cloudState._updatedAt || 0;
     if (cloudTs > localTs && cloudState[field] !== undefined) {
       merged[field] = cloudState[field];
+      effectiveFieldTs[field] = cloudTs;
+    } else {
+      effectiveFieldTs[field] = localTs;
     }
   }
+  merged._effectiveFieldTs = effectiveFieldTs;
   return merged;
 }
 
