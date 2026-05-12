@@ -14,8 +14,11 @@ const redis = new Redis({
   token: process.env.KV_REST_API_TOKEN,
 })
 
-// Status-verdier som anses som "ledige til import"
-const LEDIGE_STATUS = ['planlagt', 'tilbud_arbeid', 'tilbud_sendt']
+// Status-verdier som anses som "ledige til import".
+// Kun 'planlagt' — befaringer som er igang med tilbudsarbeid (tilbud_arbeid /
+// tilbud_sendt) er allerede tatt hånd om i tilbuds-appen og skal ikke vises
+// som "nye" befaringer å importere.
+const LEDIGE_STATUS = ['planlagt']
 
 function sammensetDato(dato, tid) {
   if (!dato) return null
