@@ -91,6 +91,7 @@ export default function BefaringPlan() {
     }, 700);
     return () => { if (autoSaveRef.current) clearTimeout(autoSaveRef.current); };
   }, [form]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [visArkiv, setVisArkiv] = useState(false);
   const [visKapasitet, setVisKapasitet] = useState(null);
   const [visProsjektModal, setVisProsjektModal] = useState(false);
   const [prosjektForm, setProsjektForm] = useState({ navn: '', startDato: '', sluttDato: '', farge: '#6b8fc4', lagTildeling: true });
@@ -238,7 +239,9 @@ export default function BefaringPlan() {
     setVisProsjektModal(true);
   }
 
-  const teller = Object.fromEntries(Object.keys(STATUS).map(s => [s, befaringer.filter(b => b.status === s).length]));
+  const aktive = befaringer.filter(b => !b.arkivert);
+  const arkiverte = [...befaringer.filter(b => b.arkivert)].sort((a, b) => b.dato?.localeCompare(a.dato || '') || 0);
+  const teller = Object.fromEntries(Object.keys(STATUS).map(s => [s, aktive.filter(b => b.status === s).length]));
 
   function sokFilter(b) {
     if (!sok.trim()) return true;
@@ -264,25 +267,25 @@ export default function BefaringPlan() {
       : null;
   }
 
-  const planlagte = [...befaringer]
+  const planlagte = [...aktive]
     .filter(b => b.status === 'planlagt')
     .filter(sokFilter)
     .filter(statusFilter)
     .sort((a, b) => a.dato.localeCompare(b.dato));
 
-  const tilbudArbeid = [...befaringer]
+  const tilbudArbeid = [...aktive]
     .filter(b => b.status === 'tilbud_arbeid')
     .filter(sokFilter)
     .filter(statusFilter)
     .sort((a, b) => (a.tilbudFrist || '9999').localeCompare(b.tilbudFrist || '9999'));
 
-  const tilbudSendt = [...befaringer]
+  const tilbudSendt = [...aktive]
     .filter(b => b.status === 'tilbud_sendt')
     .filter(sokFilter)
     .filter(statusFilter)
     .sort((a, b) => (a.tilbudFrist || '9999').localeCompare(b.tilbudFrist || '9999'));
 
-  const godkjente = [...befaringer]
+  const godkjente = [...aktive]
     .filter(b => b.status === 'godkjent')
     .filter(sokFilter)
     .filter(statusFilter)
@@ -387,8 +390,16 @@ export default function BefaringPlan() {
         {b.status === 'godkjent' && (
           <div className="bef-k-prosjekt-rad" onClick={e => e.stopPropagation()}>
             {b.prosjektId ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <span className="bef-k-prosjekt-badge">🏗 Prosjekt opprettet</span>
+                <button
+                  className="btn btn-sm"
+                  style={{ fontSize: 11, padding: '2px 8px', color: '#0891b2', borderColor: '#7dd3fc', background: '#f0f9ff' }}
+                  onClick={() => dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, arkivert: true } })}
+                  title="Skjul fra aktiv liste – data beholdes i arkivet"
+                >
+                  📦 Arkiver
+                </button>
                 <button
                   className="btn btn-sm"
                   style={{ fontSize: 11, padding: '2px 8px', color: '#dc2626', borderColor: '#fca5a5', background: '#fff5f5' }}
@@ -507,6 +518,44 @@ export default function BefaringPlan() {
         </div>
       )}
 
+      {/* Arkiv-seksjon – vises under kanban */}
+      {arkiverte.length > 0 && (
+        <div className="bef-arkiv-seksjon">
+          <button className="bef-arkiv-toggle" onClick={() => setVisArkiv(v => !v)}>
+            📦 Arkiv <span className="bef-kolonne-teller">{arkiverte.length}</span>
+            <span style={{ marginLeft: 6, fontSize: 11 }}>{visArkiv ? '▲ Skjul' : '▼ Vis'}</span>
+          </button>
+          {visArkiv && (
+            <div className="bef-arkiv-liste">
+              {arkiverte.map(b => {
+                const belopVis = b.estimertBelop
+                  ? new Intl.NumberFormat('nb-NO', { maximumFractionDigits: 0 }).format(Number(b.estimertBelop)) + ' kr'
+                  : null;
+                const prosjekt = b.prosjektId ? state.prosjekter.find(p => p.id === b.prosjektId) : null;
+                return (
+                  <div key={b.id} className="bef-arkiv-rad" onClick={() => apneRediger(b)}>
+                    <span className="bef-arkiv-ikon">{STATUS[b.status]?.ikon || '📋'}</span>
+                    <span className="bef-arkiv-adresse">{b.adresse}</span>
+                    <span className="bef-arkiv-navn">{b.kontaktNavn}</span>
+                    {prosjekt && <span className="bef-arkiv-prosjekt">🏗 {prosjekt.navn}</span>}
+                    {belopVis && <span className="bef-arkiv-belop">💰 {belopVis}</span>}
+                    {b.dato && <span className="bef-arkiv-dato">{datoKort(b.dato)}</span>}
+                    <button
+                      className="btn btn-sm"
+                      style={{ fontSize: 11, padding: '2px 8px', marginLeft: 'auto', flexShrink: 0 }}
+                      onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, arkivert: false } }); }}
+                      title="Flytt tilbake til aktiv liste"
+                    >
+                      ↩ Gjenopprett
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Kalender-visning */}
       {viewTab === 'kalender' && (
         <div className="bef-innhold">
@@ -546,7 +595,7 @@ export default function BefaringPlan() {
           {/* Kommende liste ved siden av kalender */}
           <div className="bef-liste-seksjon">
             <h3 className="bef-liste-tittel">Kommende befaringer</h3>
-            {[...befaringer]
+            {[...aktive]
               .filter(b => b.status !== 'tapt' && b.status !== 'godkjent')
               .sort((a, b) => a.dato.localeCompare(b.dato))
               .map(b => {
