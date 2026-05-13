@@ -314,6 +314,7 @@ export function mergeWithCloud(localState, cloudState) {
     }
   }
   merged._effectiveFieldTs = effectiveFieldTs;
+  merged._updatedAt = cloudState._updatedAt; // pass through so LOAD_STATE can sync fbs_updated_at
   return merged;
 }
 

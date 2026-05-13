@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useEffect, useState } from 'react';
+import { createContext, useContext, useReducer, useEffect, useState, useRef } from 'react';
 import {
   loadState, FIELD_MAP,
   saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag, saveRorTimer, saveRorPlaner, saveBefaringer, saveReklamasjoner, saveServiceJobber,
@@ -22,6 +22,13 @@ function reducer(state, action) {
           const ts = _effectiveFieldTs?.[field];
           if (ts) localStorage.setItem(`fbs_ts_${field}`, String(ts));
         }
+      }
+      // Keep fbs_updated_at at least as high as the cloud's _updatedAt.
+      // This ensures subsequent auto-saves never send a lower _updatedAt than
+      // what's already in the cloud, which would cause other devices to miss updates.
+      if (_updatedAt) {
+        const localTs = getLocalUpdatedAt();
+        if (_updatedAt > localTs) localStorage.setItem('fbs_updated_at', String(_updatedAt));
       }
       return { ...state, ...s };
     }
@@ -232,11 +239,19 @@ function reducer(state, action) {
 export function AppProvider({ children }) {
   const [state, dispatch] = useReducer(reducer, null, loadState);
   const [cloudReady, setCloudReady] = useState(false);
+  // stateRef: always holds the latest state for use in polling closure
+  const stateRef = useRef(state);
+  // lastCloudTsRef: tracks the highest _updatedAt we've seen from the cloud,
+  // so we only trigger a reload when someone else has actually saved something new
+  const lastCloudTsRef = useRef(0);
+
+  useEffect(() => { stateRef.current = state; }, [state]);
 
   // Last inn fra sky ved oppstart – flet inn felt-for-felt basert på tidsstempel
   useEffect(() => {
     loadFromCloud().then(cloudState => {
       if (cloudState) {
+        lastCloudTsRef.current = cloudState._updatedAt || 0;
         const merged = mergeWithCloud(state, cloudState);
         dispatch({ type: 'LOAD_STATE', payload: merged });
       }
@@ -245,14 +260,18 @@ export function AppProvider({ children }) {
   }, []);
 
   // Auto-lagre til sky 1 sekund etter siste endring.
-  // Ved 409-konflikt: flet inn kun feltene sky har nyere data for
+  // Ved 409-konflikt: flet inn kun feltene sky har nyere data for.
   useEffect(() => {
     if (!cloudReady) return;
     const timer = setTimeout(async () => {
       const result = await saveToCloud(state);
-      if (result === 'conflict') {
+      if (result === 'ok') {
+        // Track what we just sent so polling doesn't re-trigger on our own save
+        lastCloudTsRef.current = Math.max(lastCloudTsRef.current, getLocalUpdatedAt());
+      } else if (result === 'conflict') {
         const cloudState = await loadFromCloud();
         if (cloudState) {
+          lastCloudTsRef.current = cloudState._updatedAt || 0;
           const merged = mergeWithCloud(state, cloudState);
           dispatch({ type: 'LOAD_STATE', payload: merged });
         }
@@ -260,6 +279,23 @@ export function AppProvider({ children }) {
     }, 1000);
     return () => clearTimeout(timer);
   }, [state, cloudReady]);
+
+  // Sanntids-polling: sjekk sky hvert 5. sekund.
+  // Hvis en annen bruker har lagret, henter vi ny data og fletter inn.
+  useEffect(() => {
+    if (!cloudReady) return;
+    const interval = setInterval(async () => {
+      const cloudState = await loadFromCloud();
+      if (!cloudState) return;
+      const cloudTs = cloudState._updatedAt || 0;
+      if (cloudTs > lastCloudTsRef.current) {
+        lastCloudTsRef.current = cloudTs;
+        const merged = mergeWithCloud(stateRef.current, cloudState);
+        dispatch({ type: 'LOAD_STATE', payload: merged });
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [cloudReady]);
 
   return (
     <AppContext.Provider value={{ state, dispatch }}>
