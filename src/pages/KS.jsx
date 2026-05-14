@@ -310,9 +310,10 @@ function TildelModal({ sl, ansatteIProsj, onLagre, onLukk }) {
 
 // ── Sjekkpunkt-rad ────────────────────────────────────────────────────────────
 
-function PunktRad({ punkt, idx, kanSkrive, onChange, onSigner, onAiHjelp }) {
+function PunktRad({ punkt, idx, kanSkrive, onChange, onSigner, onAiHjelp, onLastOppBilde, opplaster }) {
   const [utvidet, setUtvidet] = useState(false)
-  const [visRegelverk, setVisRegelverk] = useState(false)
+  const filRef = useRef()
+  const harDetaljer = punkt.beskrivelse || punkt.regelverkLenker?.length > 0 || punkt.krever_bilde || punkt.krever_signering
   const cfg = PUNKT_STATUS_CFG[punkt.status] || PUNKT_STATUS_CFG['ikke-utfort']
   const erSignert = !!punkt.signert_av
   const brukernavn = BRUKER()
@@ -334,19 +335,14 @@ function PunktRad({ punkt, idx, kanSkrive, onChange, onSigner, onAiHjelp }) {
           {punkt.veiledning_kort && (
             <div className="ks-punkt-hint">
               📖 {punkt.veiledning_kort}
-              {(punkt.beskrivelse || punkt.regelverkLenker?.length > 0) && (
-                <button className="ks-lenke" onClick={() => setVisRegelverk(v => !v)}>
-                  {visRegelverk ? ' Skjul ↑' : ' Vis krav ↓'}
-                </button>
-              )}
             </div>
           )}
-          {visRegelverk && (
-            <div className="ks-punkt-regelverk">
-              {punkt.beskrivelse && <p style={{ margin: '0 0 8px', fontSize: 13, lineHeight: 1.5 }}>{punkt.beskrivelse}</p>}
-              {punkt.regelverkLenker?.map((l, i) => (
-                <a key={i} href={l.url} target="_blank" rel="noopener noreferrer" className="ks-ref-lenke">📄 {l.tekst}</a>
-              ))}
+          {harDetaljer && !utvidet && (
+            <div style={{ fontSize: 11, color: '#3b82f6', marginTop: 2, cursor: 'pointer' }} onClick={() => setUtvidet(true)}>
+              {punkt.krever_bilde && '📷 '}
+              {punkt.krever_signering && '✍️ '}
+              {(punkt.beskrivelse || punkt.regelverkLenker?.length > 0) && '📖 '}
+              <span style={{ textDecoration: 'underline' }}>Vis detaljer ↓</span>
             </div>
           )}
           {punkt.status !== 'ikke-utfort' && (
@@ -384,20 +380,93 @@ function PunktRad({ punkt, idx, kanSkrive, onChange, onSigner, onAiHjelp }) {
 
       {utvidet && kanSkrive && (
         <div className="ks-punkt-utvid">
-          <label style={{ fontSize: 12, fontWeight: 600, color: '#64748b', display: 'block', marginBottom: 4 }}>Kommentar{punkt.status === 'avvik' ? ' (krevd ved avvik)' : ''}</label>
-          <textarea className="input" rows={2} value={punkt.kommentar || ''}
-            onChange={e => onChange({ ...punkt, kommentar: e.target.value })}
-            placeholder={punkt.status === 'avvik' ? 'Beskriv avviket...' : 'Legg til kommentar...'} />
-          {punkt.krever_signering && !erSignert && (
-            <button className="btn" style={{ marginTop: 8, fontSize: 12, background: '#1e293b', color: '#fff' }} onClick={() => onSigner(punkt)}>
-              ✍️ Signer dette punktet
-            </button>
-          )}
-          {erSignert && (
-            <div style={{ fontSize: 12, color: '#16a34a', marginTop: 8 }}>
-              ✅ Signert av {punkt.signert_av} · {new Date(punkt.signert_dato).toLocaleDateString('nb-NO')}
+          {/* Beskrivelse + regelverk */}
+          {(punkt.beskrivelse || punkt.regelverkLenker?.length > 0) && (
+            <div style={{ marginBottom: 14, background: '#f8fafc', borderRadius: 8, padding: '10px 12px' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>📖 Beskrivelse</div>
+              {punkt.beskrivelse && <p style={{ margin: '0 0 8px', fontSize: 13, lineHeight: 1.65, color: '#374151' }}>{punkt.beskrivelse}</p>}
+              {punkt.regelverkLenker?.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {punkt.regelverkLenker.map((l, i) => (
+                    <a key={i} href={l.url} target="_blank" rel="noopener noreferrer" className="ks-ref-lenke">📄 {l.tekst}</a>
+                  ))}
+                </div>
+              )}
             </div>
           )}
+
+          {/* Bilder */}
+          {punkt.krever_bilde && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                📷 Bilder {punkt.bilder?.length > 0 ? `(${punkt.bilder.length})` : <span style={{ color: '#dc2626' }}>(krever min. 1)</span>}
+              </div>
+              {(punkt.bilder || []).length > 0 && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                  {punkt.bilder.map((b, i) => (
+                    <div key={i} style={{ position: 'relative' }}>
+                      <img src={b.url} alt={`Bilde ${i+1}`} style={{ width: 72, height: 72, objectFit: 'cover', borderRadius: 6, border: '1px solid #e2e8f0', cursor: 'pointer' }}
+                        onClick={() => window.open(b.url, '_blank')} />
+                      {b.gps && <div style={{ position: 'absolute', bottom: 2, right: 2, fontSize: 9, background: 'rgba(0,0,0,.6)', color: '#fff', borderRadius: 3, padding: '1px 3px' }}>GPS</div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn" style={{ fontSize: 12 }}
+                  onClick={() => { filRef.current.removeAttribute('capture'); filRef.current.click() }}
+                  disabled={opplaster === punkt.id}>
+                  {opplaster === punkt.id ? '⏳ Laster...' : '📁 Last opp'}
+                </button>
+                <button className="btn" style={{ fontSize: 12 }}
+                  onClick={() => { filRef.current.setAttribute('capture', 'environment'); filRef.current.click() }}
+                  disabled={opplaster === punkt.id}>
+                  📷 Ta bilde
+                </button>
+                <input ref={filRef} type="file" accept="image/*" style={{ display: 'none' }}
+                  onChange={e => { if (e.target.files[0]) onLastOppBilde(punkt.id, e.target.files[0]); e.target.value = '' }} />
+              </div>
+            </div>
+          )}
+
+          {/* Bilder (valgfri opplastning selv om ikke krevd) */}
+          {!punkt.krever_bilde && (punkt.bilder || []).length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>📷 Bilder ({punkt.bilder.length})</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {punkt.bilder.map((b, i) => (
+                  <img key={i} src={b.url} alt={`Bilde ${i+1}`} style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 6, border: '1px solid #e2e8f0', cursor: 'pointer' }}
+                    onClick={() => window.open(b.url, '_blank')} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Signering */}
+          {punkt.krever_signering && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>✍️ Signering</div>
+              {erSignert ? (
+                <div style={{ fontSize: 12, color: '#16a34a', background: '#f0fdf4', borderRadius: 6, padding: '6px 10px' }}>
+                  ✅ Signert av {punkt.signert_av} · {new Date(punkt.signert_dato).toLocaleDateString('nb-NO')}
+                </div>
+              ) : (
+                <button className="btn" style={{ fontSize: 12, background: '#1e293b', color: '#fff' }} onClick={() => onSigner(punkt)}>
+                  ✍️ Signer som {brukernavn} — {new Date().toLocaleDateString('nb-NO')}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Kommentar */}
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#475569', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+              💬 Kommentar{punkt.status === 'avvik' ? ' (krevd ved avvik)' : ''}
+            </label>
+            <textarea className="input" rows={2} value={punkt.kommentar || ''}
+              onChange={e => onChange({ ...punkt, kommentar: e.target.value })}
+              placeholder={punkt.status === 'avvik' ? 'Beskriv avviket...' : 'Legg til kommentar...'} />
+          </div>
         </div>
       )}
     </div>
@@ -547,13 +616,55 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
       {fane === 'detaljer' && (
         <div className="ks-fane-innhold">
           <div className="ks-detalj-felt"><span className="ks-felt-label">Mal</span><span>{sl.navn} (v{sl.malVersjon || 1})</span></div>
-          <div className="ks-detalj-felt"><span className="ks-felt-label">Gruppe</span><span>{sl.gruppe || '–'}</span></div>
-          <div className="ks-detalj-felt"><span className="ks-felt-label">Kategori</span><span>{sl.kategori}</span></div>
-          <div className="ks-detalj-felt"><span className="ks-felt-label">Ansvarlig</span><span>{sl.ansvarlig?.join(', ') || '–'}</span></div>
-          <div className="ks-detalj-felt"><span className="ks-felt-label">Frist</span><span>{sl.frist ? new Date(sl.frist).toLocaleDateString('nb-NO') : '–'}</span></div>
+          <div className="ks-detalj-felt">
+            <span className="ks-felt-label">Gruppe</span>
+            <span>{sl.gruppe
+              ? sl.gruppe
+              : <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Ingen — gruppen settes automatisk fra mal-kategori</span>}
+            </span>
+          </div>
+          {sl.kategori && <div className="ks-detalj-felt"><span className="ks-felt-label">Kategori</span><span style={{ textTransform: 'capitalize' }}>{sl.kategori}</span></div>}
+          <div className="ks-detalj-felt">
+            <span className="ks-felt-label">Ansvarlig</span>
+            <span>{sl.ansvarlig?.length > 0
+              ? sl.ansvarlig.join(', ')
+              : <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Ingen — tildel via «👥 Tildel»-knappen øverst</span>}
+            </span>
+          </div>
+          <div className="ks-detalj-felt">
+            <span className="ks-felt-label">Frist</span>
+            <span>{sl.frist
+              ? <span style={{ color: new Date(sl.frist) < new Date() ? '#dc2626' : '#1e293b' }}>{new Date(sl.frist).toLocaleDateString('nb-NO')}{new Date(sl.frist) < new Date() ? ' ⚠️ Forfalt' : ''}</span>
+              : <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>Ingen frist — sett via «👥 Tildel»</span>}
+            </span>
+          </div>
           <div className="ks-detalj-felt"><span className="ks-felt-label">Opprettet</span><span>{new Date(sl.opprettet).toLocaleDateString('nb-NO')}</span></div>
           {sl.tildelt_av && <div className="ks-detalj-felt"><span className="ks-felt-label">Tildelt av</span><span>{sl.tildelt_av} · {new Date(sl.tildelt_dato).toLocaleDateString('nb-NO')}</span></div>}
           {sl.ferdigstilt && <div className="ks-detalj-felt"><span className="ks-felt-label">Ferdigstilt</span><span>{new Date(sl.ferdigstilt).toLocaleDateString('nb-NO')}</span></div>}
+
+          {/* Beskrivelse fra mal */}
+          {sl.beskrivelse && (
+            <div style={{ marginTop: 16, padding: '12px 14px', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>📖 Beskrivelse</div>
+              <p style={{ margin: 0, fontSize: 13, lineHeight: 1.65, color: '#374151' }}>{sl.beskrivelse}</p>
+            </div>
+          )}
+
+          {/* Referanser / regelverk */}
+          {(() => {
+            const alleRefs = (sl.punkter || []).flatMap(p => p.regelverkLenker || [])
+            const unikeRefs = [...new Map(alleRefs.map(r => [r.tekst, r])).values()]
+            return unikeRefs.length > 0 ? (
+              <div style={{ marginTop: 12, padding: '12px 14px', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>📄 Regelverk ({unikeRefs.length})</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {unikeRefs.map((r, i) => (
+                    <a key={i} href={r.url} target="_blank" rel="noopener noreferrer" className="ks-ref-lenke">{r.tekst}</a>
+                  ))}
+                </div>
+              </div>
+            ) : null
+          })()}
         </div>
       )}
 
@@ -564,6 +675,8 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
               onChange={oppdaterPunkt}
               onSigner={p => setSignerPunkt(p)}
               onAiHjelp={p => { setAiPunkt(p); setAiModus('hjelp') }}
+              onLastOppBilde={lastOppBilde}
+              opplaster={opplaster}
             />
           ))}
           {/* Bilde-opplastning for aktivt punkt */}
@@ -660,10 +773,15 @@ function ProsjektVisning({ prosjekt, sjekklister, maler, ansatte, alleProsjekter
   // Obligatoriske maler som mangler
   const obligManger = maler.filter(m => m.obligatorisk && !mine.some(s => s.malId === m.id))
 
-  // Grupper sjekklistene
+  // Grupper sjekklistene — bruk gruppe, deretter kategori-mapping, deretter 'Annet'
+  const KAT_TIL_GRUPPE = {
+    hms: 'HMS / SHA', bad: 'Bad / Våtrom', fasade: 'Fasade', tak: 'Tak',
+    tomrer: 'Tømrer / Bygg', maler: 'Maling', ror: 'VVS / Rør', el: 'El-installasjon',
+    sluttkontroll: 'Sluttkontroll / Overlevering',
+  }
   const gruppert = {}
   for (const sl of mine) {
-    const g = sl.gruppe || 'Annet'
+    const g = sl.gruppe || KAT_TIL_GRUPPE[sl.kategori] || 'Annet'
     if (!gruppert[g]) gruppert[g] = []
     gruppert[g].push(sl)
   }
@@ -681,7 +799,7 @@ function ProsjektVisning({ prosjekt, sjekklister, maler, ansatte, alleProsjekter
 
   return (
     <div className="ks-side">
-      <div className="page-header">
+      <div className="page-header" style={{ position: 'sticky', top: 0, zIndex: 50, background: '#f8fafc', marginLeft: -16, marginRight: -16, paddingLeft: 16, paddingRight: 16, paddingTop: 10, paddingBottom: 10, borderBottom: '1px solid #e2e8f0', marginBottom: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <button className="btn" onClick={onTilbake}>← Oversikt</button>
@@ -1368,7 +1486,12 @@ function ProsjektVelger({ prosjekter, sjekklister, onVelg, valgt, autoOpen = fal
 
   const filtrert = prosjekter
     .filter(p => !sok || p.navn.toLowerCase().includes(sok.toLowerCase()) || (p.adresse || '').toLowerCase().includes(sok.toLowerCase()))
-    .sort((a, b) => a.navn.localeCompare(b.navn, 'nb'))
+    .map(p => ({ ...p, _antallSl: sjekklister.filter(s => s.prosjektId === p.id).length }))
+    .sort((a, b) => {
+      // Mest aktive (har sjekklister) først, deretter alfabetisk
+      if (b._antallSl !== a._antallSl) return b._antallSl - a._antallSl
+      return a.navn.localeCompare(b.navn, 'nb')
+    })
 
   return (
     <div ref={dropdownRef} style={{ position: 'relative' }}>
@@ -1429,6 +1552,21 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
   const [visdiag, setVisdiag] = useState(false)
   const totalFerdig = sjekklister.filter(s => s.status === 'ferdig').length
   const totalAvvik = sjekklister.filter(s => (s.punkter || []).some(p => p.status === 'avvik')).length
+  const totalPst = sjekklister.length
+    ? Math.round(sjekklister.filter(s => s.status === 'ferdig').length / sjekklister.length * 100)
+    : 0
+
+  // Nylig brukt (lagres i localStorage)
+  const [nyligBrukt, setNyligBrukt] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('ks_nylig_brukt') || '[]') } catch { return [] }
+  })
+  function velgOgHusk(p) {
+    const oppdatert = [p.id, ...nyligBrukt.filter(id => id !== p.id)].slice(0, 4)
+    setNyligBrukt(oppdatert)
+    localStorage.setItem('ks_nylig_brukt', JSON.stringify(oppdatert))
+    onVelgProsjekt(p)
+  }
+  const nyligeProsjekter = nyligBrukt.map(id => prosjekter.find(p => p.id === id)).filter(Boolean)
 
   // Diagnostikk: sjekklister som ikke matcher noen prosjekt
   const prosjektIds = new Set(prosjekter.map(p => p.id))
@@ -1446,28 +1584,56 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
         </div>
       </div>
 
+      {/* Stat-kort */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 14, padding: '16px 18px', textAlign: 'center' }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: '#1d4ed8' }}>{prosjekter.length}</div>
+          <div style={{ fontSize: 12, color: '#3b82f6', fontWeight: 600, marginTop: 2 }}>Prosjekter</div>
+        </div>
+        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 14, padding: '16px 18px', textAlign: 'center' }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: '#16a34a' }}>{totalFerdig}</div>
+          <div style={{ fontSize: 12, color: '#22c55e', fontWeight: 600, marginTop: 2 }}>Ferdig</div>
+        </div>
+        <div style={{ background: totalAvvik > 0 ? '#fff7ed' : '#f8fafc', border: `1px solid ${totalAvvik > 0 ? '#fed7aa' : '#e2e8f0'}`, borderRadius: 14, padding: '16px 18px', textAlign: 'center', cursor: totalAvvik > 0 ? 'pointer' : 'default' }} onClick={totalAvvik > 0 ? onVisAvvik : undefined}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: totalAvvik > 0 ? '#ea580c' : '#94a3b8' }}>{totalAvvik}</div>
+          <div style={{ fontSize: 12, color: totalAvvik > 0 ? '#ea580c' : '#94a3b8', fontWeight: 600, marginTop: 2 }}>Avvik {totalAvvik > 0 ? '↗' : ''}</div>
+        </div>
+      </div>
+
       {/* Prosjektvelger */}
-      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '20px 20px 22px', marginBottom: 16, boxShadow: '0 1px 4px rgba(0,0,0,.04)' }}>
-        <div style={{ fontWeight: 700, fontSize: 13, color: '#475569', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.04em' }}>📁 Velg prosjekt</div>
-        <ProsjektVelger prosjekter={prosjekter} sjekklister={sjekklister} onVelg={onVelgProsjekt} valgt={null} />
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '18px 20px 20px', marginBottom: 16, boxShadow: '0 1px 4px rgba(0,0,0,.04)' }}>
+        <div style={{ fontWeight: 700, fontSize: 13, color: '#475569', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.04em' }}>📁 Velg prosjekt for å jobbe</div>
+        <ProsjektVelger prosjekter={prosjekter} sjekklister={sjekklister} onVelg={velgOgHusk} valgt={null} />
+        {nyligeProsjekter.length > 0 && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.04em' }}>🕐 Nylig brukt</div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {nyligeProsjekter.map(p => {
+                const mine = sjekklister.filter(s => s.prosjektId === p.id)
+                const pst = mine.length ? Math.round(mine.reduce((sum, s) => sum + prosent(s.punkter), 0) / mine.length) : 0
+                return (
+                  <button key={p.id} onClick={() => velgOgHusk(p)}
+                    style={{ fontSize: 12, padding: '5px 12px', border: '1px solid #e2e8f0', borderRadius: 8, background: '#f8fafc', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontWeight: 600 }}>{p.navn.length > 24 ? p.navn.slice(0, 22) + '…' : p.navn}</span>
+                    {mine.length > 0 && <span style={{ color: pst === 100 ? '#16a34a' : '#64748b', fontWeight: 700 }}>{pst}%</span>}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Knapper */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-        <button className="btn" onClick={onVisBibliotek}>📚 Mal-bibliotek ({maler.length})</button>
-        <button className="btn" onClick={onVisAvvik}>⚠️ Avvik-register</button>
-      </div>
-
-      {/* Sammendrag */}
-      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '14px 18px' }}>
-        <div style={{ fontWeight: 700, fontSize: 12, color: '#64748b', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>📊 Sammendrag</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          <div style={{ fontSize: 13, color: '#1e293b' }}>• <strong>{prosjekter.length}</strong> aktive prosjekter</div>
-          <div style={{ fontSize: 13, color: '#1e293b' }}>• <strong>{sjekklister.length}</strong> sjekkliste-instanser totalt</div>
-          <div style={{ fontSize: 13, color: totalFerdig > 0 ? '#16a34a' : '#1e293b' }}>• <strong>{totalFerdig}</strong> ferdig</div>
-          {totalAvvik > 0 && <div style={{ fontSize: 13, color: '#dc2626', cursor: 'pointer' }} onClick={onVisAvvik}>• <strong>{totalAvvik}</strong> med åpne avvik ↗</div>}
-          {sjekklister.length === 0 && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>Ingen sjekklister ennå — åpne et prosjekt og klikk «+ Legg til sjekkliste».</div>}
-        </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
+        <button onClick={onVisBibliotek}
+          style={{ padding: '14px 16px', border: 'none', borderRadius: 12, background: '#1e293b', color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          📚 Mal-bibliotek <span style={{ fontSize: 12, background: 'rgba(255,255,255,.2)', borderRadius: 6, padding: '1px 7px' }}>{maler.length}</span>
+        </button>
+        <button onClick={onVisAvvik}
+          style={{ padding: '14px 16px', border: '2px solid #fee2e2', borderRadius: 12, background: '#fff', color: '#dc2626', cursor: 'pointer', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
+          ⚠️ Avvik-register {totalAvvik > 0 && <span style={{ fontSize: 12, background: '#fee2e2', borderRadius: 6, padding: '1px 7px' }}>{totalAvvik}</span>}
+        </button>
       </div>
 
       {/* Diagnostikk-banner: sjekklister koblet til ukjente prosjekter */}
