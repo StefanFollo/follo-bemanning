@@ -14,6 +14,7 @@ import Dashboard from './pages/Dashboard';
 import LoginPage from './pages/LoginPage';
 import ResetPassword from './pages/ResetPassword';
 import AdminUsers from './pages/AdminUsers';
+import KS from './pages/KS';
 import './App.css';
 
 const ADMIN_TABS = [
@@ -26,6 +27,7 @@ const ADMIN_TABS = [
   { id: 'bemanningsplan', label: 'Bemanningsplan', icon: '📅' },
   { id: 'rorlegger', label: 'Rørlegger', icon: '🔧' },
   { id: 'framdrift', label: 'Framdrift', icon: '📊' },
+  { id: 'ks', label: 'KS / HMS', icon: '✅' },
   { id: 'brukere', label: 'Brukere', icon: '👥' },
 ];
 
@@ -37,6 +39,7 @@ const KONTOR_TABS = [
   { id: 'prosjekter', label: 'Prosjekter', icon: '🏗' },
   { id: 'ansatte', label: 'Ansatte', icon: '👷' },
   { id: 'framdrift', label: 'Framdrift', icon: '📊' },
+  { id: 'ks', label: 'KS / HMS', icon: '✅' },
 ];
 
 const RORLEGGER_TABS = [
@@ -199,6 +202,7 @@ function App() {
           {activeTab === 'bemanningsplan' && (isAdmin || role === 'ansatt') && <Bemanningsplan readOnly={!isAdmin} />}
           {activeTab === 'rorlegger' && (isAdmin || isKontor || isRorlegger) && <RorleggerPlan />}
           {activeTab === 'framdrift' && (isAdmin || isKontor) && <Framdriftsplan />}
+          {activeTab === 'ks' && (isAdmin || isKontor) && <KS />}
           {activeTab === 'brukere' && isAdmin && <AdminUsers />}
         </main>
 

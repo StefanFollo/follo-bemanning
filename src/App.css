@@ -2795,3 +2795,374 @@ body {
   .dash-grid  { grid-template-columns: 1fr; }
   .dash-kolonne:first-child { border-right: none; border-bottom: 1px solid #f1f5f9; }
 }
+
+/* ============================================================
+   KS / HMS
+   ============================================================ */
+
+.ks-side {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+/* Topplinje */
+.ks-topp {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+.ks-topp h2 { margin: 0; font-size: 22px; color: #1e293b; flex: 1; }
+.ks-topp-knapp {
+  background: #2563eb; color: #fff;
+  border: none; border-radius: 8px;
+  padding: 8px 16px; font-size: 14px; font-weight: 600;
+  cursor: pointer; transition: background .15s;
+}
+.ks-topp-knapp:hover { background: #1d4ed8; }
+.ks-topp-knapp.sekundaer {
+  background: #f1f5f9; color: #334155;
+  border: 1px solid #e2e8f0;
+}
+.ks-topp-knapp.sekundaer:hover { background: #e2e8f0; }
+
+/* Stats-rad */
+.ks-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.ks-stat-kort {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  text-align: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,.04);
+}
+.ks-stat-tall { font-size: 28px; font-weight: 800; color: #1e293b; line-height: 1; }
+.ks-stat-label { font-size: 11px; color: #64748b; margin-top: 4px; }
+.ks-stat-kort.advarsel { border-color: #fbbf24; background: #fffbeb; }
+.ks-stat-kort.advarsel .ks-stat-tall { color: #b45309; }
+
+/* Tabs i KS */
+.ks-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  background: #f1f5f9;
+  border-radius: 10px;
+  padding: 4px;
+}
+.ks-tab {
+  flex: 1; padding: 8px 12px;
+  background: transparent; border: none;
+  border-radius: 8px; font-size: 13px; font-weight: 600;
+  color: #64748b; cursor: pointer; transition: all .15s;
+}
+.ks-tab.aktiv { background: #fff; color: #1e293b; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+
+/* Prosjekt-grid */
+.ks-prosjekt-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+.ks-prosjekt-kort {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 18px;
+  cursor: pointer;
+  transition: box-shadow .15s, border-color .15s;
+  box-shadow: 0 1px 4px rgba(0,0,0,.04);
+}
+.ks-prosjekt-kort:hover { box-shadow: 0 4px 16px rgba(37,99,235,.10); border-color: #bfdbfe; }
+.ks-pk-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.ks-pk-navn { font-size: 15px; font-weight: 700; color: #1e293b; }
+.ks-pk-adresse { font-size: 12px; color: #64748b; margin-top: 2px; }
+.ks-pk-badge {
+  font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 12px;
+  white-space: nowrap; flex-shrink: 0;
+  background: #f1f5f9; color: #475569;
+}
+.ks-pk-badge.ok { background: #dcfce7; color: #16a34a; }
+.ks-pk-badge.avvik { background: #fee2e2; color: #dc2626; }
+.ks-pk-badge.pagar { background: #fef9c3; color: #ca8a04; }
+
+/* Fremdriftsbar */
+.ks-pk-framgang { margin-top: 10px; }
+.ks-pk-framgang-bar {
+  height: 6px; background: #e2e8f0; border-radius: 3px; overflow: hidden;
+}
+.ks-pk-framgang-fill {
+  height: 100%; background: #22c55e; border-radius: 3px;
+  transition: width .3s ease;
+}
+.ks-pk-framgang-fill.delvis { background: #f59e0b; }
+.ks-pk-framgang-tekst { font-size: 11px; color: #64748b; margin-top: 4px; }
+
+/* Sjekkliste-grid */
+.ks-sl-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+.ks-sl-kort {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: box-shadow .15s, border-color .15s;
+}
+.ks-sl-kort:hover { box-shadow: 0 3px 12px rgba(37,99,235,.10); border-color: #bfdbfe; }
+.ks-sl-kort.obligatorisk { border-left: 4px solid #f59e0b; }
+.ks-sl-kort.obligatorisk.ok { border-left-color: #22c55e; }
+.ks-sl-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.ks-sl-navn { font-size: 14px; font-weight: 700; color: #1e293b; }
+.ks-sl-kategori { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+.ks-sl-status {
+  font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px;
+  white-space: nowrap; flex-shrink: 0;
+}
+.ks-sl-status.ferdig { background: #dcfce7; color: #16a34a; }
+.ks-sl-status.pagar { background: #fef9c3; color: #ca8a04; }
+.ks-sl-status.ikke-startet { background: #f1f5f9; color: #64748b; }
+.ks-sl-status.avvik { background: #fee2e2; color: #dc2626; }
+
+/* Sjekkliste-detalj */
+.ks-detalj {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.06);
+}
+.ks-detalj-header {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;
+}
+.ks-tilbake {
+  background: #f1f5f9; border: 1px solid #e2e8f0;
+  border-radius: 8px; padding: 7px 14px;
+  font-size: 13px; font-weight: 600; color: #475569;
+  cursor: pointer; transition: background .15s;
+}
+.ks-tilbake:hover { background: #e2e8f0; }
+.ks-detalj-tittel { font-size: 20px; font-weight: 800; color: #1e293b; flex: 1; }
+
+/* Punkter */
+.ks-seksjon { margin-bottom: 24px; }
+.ks-seksjon-tittel {
+  font-size: 13px; font-weight: 700; color: #475569; text-transform: uppercase;
+  letter-spacing: .5px; margin-bottom: 10px; padding-bottom: 6px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.ks-punkt {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 0; border-bottom: 1px solid #f8fafc;
+}
+.ks-punkt:last-child { border-bottom: none; }
+.ks-punkt-info { flex: 1; min-width: 0; }
+.ks-punkt-tekst { font-size: 14px; color: #1e293b; font-weight: 500; }
+.ks-punkt-merker { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+.ks-punkt-merke {
+  font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 6px;
+  background: #f1f5f9; color: #64748b;
+}
+.ks-punkt-merke.sign { background: #eff6ff; color: #2563eb; }
+.ks-punkt-merke.bilde { background: #f0fdf4; color: #16a34a; }
+.ks-punkt-merke.avvik-merke { background: #fee2e2; color: #dc2626; }
+
+/* Punkt-knapper */
+.ks-punkt-knapper { display: flex; gap: 4px; flex-shrink: 0; }
+.ks-punkt-btn {
+  padding: 5px 10px; border-radius: 7px; font-size: 12px; font-weight: 600;
+  border: 1.5px solid #e2e8f0; background: #fff; color: #64748b;
+  cursor: pointer; transition: all .12s;
+}
+.ks-punkt-btn:hover { background: #f1f5f9; }
+.ks-punkt-btn.aktiv-ok { background: #dcfce7; border-color: #22c55e; color: #16a34a; }
+.ks-punkt-btn.aktiv-avvik { background: #fee2e2; border-color: #dc2626; color: #dc2626; }
+.ks-punkt-btn.aktiv-na { background: #f1f5f9; border-color: #94a3b8; color: #475569; }
+.ks-punkt-btn.sign-btn { background: #eff6ff; border-color: #93c5fd; color: #2563eb; }
+.ks-punkt-btn.sign-btn.signert { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
+
+/* Kommentarfelt */
+.ks-punkt-kommentar {
+  margin-top: 8px;
+  width: 100%; padding: 7px 10px;
+  border: 1.5px solid #e2e8f0; border-radius: 8px;
+  font-size: 13px; color: #1e293b; resize: vertical;
+  min-height: 56px;
+  font-family: inherit;
+}
+.ks-punkt-kommentar:focus { outline: none; border-color: #93c5fd; }
+
+/* Ansvarlig + dato */
+.ks-felt { display: flex; flex-direction: column; gap: 4px; margin-top: 12px; }
+.ks-felt-label { font-size: 11px; font-weight: 700; color: #64748b; }
+.ks-felt-input {
+  padding: 7px 10px; border: 1.5px solid #e2e8f0; border-radius: 8px;
+  font-size: 13px; color: #1e293b; font-family: inherit;
+}
+.ks-felt-input:focus { outline: none; border-color: #93c5fd; }
+
+/* Modal */
+.ks-modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000; padding: 16px;
+}
+.ks-modal {
+  background: #fff; border-radius: 16px;
+  padding: 28px; width: 100%; max-width: 440px;
+  box-shadow: 0 8px 40px rgba(0,0,0,.18);
+}
+.ks-modal h3 { margin: 0 0 16px; font-size: 18px; color: #1e293b; }
+.ks-modal-felt { display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px; }
+.ks-modal-label { font-size: 12px; font-weight: 700; color: #475569; margin-bottom: 4px; }
+.ks-modal-input {
+  padding: 9px 12px; border: 1.5px solid #e2e8f0; border-radius: 9px;
+  font-size: 14px; color: #1e293b; font-family: inherit; width: 100%;
+}
+.ks-modal-input:focus { outline: none; border-color: #93c5fd; }
+.ks-modal-knapper { display: flex; gap: 10px; justify-content: flex-end; }
+.ks-modal-avbryt {
+  padding: 9px 18px; border-radius: 9px; font-size: 14px; font-weight: 600;
+  background: #f1f5f9; border: 1px solid #e2e8f0; color: #475569; cursor: pointer;
+}
+.ks-modal-avbryt:hover { background: #e2e8f0; }
+.ks-modal-bekreft {
+  padding: 9px 18px; border-radius: 9px; font-size: 14px; font-weight: 600;
+  background: #2563eb; border: none; color: #fff; cursor: pointer;
+}
+.ks-modal-bekreft:hover { background: #1d4ed8; }
+
+/* Bibliotek-grid */
+.ks-bib-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+.ks-bib-kort {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px;
+}
+.ks-bib-navn { font-size: 14px; font-weight: 700; color: #1e293b; margin-bottom: 4px; }
+.ks-bib-meta { font-size: 11px; color: #94a3b8; }
+.ks-bib-fag { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 6px; }
+.ks-bib-fag-pill {
+  font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 8px;
+  background: #eff6ff; color: #2563eb;
+}
+.ks-bib-oblig { border-left: 3px solid #f59e0b; }
+
+/* Tom-tilstand */
+.ks-tom {
+  text-align: center; padding: 60px 20px; color: #94a3b8;
+}
+.ks-tom-ikon { font-size: 48px; margin-bottom: 12px; }
+.ks-tom-tekst { font-size: 15px; font-weight: 600; color: #64748b; }
+.ks-tom-sub { font-size: 13px; margin-top: 6px; }
+
+/* Advarsel-boks */
+.ks-advarsel {
+  background: #fffbeb; border: 1px solid #fbbf24; border-radius: 10px;
+  padding: 12px 16px; font-size: 13px; color: #92400e; margin-bottom: 16px;
+}
+
+/* Signert-info */
+.ks-signert-info { font-size: 11px; color: #16a34a; font-style: italic; margin-top: 3px; }
+
+/* Filter-rad */
+.ks-filter { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+.ks-filter-btn {
+  padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+  border: 1.5px solid #e2e8f0; background: #fff; color: #64748b; cursor: pointer;
+}
+.ks-filter-btn.aktiv { background: #2563eb; border-color: #2563eb; color: #fff; }
+
+/* Seksjon-separator i prosjektvisning */
+.ks-prosjekt-seksjon { margin-bottom: 28px; }
+.ks-prosjekt-seksjon-tittel {
+  font-size: 14px; font-weight: 700; color: #475569; margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* Lagre-knapp i detalj */
+.ks-lagre-rad {
+  display: flex; gap: 10px; align-items: center; margin-top: 24px; padding-top: 16px;
+  border-top: 1px solid #f1f5f9;
+}
+.ks-lagre-status { font-size: 13px; color: #64748b; }
+
+/* ProsjektKort internals */
+.ks-pk-farge {
+  height: 4px; border-radius: 4px 4px 0 0; margin: -18px -18px 12px;
+}
+.ks-pk-innhold { flex: 1; }
+.ks-pk-meta { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 8px; }
+.ks-pk-chip {
+  font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px;
+  background: #f1f5f9; color: #475569;
+}
+.ks-pk-bar-wrap { height: 5px; background: #e2e8f0; border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
+.ks-pk-bar { height: 100%; border-radius: 3px; transition: width .3s; }
+.ks-pk-pst { font-size: 11px; color: #64748b; }
+
+/* SjekklisteKort internals */
+.ks-sl-topp { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.ks-sl-meta { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
+.ks-sl-chip {
+  font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 8px;
+  background: #f1f5f9; color: #64748b;
+}
+.ks-sl-avvik { font-size: 12px; color: #dc2626; background: #fee2e2; border-radius: 6px; padding: 3px 8px; margin-bottom: 6px; }
+.ks-sl-bar-wrap { height: 4px; background: #e2e8f0; border-radius: 2px; overflow: hidden; margin-bottom: 4px; }
+.ks-sl-bar { height: 100%; border-radius: 2px; transition: width .3s; }
+.ks-sl-pst { font-size: 11px; color: #94a3b8; }
+
+/* Sjekkliste-detalj internals */
+.ks-ansvarlig-rad {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0; margin-bottom: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+.ks-punkter { display: flex; flex-direction: column; }
+.ks-punkt { padding: 12px 0; border-bottom: 1px solid #f8fafc; }
+.ks-punkt:last-child { border-bottom: none; }
+.ks-punkt--ok { background: #f0fdf4; border-radius: 8px; padding: 10px 12px; }
+.ks-punkt--avvik { background: #fef2f2; border-radius: 8px; padding: 10px 12px; }
+.ks-punkt-topp { display: flex; align-items: flex-start; gap: 10px; }
+.ks-punkt-nr {
+  font-size: 12px; font-weight: 800; width: 22px; flex-shrink: 0;
+  text-align: center; padding-top: 2px;
+}
+.ks-punkt-tekst { flex: 1; min-width: 0; font-size: 14px; color: #1e293b; }
+.ks-punkt-knapper { display: flex; gap: 4px; flex-wrap: wrap; flex-shrink: 0; }
+.ks-punkt-btn {
+  padding: 5px 10px; border-radius: 7px; font-size: 12px; font-weight: 600;
+  border: 1.5px solid #e2e8f0; background: #fff; color: #64748b;
+  cursor: pointer; transition: all .12s; white-space: nowrap;
+}
+.ks-punkt-btn:hover { background: #f1f5f9; }
+.ks-punkt-kritisk {
+  font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 6px;
+  background: #fef3c7; color: #92400e; margin-left: 6px;
+  vertical-align: middle;
+}
+.ks-punkt-utvidet {
+  padding: 10px 0 4px 32px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+
+@media (max-width: 768px) {
+  .ks-stats { grid-template-columns: repeat(2, 1fr); }
+  .ks-tabs { flex-wrap: wrap; }
+  .ks-punkt-topp { flex-direction: column; }
+  .ks-punkt-knapper { flex-wrap: wrap; }
+  .ks-punkt-utvidet { padding-left: 0; }
+}
