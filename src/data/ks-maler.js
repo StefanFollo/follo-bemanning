@@ -1,28 +1,38 @@
-// 34 sjekkliste-maler for KS/HMS-systemet
-// Kategorier: hms | bad | fasade | tak | tomrer | maler | ror | el
+// 34 sjekkliste-maler — Fase 3 datamodell
+// Hierarki: gruppe → sjekkliste → sjekkpunkt
+// Grupper: HMS | Sluttkontroll | Utførelse bad | Utførelse fasade |
+//          Utførelse tak | Utførelse innvendig | Maling | Rørlegger | Elektrisk
+
+const naa = new Date().toISOString();
 
 function p(id, tekst, opts = {}) {
   return {
     id,
-    tekst,
+    tekst,                            // kort tittel (brukes i mobil-visning)
+    beskrivelse: opts.beskrivelse || '', // AI fyller ut: regelverk, krav, how-to
+    veiledning_kort: opts.veiledning || '', // én setning for mobil-hint
+    regelverkLenker: opts.lenker || [], // [{ tekst, url }]
     krever_bilde: opts.bilde || false,
     krever_signering: opts.sign || false,
     kommentar_pakrevd: opts.kommentar || false,
   };
 }
 
-const naa = new Date().toISOString();
-
 export const KS_MALER = [
-  // ─── OBLIGATORISKE ──────────────────────────────────────────────────────────
+
+  // ════════════════════════════════════════════════════════════════════
+  //  GRUPPE: HMS
+  // ════════════════════════════════════════════════════════════════════
+
   {
     id: 'mal-hms-daglig',
     navn: 'HMS daglig sjekkliste',
+    gruppe: 'HMS',
     kategori: 'hms',
     fag: [],
     obligatorisk: true,
     punkter: [
-      p('d1', 'Vernerundering gjennomført på arbeidsstedet'),
+      p('d1', 'Vernerunde gjennomført på arbeidsstedet'),
       p('d2', 'Ryddig og orden på byggeplass — gangveier fri'),
       p('d3', 'Verneutstyr (hjelm, vernesko, refleks) i bruk'),
       p('d4', 'Stillas og stillasnett kontrollert og OK'),
@@ -34,9 +44,11 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-risikovurdering-oppstart',
     navn: 'Risikovurdering oppstart',
+    gruppe: 'HMS',
     kategori: 'hms',
     fag: [],
     obligatorisk: true,
@@ -54,9 +66,11 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-sha-sja',
     navn: 'SHA-plan / Sikker jobb-analyse (SJA)',
+    gruppe: 'HMS',
     kategori: 'hms',
     fag: [],
     obligatorisk: true,
@@ -71,9 +85,15 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
+  // ════════════════════════════════════════════════════════════════════
+  //  GRUPPE: Sluttkontroll
+  // ════════════════════════════════════════════════════════════════════
+
   {
     id: 'mal-sluttkontroll',
     navn: 'Sluttkontroll prosjekt',
+    gruppe: 'Sluttkontroll',
     kategori: 'hms',
     fag: [],
     obligatorisk: true,
@@ -92,10 +112,14 @@ export const KS_MALER = [
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
 
-  // ─── BAD / VÅTROM ────────────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════
+  //  GRUPPE: Utførelse bad
+  // ════════════════════════════════════════════════════════════════════
+
   {
     id: 'mal-bad-riving',
     navn: 'Riving og forberedelse bad',
+    gruppe: 'Utførelse bad',
     kategori: 'bad',
     fag: ['tomrer'],
     obligatorisk: false,
@@ -111,9 +135,11 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-bad-membran',
     navn: 'Membran og våtrom',
+    gruppe: 'Utførelse bad',
     kategori: 'bad',
     fag: ['tomrer', 'flis'],
     obligatorisk: false,
@@ -130,9 +156,11 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-bad-flis',
     navn: 'Flislegging bad',
+    gruppe: 'Utførelse bad',
     kategori: 'bad',
     fag: ['flis'],
     obligatorisk: false,
@@ -149,9 +177,11 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-bad-ror',
     navn: 'Sanitæranlegg — rørlegger',
+    gruppe: 'Utførelse bad',
     kategori: 'bad',
     fag: ['ror'],
     obligatorisk: false,
@@ -167,9 +197,11 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-bad-el',
     navn: 'Elektrisk bad',
+    gruppe: 'Utførelse bad',
     kategori: 'bad',
     fag: ['el'],
     obligatorisk: false,
@@ -184,10 +216,14 @@ export const KS_MALER = [
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
 
-  // ─── FASADE ──────────────────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════
+  //  GRUPPE: Utførelse fasade
+  // ════════════════════════════════════════════════════════════════════
+
   {
     id: 'mal-fasade-stillas',
     navn: 'Stillas og fallsikring fasade',
+    gruppe: 'Utførelse fasade',
     kategori: 'fasade',
     fag: [],
     obligatorisk: false,
@@ -201,9 +237,11 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-fasade-riving',
     navn: 'Riving og demontering fasade',
+    gruppe: 'Utførelse fasade',
     kategori: 'fasade',
     fag: ['tomrer'],
     obligatorisk: false,
@@ -216,9 +254,11 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-fasade-underlag',
     navn: 'Underlag, vindsperre og isolasjon fasade',
+    gruppe: 'Utførelse fasade',
     kategori: 'fasade',
     fag: ['tomrer'],
     obligatorisk: false,
@@ -231,9 +271,11 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-fasade-kledning',
     navn: 'Panel og kledning fasade',
+    gruppe: 'Utførelse fasade',
     kategori: 'fasade',
     fag: ['tomrer'],
     obligatorisk: false,
@@ -247,9 +289,11 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-fasade-vinduer',
     navn: 'Vinduer og dører — montering',
+    gruppe: 'Utførelse fasade',
     kategori: 'fasade',
     fag: ['tomrer'],
     obligatorisk: false,
@@ -264,9 +308,11 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-fasade-beslag',
     navn: 'Beslag og tetting fasade',
+    gruppe: 'Utførelse fasade',
     kategori: 'fasade',
     fag: ['tomrer'],
     obligatorisk: false,
@@ -280,10 +326,14 @@ export const KS_MALER = [
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
 
-  // ─── TAK ─────────────────────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════
+  //  GRUPPE: Utførelse tak
+  // ════════════════════════════════════════════════════════════════════
+
   {
     id: 'mal-tak-stillas',
     navn: 'Stillas og fallsikring tak',
+    gruppe: 'Utførelse tak',
     kategori: 'tak',
     fag: [],
     obligatorisk: false,
@@ -295,9 +345,11 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-tak-riving',
     navn: 'Riving gammelt tak',
+    gruppe: 'Utførelse tak',
     kategori: 'tak',
     fag: ['tomrer'],
     obligatorisk: false,
@@ -310,9 +362,11 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-tak-undertak',
     navn: 'Undertak og lekting',
+    gruppe: 'Utførelse tak',
     kategori: 'tak',
     fag: ['tomrer'],
     obligatorisk: false,
@@ -325,9 +379,11 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-tak-tekking',
     navn: 'Taktekking',
+    gruppe: 'Utførelse tak',
     kategori: 'tak',
     fag: ['tomrer'],
     obligatorisk: false,
@@ -341,9 +397,11 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-tak-beslag',
     navn: 'Beslag og renner tak',
+    gruppe: 'Utførelse tak',
     kategori: 'tak',
     fag: ['tomrer'],
     obligatorisk: false,
@@ -356,10 +414,14 @@ export const KS_MALER = [
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
 
-  // ─── TØMRER INNVENDIG ────────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════
+  //  GRUPPE: Utførelse innvendig
+  // ════════════════════════════════════════════════════════════════════
+
   {
     id: 'mal-tomrer-riving',
     navn: 'Riving innvendig',
+    gruppe: 'Utførelse innvendig',
     kategori: 'tomrer',
     fag: ['tomrer'],
     obligatorisk: false,
@@ -372,9 +434,11 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-tomrer-baerende',
     navn: 'Bærekonstruksjoner og bindingsverk',
+    gruppe: 'Utførelse innvendig',
     kategori: 'tomrer',
     fag: ['tomrer'],
     obligatorisk: false,
@@ -387,9 +451,11 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-tomrer-isolasjon',
     navn: 'Isolasjon og dampsperre',
+    gruppe: 'Utførelse innvendig',
     kategori: 'tomrer',
     fag: ['tomrer'],
     obligatorisk: false,
@@ -403,14 +469,16 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-tomrer-gips',
     navn: 'Gips og innkledning',
+    gruppe: 'Utførelse innvendig',
     kategori: 'tomrer',
     fag: ['tomrer'],
     obligatorisk: false,
     punkter: [
-      p('gi1', 'Gipstype korrekt for romfunksjon (gips, vann-/brannmotstandig)'),
+      p('gi1', 'Gipstype korrekt for romfunksjon (standard, vann- eller brannmotstandig)'),
       p('gi2', 'Gipsplater montert rett og i vater'),
       p('gi3', 'Skruer i riktig c/c-avstand og i flukt'),
       p('gi4', 'Skjøter stagget mellom plater'),
@@ -419,9 +487,11 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-tomrer-gulv',
     navn: 'Gulvlegging',
+    gruppe: 'Utførelse innvendig',
     kategori: 'tomrer',
     fag: ['tomrer'],
     obligatorisk: false,
@@ -436,10 +506,14 @@ export const KS_MALER = [
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
 
-  // ─── MALING ──────────────────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════
+  //  GRUPPE: Maling
+  // ════════════════════════════════════════════════════════════════════
+
   {
     id: 'mal-maling-sparkling',
     navn: 'Sparkling og overflatebehandling',
+    gruppe: 'Maling',
     kategori: 'maler',
     fag: ['maler'],
     obligatorisk: false,
@@ -447,15 +521,17 @@ export const KS_MALER = [
       p('ms1', 'Underlag rent, tørt og fritt for fett/støv'),
       p('ms2', 'Sprekker og hull sparklet og slipt'),
       p('ms3', 'Gipsskjøter og hjørner sparklet — min. 2 lag'),
-      p('ms4', 'Skruhoder fyllt og slipt'),
+      p('ms4', 'Skruhoder fylt og slipt'),
       p('ms5', 'Overflate finslipet og kontrollert under sidelys', { bilde: true }),
       p('ms6', 'Grunnmaling påført iht. produkt-spesifikasjon'),
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-maling-innvendig',
     navn: 'Maling innvendig',
+    gruppe: 'Maling',
     kategori: 'maler',
     fag: ['maler'],
     obligatorisk: false,
@@ -466,18 +542,20 @@ export const KS_MALER = [
       p('mi4', 'Listverk og hjørner korrekt maskert og malt'),
       p('mi5', 'Rundt uttak og brytere ren avslutning'),
       p('mi6', 'Taket malt uten takskygger eller striper'),
-      p('mi7', 'Sluttbefaring maling — ingen skvetter, striper eller glippertfeil', { bilde: true }),
+      p('mi7', 'Sluttbefaring maling — ingen skvetter, striper eller glippfeil', { bilde: true }),
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-maling-utvendig',
     navn: 'Maling utvendig',
+    gruppe: 'Maling',
     kategori: 'fasade',
     fag: ['maler'],
     obligatorisk: false,
     punkter: [
-      p('mu1', 'Vær og temperatur OK for maling (5-25°C, ingen nedbør)'),
+      p('mu1', 'Vær og temperatur OK for maling (5–25°C, ingen nedbør)'),
       p('mu2', 'Underlag rent og tørt — gammelt løst maling fjernet'),
       p('mu3', 'Grunning/bunnmaling iht. produkt og trevirke-type', { kommentar: true }),
       p('mu4', 'Mellomstrøk påført og herdet'),
@@ -487,10 +565,14 @@ export const KS_MALER = [
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
 
-  // ─── RØRLEGGER ───────────────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════
+  //  GRUPPE: Rørlegger
+  // ════════════════════════════════════════════════════════════════════
+
   {
     id: 'mal-ror-vvs',
     navn: 'VVS-installasjon generell',
+    gruppe: 'Rørlegger',
     kategori: 'ror',
     fag: ['ror'],
     obligatorisk: false,
@@ -504,9 +586,11 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-ror-varme',
     navn: 'Varmtvannsbereder og varmeanlegg',
+    gruppe: 'Rørlegger',
     kategori: 'ror',
     fag: ['ror'],
     obligatorisk: false,
@@ -519,26 +603,32 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-ror-avlop',
     navn: 'Avløp og sanitær',
+    gruppe: 'Rørlegger',
     kategori: 'ror',
     fag: ['ror'],
     obligatorisk: false,
     punkter: [
       p('as1', 'Avløpsledninger montert med korrekt fall (min. 1,5 %)'),
       p('as2', 'Rensepunkter tilgjengelig på hver loddrett gren'),
-      p('as3', 'Vanllås montert på alle avløpsarmaturer'),
+      p('as3', 'Vannlås montert på alle avløpsarmaturer'),
       p('as4', 'Avløpsprøve utført — ingen lekkasjer', { sign: true }),
       p('as5', 'Tilkobling til kommunalt nett dokumentert'),
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
 
-  // ─── ELEKTRISK ───────────────────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════════════
+  //  GRUPPE: Elektrisk
+  // ════════════════════════════════════════════════════════════════════
+
   {
     id: 'mal-el-innvendig',
     navn: 'Elektrisk innvendig',
+    gruppe: 'Elektrisk',
     kategori: 'el',
     fag: ['el'],
     obligatorisk: false,
@@ -551,9 +641,11 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-el-kurs',
     navn: 'Kurssikring og jordfeil',
+    gruppe: 'Elektrisk',
     kategori: 'el',
     fag: ['el'],
     obligatorisk: false,
@@ -565,9 +657,11 @@ export const KS_MALER = [
     ],
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
+
   {
     id: 'mal-el-slutt',
     navn: 'Elektrisk sluttkontroll',
+    gruppe: 'Elektrisk',
     kategori: 'el',
     fag: ['el'],
     obligatorisk: false,
