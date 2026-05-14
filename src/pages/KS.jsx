@@ -486,7 +486,6 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
   const [aiPunkt, setAiPunkt] = useState(null)
   const [visTildel, setVisTildel] = useState(false)
   const [opplaster, setOpplaster] = useState(null)
-  const filInputRef = useRef()
   const kanSkrive = ROLLE() !== 'les'
   const kanAdmin = ROLLE() === 'admin' || ROLLE() === 'kontor'
 
@@ -679,13 +678,6 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
               opplaster={opplaster}
             />
           ))}
-          {/* Bilde-opplastning for aktivt punkt */}
-          {kanSkrive && (
-            <div style={{ marginTop: 12, paddingTop: 12, borderTop: '1px solid #f1f5f9' }}>
-              <input ref={filInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }}
-                onChange={e => { if (e.target.files[0] && opplaster) lastOppBilde(opplaster, e.target.files[0]) }} />
-            </div>
-          )}
         </div>
       )}
 
@@ -775,9 +767,9 @@ function ProsjektVisning({ prosjekt, sjekklister, maler, ansatte, alleProsjekter
 
   // Grupper sjekklistene — bruk gruppe, deretter kategori-mapping, deretter 'Annet'
   const KAT_TIL_GRUPPE = {
-    hms: 'HMS / SHA', bad: 'Bad / Våtrom', fasade: 'Fasade', tak: 'Tak',
-    tomrer: 'Tømrer / Bygg', maler: 'Maling', ror: 'VVS / Rør', el: 'El-installasjon',
-    sluttkontroll: 'Sluttkontroll / Overlevering',
+    hms: 'HMS', bad: 'Utførelse bad', fasade: 'Utførelse fasade', tak: 'Utførelse tak',
+    tomrer: 'Utførelse innvendig', maler: 'Maling', ror: 'Rørlegger', el: 'Elektrisk',
+    sluttkontroll: 'Sluttkontroll',
   }
   const gruppert = {}
   for (const sl of mine) {
@@ -1547,15 +1539,11 @@ function ProsjektVelger({ prosjekter, sjekklister, onVelg, valgt, autoOpen = fal
 
 // ── Oversiktsskjerm ───────────────────────────────────────────────────────────
 
-function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliotek, onVisAvvik, onRensTestData }) {
+function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliotek, onVisAvvik, onRensTestData, onOppdaterMaler }) {
   const [aiModal, setAiModal] = useState(false)
   const [visdiag, setVisdiag] = useState(false)
   const totalFerdig = sjekklister.filter(s => s.status === 'ferdig').length
   const totalAvvik = sjekklister.filter(s => (s.punkter || []).some(p => p.status === 'avvik')).length
-  const totalPst = sjekklister.length
-    ? Math.round(sjekklister.filter(s => s.status === 'ferdig').length / sjekklister.length * 100)
-    : 0
-
   // Nylig brukt (lagres i localStorage)
   const [nyligBrukt, setNyligBrukt] = useState(() => {
     try { return JSON.parse(localStorage.getItem('ks_nylig_brukt') || '[]') } catch { return [] }
@@ -1663,7 +1651,15 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
         </div>
       )}
 
-      {aiModal && <AiModal modus="ny" onFerdig={() => setAiModal(false)} onLukk={() => setAiModal(false)} />}
+      {aiModal && <AiModal modus="ny" onFerdig={async ({ type, mal }) => {
+        if (type === 'ny-mal' && mal && onOppdaterMaler) {
+          const id = `mal-${Date.now()}`
+          await apiFetch('/api/ks/maler', { method: 'POST', body: { ...mal, id } }).catch(() => {})
+          const friske = await apiFetch('/api/ks/maler').catch(() => null)
+          if (friske) onOppdaterMaler(friske)
+        }
+        setAiModal(false)
+      }} onLukk={() => setAiModal(false)} />}
     </div>
   )
 }
@@ -1811,6 +1807,7 @@ export default function KS() {
         onVisBibliotek={() => setView('bibliotek')}
         onVisAvvik={() => setView('avvik')}
         onRensTestData={isAdmin ? rensOrphans : undefined}
+        onOppdaterMaler={setMaler}
       />
       {/* AI-floating-button */}
       <button className="ks-fab" onClick={() => setAiFlyt(true)} title="Spør AI">✨</button>
