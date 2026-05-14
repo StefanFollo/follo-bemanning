@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, startTransition } from 'react'
 import { useApp } from '../context/AppContext'
 
 // ── Konstanter ────────────────────────────────────────────────────────────────
@@ -629,11 +629,20 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
 
 // ── Prosjekt-visning (trestruktur) ────────────────────────────────────────────
 
-function ProsjektVisning({ prosjekt, sjekklister, maler, ansatte, onOppdater, onTilbake, onAapneSl }) {
+function ProsjektVisning({ prosjekt, sjekklister, maler, ansatte, alleProsjekter, alleSjekklister, onOppdater, onTilbake, onAapneSl, onByttProsjekt }) {
   const [visLeggTil, setVisLeggTil] = useState(false)
   const [kollapset, setKollapset] = useState({})
   const [lasterSl, setLasterSl] = useState(false)
+  const [visBytt, setVisBytt] = useState(false)
+  const byttRef = useRef()
   const kanAdmin = ROLLE() === 'admin' || ROLLE() === 'kontor'
+
+  useEffect(() => {
+    if (!visBytt) return
+    function lukk(e) { if (byttRef.current && !byttRef.current.contains(e.target)) setVisBytt(false) }
+    document.addEventListener('mousedown', lukk)
+    return () => document.removeEventListener('mousedown', lukk)
+  }, [visBytt])
 
   // Mannskap på dette prosjektet fra bemanningsplanleggeren
   const ansatteIProsj = [...new Set(
@@ -673,10 +682,32 @@ function ProsjektVisning({ prosjekt, sjekklister, maler, ansatte, onOppdater, on
   return (
     <div className="ks-side">
       <div className="page-header">
-        <div>
-          <button className="btn" style={{ marginRight: 12 }} onClick={onTilbake}>← Oversikt</button>
-          <span style={{ fontSize: 20, fontWeight: 800, color: '#1e293b' }}>{prosjekt.navn}</span>
-          {prosjekt.adresse && <div style={{ fontSize: 13, color: '#64748b', marginTop: 4 }}>📍 {prosjekt.adresse}</div>}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <button className="btn" onClick={onTilbake}>← Oversikt</button>
+            <div ref={byttRef} style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 20, fontWeight: 800, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{prosjekt.navn}</span>
+                {alleProsjekter?.length > 1 && onByttProsjekt && (
+                  <button className="btn" style={{ fontSize: 11, padding: '3px 10px', flexShrink: 0 }} onClick={() => setVisBytt(v => !v)}>
+                    Bytt {visBytt ? '▲' : '▼'}
+                  </button>
+                )}
+              </div>
+              {prosjekt.adresse && <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>📍 {prosjekt.adresse}</div>}
+              {visBytt && alleProsjekter && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 300, width: 360, maxWidth: '90vw' }}>
+                  <ProsjektVelger
+                    prosjekter={alleProsjekter}
+                    sjekklister={alleSjekklister || []}
+                    onVelg={p => { setVisBytt(false); onByttProsjekt(p) }}
+                    valgt={prosjekt}
+                    autoOpen={true}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <div style={{ textAlign: 'right', fontSize: 13 }}>
@@ -774,7 +805,11 @@ function Bibliotek({ maler, onTilbake, onOppdaterMaler }) {
   const [aiModus, setAiModus] = useState(null)
   const [valgtMal, setValgtMal] = useState(null)
   const [fyller, setFyller] = useState(null)
+  const [fyllerAlle, setFyllerAlle] = useState(false)
+  const [fyllerProgress, setFyllerProgress] = useState({ gjort: 0, total: 0 })
   const kanAdmin = ROLLE() === 'admin' || ROLLE() === 'kontor'
+
+  const malerUtenBeskrivelse = maler.filter(m => !m.punkter?.some(p => p.beskrivelse))
 
   const gruppert = {}
   for (const m of maler) {
@@ -792,6 +827,26 @@ function Bibliotek({ maler, onTilbake, onOppdaterMaler }) {
       onOppdaterMaler(oppdatert)
     } catch (e) { alert('AI-feil: ' + e.message) }
     setFyller(null)
+  }
+
+  async function fyllAlleNaa() {
+    if (malerUtenBeskrivelse.length === 0) return
+    if (!window.confirm(`Fyll beskrivelser på alle ${malerUtenBeskrivelse.length} maler med AI? Dette tar ~3 min og koster ~$4.`)) return
+    setFyllerAlle(true)
+    setFyllerProgress({ gjort: 0, total: malerUtenBeskrivelse.length })
+    for (let i = 0; i < malerUtenBeskrivelse.length; i++) {
+      const mal = malerUtenBeskrivelse[i]
+      setFyllerProgress({ gjort: i, total: malerUtenBeskrivelse.length, navaerendeMal: mal.navn })
+      try {
+        await apiFetch('/api/ks/ai', { method: 'POST', body: { action: 'fyll-beskrivelser', malId: mal.id } })
+      } catch (e) {
+        console.warn(`Feil på mal ${mal.navn}:`, e.message)
+      }
+    }
+    const oppdatert = await apiFetch('/api/ks/maler')
+    onOppdaterMaler(oppdatert)
+    setFyllerAlle(false)
+    setFyllerProgress({ gjort: 0, total: 0 })
   }
 
   async function aiHandter({ type, diff, malId, mal: nyMal }) {
@@ -824,13 +879,37 @@ function Bibliotek({ maler, onTilbake, onOppdaterMaler }) {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {kanAdmin && (
-            <>
-              <button className="btn" onClick={() => { setValgtMal(null); setAiModus('ny') }}>✨ Lag ny mal</button>
-            </>
+            <button className="btn" onClick={() => { setValgtMal(null); setAiModus('ny') }}>✨ Lag ny mal</button>
           )}
           <span style={{ fontSize: 13, color: '#94a3b8', alignSelf: 'center' }}>{maler.length} maler</span>
         </div>
       </div>
+
+      {/* AI fyll-alle banner */}
+      {kanAdmin && malerUtenBeskrivelse.length > 0 && (
+        <div style={{ background: fyllerAlle ? '#eff6ff' : '#fef3c7', border: `1px solid ${fyllerAlle ? '#3b82f6' : '#f59e0b'}`, borderRadius: 12, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 13, color: fyllerAlle ? '#1d4ed8' : '#92400e' }}>
+              {fyllerAlle
+                ? `✨ Fyller ${fyllerProgress.gjort + 1} av ${fyllerProgress.total}: ${fyllerProgress.navaerendeMal || ''}...`
+                : `⚠️ ${malerUtenBeskrivelse.length} maler mangler beskrivelser`}
+            </div>
+            {!fyllerAlle && <div style={{ fontSize: 12, color: '#92400e', marginTop: 2 }}>AI fyller regelverk og veiledning på alle sjekkpunkter (~3 min, ~$4)</div>}
+            {fyllerAlle && (
+              <div style={{ marginTop: 6 }}>
+                <Fremdriftsbar pst={Math.round(fyllerProgress.gjort / fyllerProgress.total * 100)} hoyde={4} />
+                <div style={{ fontSize: 11, color: '#1d4ed8', marginTop: 2 }}>{Math.round(fyllerProgress.gjort / fyllerProgress.total * 100)}%</div>
+              </div>
+            )}
+          </div>
+          {!fyllerAlle && (
+            <button className="btn btn-primary" style={{ whiteSpace: 'nowrap' }} onClick={fyllAlleNaa}>
+              ✨ Fyll beskrivelser på alle {malerUtenBeskrivelse.length} nå
+            </button>
+          )}
+        </div>
+      )}
+
       {grupper.map(g => (
         <div key={g} style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1274,20 +1353,87 @@ ${avvik.map(a => `<tr>
   if (w) { w.document.write(html); w.document.close() }
 }
 
+// ── Prosjekt-velger (søkbar dropdown) ────────────────────────────────────────
+
+function ProsjektVelger({ prosjekter, sjekklister, onVelg, valgt, autoOpen = false }) {
+  const [aapen, setAapen] = useState(autoOpen)
+  const [sok, setSok] = useState('')
+  const dropdownRef = useRef()
+
+  useEffect(() => {
+    function lukk(e) { if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setAapen(false) }
+    document.addEventListener('mousedown', lukk)
+    return () => document.removeEventListener('mousedown', lukk)
+  }, [])
+
+  const filtrert = prosjekter
+    .filter(p => !sok || p.navn.toLowerCase().includes(sok.toLowerCase()) || (p.adresse || '').toLowerCase().includes(sok.toLowerCase()))
+    .sort((a, b) => a.navn.localeCompare(b.navn, 'nb'))
+
+  return (
+    <div ref={dropdownRef} style={{ position: 'relative' }}>
+      <button
+        style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#fff', border: `2px solid ${aapen ? '#3b82f6' : '#e2e8f0'}`, borderRadius: 10, cursor: 'pointer', fontSize: 15, fontWeight: valgt ? 600 : 400, color: valgt ? '#1e293b' : '#94a3b8', transition: 'border-color .15s', textAlign: 'left' }}
+        onClick={() => { setAapen(v => !v); setSok('') }}>
+        <span>{valgt ? `📁 ${valgt.navn}` : '🔍 Søk eller velg prosjekt...'}</span>
+        <span style={{ color: '#94a3b8', fontSize: 12, marginLeft: 8, flexShrink: 0 }}>{aapen ? '▲' : '▼'}</span>
+      </button>
+
+      {aapen && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,.14)', zIndex: 200, maxHeight: 420, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+          <div style={{ padding: '10px 12px', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
+            <input autoFocus className="input" style={{ margin: 0, fontSize: 14 }}
+              placeholder="Søk prosjekt eller adresse..." value={sok} onChange={e => setSok(e.target.value)} />
+          </div>
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            {filtrert.length === 0 && (
+              <div style={{ padding: '24px', textAlign: 'center', color: '#94a3b8', fontSize: 14 }}>Ingen prosjekter funnet</div>
+            )}
+            {filtrert.map(p => {
+              const mine = sjekklister.filter(s => s.prosjektId === p.id)
+              const pst = mine.length ? Math.round(mine.reduce((sum, s) => sum + prosent(s.punkter), 0) / mine.length) : 0
+              const avvikAnt = mine.filter(s => (s.punkter || []).some(pt => pt.status === 'avvik')).length
+              const erValgt = valgt?.id === p.id
+              return (
+                <div key={p.id}
+                  style={{ padding: '11px 16px', cursor: 'pointer', borderBottom: '1px solid #f8fafc', background: erValgt ? '#eff6ff' : '#fff', transition: 'background .1s' }}
+                  onMouseEnter={e => { if (!erValgt) e.currentTarget.style.background = '#f8fafc' }}
+                  onMouseLeave={e => { if (!erValgt) e.currentTarget.style.background = '#fff' }}
+                  onClick={() => { onVelg(p); setAapen(false); setSok('') }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: '#1e293b' }}>{p.navn}</div>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
+                      {avvikAnt > 0 && <span style={{ fontSize: 11, background: '#fee2e2', color: '#dc2626', borderRadius: 6, padding: '1px 6px', fontWeight: 700 }}>⚠ {avvikAnt}</span>}
+                      {mine.length > 0 && <span style={{ fontSize: 11, color: pst === 100 ? '#16a34a' : '#64748b', fontWeight: 600 }}>{pst}%</span>}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 2, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                    {p.adresse && <span>📍 {p.adresse}</span>}
+                    <span>{mine.length} sjekklister</span>
+                  </div>
+                  {mine.length > 0 && <div style={{ marginTop: 5 }}><Fremdriftsbar pst={pst} avvik={avvikAnt > 0} hoyde={3} /></div>}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Oversiktsskjerm ───────────────────────────────────────────────────────────
 
-function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliotek, onVisAvvik }) {
-  const [sok, setSok] = useState('')
+function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliotek, onVisAvvik, onRensTestData }) {
   const [aiModal, setAiModal] = useState(false)
-  const kanAdmin = ROLLE() === 'admin' || ROLLE() === 'kontor'
-
-  const filtrert = prosjekter.filter(p =>
-    p.navn.toLowerCase().includes(sok.toLowerCase()) ||
-    (p.adresse || '').toLowerCase().includes(sok.toLowerCase())
-  )
-
-  const totalAvvik = sjekklister.filter(s => (s.punkter || []).some(p => p.status === 'avvik')).length
+  const [visdiag, setVisdiag] = useState(false)
   const totalFerdig = sjekklister.filter(s => s.status === 'ferdig').length
+  const totalAvvik = sjekklister.filter(s => (s.punkter || []).some(p => p.status === 'avvik')).length
+
+  // Diagnostikk: sjekklister som ikke matcher noen prosjekt
+  const prosjektIds = new Set(prosjekter.map(p => p.id))
+  const ugyldigeSl = sjekklister.filter(s => !prosjektIds.has(s.prosjektId))
+  const harMismatch = ugyldigeSl.length > 0 && sjekklister.length > 0
 
   return (
     <div className="ks-side">
@@ -1300,54 +1446,56 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="ks-stats">
-        <div className="ks-stat-kort"><div className="ks-stat-tall">{prosjekter.length}</div><div className="ks-stat-label">Aktive prosjekter</div></div>
-        <div className="ks-stat-kort"><div className="ks-stat-tall">{sjekklister.length}</div><div className="ks-stat-label">Sjekklister totalt</div></div>
-        <div className="ks-stat-kort" style={{ borderColor: '#22c55e' }}><div className="ks-stat-tall" style={{ color: '#16a34a' }}>{totalFerdig}</div><div className="ks-stat-label">Ferdig</div></div>
-        {totalAvvik > 0 && (
-        <div className="ks-stat-kort" style={{ borderColor: '#dc2626', background: '#fef2f2', cursor: 'pointer' }} onClick={onVisAvvik}>
-          <div className="ks-stat-tall" style={{ color: '#dc2626' }}>{totalAvvik}</div>
-          <div className="ks-stat-label">Med avvik ↗</div>
+      {/* Prosjektvelger */}
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '20px 20px 22px', marginBottom: 16, boxShadow: '0 1px 4px rgba(0,0,0,.04)' }}>
+        <div style={{ fontWeight: 700, fontSize: 13, color: '#475569', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.04em' }}>📁 Velg prosjekt</div>
+        <ProsjektVelger prosjekter={prosjekter} sjekklister={sjekklister} onVelg={onVelgProsjekt} valgt={null} />
+      </div>
+
+      {/* Knapper */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+        <button className="btn" onClick={onVisBibliotek}>📚 Mal-bibliotek ({maler.length})</button>
+        <button className="btn" onClick={onVisAvvik}>⚠️ Avvik-register</button>
+      </div>
+
+      {/* Sammendrag */}
+      <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 12, padding: '14px 18px' }}>
+        <div style={{ fontWeight: 700, fontSize: 12, color: '#64748b', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>📊 Sammendrag</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div style={{ fontSize: 13, color: '#1e293b' }}>• <strong>{prosjekter.length}</strong> aktive prosjekter</div>
+          <div style={{ fontSize: 13, color: '#1e293b' }}>• <strong>{sjekklister.length}</strong> sjekkliste-instanser totalt</div>
+          <div style={{ fontSize: 13, color: totalFerdig > 0 ? '#16a34a' : '#1e293b' }}>• <strong>{totalFerdig}</strong> ferdig</div>
+          {totalAvvik > 0 && <div style={{ fontSize: 13, color: '#dc2626', cursor: 'pointer' }} onClick={onVisAvvik}>• <strong>{totalAvvik}</strong> med åpne avvik ↗</div>}
+          {sjekklister.length === 0 && <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4 }}>Ingen sjekklister ennå — åpne et prosjekt og klikk «+ Legg til sjekkliste».</div>}
+        </div>
+      </div>
+
+      {/* Diagnostikk-banner: sjekklister koblet til ukjente prosjekter */}
+      {harMismatch && (
+        <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 12, padding: '12px 16px', marginTop: 4 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setVisdiag(v => !v)}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>
+              ⚠️ {ugyldigeSl.length} sjekklister er koblet til prosjekter som ikke finnes {visdiag ? '▲' : '▼'}
+            </span>
+            {onRensTestData && (
+              <button className="btn" style={{ fontSize: 11, padding: '3px 10px', background: '#dc2626', color: '#fff', border: 'none' }}
+                onClick={e => { e.stopPropagation(); onRensTestData(ugyldigeSl.map(s => s.id)) }}>
+                🗑 Slett disse
+              </button>
+            )}
+          </div>
+          {visdiag && (
+            <div style={{ marginTop: 10, fontSize: 12, color: '#92400e' }}>
+              <div style={{ marginBottom: 6, fontWeight: 600 }}>ProsjektIder i systemet: {[...prosjektIds].slice(0, 5).join(', ')}{prosjektIds.size > 5 ? ` +${prosjektIds.size - 5} til` : ''}</div>
+              {[...new Set(ugyldigeSl.map(s => s.prosjektId))].map(id => (
+                <div key={id} style={{ padding: '2px 0' }}>
+                  • ID <code style={{ background: '#fef9c3', padding: '0 3px', borderRadius: 2 }}>{id}</code> — {ugyldigeSl.filter(s => s.prosjektId === id).length} sjekklister
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
-      </div>
-
-      {/* Prosjekt-søk og liste */}
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
-        <input className="input" style={{ maxWidth: 280, flex: 1 }} placeholder="🔍 Søk prosjekt..." value={sok} onChange={e => setSok(e.target.value)} />
-        <button className="btn" onClick={onVisAvvik}>⚠️ Avvik-register</button>
-        <button className="btn" onClick={onVisBibliotek}>📚 Mal-bibliotek ({maler.length})</button>
-      </div>
-
-      <div className="ks-prosjekt-grid">
-        {filtrert.map(p => {
-          const mine = sjekklister.filter(s => s.prosjektId === p.id)
-          const ferdig = mine.filter(s => s.status === 'ferdig').length
-          const avvik = mine.filter(s => (s.punkter || []).some(pt => pt.status === 'avvik')).length
-          const pst = mine.length ? Math.round(mine.reduce((sum, s) => sum + prosent(s.punkter), 0) / mine.length) : 0
-          return (
-            <div key={p.id} className="ks-prosjekt-kort" onClick={() => onVelgProsjekt(p)}>
-              <div style={{ height: 4, background: p.farge || '#6b7280', borderRadius: '12px 12px 0 0', margin: '-18px -18px 14px' }} />
-              <div style={{ fontWeight: 700, fontSize: 15, color: '#1e293b', marginBottom: 2 }}>{p.navn}</div>
-              {p.adresse && <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 8 }}>📍 {p.adresse}</div>}
-              <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 8, background: '#f1f5f9', color: '#475569', fontWeight: 600 }}>{mine.length} sjekklister</span>
-                <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 8, background: '#f0fdf4', color: '#16a34a', fontWeight: 600 }}>{ferdig} ferdig</span>
-                {avvik > 0 && <span style={{ fontSize: 11, padding: '2px 7px', borderRadius: 8, background: '#fef2f2', color: '#dc2626', fontWeight: 600 }}>⚠ {avvik} avvik</span>}
-              </div>
-              <Fremdriftsbar pst={pst} avvik={avvik > 0} />
-              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 4 }}>{pst}% ferdig</div>
-            </div>
-          )
-        })}
-        {!filtrert.length && (
-          <div style={{ color: '#94a3b8', padding: '40px 0', gridColumn: '1/-1', textAlign: 'center' }}>
-            <div style={{ fontSize: 32 }}>📋</div>
-            <div>Ingen aktive prosjekter</div>
-          </div>
-        )}
-      </div>
 
       {aiModal && <AiModal modus="ny" onFerdig={() => setAiModal(false)} onLukk={() => setAiModal(false)} />}
     </div>
@@ -1366,6 +1514,23 @@ export default function KS() {
   const [valgtProsjekt, setValgtProsjekt] = useState(null)
   const [valgtSl, setValgtSl] = useState(null)
   const [aiFlyt, setAiFlyt] = useState(false)
+  const [lasterProsjekt, setLasterProsjekt] = useState(false)
+
+  function velgProsjekt(p) {
+    setLasterProsjekt(true)
+    startTransition(() => {
+      setValgtProsjekt(p)
+      setView('prosjekt')
+      setLasterProsjekt(false)
+    })
+  }
+
+  async function rensOrphans(ids) {
+    if (!window.confirm(`Slett ${ids.length} sjekklister som er koblet til ukjente prosjekter?`)) return
+    await Promise.all(ids.map(id => apiFetch(`/api/ks/sjekklister?id=${id}`, { method: 'DELETE' }).catch(() => {})))
+    const ferske = await apiFetch('/api/ks/sjekklister')
+    setSjekklister(ferske)
+  }
 
   const isAdmin = ROLLE() === 'admin'
 
@@ -1426,15 +1591,24 @@ export default function KS() {
 
   // ── Prosjekt-visning ──────────────────────────────────────────────────────────
   if (view === 'prosjekt' && valgtProsjekt) {
+    if (lasterProsjekt) return (
+      <div className="ks-side" style={{ textAlign: 'center', paddingTop: 80 }}>
+        <div style={{ fontSize: 32 }}>⏳</div>
+        <div style={{ color: '#64748b', marginTop: 12 }}>Laster prosjekt...</div>
+      </div>
+    )
     return (
       <ProsjektVisning
         prosjekt={valgtProsjekt}
         sjekklister={sjekklister}
         maler={maler}
         ansatte={ansatte}
+        alleProsjekter={prosjekter}
+        alleSjekklister={sjekklister}
         onOppdater={nySl => setSjekklister(nySl)}
         onTilbake={() => setView('oversikt')}
         onAapneSl={sl => { setValgtSl(sl); setView('sjekkliste') }}
+        onByttProsjekt={velgProsjekt}
       />
     )
   }
@@ -1467,9 +1641,10 @@ export default function KS() {
         prosjekter={prosjekter}
         sjekklister={sjekklister}
         maler={maler}
-        onVelgProsjekt={p => { setValgtProsjekt(p); setView('prosjekt') }}
+        onVelgProsjekt={velgProsjekt}
         onVisBibliotek={() => setView('bibliotek')}
         onVisAvvik={() => setView('avvik')}
+        onRensTestData={isAdmin ? rensOrphans : undefined}
       />
       {/* AI-floating-button */}
       <button className="ks-fab" onClick={() => setAiFlyt(true)} title="Spør AI">✨</button>
