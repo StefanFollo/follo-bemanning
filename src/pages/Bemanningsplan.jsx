@@ -1418,7 +1418,9 @@ export default function Bemanningsplan({ readOnly = false }) {
   function TeamsVisning() {
     const teams = state.teams || [];
     const aktiveProsjekter = state.prosjekter.filter(p => p.status === 'aktiv' || !p.status).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
-    const planAnsatteAlle = state.ansatte.filter(a => !a.innleie).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+    const fastAnsatte = state.ansatte.filter(a => !a.innleie).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+    const innleieAnsatte = state.ansatte.filter(a => a.innleie).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+    const planAnsatteAlle = [...fastAnsatte, ...innleieAnsatte];
     const TEAM_FARGER = ['#3b82f6','#16a34a','#dc2626','#9333ea','#ea580c','#0891b2','#be185d','#854d0e'];
 
     function startNyttTeam() {
@@ -1527,12 +1529,12 @@ export default function Bemanningsplan({ readOnly = false }) {
                   <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>{medlemmer.length} medlemmer</div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {medlemmer.map(a => (
-                      <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '3px 8px 3px 4px', fontSize: 12 }}>
-                        <div style={{ width: 20, height: 20, borderRadius: '50%', background: fagColor(a.fag), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 700, flexShrink: 0 }}>
+                      <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 5, background: a.innleie ? '#fff7ed' : '#f8fafc', border: `1px solid ${a.innleie ? '#fed7aa' : '#e2e8f0'}`, borderRadius: 8, padding: '3px 8px 3px 4px', fontSize: 12 }}>
+                        <div style={{ width: 20, height: 20, borderRadius: '50%', background: a.innleie ? '#f97316' : fagColor(a.fag), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 700, flexShrink: 0 }}>
                           {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                         </div>
                         <span>{a.navn}</span>
-                        <span style={{ color: '#94a3b8', fontSize: 10 }}>{a.fag}</span>
+                        <span style={{ color: a.innleie ? '#f97316' : '#94a3b8', fontSize: 10 }}>{a.innleie ? '🔧' : a.fag}</span>
                       </div>
                     ))}
                     {medlemmer.length === 0 && <span style={{ color: '#94a3b8', fontSize: 12 }}>Ingen medlemmer ennå</span>}
@@ -1557,8 +1559,11 @@ export default function Bemanningsplan({ readOnly = false }) {
                 ))}
               </div>
               <label>Medlemmer ({teamForm.ansatteIds.length} valgt)</label>
-              <div style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, padding: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {planAnsatteAlle.map(a => {
+              <div style={{ maxHeight: 280, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, padding: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {fastAnsatte.length > 0 && (
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.06em', padding: '2px 6px 4px', textTransform: 'uppercase' }}>Fast ansatte</div>
+                )}
+                {fastAnsatte.map(a => {
                   const tatt = opptattIAnnetTeam.has(a.id);
                   const valgt = teamForm.ansatteIds.includes(a.id);
                   const annetTeam = tatt ? teams.find(t => (!redigererTeam || t.id !== redigererTeam.id) && (t.ansatteIds || []).includes(a.id)) : null;
@@ -1572,6 +1577,27 @@ export default function Bemanningsplan({ readOnly = false }) {
                       {tatt
                         ? <span style={{ fontSize: 11, color: '#f97316', marginLeft: 'auto' }}>i {annetTeam?.navn || 'annet team'}</span>
                         : <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{a.fag}</span>
+                      }
+                    </label>
+                  );
+                })}
+                {innleieAnsatte.length > 0 && (
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#f97316', letterSpacing: '0.06em', padding: '6px 6px 4px', textTransform: 'uppercase', borderTop: fastAnsatte.length > 0 ? '1px solid #f1f5f9' : 'none', marginTop: fastAnsatte.length > 0 ? 4 : 0 }}>🔧 Innleie</div>
+                )}
+                {innleieAnsatte.map(a => {
+                  const tatt = opptattIAnnetTeam.has(a.id);
+                  const valgt = teamForm.ansatteIds.includes(a.id);
+                  const annetTeam = tatt ? teams.find(t => (!redigererTeam || t.id !== redigererTeam.id) && (t.ansatteIds || []).includes(a.id)) : null;
+                  return (
+                    <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: tatt ? 'not-allowed' : 'pointer', padding: '4px 6px', borderRadius: 6, opacity: tatt ? 0.45 : 1, background: valgt ? '#fff7ed' : 'transparent' }}>
+                      <input type="checkbox" checked={valgt} disabled={tatt} onChange={() => toggleMedlem(a.id)} />
+                      <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#f97316', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 700, flexShrink: 0 }}>
+                        {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </div>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>{a.navn}</span>
+                      {tatt
+                        ? <span style={{ fontSize: 11, color: '#f97316', marginLeft: 'auto' }}>i {annetTeam?.navn || 'annet team'}</span>
+                        : <span style={{ fontSize: 11, color: '#f97316', marginLeft: 'auto' }}>🔧 {a.fag}</span>
                       }
                     </label>
                   );
