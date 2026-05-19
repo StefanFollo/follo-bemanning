@@ -58,7 +58,7 @@ function Modal({ title, onClose, children }) {
 export default function Bemanningsplan({ readOnly = false }) {
   const { state, dispatch } = useApp();
   // Ansatte som er med i bemanningsplan-kapasitetsberegningen
-  const planAnsatte = state.ansatte.filter(a => !a.utenforBemanningsplan && a.fag !== 'Rørlegger');
+  const planAnsatte = state.ansatte.filter(a => !a.utenforBemanningsplan && !a.sykmeldt && a.fag !== 'Rørlegger');
   const [tab, setTab] = useState('uke');
   const [fullscreen, setFullscreen] = useState(false);
   const [storskjerm, setStorskjerm] = useState(false);
@@ -1588,13 +1588,22 @@ export default function Bemanningsplan({ readOnly = false }) {
                           memberDragInfo.current = null;
                           setMemberDragOverTeam(null);
                         }}
-                        style={{ display: 'flex', alignItems: 'center', gap: 5, background: a.innleie ? '#fff7ed' : '#f8fafc', border: `1px solid ${a.innleie ? '#fed7aa' : '#e2e8f0'}`, borderRadius: 8, padding: '3px 8px 3px 4px', fontSize: 12, cursor: 'grab' }}
+                        title={a.sykmeldt ? '🤒 Sykmeldt – ikke i bemanningsplan' : undefined}
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: 5,
+                          background: a.sykmeldt ? '#f1f5f9' : a.innleie ? '#fff7ed' : '#f8fafc',
+                          border: `1px solid ${a.sykmeldt ? '#cbd5e1' : a.innleie ? '#fed7aa' : '#e2e8f0'}`,
+                          borderRadius: 8, padding: '3px 8px 3px 4px', fontSize: 12,
+                          cursor: 'grab', opacity: a.sykmeldt ? 0.6 : 1,
+                        }}
                       >
-                        <div style={{ width: 20, height: 20, borderRadius: '50%', background: a.innleie ? '#f97316' : fagColor(a.fag), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 700, flexShrink: 0 }}>
+                        <div style={{ width: 20, height: 20, borderRadius: '50%', background: a.sykmeldt ? '#94a3b8' : a.innleie ? '#f97316' : fagColor(a.fag), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 700, flexShrink: 0 }}>
                           {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                         </div>
-                        <span>{a.navn}</span>
-                        <span style={{ color: a.innleie ? '#f97316' : '#94a3b8', fontSize: 10 }}>{a.innleie ? '🔧' : a.fag}</span>
+                        <span style={{ color: a.sykmeldt ? '#64748b' : 'inherit' }}>{a.navn}</span>
+                        <span style={{ color: a.sykmeldt ? '#94a3b8' : a.innleie ? '#f97316' : '#94a3b8', fontSize: 10 }}>
+                          {a.sykmeldt ? '🤒' : a.innleie ? '🔧' : a.fag}
+                        </span>
                       </div>
                     ))}
                     {medlemmer.length === 0 && (

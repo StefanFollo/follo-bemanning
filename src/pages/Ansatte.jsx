@@ -177,23 +177,26 @@ export default function Ansatte() {
             <div className="ct-col ct-actions"></div>
           </div>
           {ansatte.map(a => (
-            <div className="ct-row" key={a.id}>
+            <div className="ct-row" key={a.id} style={a.sykmeldt ? { opacity: 0.55, background: '#f8fafc' } : {}}>
               <div className="ct-col ct-ansatt-navn">
-                <div className="ct-avatar" style={{ background: a.innleie ? '#f97316' : fagColor(a.fag) }}>
+                <div className="ct-avatar" style={{ background: a.sykmeldt ? '#94a3b8' : a.innleie ? '#f97316' : fagColor(a.fag) }}>
                   {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                   <span className="ct-prosjekt-navn">{a.navn}</span>
-                  {a.innleie && (
+                  {a.sykmeldt && (
+                    <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600, letterSpacing: '0.03em' }}>🤒 SYKMELDT</span>
+                  )}
+                  {!a.sykmeldt && a.innleie && (
                     <span style={{ fontSize: 10, color: '#f97316', fontWeight: 600, letterSpacing: '0.03em' }}>INNLEIE</span>
                   )}
-                  {a.utenforBemanningsplan && (
+                  {!a.sykmeldt && a.utenforBemanningsplan && (
                     <span style={{ fontSize: 10, color: '#b45309', fontWeight: 600, letterSpacing: '0.03em' }}>KONTOR / ADMIN</span>
                   )}
                 </div>
               </div>
               <div className="ct-col ct-fag">
-                <span className="fag-tag" style={{ background: fagColor(a.fag) + '22', color: fagColor(a.fag), borderColor: fagColor(a.fag) + '55' }}>
+                <span className="fag-tag" style={{ background: a.sykmeldt ? '#e2e8f022' : fagColor(a.fag) + '22', color: a.sykmeldt ? '#94a3b8' : fagColor(a.fag), borderColor: a.sykmeldt ? '#e2e8f0' : fagColor(a.fag) + '55' }}>
                   {a.fag || '–'}
                 </span>
               </div>
@@ -205,6 +208,14 @@ export default function Ansatte() {
                   : <span style={{ color: '#cbd5e1' }}>–</span>}
               </div>
               <div className="ct-col ct-actions">
+                <button
+                  className={`btn btn-sm${a.sykmeldt ? ' btn-warning' : ''}`}
+                  style={a.sykmeldt ? { background: '#f1f5f9', color: '#64748b', borderColor: '#e2e8f0' } : {}}
+                  title={a.sykmeldt ? 'Tilbake på jobb' : 'Marker som sykmeldt'}
+                  onClick={() => dispatch({ type: 'UPDATE_ANSATT', payload: { ...a, sykmeldt: !a.sykmeldt } })}
+                >
+                  {a.sykmeldt ? '✅ Friskmeldt' : '🤒 Syk'}
+                </button>
                 <button className="btn btn-sm" onClick={() => openEdit(a)}>Rediger</button>
                 <button className="btn btn-sm btn-danger" onClick={() => handleDelete(a.id)}>Slett</button>
               </div>
