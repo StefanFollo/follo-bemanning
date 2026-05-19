@@ -234,6 +234,10 @@ function reducer(state, action) {
       saveTeams(next);
       return { ...state, teams: next };
     }
+    case 'SET_TEAMS': {
+      saveTeams(action.teams);
+      return { ...state, teams: action.teams };
+    }
 
     // --- Fag ---
     case 'ADD_FAG': {

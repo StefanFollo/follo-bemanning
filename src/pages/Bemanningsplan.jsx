@@ -84,6 +84,8 @@ export default function Bemanningsplan({ readOnly = false }) {
   const [barMenu, setBarMenu] = useState(null); // { t, splitDay, x, y }
   const dragRef = useRef(null);
   const scrollRestoreRef = useRef(null); // lagrer scroll-posisjoner mellom dispatch og useLayoutEffect
+  const teamDragIdx = useRef(null);
+  const [teamDragOver, setTeamDragOver] = useState(null);
 
   // Needle-state flyttes hit (var i UkeVisning) slik at UkeVisning() kan kalles som funksjon
   const [needleDay, setNeedleDay] = useState(() => dateToIso(new Date()));
@@ -1430,15 +1432,47 @@ export default function Bemanningsplan({ readOnly = false }) {
           <div className="empty">Ingen team opprettet ennå. Klikk «+ Nytt team» for å lage ditt første team.</div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-            {teams.map(team => {
+            {teams.map((team, idx) => {
               const medlemmer = (team.ansatteIds || []).map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
+              const isDragOver = teamDragOver === idx && teamDragIdx.current !== idx;
               return (
-                <div key={team.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 18, boxShadow: '0 1px 4px rgba(0,0,0,.04)', borderTop: `4px solid ${team.farge || '#3b82f6'}` }}>
+                <div
+                  key={team.id}
+                  draggable
+                  onDragStart={() => { teamDragIdx.current = idx; }}
+                  onDragOver={e => { e.preventDefault(); setTeamDragOver(idx); }}
+                  onDragLeave={() => setTeamDragOver(null)}
+                  onDrop={() => {
+                    const from = teamDragIdx.current;
+                    if (from === null || from === idx) { setTeamDragOver(null); return; }
+                    const reordered = [...teams];
+                    const [moved] = reordered.splice(from, 1);
+                    reordered.splice(idx, 0, moved);
+                    dispatch({ type: 'SET_TEAMS', teams: reordered });
+                    teamDragIdx.current = null;
+                    setTeamDragOver(null);
+                  }}
+                  onDragEnd={() => { teamDragIdx.current = null; setTeamDragOver(null); }}
+                  style={{
+                    background: '#fff',
+                    border: isDragOver ? `2px dashed ${team.farge || '#3b82f6'}` : '1px solid #e2e8f0',
+                    borderRadius: 14,
+                    padding: isDragOver ? 17 : 18,
+                    boxShadow: isDragOver ? `0 4px 16px ${team.farge || '#3b82f6'}33` : '0 1px 4px rgba(0,0,0,.04)',
+                    borderTop: `4px solid ${team.farge || '#3b82f6'}`,
+                    cursor: 'grab',
+                    transition: 'box-shadow .15s, border .1s',
+                    opacity: teamDragIdx.current === idx ? 0.45 : 1,
+                  }}
+                >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                    <div style={{ fontWeight: 800, fontSize: 16, color: '#1e293b' }}>{team.navn}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ color: '#cbd5e1', fontSize: 16, lineHeight: 1, cursor: 'grab', userSelect: 'none' }}>⠿</span>
+                      <div style={{ fontWeight: 800, fontSize: 16, color: '#1e293b' }}>{team.navn}</div>
+                    </div>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <button className="btn btn-sm" onClick={() => startRedigerTeam(team)}>Rediger</button>
-                      <button className="btn btn-sm btn-danger" onClick={() => slettTeam(team.id)}>Slett</button>
+                      <button className="btn btn-sm" onMouseDown={e => e.stopPropagation()} onClick={() => startRedigerTeam(team)}>Rediger</button>
+                      <button className="btn btn-sm btn-danger" onMouseDown={e => e.stopPropagation()} onClick={() => slettTeam(team.id)}>Slett</button>
                     </div>
                   </div>
                   <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>{medlemmer.length} medlemmer</div>
