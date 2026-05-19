@@ -50,6 +50,12 @@ const ANSATT_TABS = [
   { id: 'bemanningsplan', label: 'Bemanningsplan', icon: '📅' },
 ];
 
+const BEFARING_TABS = [
+  { id: 'befaring', label: 'Befaring', icon: '🔍' },
+  { id: 'service', label: 'Service', icon: '⚡' },
+  { id: 'reklamasjon', label: 'Reklamasjon', icon: '⚠️' },
+];
+
 function getResetToken() {
   const params = new URLSearchParams(window.location.search);
   return params.get('reset') || null;
@@ -132,6 +138,7 @@ function App() {
     setLoggedIn(true);
     if (r === 'ansatt') setActiveTab('bemanningsplan');
     else if (r === 'rorlegger') setActiveTab('rorlegger');
+    else if (r === 'befaring') setActiveTab('befaring');
     else setActiveTab('dashboard');
   }
 
@@ -152,9 +159,11 @@ function App() {
   const isAdmin = role === 'admin';
   const isKontor = role === 'kontor';
   const isRorlegger = role === 'rorlegger';
+  const isBefaring = role === 'befaring';
   const TABS = isAdmin ? ADMIN_TABS
              : isKontor ? KONTOR_TABS
              : isRorlegger ? RORLEGGER_TABS
+             : isBefaring ? BEFARING_TABS
              : ANSATT_TABS;
 
   return (
@@ -182,10 +191,10 @@ function App() {
             <div className="nav-user">
               {userNavn && <span className="nav-user-name">{userNavn}</span>}
               <span className={`nav-role-badge nav-role-${role}`}>
-                {isAdmin ? 'Admin' : isKontor ? 'Kontor' : isRorlegger ? 'Rørlegger' : 'Ansatt'}
+                {isAdmin ? 'Admin' : isKontor ? 'Kontor' : isRorlegger ? 'Rørlegger' : isBefaring ? 'Befaring' : 'Ansatt'}
               </span>
             </div>
-            {(isAdmin || isKontor) && <SaveButton />}
+            {(isAdmin || isKontor || isBefaring) && <SaveButton />}
             <button className="nav-btn logout-btn" onClick={handleLogout} title="Logg ut">
               🚪 Logg ut
             </button>
@@ -194,9 +203,9 @@ function App() {
 
         <main className="main">
           {activeTab === 'dashboard' && (isAdmin || isKontor) && <Dashboard onNavigate={setActiveTab} />}
-          {activeTab === 'befaring' && (isAdmin || isKontor) && <BefaringPlan />}
-          {activeTab === 'reklamasjon' && (isAdmin || isKontor) && <Reklamasjon />}
-          {activeTab === 'service' && (isAdmin || isKontor) && <Service />}
+          {activeTab === 'befaring' && (isAdmin || isKontor || isBefaring) && <BefaringPlan />}
+          {activeTab === 'reklamasjon' && (isAdmin || isKontor || isBefaring) && <Reklamasjon />}
+          {activeTab === 'service' && (isAdmin || isKontor || isBefaring) && <Service />}
           {activeTab === 'prosjekter' && (isAdmin || isKontor) && <Prosjekter />}
           {activeTab === 'ansatte' && (isAdmin || isKontor) && <Ansatte />}
           {activeTab === 'bemanningsplan' && (isAdmin || role === 'ansatt') && <Bemanningsplan readOnly={!isAdmin} />}

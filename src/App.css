@@ -96,6 +96,7 @@ body {
 .nav-role-kontor { background: #7c3aed; color: white; }
 .nav-role-rorlegger { background: #0891b2; color: white; }
 .nav-role-ansatt { background: #16a34a; color: white; }
+.nav-role-befaring { background: #d97706; color: white; }
 
 /* Logout button */
 .logout-btn { margin-left: 8px; border-left: 1px solid rgba(255,255,255,.15); padding-left: 16px; }

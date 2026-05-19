@@ -7,8 +7,8 @@ function formatTs(ts) {
   return d.toLocaleString('nb-NO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-const ROLE_LABELS = { admin: 'Administrator', kontor: 'Kontor', rorlegger: 'Rørlegger', ansatt: 'Ansatt (lesetilgang)' };
-const ROLE_COLORS = { admin: '#1e3a5f', kontor: '#7c3aed', rorlegger: '#0891b2', ansatt: '#16a34a' };
+const ROLE_LABELS = { admin: 'Administrator', kontor: 'Kontor', rorlegger: 'Rørlegger', befaring: 'Befaring / Service', ansatt: 'Ansatt (lesetilgang)' };
+const ROLE_COLORS = { admin: '#1e3a5f', kontor: '#7c3aed', rorlegger: '#0891b2', befaring: '#d97706', ansatt: '#16a34a' };
 
 function authHeader() {
   const token = localStorage.getItem('fbs_token') || '';
@@ -215,6 +215,7 @@ export default function AdminUsers() {
                 <label>Rolle *</label>
                 <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
                   <option value="ansatt">Ansatt – kun lesetilgang (Bemanningsplan)</option>
+                  <option value="befaring">Befaring / Service – befaring, service og reklamasjon</option>
                   <option value="kontor">Kontor – alt unntatt Bemanningsplan</option>
                   <option value="rorlegger">Rørlegger – kun Rørlegger-siden</option>
                   <option value="admin">Administrator – full tilgang</option>
@@ -223,6 +224,7 @@ export default function AdminUsers() {
                   {form.role === 'admin' ? '🔑 Kan se og endre alt'
                     : form.role === 'kontor' ? '🏢 Ser alt unntatt Bemanningsplan'
                     : form.role === 'rorlegger' ? '🔧 Kun tilgang til Rørlegger-siden'
+                    : form.role === 'befaring' ? '🔍 Tilgang til Befaring, Service og Reklamasjon (lese + endre)'
                     : '👁 Kan kun se Bemanningsplanen – vanlige ansatte'}
                 </div>
               </div>
@@ -282,6 +284,7 @@ export default function AdminUsers() {
                   >
                     <option value="admin">Administrator</option>
                     <option value="kontor">Kontor</option>
+                    <option value="befaring">Befaring / Service</option>
                     <option value="rorlegger">Rørlegger</option>
                     <option value="ansatt">Ansatt</option>
                   </select>
@@ -321,6 +324,7 @@ export default function AdminUsers() {
         <ul style={{ margin: '8px 0 0', paddingLeft: 20, lineHeight: 2 }}>
           <li><strong>Administrator</strong> – Full tilgang: alle sider inkl. Bemanningsplan og Brukerstyring</li>
           <li><strong>Kontor</strong> – Tilgang til alt unntatt Bemanningsplan (oversikt, befaring, reklamasjon, service, prosjekter, ansatte, framdrift)</li>
+          <li><strong>Befaring / Service</strong> – Tilgang til Befaring, Service og Reklamasjon (lese og endre)</li>
           <li><strong>Rørlegger</strong> – Kun tilgang til Rørlegger-siden</li>
           <li><strong>Ansatt</strong> – Kun lesetilgang til Bemanningsplan (kan se hvem som jobber hvor)</li>
         </ul>
