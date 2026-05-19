@@ -86,6 +86,8 @@ export default function Bemanningsplan({ readOnly = false }) {
   const scrollRestoreRef = useRef(null); // lagrer scroll-posisjoner mellom dispatch og useLayoutEffect
   const teamDragIdx = useRef(null);
   const [teamDragOver, setTeamDragOver] = useState(null);
+  const memberDragInfo = useRef(null); // { ansattId, fromTeamId }
+  const [memberDragOverTeam, setMemberDragOverTeam] = useState(null);
 
   // Needle-state flyttes hit (var i UkeVisning) slik at UkeVisning() kan kalles som funksjon
   const [needleDay, setNeedleDay] = useState(() => dateToIso(new Date()));
@@ -1485,15 +1487,44 @@ export default function Bemanningsplan({ readOnly = false }) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
             {teams.map((team, idx) => {
               const medlemmer = (team.ansatteIds || []).map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
-              const isDragOver = teamDragOver === idx && teamDragIdx.current !== idx;
+              const isCardDragOver = teamDragOver === idx && teamDragIdx.current !== null && teamDragIdx.current !== idx;
+              const isMemberDragOver = memberDragOverTeam === team.id && memberDragInfo.current?.fromTeamId !== team.id;
               return (
                 <div
                   key={team.id}
                   draggable
-                  onDragStart={() => { teamDragIdx.current = idx; }}
-                  onDragOver={e => { e.preventDefault(); setTeamDragOver(idx); }}
-                  onDragLeave={() => setTeamDragOver(null)}
-                  onDrop={() => {
+                  onDragStart={e => {
+                    if (memberDragInfo.current) { e.preventDefault(); return; }
+                    teamDragIdx.current = idx;
+                  }}
+                  onDragOver={e => {
+                    e.preventDefault();
+                    if (memberDragInfo.current) setMemberDragOverTeam(team.id);
+                    else setTeamDragOver(idx);
+                  }}
+                  onDragLeave={e => {
+                    if (e.currentTarget.contains(e.relatedTarget)) return;
+                    if (memberDragInfo.current) setMemberDragOverTeam(null);
+                    else setTeamDragOver(null);
+                  }}
+                  onDrop={e => {
+                    e.preventDefault();
+                    // --- Member move ---
+                    if (memberDragInfo.current) {
+                      const { ansattId, fromTeamId } = memberDragInfo.current;
+                      if (fromTeamId !== team.id) {
+                        const updated = teams.map(t => {
+                          if (t.id === fromTeamId) return { ...t, ansatteIds: (t.ansatteIds || []).filter(id => id !== ansattId) };
+                          if (t.id === team.id) return { ...t, ansatteIds: [...(t.ansatteIds || []), ansattId] };
+                          return t;
+                        });
+                        dispatch({ type: 'SET_TEAMS', teams: updated });
+                      }
+                      memberDragInfo.current = null;
+                      setMemberDragOverTeam(null);
+                      return;
+                    }
+                    // --- Card reorder ---
                     const from = teamDragIdx.current;
                     if (from === null || from === idx) { setTeamDragOver(null); return; }
                     const reordered = [...teams];
@@ -1503,16 +1534,29 @@ export default function Bemanningsplan({ readOnly = false }) {
                     teamDragIdx.current = null;
                     setTeamDragOver(null);
                   }}
-                  onDragEnd={() => { teamDragIdx.current = null; setTeamDragOver(null); }}
+                  onDragEnd={() => {
+                    teamDragIdx.current = null;
+                    memberDragInfo.current = null;
+                    setTeamDragOver(null);
+                    setMemberDragOverTeam(null);
+                  }}
                   style={{
-                    background: '#fff',
-                    border: isDragOver ? `2px dashed ${team.farge || '#3b82f6'}` : '1px solid #e2e8f0',
+                    background: isMemberDragOver ? '#f0fdf4' : '#fff',
+                    border: isMemberDragOver
+                      ? '2px dashed #16a34a'
+                      : isCardDragOver
+                        ? `2px dashed ${team.farge || '#3b82f6'}`
+                        : '1px solid #e2e8f0',
                     borderRadius: 14,
-                    padding: isDragOver ? 17 : 18,
-                    boxShadow: isDragOver ? `0 4px 16px ${team.farge || '#3b82f6'}33` : '0 1px 4px rgba(0,0,0,.04)',
+                    padding: (isMemberDragOver || isCardDragOver) ? 17 : 18,
+                    boxShadow: isMemberDragOver
+                      ? '0 4px 16px #16a34a33'
+                      : isCardDragOver
+                        ? `0 4px 16px ${team.farge || '#3b82f6'}33`
+                        : '0 1px 4px rgba(0,0,0,.04)',
                     borderTop: `4px solid ${team.farge || '#3b82f6'}`,
                     cursor: 'grab',
-                    transition: 'box-shadow .15s, border .1s',
+                    transition: 'box-shadow .15s, border .1s, background .15s',
                     opacity: teamDragIdx.current === idx ? 0.45 : 1,
                   }}
                 >
@@ -1526,10 +1570,26 @@ export default function Bemanningsplan({ readOnly = false }) {
                       <button className="btn btn-sm btn-danger" onMouseDown={e => e.stopPropagation()} onClick={() => slettTeam(team.id)}>Slett</button>
                     </div>
                   </div>
-                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>{medlemmer.length} medlemmer</div>
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
+                    {medlemmer.length} medlemmer
+                    {isMemberDragOver && <span style={{ color: '#16a34a', marginLeft: 6, fontWeight: 600 }}>↓ Slipp for å flytte hit</span>}
+                  </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                     {medlemmer.map(a => (
-                      <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 5, background: a.innleie ? '#fff7ed' : '#f8fafc', border: `1px solid ${a.innleie ? '#fed7aa' : '#e2e8f0'}`, borderRadius: 8, padding: '3px 8px 3px 4px', fontSize: 12 }}>
+                      <div
+                        key={a.id}
+                        draggable
+                        onDragStart={e => {
+                          e.stopPropagation();
+                          memberDragInfo.current = { ansattId: a.id, fromTeamId: team.id };
+                        }}
+                        onDragEnd={e => {
+                          e.stopPropagation();
+                          memberDragInfo.current = null;
+                          setMemberDragOverTeam(null);
+                        }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 5, background: a.innleie ? '#fff7ed' : '#f8fafc', border: `1px solid ${a.innleie ? '#fed7aa' : '#e2e8f0'}`, borderRadius: 8, padding: '3px 8px 3px 4px', fontSize: 12, cursor: 'grab' }}
+                      >
                         <div style={{ width: 20, height: 20, borderRadius: '50%', background: a.innleie ? '#f97316' : fagColor(a.fag), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 700, flexShrink: 0 }}>
                           {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                         </div>
@@ -1537,7 +1597,11 @@ export default function Bemanningsplan({ readOnly = false }) {
                         <span style={{ color: a.innleie ? '#f97316' : '#94a3b8', fontSize: 10 }}>{a.innleie ? '🔧' : a.fag}</span>
                       </div>
                     ))}
-                    {medlemmer.length === 0 && <span style={{ color: '#94a3b8', fontSize: 12 }}>Ingen medlemmer ennå</span>}
+                    {medlemmer.length === 0 && (
+                      <span style={{ color: isMemberDragOver ? '#16a34a' : '#94a3b8', fontSize: 12, fontStyle: 'italic' }}>
+                        {isMemberDragOver ? '↓ Slipp her' : 'Ingen medlemmer ennå'}
+                      </span>
+                    )}
                   </div>
                 </div>
               );
