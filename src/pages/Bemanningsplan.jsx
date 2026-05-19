@@ -971,7 +971,7 @@ export default function Bemanningsplan({ readOnly = false }) {
           </span>
           <button className="btn" onClick={() => setGanttPageOffset(0)}>I dag</button>
           <button className="btn" onClick={() => setGanttPageOffset(o => o + 1)}>Neste →</button>
-          {ansatteOrder.length > 0 && (
+          {ansatteOrder.length > 0 && (state.teams || []).length === 0 && (
             <button className="btn" title="Tilbakestill til alfabetisk rekkefølge"
               onClick={() => saveOrder([])}>↺ Alfabetisk</button>
           )}
@@ -1058,13 +1058,17 @@ export default function Bemanningsplan({ readOnly = false }) {
               })}
             </div>
 
-            {/* ── Ansatte-rader ──────────────────────────────── */}
-            {filteredAnsatte.map((ansatt, ri) => {
-              const myTils = state.tildelinger
-                .filter(t => t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, viewStart, viewEnd))
-                .sort((a, b) => (a.prosjektId === FERIE_ID ? 1 : 0) - (b.prosjektId === FERIE_ID ? 1 : 0));
+            {/* ── Ansatte-rader (gruppert etter team) ───────── */}
+            {(() => {
+              const teams = state.teams || [];
+              let rowIdx = 0;
 
-              return (
+              function renderAnsattRad(ansatt) {
+                const myTils = state.tildelinger
+                  .filter(t => t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, viewStart, viewEnd))
+                  .sort((a, b) => (a.prosjektId === FERIE_ID ? 1 : 0) - (b.prosjektId === FERIE_ID ? 1 : 0));
+                const ri = rowIdx++;
+                return (
                 <div key={ansatt.id}
                   className={`oversikt-row${ri % 2 === 0 ? '' : ' alt'}`}
                   style={{ height: ROW_H }}
@@ -1199,8 +1203,53 @@ export default function Bemanningsplan({ readOnly = false }) {
                     })}
                   </div>
                 </div>
-              );
-            })}
+                );
+              }
+
+              function renderTeamHeader(team, count) {
+                return (
+                  <div key={`th-${team.id}`} style={{ display: 'flex', height: 30, alignItems: 'center', background: team.farge + '18', borderTop: `2px solid ${team.farge}`, borderBottom: `1px solid ${team.farge}33`, minWidth: LABEL_W + totalW }}>
+                    <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '0 12px' }}>
+                      <div style={{ width: 10, height: 10, borderRadius: '50%', background: team.farge, flexShrink: 0 }} />
+                      <span style={{ fontWeight: 700, fontSize: 12, color: team.farge, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{team.navn}</span>
+                      <span style={{ fontSize: 11, color: '#94a3b8', flexShrink: 0 }}>{count}</span>
+                    </div>
+                    <div style={{ flex: 1 }} />
+                  </div>
+                );
+              }
+
+              if (teams.length === 0) {
+                return filteredAnsatte.map(a => renderAnsattRad(a));
+              }
+
+              const assignedIds = new Set(teams.flatMap(t => t.ansatteIds || []));
+              const rows = [];
+
+              for (const team of teams) {
+                const members = filteredAnsatte.filter(a => (team.ansatteIds || []).includes(a.id));
+                if (members.length === 0 && !filteredAnsatte.some(a => (team.ansatteIds || []).includes(a.id))) continue;
+                rows.push(renderTeamHeader(team, members.length + ' medl.'));
+                members.forEach(a => rows.push(renderAnsattRad(a)));
+              }
+
+              const unassigned = filteredAnsatte.filter(a => !assignedIds.has(a.id));
+              if (unassigned.length > 0) {
+                rows.push(
+                  <div key="th-uten" style={{ display: 'flex', height: 30, alignItems: 'center', background: '#f1f5f9', borderTop: '2px solid #94a3b8', borderBottom: '1px solid #e2e8f0', minWidth: LABEL_W + totalW }}>
+                    <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '0 12px' }}>
+                      <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#94a3b8', flexShrink: 0 }} />
+                      <span style={{ fontWeight: 700, fontSize: 12, color: '#64748b' }}>Uten team</span>
+                      <span style={{ fontSize: 11, color: '#94a3b8' }}>{unassigned.length}</span>
+                    </div>
+                    <div style={{ flex: 1 }} />
+                  </div>
+                );
+                unassigned.forEach(a => rows.push(renderAnsattRad(a)));
+              }
+
+              return rows;
+            })()}
 
           </div>
         </div>
