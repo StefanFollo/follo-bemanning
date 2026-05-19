@@ -49,6 +49,8 @@ export default function Ansatte() {
   const [filterFag, setFilterFag] = useState('alle');
   const [search, setSearch] = useState('');
   const [gruppe, setGruppe] = useState('fast'); // 'fast' | 'innleie'
+  const [sykmeldtModal, setSykmeldtModal] = useState(null); // ansatt object
+  const [sykmeldtForm, setSykmeldtForm] = useState({ fra: '', til: '' });
 
   function openNew() {
     setEditing(null);
@@ -185,7 +187,9 @@ export default function Ansatte() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                   <span className="ct-prosjekt-navn">{a.navn}</span>
                   {a.sykmeldt && (
-                    <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600, letterSpacing: '0.03em' }}>🤒 SYKMELDT</span>
+                    <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600, letterSpacing: '0.03em' }}>
+                      🤒 SYKMELDT{a.sykmeldtTil ? ` t.o.m. ${bursdagLabel ? new Date(a.sykmeldtTil + 'T00:00:00').toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' }) : a.sykmeldtTil}` : ''}
+                    </span>
                   )}
                   {!a.sykmeldt && a.innleie && (
                     <span style={{ fontSize: 10, color: '#f97316', fontWeight: 600, letterSpacing: '0.03em' }}>INNLEIE</span>
@@ -208,14 +212,19 @@ export default function Ansatte() {
                   : <span style={{ color: '#cbd5e1' }}>–</span>}
               </div>
               <div className="ct-col ct-actions">
-                <button
-                  className={`btn btn-sm${a.sykmeldt ? ' btn-warning' : ''}`}
-                  style={a.sykmeldt ? { background: '#f1f5f9', color: '#64748b', borderColor: '#e2e8f0' } : {}}
-                  title={a.sykmeldt ? 'Tilbake på jobb' : 'Marker som sykmeldt'}
-                  onClick={() => dispatch({ type: 'UPDATE_ANSATT', payload: { ...a, sykmeldt: !a.sykmeldt } })}
-                >
-                  {a.sykmeldt ? '✅ Friskmeldt' : '🤒 Syk'}
-                </button>
+                {a.sykmeldt ? (
+                  <button
+                    className="btn btn-sm"
+                    style={{ background: '#f0fdf4', color: '#16a34a', borderColor: '#bbf7d0' }}
+                    onClick={() => dispatch({ type: 'UPDATE_ANSATT', payload: { ...a, sykmeldt: false, sykmeldtFra: '', sykmeldtTil: '' } })}
+                  >✅ Friskmeldt</button>
+                ) : (
+                  <button
+                    className="btn btn-sm"
+                    style={{ background: '#f8fafc', color: '#64748b', borderColor: '#e2e8f0' }}
+                    onClick={() => { setSykmeldtForm({ fra: new Date().toISOString().slice(0, 10), til: '' }); setSykmeldtModal(a); }}
+                  >🤒 Syk</button>
+                )}
                 <button className="btn btn-sm" onClick={() => openEdit(a)}>Rediger</button>
                 <button className="btn btn-sm btn-danger" onClick={() => handleDelete(a.id)}>Slett</button>
               </div>
@@ -330,6 +339,33 @@ export default function Ansatte() {
             <div className="form-actions">
               <button className="btn" onClick={() => setShowModal(false)}>Avbryt</button>
               <button className="btn btn-primary" onClick={handleSave}>Lagre</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {sykmeldtModal && (
+        <Modal title={`🤒 Sykmelding – ${sykmeldtModal.navn}`} onClose={() => setSykmeldtModal(null)}>
+          <div className="form">
+            <label>Fra dato</label>
+            <input type="date" value={sykmeldtForm.fra} onChange={e => setSykmeldtForm(f => ({ ...f, fra: e.target.value }))} />
+            <label>Til dato <span style={{ color: '#94a3b8', fontWeight: 400 }}>(valgfritt – la stå tom hvis ukjent)</span></label>
+            <input type="date" value={sykmeldtForm.til} min={sykmeldtForm.fra} onChange={e => setSykmeldtForm(f => ({ ...f, til: e.target.value }))} />
+            {sykmeldtForm.til && sykmeldtForm.fra && (
+              <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#475569' }}>
+                📅 Sykmeldt i {Math.max(1, Math.round((new Date(sykmeldtForm.til) - new Date(sykmeldtForm.fra)) / 86400000))} dager
+              </div>
+            )}
+            <div className="form-actions">
+              <button className="btn" onClick={() => setSykmeldtModal(null)}>Avbryt</button>
+              <button
+                className="btn btn-primary"
+                disabled={!sykmeldtForm.fra}
+                onClick={() => {
+                  dispatch({ type: 'UPDATE_ANSATT', payload: { ...sykmeldtModal, sykmeldt: true, sykmeldtFra: sykmeldtForm.fra, sykmeldtTil: sykmeldtForm.til } });
+                  setSykmeldtModal(null);
+                }}
+              >Lagre sykmelding</button>
             </div>
           </div>
         </Modal>

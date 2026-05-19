@@ -58,7 +58,7 @@ function Modal({ title, onClose, children }) {
 export default function Bemanningsplan({ readOnly = false }) {
   const { state, dispatch } = useApp();
   // Ansatte som er med i bemanningsplan-kapasitetsberegningen
-  const planAnsatte = state.ansatte.filter(a => !a.utenforBemanningsplan && !a.sykmeldt && a.fag !== 'Rørlegger');
+  const planAnsatte = state.ansatte.filter(a => !a.utenforBemanningsplan && a.fag !== 'Rørlegger');
   const [tab, setTab] = useState('uke');
   const [fullscreen, setFullscreen] = useState(false);
   const [storskjerm, setStorskjerm] = useState(false);
@@ -585,15 +585,14 @@ export default function Bemanningsplan({ readOnly = false }) {
     function UkeAnsattRad({ ansatt, prosjektId }) {
       return (
         <React.Fragment>
-          <div className="uke-row-label">
-            <div className="mini-avatar" style={{ background: fagColor(ansatt.fag) }}>
+          <div className="uke-row-label" style={ansatt.sykmeldt ? { opacity: 0.45, filter: 'grayscale(1)' } : {}}>
+            <div className="mini-avatar" style={{ background: ansatt.sykmeldt ? '#94a3b8' : fagColor(ansatt.fag) }}>
               {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
             </div>
             <div>
               <div className="row-navn">{ansatt.navn}</div>
-              <div className="row-fag" style={{ color: fagColor(ansatt.fag) }}>
-                {ansatt.innleie && <span style={{ color: '#f97316', fontWeight: 600, marginRight: 3 }}>🔧</span>}
-                {ansatt.fag}
+              <div className="row-fag" style={{ color: ansatt.sykmeldt ? '#94a3b8' : fagColor(ansatt.fag) }}>
+                {ansatt.sykmeldt ? '🤒 Sykmeldt' : ansatt.innleie ? <><span style={{ color: '#f97316', fontWeight: 600, marginRight: 3 }}>🔧</span>{ansatt.fag}</> : ansatt.fag}
               </div>
             </div>
           </div>
@@ -650,15 +649,14 @@ export default function Bemanningsplan({ readOnly = false }) {
     function MaanedAnsattRad({ ansatt, prosjektId }) {
       return (
         <React.Fragment>
-          <div className="uke-row-label">
-            <div className="mini-avatar" style={{ background: fagColor(ansatt.fag) }}>
+          <div className="uke-row-label" style={ansatt.sykmeldt ? { opacity: 0.45, filter: 'grayscale(1)' } : {}}>
+            <div className="mini-avatar" style={{ background: ansatt.sykmeldt ? '#94a3b8' : fagColor(ansatt.fag) }}>
               {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
             </div>
             <div>
               <div className="row-navn">{ansatt.navn}</div>
-              <div className="row-fag" style={{ color: fagColor(ansatt.fag) }}>
-                {ansatt.innleie && <span style={{ color: '#f97316', fontWeight: 600, marginRight: 3 }}>🔧</span>}
-                {ansatt.fag}
+              <div className="row-fag" style={{ color: ansatt.sykmeldt ? '#94a3b8' : fagColor(ansatt.fag) }}>
+                {ansatt.sykmeldt ? '🤒 Sykmeldt' : ansatt.innleie ? <><span style={{ color: '#f97316', fontWeight: 600, marginRight: 3 }}>🔧</span>{ansatt.fag}</> : ansatt.fag}
               </div>
             </div>
           </div>
@@ -1119,13 +1117,19 @@ export default function Bemanningsplan({ readOnly = false }) {
                       }}
                     >⠿</span>
                     <div className="mini-avatar" style={{
-                      background: ansatt.innleie ? '#f97316' : fagColor(ansatt.fag),
+                      background: ansatt.sykmeldt ? '#94a3b8' : ansatt.innleie ? '#f97316' : fagColor(ansatt.fag),
                       width: 22, height: 22, fontSize: 9, flexShrink: 0,
+                      filter: ansatt.sykmeldt ? 'grayscale(1)' : 'none',
                     }}>
                       {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                     </div>
-                    <span className="oversikt-row-navn">{ansatt.navn}</span>
-                    {ansatt.innleie && <span style={{ fontSize: 9, color: '#f97316', flexShrink: 0 }}>🔧</span>}
+                    <span className="oversikt-row-navn" style={ansatt.sykmeldt ? { color: '#94a3b8' } : {}}>
+                      {ansatt.navn}
+                    </span>
+                    {ansatt.sykmeldt
+                      ? <span style={{ fontSize: 9, color: '#94a3b8', flexShrink: 0 }}>🤒</span>
+                      : ansatt.innleie && <span style={{ fontSize: 9, color: '#f97316', flexShrink: 0 }}>🔧</span>
+                    }
                   </div>
 
                   {/* Bar area */}
@@ -1153,6 +1157,27 @@ export default function Bemanningsplan({ readOnly = false }) {
                     {todayIdx >= 0 && (
                       <div className="oversikt-needle" style={{ left: todayIdx * DAY_W + DAY_W / 2 }} />
                     )}
+
+                    {/* Sykmeldt-bar */}
+                    {ansatt.sykmeldt && (() => {
+                      const fra = ansatt.sykmeldtFra || viewStart;
+                      const til = ansatt.sykmeldtTil || viewEnd;
+                      const bp = barProps({ startDato: fra, sluttDato: til });
+                      if (!bp) return null;
+                      return (
+                        <div key="syk" style={{
+                          position: 'absolute', top: 4, height: ROW_H - 8,
+                          left: bp.left, width: bp.width,
+                          background: 'repeating-linear-gradient(45deg,#e2e8f0,#e2e8f0 4px,#f1f5f9 4px,#f1f5f9 8px)',
+                          borderRadius: 4, border: '1px solid #cbd5e1',
+                          display: 'flex', alignItems: 'center', paddingLeft: 6,
+                          fontSize: 10, color: '#94a3b8', fontWeight: 600, gap: 4,
+                          pointerEvents: 'none',
+                        }}>
+                          🤒 Sykmeldt{ansatt.sykmeldtTil ? ` t.o.m. ${new Date(ansatt.sykmeldtTil + 'T00:00:00').toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })}` : ''}
+                        </div>
+                      );
+                    })()}
 
                     {/* Project / ferie bars */}
                     {myTils.map(t => {
