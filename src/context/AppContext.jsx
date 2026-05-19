@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useEffect, useState, useRef } from 'react';
 import {
   loadState, FIELD_MAP,
-  saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag, saveRorTimer, saveRorPlaner, saveBefaringer, saveReklamasjoner, saveServiceJobber,
+  saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag, saveTeams, saveRorTimer, saveRorPlaner, saveBefaringer, saveReklamasjoner, saveServiceJobber,
   loadFromCloud, saveToCloud, getLocalUpdatedAt, getFieldTs, mergeWithCloud,
   uid,
 } from '../store';
@@ -216,6 +216,23 @@ function reducer(state, action) {
       const next = (state.serviceJobber || []).filter(s => s.id !== action.id);
       saveServiceJobber(next);
       return { ...state, serviceJobber: next };
+    }
+
+    // --- Teams ---
+    case 'ADD_TEAM': {
+      const next = [...(state.teams || []), { ...action.payload, id: uid() }];
+      saveTeams(next);
+      return { ...state, teams: next };
+    }
+    case 'UPDATE_TEAM': {
+      const next = (state.teams || []).map(t => t.id === action.payload.id ? { ...t, ...action.payload } : t);
+      saveTeams(next);
+      return { ...state, teams: next };
+    }
+    case 'DELETE_TEAM': {
+      const next = (state.teams || []).filter(t => t.id !== action.id);
+      saveTeams(next);
+      return { ...state, teams: next };
     }
 
     // --- Fag ---

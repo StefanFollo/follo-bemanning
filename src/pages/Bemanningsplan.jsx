@@ -6,7 +6,8 @@ import { getHolidayMap } from '../holidays';
 const FERIE_ID = '__FERIE__';
 
 const FAG_COLORS = {
-  'Bas Tømrer': '#f59e0b',
+  'Anleggsleder': '#f59e0b',
+  'Bas Tømrer': '#f59e0b', // bakoverkompatibilitet
   'Montør': '#3b82f6',
   'Lærling Tømrer': '#16a34a',
   'Maler': '#ec4899',
@@ -75,6 +76,11 @@ export default function Bemanningsplan({ readOnly = false }) {
   const [currentMonth, setCurrentMonth] = useState(() => monthStart(dateToIso(new Date())));
   const [showModal, setShowModal] = useState(false);
   const [tilForm, setTilForm] = useState({ ansattId: '', prosjektId: '', startDato: '', sluttDato: '' });
+  const [showTeamModal, setShowTeamModal] = useState(false);
+  const [teamForm, setTeamForm] = useState({ navn: '', farge: '#3b82f6', ansatteIds: [] });
+  const [redigererTeam, setRedigererTeam] = useState(null);
+  const [teamTildelForm, setTeamTildelForm] = useState({ teamId: '', prosjektId: '', startDato: '', sluttDato: '' });
+  const [visTeamTildel, setVisTeamTildel] = useState(false);
   const [barMenu, setBarMenu] = useState(null); // { t, splitDay, x, y }
   const dragRef = useRef(null);
   const scrollRestoreRef = useRef(null); // lagrer scroll-posisjoner mellom dispatch og useLayoutEffect
@@ -146,9 +152,17 @@ export default function Bemanningsplan({ readOnly = false }) {
     setShowModal(true);
   }
 
+  // Anleggsleder kan ha flere prosjekter parallelt
+  const FLER_PROSJEKT_FAG = ['Anleggsleder', 'Prosjektleder'];
+  function kanHaFlereProsjekter(ansattId) {
+    const ansatt = state.ansatte.find(a => a.id === ansattId);
+    return ansatt && FLER_PROSJEKT_FAG.includes(ansatt.fag);
+  }
+
   // Sjekker om ansatt allerede er tildelt et prosjekt i den gitte perioden
   // ekskluderTildelingId brukes ved redigering slik at vi ikke kolliderer med seg selv
   function harKonflikt(ansattId, startDato, sluttDato, ekskluderTildelingId = null) {
+    if (kanHaFlereProsjekter(ansattId)) return false; // Anleggsleder/PL kan ha flere
     return state.tildelinger.some(t =>
       t.ansattId === ansattId &&
       t.prosjektId !== FERIE_ID &&
@@ -166,6 +180,22 @@ export default function Bemanningsplan({ readOnly = false }) {
     }
     dispatch({ type: 'ADD_TILDELING', payload: tilForm });
     setShowModal(false);
+  }
+
+  // Tildel hele teamet til prosjekt
+  function handleTildelTeam(teamId, prosjektId, startDato, sluttDato) {
+    const team = (state.teams || []).find(t => t.id === teamId);
+    if (!team || !prosjektId || !startDato || !sluttDato) return;
+    let konflikter = 0;
+    for (const ansattId of (team.ansatteIds || [])) {
+      if (!harKonflikt(ansattId, startDato, sluttDato)) {
+        dispatch({ type: 'ADD_TILDELING', payload: { ansattId, prosjektId, startDato, sluttDato } });
+      } else {
+        konflikter++;
+      }
+    }
+    if (konflikter > 0) alert(`${konflikter} teammedlem(mer) var allerede opptatt og ble ikke tildelt.`);
+    setShowTeamModal(false);
   }
 
   function deleteTildeling(id) {
@@ -1333,6 +1363,168 @@ export default function Bemanningsplan({ readOnly = false }) {
   }
 
   // --- BURSDAGSKALENDER ---
+  // --- TEAM-VISNING ---
+  function TeamsVisning() {
+    const teams = state.teams || [];
+    const aktiveProsjekter = state.prosjekter.filter(p => p.status === 'aktiv' || !p.status).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+    const planAnsatteAlle = state.ansatte.filter(a => !a.innleie).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+    const TEAM_FARGER = ['#3b82f6','#16a34a','#dc2626','#9333ea','#ea580c','#0891b2','#be185d','#854d0e'];
+
+    function startNyttTeam() {
+      setRedigererTeam(null);
+      setTeamForm({ navn: '', farge: TEAM_FARGER[teams.length % TEAM_FARGER.length], ansatteIds: [] });
+      setShowTeamModal(true);
+    }
+    function startRedigerTeam(t) {
+      setRedigererTeam(t);
+      setTeamForm({ navn: t.navn, farge: t.farge || '#3b82f6', ansatteIds: [...(t.ansatteIds || [])] });
+      setShowTeamModal(true);
+    }
+    function lagreTeam() {
+      if (!teamForm.navn.trim()) return;
+      if (redigererTeam) {
+        dispatch({ type: 'UPDATE_TEAM', payload: { ...redigererTeam, ...teamForm } });
+      } else {
+        dispatch({ type: 'ADD_TEAM', payload: teamForm });
+      }
+      setShowTeamModal(false);
+    }
+    function slettTeam(id) {
+      if (confirm('Slett teamet?')) dispatch({ type: 'DELETE_TEAM', id });
+    }
+    function toggleMedlem(ansattId) {
+      setTeamForm(f => ({
+        ...f,
+        ansatteIds: f.ansatteIds.includes(ansattId)
+          ? f.ansatteIds.filter(id => id !== ansattId)
+          : [...f.ansatteIds, ansattId]
+      }));
+    }
+
+    return (
+      <div style={{ padding: '20px 0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Team</h3>
+            <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>Grupper ansatte i team og tildel hele teamet til et prosjekt på én gang</div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {teams.length > 0 && (
+              <button className="btn" onClick={() => { setTeamTildelForm({ teamId: teams[0].id, prosjektId: '', startDato: currentWeek, sluttDato: addDays(currentWeek, 4) }); setVisTeamTildel(true); }}>
+                📅 Tildel team til prosjekt
+              </button>
+            )}
+            <button className="btn btn-primary" onClick={startNyttTeam}>+ Nytt team</button>
+          </div>
+        </div>
+
+        {teams.length === 0 ? (
+          <div className="empty">Ingen team opprettet ennå. Klikk «+ Nytt team» for å lage ditt første team.</div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+            {teams.map(team => {
+              const medlemmer = (team.ansatteIds || []).map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
+              return (
+                <div key={team.id} style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: 18, boxShadow: '0 1px 4px rgba(0,0,0,.04)', borderTop: `4px solid ${team.farge || '#3b82f6'}` }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                    <div style={{ fontWeight: 800, fontSize: 16, color: '#1e293b' }}>{team.navn}</div>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn btn-sm" onClick={() => startRedigerTeam(team)}>Rediger</button>
+                      <button className="btn btn-sm btn-danger" onClick={() => slettTeam(team.id)}>Slett</button>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>{medlemmer.length} medlemmer</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {medlemmer.map(a => (
+                      <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 5, background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '3px 8px 3px 4px', fontSize: 12 }}>
+                        <div style={{ width: 20, height: 20, borderRadius: '50%', background: fagColor(a.fag), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 700, flexShrink: 0 }}>
+                          {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                        </div>
+                        <span>{a.navn}</span>
+                        <span style={{ color: '#94a3b8', fontSize: 10 }}>{a.fag}</span>
+                      </div>
+                    ))}
+                    {medlemmer.length === 0 && <span style={{ color: '#94a3b8', fontSize: 12 }}>Ingen medlemmer ennå</span>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Modal: Rediger/lag team */}
+        {showTeamModal && (
+          <Modal title={redigererTeam ? `Rediger team: ${redigererTeam.navn}` : 'Nytt team'} onClose={() => setShowTeamModal(false)}>
+            <div className="form">
+              <label>Teamnavn *</label>
+              <input value={teamForm.navn} onChange={e => setTeamForm(f => ({ ...f, navn: e.target.value }))} placeholder="f.eks. Team 1 – Tømrer" />
+              <label>Farge</label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+                {TEAM_FARGER.map(farge => (
+                  <button key={farge} type="button" onClick={() => setTeamForm(f => ({ ...f, farge }))}
+                    style={{ width: 28, height: 28, borderRadius: '50%', background: farge, border: teamForm.farge === farge ? '3px solid #1e293b' : '2px solid transparent', cursor: 'pointer' }} />
+                ))}
+              </div>
+              <label>Medlemmer ({teamForm.ansatteIds.length} valgt)</label>
+              <div style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, padding: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {planAnsatteAlle.map(a => (
+                  <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '4px 6px', borderRadius: 6, background: teamForm.ansatteIds.includes(a.id) ? '#eff6ff' : 'transparent' }}>
+                    <input type="checkbox" checked={teamForm.ansatteIds.includes(a.id)} onChange={() => toggleMedlem(a.id)} />
+                    <div style={{ width: 20, height: 20, borderRadius: '50%', background: fagColor(a.fag), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 700, flexShrink: 0 }}>
+                      {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>{a.navn}</span>
+                    <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{a.fag}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="modal-actions">
+                <button className="btn" onClick={() => setShowTeamModal(false)}>Avbryt</button>
+                <button className="btn btn-primary" onClick={lagreTeam} disabled={!teamForm.navn.trim() || teamForm.ansatteIds.length === 0}>
+                  {redigererTeam ? 'Lagre endringer' : `Opprett team (${teamForm.ansatteIds.length} medl.)`}
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {/* Modal: Tildel team til prosjekt */}
+        {visTeamTildel && (
+          <Modal title="Tildel team til prosjekt" onClose={() => setVisTeamTildel(false)}>
+            <div className="form">
+              <label>Team</label>
+              <select value={teamTildelForm.teamId} onChange={e => setTeamTildelForm(f => ({ ...f, teamId: e.target.value }))}>
+                {teams.map(t => <option key={t.id} value={t.id}>{t.navn} ({(t.ansatteIds || []).length} medl.)</option>)}
+              </select>
+              <label>Prosjekt</label>
+              <select value={teamTildelForm.prosjektId} onChange={e => setTeamTildelForm(f => ({ ...f, prosjektId: e.target.value }))}>
+                <option value="">– Velg prosjekt –</option>
+                {aktiveProsjekter.map(p => <option key={p.id} value={p.id}>{p.navn}</option>)}
+              </select>
+              <label>Fra dato</label>
+              <input type="date" value={teamTildelForm.startDato} onChange={e => setTeamTildelForm(f => ({ ...f, startDato: e.target.value }))} />
+              <label>Til dato</label>
+              <input type="date" value={teamTildelForm.sluttDato} onChange={e => setTeamTildelForm(f => ({ ...f, sluttDato: e.target.value }))} />
+              {teamTildelForm.teamId && (
+                <div style={{ fontSize: 12, color: '#64748b', background: '#f8fafc', borderRadius: 8, padding: '8px 12px', marginTop: 4 }}>
+                  Tildeler {(teams.find(t => t.id === teamTildelForm.teamId)?.ansatteIds || []).length} teammedlemmer til prosjektet
+                </div>
+              )}
+              <div className="modal-actions">
+                <button className="btn" onClick={() => setVisTeamTildel(false)}>Avbryt</button>
+                <button className="btn btn-primary"
+                  disabled={!teamTildelForm.teamId || !teamTildelForm.prosjektId || !teamTildelForm.startDato || !teamTildelForm.sluttDato}
+                  onClick={() => handleTildelTeam(teamTildelForm.teamId, teamTildelForm.prosjektId, teamTildelForm.startDato, teamTildelForm.sluttDato)}>
+                  📅 Tildel team
+                </button>
+              </div>
+            </div>
+          </Modal>
+        )}
+      </div>
+    );
+  }
+
   function BursdagVisning() {
     const today = dateToIso(new Date());
     const todayMM = today.slice(5, 7);
@@ -1645,6 +1837,9 @@ export default function Bemanningsplan({ readOnly = false }) {
         <button className={`tab-btn ${tab === 'bursdag' ? 'active' : ''}`} onClick={() => setTab('bursdag')}>
           🎂 Bursdag
         </button>
+        <button className={`tab-btn ${tab === 'teams' ? 'active' : ''}`} onClick={() => setTab('teams')}>
+          👷 Team {(state.teams || []).length > 0 && <span className="count-badge" style={{ marginLeft: 4 }}>{(state.teams || []).length}</span>}
+        </button>
       </div>
 
       <div ref={storskjermContentRef}>
@@ -1654,6 +1849,7 @@ export default function Bemanningsplan({ readOnly = false }) {
         {tab === 'prosjekt' && ProsjektOversiktVisning()}
         {tab === 'ferie' && FerieVisning()}
         {tab === 'bursdag' && BursdagVisning()}
+        {tab === 'teams' && TeamsVisning()}
       </div>
 
       {barMenu && (

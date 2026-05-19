@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 
 const FAG_COLORS = {
-  'Bas Tømrer': '#f59e0b',
+  'Anleggsleder': '#f59e0b',
+  'Bas Tømrer': '#f59e0b', // bakoverkompatibilitet
   'Montør': '#3b82f6',
   'Lærling Tømrer': '#16a34a',
   'Maler': '#ec4899',

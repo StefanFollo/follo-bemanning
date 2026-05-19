@@ -148,7 +148,7 @@ const PRORESULT_WK22_41 = [
   ['Rytis 2',          'OBE',               'OBE',                '2026-06-25', '2026-06-29'],
 ];
 
-const DEFAULT_FAG = ['Bas Tømrer', 'Montør', 'Lærling Tømrer', 'Maler', 'Rørlegger', 'Tømrer', 'Flislegger', 'Prosjektleder'];
+const DEFAULT_FAG = ['Anleggsleder', 'Montør', 'Lærling Tømrer', 'Maler', 'Rørlegger', 'Tømrer', 'Flislegger', 'Prosjektleder'];
 
 function mkId(n) { return 'seed' + n; }
 
@@ -264,6 +264,7 @@ export const FIELD_MAP = {
   tildelinger:  'fbs_tildelinger',
   oppgaver:     'fbs_oppgaver',
   fag:          'fbs_fag',
+  teams:        'fbs_teams',
   rorTimer:     'fbs_ror_timer',
   rorPlaner:    'fbs_ror_planer',
   befaringer:   'fbs_befaringer',
@@ -412,11 +413,30 @@ export function loadState() {
   }
 
   return {
-    ansatte: load('fbs_ansatte', SEED_ANSATTE),
+    ansatte: (() => {
+      // Migrer 'Bas Tømrer' → 'Anleggsleder' på eksisterende ansatte
+      const data = load('fbs_ansatte', SEED_ANSATTE);
+      if (data.some(a => a.fag === 'Bas Tømrer')) {
+        const migrated = data.map(a => a.fag === 'Bas Tømrer' ? { ...a, fag: 'Anleggsleder' } : a);
+        saveRaw('fbs_ansatte', migrated);
+        return migrated;
+      }
+      return data;
+    })(),
     prosjekter: load('fbs_prosjekter', SEED_PROSJEKTER),
     tildelinger: load('fbs_tildelinger', SEED_TILDELINGER),
     oppgaver: load('fbs_oppgaver', []),
-    fag: load('fbs_fag', DEFAULT_FAG),
+    fag: (() => {
+      // Migrer 'Bas Tømrer' → 'Anleggsleder' i fag-listen
+      const data = load('fbs_fag', DEFAULT_FAG);
+      if (data.includes('Bas Tømrer')) {
+        const migrated = data.map(f => f === 'Bas Tømrer' ? 'Anleggsleder' : f);
+        saveRaw('fbs_fag', migrated);
+        return migrated;
+      }
+      return data;
+    })(),
+    teams: load('fbs_teams', []),
     rorTimer: load('fbs_ror_timer', []),
     rorPlaner: load('fbs_ror_planer', []),
     befaringer: load('fbs_befaringer', []),
@@ -432,6 +452,7 @@ export function saveOppgaver(data)      { save('fbs_oppgaver',       data, 'oppg
 export function saveFag(data)           { save('fbs_fag',            data, 'fag'); }
 export function saveRorTimer(data)      { save('fbs_ror_timer',      data, 'rorTimer'); }
 export function saveRorPlaner(data)     { save('fbs_ror_planer',     data, 'rorPlaner'); }
+export function saveTeams(data)         { save('fbs_teams',           data, 'teams'); }
 export function saveBefaringer(data)    { save('fbs_befaringer',     data, 'befaringer'); }
 export function saveReklamasjoner(data) { save('fbs_reklamasjoner',  data, 'reklamasjoner'); }
 export function saveServiceJobber(data) { save('fbs_service_jobber', data, 'serviceJobber'); }
