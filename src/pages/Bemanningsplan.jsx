@@ -1392,7 +1392,15 @@ export default function Bemanningsplan({ readOnly = false }) {
     function slettTeam(id) {
       if (confirm('Slett teamet?')) dispatch({ type: 'DELETE_TEAM', id });
     }
+    // IDs som allerede tilhører et annet team (ikke det vi redigerer nå)
+    const opptattIAnnetTeam = new Set(
+      teams
+        .filter(t => !redigererTeam || t.id !== redigererTeam.id)
+        .flatMap(t => t.ansatteIds || [])
+    );
+
     function toggleMedlem(ansattId) {
+      if (opptattIAnnetTeam.has(ansattId)) return;
       setTeamForm(f => ({
         ...f,
         ansatteIds: f.ansatteIds.includes(ansattId)
@@ -1467,16 +1475,24 @@ export default function Bemanningsplan({ readOnly = false }) {
               </div>
               <label>Medlemmer ({teamForm.ansatteIds.length} valgt)</label>
               <div style={{ maxHeight: 260, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, padding: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {planAnsatteAlle.map(a => (
-                  <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '4px 6px', borderRadius: 6, background: teamForm.ansatteIds.includes(a.id) ? '#eff6ff' : 'transparent' }}>
-                    <input type="checkbox" checked={teamForm.ansatteIds.includes(a.id)} onChange={() => toggleMedlem(a.id)} />
-                    <div style={{ width: 20, height: 20, borderRadius: '50%', background: fagColor(a.fag), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 700, flexShrink: 0 }}>
-                      {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                    </div>
-                    <span style={{ fontSize: 13, fontWeight: 500 }}>{a.navn}</span>
-                    <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{a.fag}</span>
-                  </label>
-                ))}
+                {planAnsatteAlle.map(a => {
+                  const tatt = opptattIAnnetTeam.has(a.id);
+                  const valgt = teamForm.ansatteIds.includes(a.id);
+                  const annetTeam = tatt ? teams.find(t => (!redigererTeam || t.id !== redigererTeam.id) && (t.ansatteIds || []).includes(a.id)) : null;
+                  return (
+                    <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: tatt ? 'not-allowed' : 'pointer', padding: '4px 6px', borderRadius: 6, opacity: tatt ? 0.45 : 1, background: valgt ? '#eff6ff' : 'transparent' }}>
+                      <input type="checkbox" checked={valgt} disabled={tatt} onChange={() => toggleMedlem(a.id)} />
+                      <div style={{ width: 20, height: 20, borderRadius: '50%', background: fagColor(a.fag), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 700, flexShrink: 0 }}>
+                        {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </div>
+                      <span style={{ fontSize: 13, fontWeight: 500 }}>{a.navn}</span>
+                      {tatt
+                        ? <span style={{ fontSize: 11, color: '#f97316', marginLeft: 'auto' }}>i {annetTeam?.navn || 'annet team'}</span>
+                        : <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{a.fag}</span>
+                      }
+                    </label>
+                  );
+                })}
               </div>
               <div className="modal-actions">
                 <button className="btn" onClick={() => setShowTeamModal(false)}>Avbryt</button>
