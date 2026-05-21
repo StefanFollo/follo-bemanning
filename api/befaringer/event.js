@@ -236,10 +236,13 @@ export default async function handler(req, res) {
             b.id === kildeBefaringId ? { ...b, prosjektId: nyttProsjektId } : b
           )
         }
+        const nowTs = Date.now()
         const oppdatertState = {
           ...state,
           prosjekter: [...prosjekter, nyttProsjekt],
           befaringer: oppdatertBefaringer,
+          _fieldTs: { ...(state._fieldTs || {}), prosjekter: nowTs },
+          _updatedAt: nowTs,
         }
         await redis.set('fbs_state', oppdatertState)
         // Send e-post-varsel

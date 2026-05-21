@@ -167,12 +167,15 @@ export default async function handler(req, res) {
 
       const generated = await genererMedAI({ ...tilbudData, adresse: prosjekt.adresse }, apiKey)
 
+      const nowTs1 = Date.now()
       const oppdatertState = {
         ...state,
         prosjekter: prosjekter.map(p => p.id === body.prosjektId
           ? { ...p, ...generated, fdGenDato: new Date().toISOString(), fdGenAv: 'AI' }
           : p
         ),
+        _fieldTs: { ...(state._fieldTs || {}), prosjekter: nowTs1 },
+        _updatedAt: nowTs1,
       }
       await redis.set('fbs_state', oppdatertState)
 
@@ -200,6 +203,7 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Prosjekt ikke funnet' })
     }
 
+    const nowTs2 = Date.now()
     const oppdatertState = {
       ...state,
       prosjekter: prosjekter.map(p => p.id === prosjektId
@@ -216,6 +220,8 @@ export default async function handler(req, res) {
           }
         : p
       ),
+      _fieldTs: { ...(state._fieldTs || {}), prosjekter: nowTs2 },
+      _updatedAt: nowTs2,
     }
     await redis.set('fbs_state', oppdatertState)
 

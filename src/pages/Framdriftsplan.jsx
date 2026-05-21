@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { uid } from '../store';
+import { uid, mergeWithCloud } from '../store';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -632,20 +632,27 @@ export default function Framdriftsplan() {
   const [filter,     setFilter]     = useState('Alle');
   const [synker,     setSynker]     = useState(false);
   const [sistSynk,   setSistSynk]   = useState(null);
+  const [synkFeil,   setSynkFeil]   = useState('');
 
   // Force cloud sync når siden lastes
   useEffect(() => { syncFraCloud(); }, []);
 
   async function syncFraCloud() {
     setSynker(true);
+    setSynkFeil('');
     try {
       const token = localStorage.getItem('fbs_token') || '';
+      if (!token) { setSynkFeil('Ikke innlogget'); return; }
       const r = await fetch('/api/state', { headers: { Authorization: `Bearer ${token}` } });
-      if (!r.ok) return;
-      const data = await r.json();
-      dispatch({ type: 'LOAD_STATE', payload: data });
+      if (r.status === 401) { setSynkFeil('Innlogging utløpt – last siden på nytt'); return; }
+      if (!r.ok) { setSynkFeil(`Sky-feil (${r.status})`); return; }
+      const cloudState = await r.json();
+      if (!cloudState || typeof cloudState !== 'object') { setSynkFeil('Ugyldig sky-data'); return; }
+      // Bruk mergeWithCloud slik at prosjekter fra sky alltid vinner hvis sky er nyere
+      const merged = mergeWithCloud(state, cloudState);
+      dispatch({ type: 'LOAD_STATE', payload: merged });
       setSistSynk(new Date());
-    } catch { /* stille feil — offline OK */ }
+    } catch { setSynkFeil('Nettverksfeil – sjekk internett'); }
     finally { setSynker(false); }
   }
 
@@ -701,15 +708,20 @@ export default function Framdriftsplan() {
           <h2 className="fd2-page-tittel">Framdriftsplan</h2>
           <p className="fd2-page-sub">{aktive.length} aktive prosjekter</p>
         </div>
-        <button className="btn btn-sm fd2-sync-btn" onClick={syncFraCloud} disabled={synker}
-          title="Hent siste data fra sky">
-          {synker ? '⏳ Synker…' : '🔄 Synk'}
-          {sistSynk && !synker && (
-            <span className="fd2-sync-tid">
-              {sistSynk.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })}
-            </span>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+          <button className="btn btn-sm fd2-sync-btn" onClick={syncFraCloud} disabled={synker}
+            title="Hent siste data fra sky">
+            {synker ? '⏳ Synker…' : '🔄 Synk'}
+            {sistSynk && !synker && (
+              <span className="fd2-sync-tid">
+                {sistSynk.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
+          </button>
+          {synkFeil && (
+            <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 500 }}>⚠ {synkFeil}</span>
           )}
-        </button>
+        </div>
       </div>
 
       <div className="fd2-filter-bar">

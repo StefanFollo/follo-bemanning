@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     try {
       // Sikkerhetssperre: ikke tillat lagring som reduserer befaringer drastisk
       // (beskytter mot at seed-data ved ny browser-oppstart overskriver sky-data)
-      const newState = req.body;
+      let newState = req.body;
       const currentState = await redis.get('fbs_state');
       if (currentState) {
         // Befaringer: blokker hvis mer enn 5 færre
@@ -64,6 +64,29 @@ export default async function handler(req, res) {
               error: `Konflikt: forsøker å lagre ${nxt} ansatte, men det finnes ${cur} i skyen. Last inn siden på nytt.`,
               field: 'ansatte', currentCount: cur, newCount: nxt,
             });
+          }
+        }
+        // Prosjekter: MERGE (union by ID) — bevar prosjekter lagt til av tilbuds-appen
+        // som ikke har rukket å synke til nettleseren ennå
+        if (Array.isArray(currentState.prosjekter) && Array.isArray(newState.prosjekter)) {
+          const incomingIds = new Set(newState.prosjekter.map(p => p.id));
+          const missingProsjekter = currentState.prosjekter.filter(p => !incomingIds.has(p.id));
+          if (missingProsjekter.length > 0) {
+            console.log(`[state] Beholder ${missingProsjekter.length} sky-prosjekter som mangler lokalt`);
+            newState = { ...newState, prosjekter: [...newState.prosjekter, ...missingProsjekter] };
+          }
+          // Bevar høyeste _fieldTs.prosjekter — aldri la nettleseren overskrive
+          // en nyere timestamp satt av tilbuds-appen (event.js / framdrift.js)
+          const cloudTs = currentState._fieldTs?.prosjekter || 0;
+          const incomingTs = newState._fieldTs?.prosjekter || 0;
+          if (cloudTs > incomingTs) {
+            newState = { ...newState, _fieldTs: { ...(newState._fieldTs || {}), prosjekter: cloudTs } };
+          }
+          // Bevar høyeste _updatedAt så polling i klientene kan oppdage endringen
+          const cloudUpd = currentState._updatedAt || 0;
+          const incomingUpd = newState._updatedAt || 0;
+          if (cloudUpd > incomingUpd) {
+            newState = { ...newState, _updatedAt: cloudUpd };
           }
         }
       }
