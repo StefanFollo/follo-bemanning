@@ -533,6 +533,7 @@ body {
   letter-spacing: .05em; color: #94a3b8;
   padding: 4px 8px; flex-shrink: 0;
   border-right: 1px solid #e2e8f0;
+  position: sticky; left: 0; z-index: 3; background: #f8fafc;
 }
 .oversikt-kap-cell {
   display: flex; align-items: center; justify-content: center;
@@ -561,20 +562,27 @@ body {
   min-height: 200px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
+  cursor: grab;
+  user-select: none;
 }
+.oversikt-scroll-wrap:active { cursor: grabbing; }
+/* Gjenopprett cursor for interaktive elementer inni */
+.oversikt-scroll-wrap .oversikt-bar,
+.oversikt-scroll-wrap .oversikt-handle,
+.oversikt-scroll-wrap button { cursor: pointer; user-select: auto; }
 
 /* Week header row */
 .oversikt-wk-header-row {
   display: flex;
-  position: sticky;
-  top: 0;
-  z-index: 10;
 }
 .oversikt-corner {
   background: #1e293b;
   border-right: 1px solid #334155;
   flex-shrink: 0;
   height: 26px;
+  position: sticky;
+  left: 0;
+  z-index: 4;
 }
 .oversikt-wk-cell {
   background: #1e293b;
@@ -598,9 +606,6 @@ body {
 /* Day header row */
 .oversikt-day-header-row {
   display: flex;
-  position: sticky;
-  top: 26px;
-  z-index: 10;
 }
 .oversikt-day-corner {
   background: #f8fafc;
@@ -618,7 +623,7 @@ body {
   text-transform: uppercase;
   position: sticky;
   left: 0;
-  z-index: 11;
+  z-index: 4;
 }
 .oversikt-day-cell {
   background: #f8fafc;
@@ -669,6 +674,10 @@ body {
   padding: 0 8px;
   border-right: 2px solid #e2e8f0;
   font-size: 11px;
+  position: sticky;
+  left: 0;
+  z-index: 3;
+  background: inherit;
   font-weight: 500;
   color: #1e293b;
   white-space: nowrap;

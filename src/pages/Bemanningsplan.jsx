@@ -67,7 +67,8 @@ export default function Bemanningsplan({ readOnly = false }) {
   const storskjermContentRef = useRef(null);
   const [ukeMode, setUkeMode] = useState('dag'); // 'dag' | 'uke' | 'maaned'
   const [ferieYearOffset, setFerieYearOffset] = useState(0);
-  const [ganttPageOffset, setGanttPageOffset] = useState(0);
+  const oversiktScrollRef = useRef(null);
+  const oversiktPanRef    = useRef(null); // { startX, startScrollLeft }
   const [ansatteOrder, setAnsatteOrder] = useState(() => {
     try { return JSON.parse(localStorage.getItem('fbs_ansatte_order_v2') || '[]'); } catch { return []; }
   });
@@ -112,11 +113,23 @@ export default function Bemanningsplan({ readOnly = false }) {
     });
   }, [storskjerm, tab, ukeMode]);
 
+  // Scroll Oversikt-tidslinja til i dag når fanen åpnes
+  useEffect(() => {
+    if (tab !== 'oversikt') return;
+    const el = oversiktScrollRef.current;
+    if (!el) return;
+    const LABEL_W = 162;
+    const DAY_W   = 36;
+    const PAST_WEEKS = 4;
+    const targetLeft = LABEL_W + PAST_WEEKS * 5 * DAY_W - 120;
+    el.scrollLeft = Math.max(0, targetLeft);
+  }, [tab]);
+
   // useLayoutEffect kjøres synkront etter DOM-oppdatering men FØR nettleseren tegner.
   // Bruker dette til å gjenopprette scroll etter dispatch, selv om komponenten ble re-mountet.
   useLayoutEffect(() => {
     if (!scrollRestoreRef.current) return;
-    const { winY, winX, wraps } = scrollRestoreRef.current;
+    const { winY, winX, wraps, oversiktLeft, oversiktTop } = scrollRestoreRef.current;
     scrollRestoreRef.current = null;
     window.scrollTo({ top: winY, left: winX, behavior: 'instant' });
     const newWraps = [...document.querySelectorAll('.uke-grid-wrap')];
@@ -126,6 +139,10 @@ export default function Bemanningsplan({ readOnly = false }) {
         el.scrollLeft = wraps[i].left;
       }
     });
+    if (oversiktScrollRef.current && oversiktLeft !== null) {
+      oversiktScrollRef.current.scrollLeft = oversiktLeft;
+      oversiktScrollRef.current.scrollTop  = oversiktTop;
+    }
   });
 
   // Kun hverdager (Man–Fre) over 52 uker = ~260 kolonner
@@ -243,10 +260,14 @@ export default function Bemanningsplan({ readOnly = false }) {
   // Scroll-gjenopprettelsen skjer i useLayoutEffect over, etter at DOM er oppdatert
   function dispatchKeepScroll(action) {
     const wraps = [...document.querySelectorAll('.uke-grid-wrap')];
+    const oversiktLeft = oversiktScrollRef.current ? oversiktScrollRef.current.scrollLeft : null;
+    const oversiktTop  = oversiktScrollRef.current ? oversiktScrollRef.current.scrollTop  : null;
     scrollRestoreRef.current = {
       winY: window.scrollY,
       winX: window.scrollX,
       wraps: wraps.map(el => ({ top: el.scrollTop, left: el.scrollLeft })),
+      oversiktLeft,
+      oversiktTop,
     };
     dispatch(action);
   }
@@ -871,16 +892,17 @@ export default function Bemanningsplan({ readOnly = false }) {
   // --- MULTI-UKE GANTT OVERSIKT ---
   function OversiktVisning() {
     const today = dateToIso(new Date());
-    const GANTT_WEEKS = 10;
+    const PAST_WEEKS  = 4;   // uker før i dag som vises
+    const GANTT_WEEKS = 60;  // total antall uker (4 bak + 56 frem ≈ 14 måneder)
     const DAY_W = 36;   // px per weekday
     const ROW_H = 34;   // px per employee row
     const LABEL_W = 162;
 
     const thisYear = new Date().getFullYear();
-    const HOLIDAYS = getHolidayMap(thisYear - 1, thisYear + 2);
+    const HOLIDAYS = getHolidayMap(thisYear - 1, thisYear + 3);
 
-    // Page-based navigation: each page = GANTT_WEEKS weeks
-    const baseWeek = weekStart(addDays(today, ganttPageOffset * GANTT_WEEKS * 7));
+    // Fast startpunkt – alltid 4 uker før i dag, uavhengig av navigasjon
+    const baseWeek = weekStart(addDays(today, -PAST_WEEKS * 7));
 
     const weeks = [];
     for (let w = 0; w < GANTT_WEEKS; w++) {
@@ -965,12 +987,13 @@ export default function Bemanningsplan({ readOnly = false }) {
       <div>
         {/* Navigation */}
         <div className="uke-nav">
-          <button className="btn" onClick={() => setGanttPageOffset(o => o - 1)}>← Forrige</button>
-          <span className="uke-label">
-            Uke {wkNr(weeks[0].start)} – {wkNr(weeks[GANTT_WEEKS - 1].start)}, {weeks[0].start.slice(0, 4)}
-          </span>
-          <button className="btn" onClick={() => setGanttPageOffset(0)}>I dag</button>
-          <button className="btn" onClick={() => setGanttPageOffset(o => o + 1)}>Neste →</button>
+          <button className="btn" title="Gå til i dag"
+            onClick={() => {
+              if (!oversiktScrollRef.current) return;
+              const todayIdx = allDays.indexOf(today);
+              if (todayIdx >= 0) oversiktScrollRef.current.scrollLeft = LABEL_W + todayIdx * DAY_W - 120;
+            }}>⊙ I dag</button>
+          <span style={{ fontSize: 12, color: '#94a3b8' }}>Dra tidslinjen for å navigere</span>
           {ansatteOrder.length > 0 && (state.teams || []).length === 0 && (
             <button className="btn" title="Tilbakestill til alfabetisk rekkefølge"
               onClick={() => saveOrder([])}>↺ Alfabetisk</button>
@@ -995,8 +1018,30 @@ export default function Bemanningsplan({ readOnly = false }) {
           </div>
         )}
 
-        <div className="oversikt-scroll-wrap">
-          <div style={{ minWidth: LABEL_W + totalW }}>
+        <div className="oversikt-scroll-wrap" ref={oversiktScrollRef}
+          onPointerDown={e => {
+            if (e.target.closest('.oversikt-bar,.oversikt-handle,.oversikt-drag-handle,button')) return;
+            if (dragRef.current) return;
+            oversiktPanRef.current = { startX: e.clientX, startScrollLeft: oversiktScrollRef.current.scrollLeft };
+            e.currentTarget.setPointerCapture(e.pointerId);
+            e.currentTarget.style.cursor = 'grabbing';
+          }}
+          onPointerMove={e => {
+            if (!oversiktPanRef.current) return;
+            const dx = e.clientX - oversiktPanRef.current.startX;
+            oversiktScrollRef.current.scrollLeft = oversiktPanRef.current.startScrollLeft - dx;
+          }}
+          onPointerUp={e => {
+            if (!oversiktPanRef.current) return;
+            oversiktPanRef.current = null;
+            e.currentTarget.style.cursor = '';
+          }}
+          onPointerCancel={e => {
+            oversiktPanRef.current = null;
+            e.currentTarget.style.cursor = '';
+          }}
+        >
+          <div style={{ display: 'inline-block', verticalAlign: 'top', width: LABEL_W + totalW, minWidth: '100%' }}>
 
             {/* ── Uke-header ─────────────────────────────────── */}
             <div className="oversikt-wk-header-row">
