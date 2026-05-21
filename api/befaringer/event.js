@@ -27,7 +27,7 @@ import { Resend } from 'resend'
 import { validerInterAppToken } from '../_interApp.js'
 
 export const config = {
-  api: { bodyParser: { sizeLimit: '1mb' } },
+  api: { bodyParser: { sizeLimit: '4mb' } },
 }
 
 const redis = new Redis({
@@ -156,10 +156,23 @@ export default async function handler(req, res) {
           if (pl) plKontakt = { navn: pl.navn || pl.fornavn || null, epost: pl.epost || pl.email || null }
         }
         const oppdatert = { ...b, status: nyStatus, sistEvent: type, sistEventDato: naa }
-        if (type === 'tilbud-sendt') {
-          oppdatert.tilbudId = tilbudId
-          if (tilbudLink) oppdatert.tilbudLink = tilbudLink
+        // Lagre alle tilbuds-data-felter på befaringen (Steg 2)
+        if (data) {
+          if (data.telefon != null && data.telefon !== '') oppdatert.telefon = data.telefon
+          if (data.epost != null && data.epost !== '') oppdatert.epost = data.epost
+          if (data.estimertSum != null) oppdatert.estimertSum = parseFloat(data.estimertSum) || 0
+          if (data.pristype) oppdatert.pristype = data.pristype
+          if (data.tilbudsfrist) oppdatert.tilbudFrist = data.tilbudsfrist
+          if (data.oppstart) oppdatert.oppstartTekst = data.oppstart
+          if (data.oppstartDato) oppdatert.oppstartDato = data.oppstartDato
+          if (data.varighet) oppdatert.varighetTekst = data.varighet
+          if (data.varighetUker != null) oppdatert.varighetUker = data.varighetUker
+          if (Array.isArray(data.fag) && data.fag.length > 0) oppdatert.fag = data.fag
+          if (Array.isArray(data.poster) && data.poster.length > 0) oppdatert.poster = data.poster
+          if (Array.isArray(data.valgteOpsjoner)) oppdatert.valgteOpsjoner = data.valgteOpsjoner
         }
+        if (tilbudLink) oppdatert.tilbudLink = tilbudLink
+        if (tilbudId) oppdatert.tilbudId = tilbudId
         if (type === 'vunnet') {
           oppdatert.resultat = 'vunnet'
           oppdatert.importertTilTilbudId = tilbudId
@@ -202,6 +215,20 @@ export default async function handler(req, res) {
           data.estimertSum ? `Estimert: ${fmt(data.estimertSum)} kr` : '',
           tilbudLink ? `Tilbud: ${tilbudLink}` : '',
         ].filter(Boolean).join('\n')
+        // Bygg timer-dict fra poster-kalkyle for AI-framdrift
+        const poster = Array.isArray(data.poster) ? data.poster : []
+        const timerPerFag = {}
+        for (const post of poster) {
+          if (Array.isArray(post.kalkyle?.timer)) {
+            for (const rad of post.kalkyle.timer) {
+              const fag = (rad.fag || 'annet').toLowerCase()
+              timerPerFag[fag] = (timerPerFag[fag] || 0) + (parseFloat(rad.antall) || 0)
+            }
+          }
+        }
+        const kildeTilbudData = (poster.length > 0 || Object.keys(timerPerFag).length > 0)
+          ? { poster, timer: timerPerFag, oppstart: data.oppstart || '', varighet: data.varighet || '', kundenavn: data.kundenavn || '' }
+          : null
         const nyttProsjekt = {
           id: nyId('p'),
           navn,
@@ -224,10 +251,16 @@ export default async function handler(req, res) {
           fag: Array.isArray(data.fag) ? data.fag : [],
           estimertSum: parseFloat(data.estimertSum) || 0,
           oppstartTekst: data.oppstart || '',
+          oppstartDato: data.oppstartDato || '',
           varighetTekst: data.varighet || '',
+          varighetUker: data.varighetUker || null,
+          tilbudsfrist: data.tilbudsfrist || '',
+          poster,
+          valgteOpsjoner: Array.isArray(data.valgteOpsjoner) ? data.valgteOpsjoner : [],
           tilbudLink: tilbudLink || '',
           opprettet: naa,
           opprettetFra: 'tilbud-app',
+          ...(kildeTilbudData ? { kildeTilbudData } : {}),
         }
         nyttProsjektId = nyttProsjekt.id
         // Knytt prosjekt-ID på befaringen

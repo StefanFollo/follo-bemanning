@@ -4,6 +4,21 @@ import { dateToIso, addDays, weekStart, overlaps, PROSJEKT_PALETTE, uid } from '
 
 const JOBB_TYPER = ['Ny bygg', 'Tilbygg', 'Tak jobb', 'Fasade jobb', 'Bad', 'Tømrer', 'Maling', 'Rørlegger', 'Flislegging', 'Elektro', 'Rehabilitering', 'Annet'];
 
+function fmtKr(n) { return Math.round(n).toLocaleString('nb-NO') + ' kr'; }
+
+function byggTimer(poster) {
+  const timer = {};
+  for (const post of (poster || [])) {
+    if (Array.isArray(post.kalkyle?.timer)) {
+      for (const rad of post.kalkyle.timer) {
+        const fag = (rad.fag || 'annet').toLowerCase();
+        timer[fag] = (timer[fag] || 0) + (parseFloat(rad.antall) || 0);
+      }
+    }
+  }
+  return timer;
+}
+
 const STATUS = {
   planlagt:      { label: 'Planlagt befaring',   farge: '#3b82f6', bg: '#eff6ff', ikon: '📋' },
   tilbud_arbeid: { label: 'Tilbud under arbeid', farge: '#f59e0b', bg: '#fffbeb', ikon: '✏️' },
@@ -189,21 +204,40 @@ export default function BefaringPlan() {
   function opprettProsjekt() {
     if (!prosjektForm.navn.trim()) return;
     const prosjektId = uid();
+    const bef = visKapasitet || {};
+    // Bygg kildeTilbudData for AI-framdrift fra tilbuds-data på befaringen
+    const poster = bef.poster || [];
+    const timerPerFag = byggTimer(poster);
+    const kildeTilbudData = (poster.length > 0 || Object.keys(timerPerFag).length > 0)
+      ? { poster, timer: timerPerFag, oppstart: bef.oppstartTekst || '', varighet: bef.varighetTekst || '', kundenavn: bef.kontaktNavn || '' }
+      : null;
     dispatch({
       type: 'ADD_PROSJEKT',
       payload: {
         id: prosjektId,
         navn: prosjektForm.navn,
-        adresse: visKapasitet?.adresse || '',
-        jobbType: visKapasitet?.jobbType || '',
-        belop: visKapasitet?.estimertBelop || '',
-        prosjektlederId: visKapasitet?.prosjektlederId || '',
+        adresse: bef.adresse || '',
+        jobbType: bef.jobbType || '',
+        belop: bef.estimertBelop || '',
+        estimertSum: bef.estimertSum || 0,
+        prosjektlederId: bef.prosjektlederId || '',
         startDato: prosjektForm.startDato,
         sluttDato: prosjektForm.sluttDato,
         status: 'aktiv',
-        beskrivelse: [visKapasitet?.notat, visKapasitet?.kommentar].filter(Boolean).join('\n\n') || '',
+        beskrivelse: [bef.notat, bef.kommentar].filter(Boolean).join('\n\n') || '',
         farge: prosjektForm.farge,
-        befaringId: visKapasitet?.id || '',
+        befaringId: bef.id || '',
+        // Tilbudsdata fra tilbuds-appen
+        poster,
+        fag: bef.fag || [],
+        pristype: bef.pristype || '',
+        oppstartTekst: bef.oppstartTekst || '',
+        varighetTekst: bef.varighetTekst || '',
+        varighetUker: bef.varighetUker || null,
+        valgteOpsjoner: bef.valgteOpsjoner || [],
+        tilbudLink: bef.tilbudLink || '',
+        kildeBefaringId: bef.id || '',
+        ...(kildeTilbudData ? { kildeTilbudData } : {}),
       },
     });
     if (prosjektForm.lagTildeling && visKapasitet?.prosjektlederId && prosjektForm.startDato) {
@@ -722,6 +756,46 @@ export default function BefaringPlan() {
                   </div>
                 </div>
               </div>
+
+              {/* Fra tilbuds-appen (read-only) */}
+              {redigerer && (redigerer.poster?.length > 0 || redigerer.tilbudLink || redigerer.estimertSum > 0 || redigerer.fag?.length > 0) && (
+                <div className="bef-modal-seksjon" style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '10px 14px' }}>
+                  <div className="bef-modal-seksjon-tittel" style={{ color: '#16a34a', marginBottom: 8 }}>📄 Fra tilbuds-appen</div>
+                  <div style={{ fontSize: 13, display: 'grid', gap: 5 }}>
+                    {redigerer.estimertSum > 0 && (
+                      <div>
+                        💰 <strong>{fmtKr(redigerer.estimertSum)}</strong>
+                        {redigerer.pristype && <span style={{ marginLeft: 8, color: '#64748b' }}>({redigerer.pristype})</span>}
+                      </div>
+                    )}
+                    {Array.isArray(redigerer.fag) && redigerer.fag.length > 0 && (
+                      <div>🔨 Fag: <strong>{redigerer.fag.join(', ')}</strong></div>
+                    )}
+                    {redigerer.varighetTekst && <div>⏱ Varighet: {redigerer.varighetTekst}</div>}
+                    {redigerer.oppstartTekst && <div>🚀 Oppstart: {redigerer.oppstartTekst}</div>}
+                    {Array.isArray(redigerer.poster) && redigerer.poster.length > 0 && (
+                      <div style={{ marginTop: 4 }}>
+                        <div style={{ fontWeight: 600, marginBottom: 3, color: '#374151' }}>Tilbudsposter ({redigerer.poster.length}):</div>
+                        {redigerer.poster.slice(0, 6).map((p, i) => (
+                          <div key={i} style={{ paddingLeft: 8, color: '#374151', fontSize: 12, lineHeight: '1.6' }}>
+                            • {p.navn || p.beskrivelse || `Post ${i + 1}`}
+                            {p.kalkyle?.totalPris > 0 && <span style={{ color: '#64748b' }}> — {fmtKr(p.kalkyle.totalPris)}</span>}
+                          </div>
+                        ))}
+                        {redigerer.poster.length > 6 && (
+                          <div style={{ paddingLeft: 8, color: '#94a3b8', fontSize: 12 }}>… og {redigerer.poster.length - 6} til</div>
+                        )}
+                      </div>
+                    )}
+                    {redigerer.tilbudLink && (
+                      <a href={redigerer.tilbudLink} target="_blank" rel="noopener noreferrer"
+                        style={{ color: '#2563eb', fontSize: 12, textDecoration: 'none', marginTop: 2 }}>
+                        🔗 Åpne tilbud →
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Status */}
               <div className="bef-modal-seksjon">
