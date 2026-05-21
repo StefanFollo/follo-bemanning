@@ -4,7 +4,8 @@ import { dateToIso } from '../store';
 
 const REKL_STATUS = {
   ny:           { label: 'Ny',             farge: '#3b82f6', bg: '#eff6ff', ikon: '🔵' },
-  under_arbeid: { label: 'Under utbedring', farge: '#f59e0b', bg: '#fffbeb', ikon: '🔨' },
+  planlagt:     { label: 'Planlagt',       farge: '#f59e0b', bg: '#fffbeb', ikon: '📅' },
+  under_arbeid: { label: 'Under utbedring', farge: '#8b5cf6', bg: '#f5f3ff', ikon: '🔨' },
   utbedret:     { label: 'Utbedret',        farge: '#16a34a', bg: '#f0fdf4', ikon: '✅' },
   avvist:       { label: 'Avvist',          farge: '#dc2626', bg: '#fef2f2', ikon: '🚫' },
   lukket:       { label: 'Lukket',          farge: '#6b7280', bg: '#f9fafb', ikon: '🔒' },
@@ -59,7 +60,7 @@ export default function Reklamasjon() {
   const [visModal, setVisModal] = useState(false);
   const [redigerer, setRedigerer] = useState(null);
   const [form, setForm] = useState(tomForm());
-  const [filter, setFilter] = useState('alle');
+  const [statusFilter, setStatusFilter] = useState(null);
   const [sok, setSok] = useState('');
 
   function ansattFarge(id) {
@@ -212,7 +213,7 @@ export default function Reklamasjon() {
 
   // Filtrert og søkt liste
   const filtrert = reklamasjoner
-    .filter(r => filter === 'alle' || r.status === filter)
+    .filter(r => !statusFilter || r.status === statusFilter)
     .filter(r => {
       if (!sok.trim()) return true;
       const q = sok.toLowerCase();
@@ -230,9 +231,15 @@ export default function Reklamasjon() {
       return b.dato.localeCompare(a.dato);
     });
 
-  // Kanban-kolonner: aktive (ny + under_arbeid) og avsluttede (utbedret + avvist + lukket)
-  const aktive     = filtrert.filter(r => r.status === 'ny' || r.status === 'under_arbeid');
-  const avsluttede = filtrert.filter(r => r.status === 'utbedret' || r.status === 'avvist' || r.status === 'lukket');
+  const nyeRekl      = filtrert.filter(r => r.status === 'ny');
+  const planlagteRekl = filtrert.filter(r => r.status === 'planlagt');
+  const underArbeid  = filtrert.filter(r => r.status === 'under_arbeid');
+  const utbedredeRekl = filtrert.filter(r => r.status === 'utbedret' || r.status === 'avvist' || r.status === 'lukket');
+
+  function sumKr(arr) {
+    const total = arr.reduce((s, r) => s + (Number(r.kostnad) || 0), 0);
+    return total > 0 ? new Intl.NumberFormat('nb-NO', { maximumFractionDigits: 0 }).format(total) + ' kr' : null;
+  }
 
   function ReklKort({ r }) {
     const s = REKL_STATUS[r.status] || REKL_STATUS.ny;
@@ -292,6 +299,19 @@ export default function Reklamasjon() {
             </span>
           )}
         </div>
+
+        {/* Rask status-bytte */}
+        <div className="bef-k-status-bytte" onClick={e => e.stopPropagation()}>
+          <select
+            className="bef-k-status-select"
+            value={r.status}
+            onChange={e => dispatch({ type: 'UPDATE_REKLAMASJON', payload: { ...r, status: e.target.value } })}
+          >
+            {Object.entries(REKL_STATUS).map(([key, s]) => (
+              <option key={key} value={key}>{s.ikon} {s.label}</option>
+            ))}
+          </select>
+        </div>
       </div>
     );
   }
@@ -315,45 +335,71 @@ export default function Reklamasjon() {
 
       {/* Pipeline */}
       <div className="bef-pipeline">
-        {Object.entries(REKL_STATUS).map(([key, s]) => (
-          <div key={key}
-            className="bef-pipeline-kort"
-            style={{ borderTop: `4px solid ${s.farge}`, background: s.bg, cursor: 'pointer' }}
-            onClick={() => setFilter(filter === key ? 'alle' : key)}
-          >
-            <div className="bef-pipeline-ikon">{s.ikon}</div>
-            <div className="bef-pipeline-antall" style={{ color: s.farge }}>{teller[key] || 0}</div>
-            <div className="bef-pipeline-label">{s.label}</div>
-            {filter === key && <div style={{ fontSize: 10, color: s.farge, marginTop: 2 }}>● Aktiv filter</div>}
-          </div>
-        ))}
+        {Object.entries(REKL_STATUS).map(([key, s]) => {
+          const aktiv = statusFilter === key;
+          return (
+            <div key={key}
+              className={`bef-pipeline-kort${aktiv ? ' bef-pipeline-kort--aktiv' : ''}`}
+              style={{ borderTop: `4px solid ${s.farge}`, background: aktiv ? s.farge : s.bg, cursor: 'pointer' }}
+              onClick={() => setStatusFilter(f => f === key ? null : key)}
+              title={aktiv ? 'Klikk for å fjerne filter' : `Filtrer: ${s.label}`}
+            >
+              <div className="bef-pipeline-ikon">{s.ikon}</div>
+              <div className="bef-pipeline-antall" style={{ color: aktiv ? '#fff' : s.farge }}>{teller[key] || 0}</div>
+              <div className="bef-pipeline-label" style={{ color: aktiv ? '#fff' : undefined }}>{s.label}</div>
+              {aktiv && <div className="bef-pipeline-aktiv-pill">✕ fjern</div>}
+            </div>
+          );
+        })}
       </div>
+      {statusFilter && (
+        <div className="bef-filter-banner">
+          Viser kun: <strong>{REKL_STATUS[statusFilter]?.label}</strong>
+          <button className="bef-filter-fjern" onClick={() => setStatusFilter(null)}>✕ Fjern filter</button>
+        </div>
+      )}
 
-      {/* Kanban */}
-      <div className="bef-kanban">
-        {/* Aktive */}
+      {/* Kanban: 4 kolonner */}
+      <div className="bef-kanban bef-kanban--4col">
+        {/* Ny */}
         <div className="bef-kolonne">
-          <div className="bef-kolonne-header" style={{ borderColor: '#f59e0b', color: '#f59e0b' }}>
-            🔨 Aktive reklamasjoner
-            <span className="bef-kolonne-teller">{aktive.length}</span>
+          <div className="bef-kolonne-header" style={{ borderColor: REKL_STATUS.ny.farge, color: REKL_STATUS.ny.farge }}>
+            <span>🔵 Ny <span className="bef-kolonne-teller">{nyeRekl.length}</span></span>
+            {sumKr(nyeRekl) && <span className="bef-kolonne-kr">{sumKr(nyeRekl)}</span>}
           </div>
-          {aktive.length === 0 && (
-            <div className="bef-tom-melding">Ingen aktive reklamasjoner.</div>
-          )}
-          {aktive.map(r => <ReklKort key={r.id} r={r} />)}
+          {nyeRekl.length === 0 && <div className="bef-tom-melding">Ingen nye reklamasjoner.</div>}
+          {nyeRekl.map(r => <ReklKort key={r.id} r={r} />)}
           <button className="bef-legg-til-btn" onClick={() => apneNy('ny')}>+ Legg til reklamasjon</button>
         </div>
 
-        {/* Avsluttede */}
+        {/* Planlagt */}
         <div className="bef-kolonne">
-          <div className="bef-kolonne-header" style={{ borderColor: '#6b7280', color: '#6b7280' }}>
-            🔒 Avsluttede
-            <span className="bef-kolonne-teller">{avsluttede.length}</span>
+          <div className="bef-kolonne-header" style={{ borderColor: REKL_STATUS.planlagt.farge, color: REKL_STATUS.planlagt.farge }}>
+            <span>📅 Planlagt <span className="bef-kolonne-teller">{planlagteRekl.length}</span></span>
+            {sumKr(planlagteRekl) && <span className="bef-kolonne-kr">{sumKr(planlagteRekl)}</span>}
           </div>
-          {avsluttede.length === 0 && (
-            <div className="bef-tom-melding">Ingen avsluttede reklamasjoner.</div>
-          )}
-          {avsluttede.map(r => <ReklKort key={r.id} r={r} />)}
+          {planlagteRekl.length === 0 && <div className="bef-tom-melding">Ingen planlagte reklamasjoner.</div>}
+          {planlagteRekl.map(r => <ReklKort key={r.id} r={r} />)}
+        </div>
+
+        {/* Under utbedring */}
+        <div className="bef-kolonne">
+          <div className="bef-kolonne-header" style={{ borderColor: REKL_STATUS.under_arbeid.farge, color: REKL_STATUS.under_arbeid.farge }}>
+            <span>🔨 Under utbedring <span className="bef-kolonne-teller">{underArbeid.length}</span></span>
+            {sumKr(underArbeid) && <span className="bef-kolonne-kr">{sumKr(underArbeid)}</span>}
+          </div>
+          {underArbeid.length === 0 && <div className="bef-tom-melding">Ingen reklamasjoner under arbeid.</div>}
+          {underArbeid.map(r => <ReklKort key={r.id} r={r} />)}
+        </div>
+
+        {/* Utbedret / Avvist / Lukket */}
+        <div className="bef-kolonne">
+          <div className="bef-kolonne-header" style={{ borderColor: REKL_STATUS.utbedret.farge, color: REKL_STATUS.utbedret.farge }}>
+            <span>✅ Utbedret <span className="bef-kolonne-teller">{utbedredeRekl.length}</span></span>
+            {sumKr(utbedredeRekl) && <span className="bef-kolonne-kr">{sumKr(utbedredeRekl)}</span>}
+          </div>
+          {utbedredeRekl.length === 0 && <div className="bef-tom-melding">Ingen utbedrede reklamasjoner.</div>}
+          {utbedredeRekl.map(r => <ReklKort key={r.id} r={r} />)}
         </div>
       </div>
 
