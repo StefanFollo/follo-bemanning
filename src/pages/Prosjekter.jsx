@@ -131,9 +131,52 @@ function fagFarge(fag) {
   return FAG_GANTT[k] || '#888780'
 }
 
+// Konverterer gammelt fdTasks-format (fra tilbuds-appen) til nytt framdriftsplan-format
+function fdTasksTilFramdrift(project) {
+  const { fdTasks = [], fdStartWeek, fdStartYear, fdTotalWeeks, fdMilepaler = [], fdGenDato, fdGenAv } = project
+  const oppstartUke = fdStartWeek || 31
+  return {
+    generertDato: fdGenDato || new Date().toISOString(),
+    generertAv: fdGenAv || 'AI',
+    versjon: 1,
+    oppstartUke,
+    oppstartAar: fdStartYear || 2026,
+    totalVarighetUker: fdTotalWeeks || 12,
+    bufferProsent: 15,
+    faser: fdTasks.map(t => ({
+      id: t.id,
+      navn: t.name,
+      fag: [t.fag || 'annet'],
+      startUke: oppstartUke + Math.floor((t.start || 0) / 5),
+      varighetDager: t.dur || 5,
+      timer: 0,
+      mannskap: 2,
+      kritisk: false,
+      venterPaa: [],
+      beskrivelse: '',
+      status: (t.pct || 0) >= 100 ? 'ferdig' : (t.pct || 0) > 0 ? 'pagar' : 'planlagt',
+    })),
+    milepaler: (fdMilepaler || []).map((m, i) => ({
+      id: `mil-${i + 1}`,
+      navn: m.navn || 'Milepæl',
+      uke: oppstartUke + Math.floor((m.dagFraStart || 0) / 5),
+      kritisk: false,
+      type: 'teknisk',
+      beskrivelse: '',
+    })),
+    kritiskSti: [],
+    advarsler: [],
+    _fraFdTasks: true,  // markør: konvertert fra gammelt format
+  }
+}
+
 function ProsjektFramdrift({ project, laster, feil, onGenerer }) {
   const [valgtFase, setValgtFase] = useState(null)
-  const fd = project.framdriftsplan
+
+  // Bruker nytt framdriftsplan-objekt hvis det finnes, ellers konverterer gammelt fdTasks
+  const harNyttFormat = Boolean(project.framdriftsplan)
+  const harGammeltFormat = Array.isArray(project.fdTasks) && project.fdTasks.length > 0
+  const fd = project.framdriftsplan || (harGammeltFormat ? fdTasksTilFramdrift(project) : null)
 
   if (laster) {
     return (
@@ -188,7 +231,13 @@ function ProsjektFramdrift({ project, laster, feil, onGenerer }) {
   return (
     <div className="fd-seksjon">
       <div className="fd-header">
-        <span className="fd-meta-badge">✨ AI-generert</span>
+        {fd._fraFdTasks ? (
+          <span className="fd-meta-badge" style={{ background: '#eff6ff', color: '#2563eb', borderColor: '#bfdbfe' }}>
+            ✨ Fra tilbuds-appen
+          </span>
+        ) : (
+          <span className="fd-meta-badge">✨ AI-generert</span>
+        )}
         <span className="fd-meta">
           {generertDato ? new Date(generertDato).toLocaleDateString('nb-NO') : ''}
           {versjon > 1 ? ` · v${versjon}` : ''}
@@ -196,7 +245,9 @@ function ProsjektFramdrift({ project, laster, feil, onGenerer }) {
         </span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
           {project.kildeTilbudData && (
-            <button className="btn btn-sm" onClick={onGenerer}>✨ Regenerer</button>
+            <button className="btn btn-sm" onClick={onGenerer} title="Generer ny detaljert plan med AI">
+              ✨ {fd._fraFdTasks ? 'Generer ny med AI' : 'Regenerer'}
+            </button>
           )}
         </div>
       </div>
