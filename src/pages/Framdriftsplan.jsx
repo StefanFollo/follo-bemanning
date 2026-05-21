@@ -2,6 +2,42 @@ import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { uid } from '../store';
 
+// ─── AI framdrifts-generering ─────────────────────────────────────────────────
+function useFramdriftAI(project, onUpdate) {
+  const [laster, setLaster] = useState(false)
+  const [feil, setFeil] = useState('')
+
+  async function regenererMedAI() {
+    setLaster(true)
+    setFeil('')
+    try {
+      const token = localStorage.getItem('fbs_token') || ''
+      const r = await fetch('/api/framdrift', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ regenerer: true, prosjektId: project.id }),
+      })
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(data?.error || `Feil ${r.status}`)
+      onUpdate({
+        fdTasks: data.fdTasks,
+        fdStartWeek: data.fdStartWeek || project.fdStartWeek,
+        fdStartYear: data.fdStartYear || project.fdStartYear,
+        fdTotalWeeks: data.fdTotalWeeks || project.fdTotalWeeks,
+        fdMilepaler: data.milepaler,
+        fdGenDato: new Date().toISOString(),
+        fdGenAv: 'AI',
+      })
+    } catch (e) {
+      setFeil(e.message)
+    } finally {
+      setLaster(false)
+    }
+  }
+
+  return { laster, feil, regenererMedAI }
+}
+
 const FAG = {
   tomrer:      { label: 'Tømrer',      color: '#185FA5' },
   flis:        { label: 'Flis / mur',  color: '#BA7517' },
@@ -401,6 +437,7 @@ function ProjectDetail({ project, onBack, onUpdate }) {
   const [totalWk, setTotalWk] = useState(project.fdTotalWeeks || 12);
   const sc = STATUS_COLORS[status] ?? '#888';
   const pct = project.fdProgress ?? 0;
+  const { laster: aiLaster, feil: aiFeil, regenererMedAI } = useFramdriftAI(project, onUpdate);
 
   useEffect(() => {
     setStatus(project.fdStatus || 'Pågående');
@@ -419,10 +456,38 @@ function ProjectDetail({ project, onBack, onUpdate }) {
           style={{ fontSize: 13, padding: '5px 12px', borderRadius: 6, border: '1px solid #ddd', background: 'transparent', cursor: 'pointer', color: '#666' }}>
           ← Tilbake
         </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          {project.fdGenAv === 'AI' && project.fdGenDato && (
+            <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: '#e0e7ff', color: '#3730a3', fontWeight: 700 }}>
+              ✨ AI-generert {new Date(project.fdGenDato).toLocaleDateString('no-NO')}
+            </span>
+          )}
+          {project.kildeTilbudData && (
+            <button
+              onClick={regenererMedAI}
+              disabled={aiLaster}
+              style={{
+                fontSize: 12, padding: '5px 12px', borderRadius: 6,
+                border: '1px solid #a5b4fc', background: aiLaster ? '#e0e7ff' : '#eef2ff',
+                color: '#3730a3', cursor: aiLaster ? 'default' : 'pointer', fontWeight: 600,
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}
+              title="Generer framdriftsplan på nytt med AI basert på tilbudsdata"
+            >
+              {aiLaster
+                ? <><span style={{ width: 12, height: 12, border: '2px solid #a5b4fc', borderTopColor: '#3730a3', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} /> Genererer…</>
+                : '✨ Regenerer med AI'
+              }
+            </button>
+          )}
           <span style={{ fontSize: 15, fontWeight: 600, color: '#1e293b' }}>{project.navn}</span>
         </div>
       </div>
+      {aiFeil && (
+        <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 7, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#dc2626' }}>
+          ❌ AI-feil: {aiFeil}
+        </div>
+      )}
 
       {/* Status + fremdrift */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14, alignItems: 'flex-end' }}>
@@ -492,6 +557,20 @@ function ProjectDetail({ project, onBack, onUpdate }) {
 
       {/* Gantt */}
       <GanttChart project={project} onUpdate={onUpdate} />
+
+      {/* AI-genererte milepæler */}
+      {Array.isArray(project.fdMilepaler) && project.fdMilepaler.length > 0 && (
+        <div style={{ marginTop: 14, padding: '10px 14px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#16a34a', marginBottom: 6 }}>📌 Milepæler</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+            {project.fdMilepaler.map((m, i) => (
+              <span key={i} style={{ fontSize: 11, padding: '3px 9px', background: '#dcfce7', border: '1px solid #86efac', borderRadius: 99, color: '#166534' }}>
+                {m.navn}{m.dagFraStart != null ? ` (dag ${m.dagFraStart})` : ''}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Notes panels */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 12, marginTop: 16 }}>
