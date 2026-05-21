@@ -3115,3 +3115,310 @@ body {
   .ks-tegning-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
+/* ===== PROSJEKT FRAMDRIFTSPLAN — fane-system og Gantt ===== */
+
+/* Fane-nav i expanded detail-panel */
+.ct-detail-faner {
+  display: flex;
+  gap: 2px;
+  border-bottom: 2px solid #e2e8f0;
+  margin-bottom: 14px;
+}
+.ct-detail-fane {
+  background: none;
+  border: none;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  border-radius: 6px 6px 0 0;
+  transition: color .15s;
+}
+.ct-detail-fane:hover { color: #1e293b; background: #f1f5f9; }
+.ct-detail-fane.active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+  background: white;
+}
+
+/* Framdriftsplan-seksjon */
+.fd-seksjon {
+  padding: 4px 0 8px;
+}
+.fd-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.fd-meta {
+  font-size: 12px;
+  color: #64748b;
+}
+.fd-meta-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}
+.fd-feil {
+  font-size: 12px;
+  color: #dc2626;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 8px;
+}
+.fd-tom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px 16px;
+  color: #94a3b8;
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Advarsel-banner */
+.fd-advarsler {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+.fd-advarsel {
+  font-size: 12px;
+  color: #92400e;
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 5px;
+  padding: 5px 10px;
+}
+
+/* Gantt-diagram */
+.fd-gantt {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.fd-gantt-inner {
+  min-width: 500px;
+}
+
+/* Uke-header */
+.fd-gantt-header {
+  display: flex;
+  margin-bottom: 6px;
+  padding-left: 130px;
+}
+.fd-gantt-uke {
+  flex: 1;
+  min-width: 0;
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-align: center;
+  letter-spacing: .03em;
+}
+.fd-gantt-uke.idag {
+  color: #2563eb;
+  background: #eff6ff;
+  border-radius: 3px;
+}
+
+/* Fase-rader */
+.fd-gantt-rader {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+.fd-gantt-rad {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+}
+.fd-gantt-navn {
+  width: 130px;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #374151;
+  padding-right: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.fd-gantt-navn:hover { color: #2563eb; }
+.fd-gantt-track {
+  flex: 1;
+  position: relative;
+  height: 22px;
+}
+/* Faint kolonne-guide-linjer */
+.fd-gantt-track::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent calc(var(--uke-w) - 1px),
+    #f1f5f9 calc(var(--uke-w) - 1px),
+    #f1f5f9 var(--uke-w)
+  );
+  pointer-events: none;
+}
+.fd-gantt-bar {
+  position: absolute;
+  top: 3px;
+  height: 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: opacity .15s, filter .15s;
+  min-width: 6px;
+  display: flex;
+  align-items: center;
+  padding: 0 5px;
+  overflow: hidden;
+}
+.fd-gantt-bar:hover { filter: brightness(1.1); opacity: .9; }
+.fd-gantt-bar--kritisk {
+  border: 1.5px solid rgba(0,0,0,.2);
+}
+.fd-gantt-bar-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: white;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+  text-shadow: 0 1px 2px rgba(0,0,0,.3);
+  pointer-events: none;
+}
+
+/* Milepæl-pinner */
+.fd-gantt-milepaler {
+  position: relative;
+  height: 20px;
+  margin-top: 8px;
+  padding-left: 130px;
+}
+.fd-gantt-mil {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: default;
+}
+.fd-gantt-mil-pin {
+  font-size: 14px;
+  line-height: 1;
+}
+.fd-gantt-mil-label {
+  font-size: 9px;
+  font-weight: 700;
+  color: #374151;
+  white-space: nowrap;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 3px;
+  padding: 1px 4px;
+  margin-top: 1px;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fd-gantt-mil--kritisk .fd-gantt-mil-label { color: #dc2626; border-color: #fecaca; background: #fef2f2; }
+
+/* Milepæl-liste under Gantt */
+.fd-milepaler {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 14px;
+}
+.fd-milepael-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #374151;
+  font-weight: 500;
+}
+.fd-milepael-chip--kritisk {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
+  font-weight: 700;
+}
+
+/* Fase-detalj-modal */
+.fd-fase-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.fd-fase-modal {
+  background: white;
+  border-radius: 12px;
+  padding: 20px 24px;
+  max-width: 420px;
+  width: 100%;
+  box-shadow: 0 20px 60px rgba(0,0,0,.15);
+}
+.fd-fase-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.fd-fase-modal-tittel { font-size: 16px; font-weight: 700; color: #1e293b; }
+.fd-fase-modal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+  font-size: 12px;
+}
+.fd-fase-modal-felt { display: flex; flex-direction: column; gap: 2px; }
+.fd-fase-modal-felt-label { font-size: 10px; font-weight: 700; text-transform: uppercase; color: #94a3b8; letter-spacing: .05em; }
+.fd-fase-modal-felt-verdi { color: #1e293b; font-weight: 600; }
+.fd-fase-modal-beskrivelse { font-size: 12px; color: #475569; margin-top: 10px; line-height: 1.5; grid-column: 1/-1; }
+.fd-fase-modal-fag-dot {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  margin-right: 4px;
+}
+
+@media (max-width: 600px) {
+  .fd-gantt-navn { width: 90px; font-size: 10px; }
+  .fd-gantt-header { padding-left: 90px; }
+  .fd-gantt-milepaler { padding-left: 90px; }
+  .fd-fase-modal-grid { grid-template-columns: 1fr; }
+}

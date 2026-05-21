@@ -119,6 +119,214 @@ function MiniGantt({ prosjekt, color, tlStart, tlDays, ticks }) {
   );
 }
 
+// ─── Framdriftsplan Gantt ─────────────────────────────────────────────────────
+
+const FAG_GANTT = {
+  tomrer: '#185FA5', flis: '#BA7517', elektriker: '#E24B4A',
+  rorlegger: '#0F6E56', ventilasjon: '#7F77DD',
+  maling: '#D4537E', ferdig: '#3B6D11', annet: '#888780',
+}
+function fagFarge(fag) {
+  const k = Array.isArray(fag) ? fag[0] : fag
+  return FAG_GANTT[k] || '#888780'
+}
+
+function ProsjektFramdrift({ project, laster, feil, onGenerer }) {
+  const [valgtFase, setValgtFase] = useState(null)
+  const fd = project.framdriftsplan
+
+  if (laster) {
+    return (
+      <div className="fd-tom">
+        <div style={{ fontSize: 22 }}>⏳</div>
+        <div style={{ fontWeight: 600 }}>Genererer framdriftsplan med AI…</div>
+        <div style={{ fontSize: 12, color: '#94a3b8' }}>Tar 10–20 sekunder</div>
+      </div>
+    )
+  }
+
+  if (!fd) {
+    return (
+      <div className="fd-tom">
+        <div>🗓 Ingen framdriftsplan generert ennå</div>
+        {project.kildeTilbudData ? (
+          <button className="btn btn-primary" onClick={onGenerer}>✨ Generer framdriftsplan med AI</button>
+        ) : (
+          <div style={{ fontSize: 12, color: '#94a3b8' }}>
+            Prosjektet må opprettes fra tilbuds-appen for å bruke AI-generering.
+          </div>
+        )}
+        {feil && <div className="fd-feil" style={{ marginTop: 10 }}>❌ {feil}</div>}
+      </div>
+    )
+  }
+
+  const {
+    faser = [], milepaler = [],
+    oppstartUke = 31, totalVarighetUker = 12,
+    generertDato, versjon, advarsler = [],
+  } = fd
+
+  const visUker = Math.max(
+    totalVarighetUker + 2, 8,
+    faser.reduce((mx, f) => {
+      const slutt = (f.startUke - oppstartUke) + Math.ceil(f.varighetDager / 5) + 1
+      return slutt > mx ? slutt : mx
+    }, 8)
+  )
+  const ukeArr = Array.from({ length: visUker }, (_, i) => oppstartUke + i)
+  const iDagUke = getWeekNr(new Date())
+
+  function fasePosisjon(fase) {
+    const startOffset = fase.startUke - oppstartUke
+    const breddeUker = Math.max(1, Math.ceil(fase.varighetDager / 5))
+    const left = Math.max(0, (startOffset / visUker) * 100)
+    const width = Math.min((breddeUker / visUker) * 100, 100 - left)
+    return { left: `${left}%`, width: `${Math.max(width, 1.5)}%` }
+  }
+
+  return (
+    <div className="fd-seksjon">
+      <div className="fd-header">
+        <span className="fd-meta-badge">✨ AI-generert</span>
+        <span className="fd-meta">
+          {generertDato ? new Date(generertDato).toLocaleDateString('nb-NO') : ''}
+          {versjon > 1 ? ` · v${versjon}` : ''}
+          {totalVarighetUker ? ` · ${totalVarighetUker} uker` : ''}
+        </span>
+        <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+          {project.kildeTilbudData && (
+            <button className="btn btn-sm" onClick={onGenerer}>✨ Regenerer</button>
+          )}
+        </div>
+      </div>
+
+      {feil && <div className="fd-feil">❌ {feil}</div>}
+
+      {advarsler.length > 0 && (
+        <div className="fd-advarsler">
+          {advarsler.map((a, i) => <div key={i} className="fd-advarsel">⚠️ {a}</div>)}
+        </div>
+      )}
+
+      <div className="fd-gantt">
+        <div className="fd-gantt-inner">
+          <div className="fd-gantt-header">
+            {ukeArr.map(u => (
+              <div key={u} className={`fd-gantt-uke${u === iDagUke ? ' idag' : ''}`}>U{u}</div>
+            ))}
+          </div>
+          <div className="fd-gantt-rader">
+            {faser.map(fase => {
+              const pos = fasePosisjon(fase)
+              const farge = fagFarge(fase.fag)
+              return (
+                <div key={fase.id} className="fd-gantt-rad">
+                  <div
+                    className="fd-gantt-navn"
+                    onClick={() => setValgtFase(v => v?.id === fase.id ? null : fase)}
+                    title={fase.navn}
+                  >
+                    {fase.kritisk && <span style={{ marginRight: 2 }}>🔴</span>}
+                    {fase.navn}
+                  </div>
+                  <div className="fd-gantt-track" style={{ '--uke-w': `${100 / visUker}%` }}>
+                    <div
+                      className={`fd-gantt-bar${fase.kritisk ? ' fd-gantt-bar--kritisk' : ''}`}
+                      style={{ ...pos, background: farge }}
+                      onClick={() => setValgtFase(v => v?.id === fase.id ? null : fase)}
+                      title={`${fase.navn} — ${fase.varighetDager} dager`}
+                    >
+                      <span className="fd-gantt-bar-label">{fase.navn}</span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+
+          {milepaler.length > 0 && (
+            <div className="fd-gantt-milepaler">
+              {milepaler.map(m => {
+                const leftPct = ((m.uke - oppstartUke + 0.5) / visUker) * 100
+                if (leftPct < 0 || leftPct > 100) return null
+                return (
+                  <div
+                    key={m.id}
+                    className={`fd-gantt-mil${m.kritisk ? ' fd-gantt-mil--kritisk' : ''}`}
+                    style={{ left: `${leftPct}%` }}
+                    title={m.beskrivelse || m.navn}
+                  >
+                    <span className="fd-gantt-mil-pin">{m.kritisk ? '📌' : '🚩'}</span>
+                    <span className="fd-gantt-mil-label">{m.navn}</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {milepaler.length > 0 && (
+        <div className="fd-milepaler">
+          {milepaler.map(m => (
+            <span
+              key={m.id}
+              className={`fd-milepael-chip${m.kritisk ? ' fd-milepael-chip--kritisk' : ''}`}
+              title={m.beskrivelse}
+            >
+              {m.kritisk ? '📌' : '🚩'} U{m.uke} — {m.navn}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {valgtFase && (
+        <div className="fd-fase-modal-overlay" onClick={() => setValgtFase(null)}>
+          <div className="fd-fase-modal" onClick={e => e.stopPropagation()}>
+            <div className="fd-fase-modal-header">
+              <div className="fd-fase-modal-tittel">
+                <span className="fd-fase-modal-fag-dot" style={{ background: fagFarge(valgtFase.fag) }} />
+                {valgtFase.navn}
+                {valgtFase.kritisk && (
+                  <span style={{ marginLeft: 8, color: '#dc2626', fontSize: 12 }}>🔴 Kritisk fase</span>
+                )}
+              </div>
+              <button className="btn-icon" onClick={() => setValgtFase(null)}>✕</button>
+            </div>
+            <div className="fd-fase-modal-grid">
+              <div className="fd-fase-modal-felt">
+                <span className="fd-fase-modal-felt-label">Startuke</span>
+                <span className="fd-fase-modal-felt-verdi">Uke {valgtFase.startUke}</span>
+              </div>
+              <div className="fd-fase-modal-felt">
+                <span className="fd-fase-modal-felt-label">Varighet</span>
+                <span className="fd-fase-modal-felt-verdi">{valgtFase.varighetDager} dager</span>
+              </div>
+              <div className="fd-fase-modal-felt">
+                <span className="fd-fase-modal-felt-label">Timer</span>
+                <span className="fd-fase-modal-felt-verdi">{valgtFase.timer || '–'}</span>
+              </div>
+              <div className="fd-fase-modal-felt">
+                <span className="fd-fase-modal-felt-label">Mannskap</span>
+                <span className="fd-fase-modal-felt-verdi">
+                  {valgtFase.mannskap} person{valgtFase.mannskap !== 1 ? 'er' : ''}
+                </span>
+              </div>
+              {valgtFase.beskrivelse && (
+                <div className="fd-fase-modal-beskrivelse">
+                  <span className="fd-fase-modal-felt-label">Beskrivelse</span>
+                  <div style={{ marginTop: 2 }}>{valgtFase.beskrivelse}</div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const FAG_COLORS = {
   'Bas Tømrer': '#f59e0b', 'Montør': '#3b82f6', 'Lærling Tømrer': '#16a34a',
   'Maler': '#ec4899', 'Rørlegger': '#06b6d4', 'Tømrer': '#8b5cf6',
@@ -204,6 +412,9 @@ export default function Prosjekter() {
   const [expandedId, setExpandedId] = useState(null);
   const [sortKey, setSortKey] = useState('navn');
   const [sortDir, setSortDir] = useState('asc');
+  const [detailFane, setDetailFane] = useState({});       // { prosjektId: 'info' | 'framdrift' }
+  const [framdriftLaster, setFramdriftLaster] = useState({});
+  const [framdriftFeil, setFramdriftFeil] = useState({});
   const tl = buildTimeline(tlMode);
 
   function sumKr(arr) {
@@ -290,6 +501,28 @@ export default function Prosjekter() {
 
   function toggleCollapse(key) {
     setCollapsed(c => ({ ...c, [key]: !c[key] }));
+  }
+
+  async function genererFramdrift(prosjektId) {
+    setFramdriftLaster(l => ({ ...l, [prosjektId]: true }))
+    setFramdriftFeil(f => ({ ...f, [prosjektId]: '' }))
+    setDetailFane(f => ({ ...f, [prosjektId]: 'framdrift' }))
+    try {
+      const token = localStorage.getItem('fbs_token') || ''
+      const r = await fetch('/api/prosjekter/framdrift', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ prosjektId }),
+      })
+      const data = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(data?.error || `Feil ${r.status}`)
+      const prosjekt = state.prosjekter.find(p => p.id === prosjektId)
+      if (prosjekt) dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...prosjekt, framdriftsplan: data.framdriftsplan } })
+    } catch (e) {
+      setFramdriftFeil(f => ({ ...f, [prosjektId]: e.message }))
+    } finally {
+      setFramdriftLaster(l => ({ ...l, [prosjektId]: false }))
+    }
   }
 
   const alleProsjekter = state.prosjekter.filter(p => {
@@ -572,75 +805,103 @@ export default function Prosjekter() {
                         {/* Utvidet detaljpanel */}
                         {isExpanded && (
                           <div className="ct-row-detail" style={{ borderLeft: `4px solid ${barColor}` }}>
-                            {/* Fra befaring */}
-                            {p.befaringId && (() => {
-                              const bef = (state.befaringer || []).find(b => b.id === p.befaringId);
-                              if (!bef) return null;
-                              return (
-                                <div className="ct-detail-seksjon ct-detail-fra-befaring">
-                                  <div className="ct-detail-tittel">📋 Fra befaring</div>
-                                  <div className="ct-detail-rad">
-                                    <span className="ct-detail-navn">{bef.kontaktNavn}</span>
-                                    {bef.adresse && <span className="ct-detail-fag">📍 {bef.adresse}</span>}
-                                    {bef.jobbType && <span className="ct-detail-fag">{bef.jobbType}</span>}
-                                    {bef.estimertBelop && (
-                                      <span className="ct-detail-fag" style={{ color: '#16a34a' }}>
-                                        💰 {new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(Number(bef.estimertBelop))}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })()}
-                            {p.beskrivelse && (
-                              <div className="ct-detail-seksjon">
-                                <div className="ct-detail-tittel">📝 Beskrivelse</div>
-                                <div className="ct-detail-tekst">{p.beskrivelse}</div>
-                              </div>
-                            )}
-                            <div className="ct-detail-grid">
-                              {/* Tildelinger */}
-                              <div className="ct-detail-seksjon">
-                                <div className="ct-detail-tittel">👷 Tildelinger ({tildelinger.length})</div>
-                                {tildelinger.length === 0 ? (
-                                  <div className="ct-detail-tom">Ingen tildelinger registrert</div>
-                                ) : (
-                                  tildelinger.map(t => {
-                                    const ansatt = state.ansatte.find(a => a.id === t.ansattId);
-                                    if (!ansatt) return null;
-                                    return (
-                                      <div key={t.id} className="ct-detail-rad">
-                                        <span className="ct-detail-dot" style={{ background: FAG_COLORS[ansatt.fag] || barColor }} />
-                                        <span className="ct-detail-navn">{ansatt.navn}</span>
-                                        {ansatt.fag && <span className="ct-detail-fag">{ansatt.fag}</span>}
-                                        <span className="ct-detail-dato">
-                                          {t.startDato ? formatDate(t.startDato) : '?'}
-                                          {t.sluttDato ? ` – ${formatDate(t.sluttDato)}` : ''}
-                                        </span>
-                                      </div>
-                                    );
-                                  })
-                                )}
-                              </div>
+                            {/* Fane-nav */}
+                            <div className="ct-detail-faner">
+                              <button
+                                className={`ct-detail-fane${(detailFane[p.id] ?? 'info') === 'info' ? ' active' : ''}`}
+                                onClick={() => setDetailFane(f => ({ ...f, [p.id]: 'info' }))}
+                              >
+                                📋 Info
+                              </button>
+                              <button
+                                className={`ct-detail-fane${detailFane[p.id] === 'framdrift' ? ' active' : ''}`}
+                                onClick={() => setDetailFane(f => ({ ...f, [p.id]: 'framdrift' }))}
+                              >
+                                🗓 Framdriftsplan{p.framdriftsplan ? ' ✓' : ''}
+                              </button>
+                            </div>
 
-                              {/* Oppgaver */}
-                              {opp.length > 0 && (
-                                <div className="ct-detail-seksjon">
-                                  <div className="ct-detail-tittel">✅ Oppgaver ({opp.length})</div>
-                                  {opp.map(o => (
-                                    <div key={o.id} className="ct-detail-opp">
-                                      <span className="ct-detail-navn">{o.navn || o.name || o.tittel || 'Oppgave'}</span>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 100 }}>
-                                        <div className="progress-bar" style={{ flex: 1, height: 4 }}>
-                                          <div className="progress-fill" style={{ width: (o.fremgang || 0) + '%', background: barColor }} />
-                                        </div>
-                                        <span style={{ fontSize: 11, fontWeight: 600, color: '#475569', minWidth: 28 }}>{o.fremgang || 0}%</span>
+                            {/* Framdriftsplan-fane */}
+                            {detailFane[p.id] === 'framdrift' ? (
+                              <ProsjektFramdrift
+                                project={p}
+                                laster={!!framdriftLaster[p.id]}
+                                feil={framdriftFeil[p.id] || ''}
+                                onGenerer={() => genererFramdrift(p.id)}
+                              />
+                            ) : (
+                              <>
+                                {/* Fra befaring */}
+                                {p.befaringId && (() => {
+                                  const bef = (state.befaringer || []).find(b => b.id === p.befaringId);
+                                  if (!bef) return null;
+                                  return (
+                                    <div className="ct-detail-seksjon ct-detail-fra-befaring">
+                                      <div className="ct-detail-tittel">📋 Fra befaring</div>
+                                      <div className="ct-detail-rad">
+                                        <span className="ct-detail-navn">{bef.kontaktNavn}</span>
+                                        {bef.adresse && <span className="ct-detail-fag">📍 {bef.adresse}</span>}
+                                        {bef.jobbType && <span className="ct-detail-fag">{bef.jobbType}</span>}
+                                        {bef.estimertBelop && (
+                                          <span className="ct-detail-fag" style={{ color: '#16a34a' }}>
+                                            💰 {new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(Number(bef.estimertBelop))}
+                                          </span>
+                                        )}
                                       </div>
                                     </div>
-                                  ))}
+                                  );
+                                })()}
+                                {p.beskrivelse && (
+                                  <div className="ct-detail-seksjon">
+                                    <div className="ct-detail-tittel">📝 Beskrivelse</div>
+                                    <div className="ct-detail-tekst">{p.beskrivelse}</div>
+                                  </div>
+                                )}
+                                <div className="ct-detail-grid">
+                                  {/* Tildelinger */}
+                                  <div className="ct-detail-seksjon">
+                                    <div className="ct-detail-tittel">👷 Tildelinger ({tildelinger.length})</div>
+                                    {tildelinger.length === 0 ? (
+                                      <div className="ct-detail-tom">Ingen tildelinger registrert</div>
+                                    ) : (
+                                      tildelinger.map(t => {
+                                        const ansatt = state.ansatte.find(a => a.id === t.ansattId);
+                                        if (!ansatt) return null;
+                                        return (
+                                          <div key={t.id} className="ct-detail-rad">
+                                            <span className="ct-detail-dot" style={{ background: FAG_COLORS[ansatt.fag] || barColor }} />
+                                            <span className="ct-detail-navn">{ansatt.navn}</span>
+                                            {ansatt.fag && <span className="ct-detail-fag">{ansatt.fag}</span>}
+                                            <span className="ct-detail-dato">
+                                              {t.startDato ? formatDate(t.startDato) : '?'}
+                                              {t.sluttDato ? ` – ${formatDate(t.sluttDato)}` : ''}
+                                            </span>
+                                          </div>
+                                        );
+                                      })
+                                    )}
+                                  </div>
+
+                                  {/* Oppgaver */}
+                                  {opp.length > 0 && (
+                                    <div className="ct-detail-seksjon">
+                                      <div className="ct-detail-tittel">✅ Oppgaver ({opp.length})</div>
+                                      {opp.map(o => (
+                                        <div key={o.id} className="ct-detail-opp">
+                                          <span className="ct-detail-navn">{o.navn || o.name || o.tittel || 'Oppgave'}</span>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 100 }}>
+                                            <div className="progress-bar" style={{ flex: 1, height: 4 }}>
+                                              <div className="progress-fill" style={{ width: (o.fremgang || 0) + '%', background: barColor }} />
+                                            </div>
+                                            <span style={{ fontSize: 11, fontWeight: 600, color: '#475569', minWidth: 28 }}>{o.fremgang || 0}%</span>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
                                 </div>
-                              )}
-                            </div>
+                              </>
+                            )}
                           </div>
                         )}
                       </div>
