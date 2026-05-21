@@ -2,71 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { uid } from '../store';
 
-// ─── AI framdrifts-generering ─────────────────────────────────────────────────
-function useFramdriftAI(project, onUpdate) {
-  const [laster, setLaster] = useState(false)
-  const [feil, setFeil] = useState('')
-
-  async function regenererMedAI() {
-    setLaster(true)
-    setFeil('')
-    try {
-      const token = localStorage.getItem('fbs_token') || ''
-      const r = await fetch('/api/framdrift', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ regenerer: true, prosjektId: project.id }),
-      })
-      const data = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(data?.error || `Feil ${r.status}`)
-      onUpdate({
-        fdTasks: data.fdTasks,
-        fdStartWeek: data.fdStartWeek || project.fdStartWeek,
-        fdStartYear: data.fdStartYear || project.fdStartYear,
-        fdTotalWeeks: data.fdTotalWeeks || project.fdTotalWeeks,
-        fdMilepaler: data.milepaler,
-        fdGenDato: new Date().toISOString(),
-        fdGenAv: 'AI',
-      })
-    } catch (e) {
-      setFeil(e.message)
-    } finally {
-      setLaster(false)
-    }
-  }
-
-  return { laster, feil, regenererMedAI }
-}
-
-const FAG = {
-  tomrer:      { label: 'Tømrer',      color: '#185FA5' },
-  flis:        { label: 'Flis / mur',  color: '#BA7517' },
-  elektriker:  { label: 'Elektriker',  color: '#E24B4A' },
-  rorlegger:   { label: 'Rørlegger',   color: '#0F6E56' },
-  ventilasjon: { label: 'Ventilasjon', color: '#7F77DD' },
-  maling:      { label: 'Maling',      color: '#D4537E' },
-  ferdig:      { label: 'Ferdig',      color: '#3B6D11' },
-  annet:       { label: 'Annet',       color: '#888780' },
-};
-const fc = k => FAG[k]?.color ?? '#888780';
-
-const STATUS_OPTIONS = ['Ikke startet', 'Pågående', 'Forsinket', 'Ferdig'];
-const STATUS_COLORS  = { 'Ikke startet': '#888780', 'Pågående': '#185FA5', 'Forsinket': '#993C1D', 'Ferdig': '#1D9E75' };
-
-// Standard byggefaser — ett klikk legger til alle relevante
-const STANDARD_FASER = [
-  { name: 'Grunnarbeider',       fag: 'tomrer',      dur: 14 },
-  { name: 'Råbygg / tømrerarbeid', fag: 'tomrer',    dur: 21 },
-  { name: 'Tak',                 fag: 'tomrer',      dur: 7  },
-  { name: 'Vinduer og dører',    fag: 'tomrer',      dur: 7  },
-  { name: 'Rørlegger',           fag: 'rorlegger',   dur: 14 },
-  { name: 'Elektriker',          fag: 'elektriker',  dur: 14 },
-  { name: 'Ventilasjon',         fag: 'ventilasjon', dur: 7  },
-  { name: 'Isolasjon og gips',   fag: 'tomrer',      dur: 14 },
-  { name: 'Flislegging',         fag: 'flis',        dur: 7  },
-  { name: 'Maling',              fag: 'maling',      dur: 7  },
-  { name: 'Ferdigstilling',      fag: 'ferdig',      dur: 7  },
-];
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function nowWeekYear() {
   const d = new Date();
@@ -99,22 +35,89 @@ function projStartWY(proj) {
   return isoToWeekYear(proj.startDato || null);
 }
 
-// Beregn fremdrift automatisk fra oppgaver (gjennomsnitt av pct)
 function calcAutoProgress(tasks) {
-  if (!tasks || tasks.length === 0) return null;
+  if (!tasks || tasks.length === 0) return 0;
   return Math.round(tasks.reduce((s, t) => s + (t.pct ?? 0), 0) / tasks.length);
 }
 
+const FAG = {
+  tomrer:      { label: 'Tømrer',      color: '#185FA5' },
+  flis:        { label: 'Flis / mur',  color: '#BA7517' },
+  elektriker:  { label: 'Elektriker',  color: '#E24B4A' },
+  rorlegger:   { label: 'Rørlegger',   color: '#0F6E56' },
+  ventilasjon: { label: 'Ventilasjon', color: '#7F77DD' },
+  maling:      { label: 'Maling',      color: '#D4537E' },
+  ferdig:      { label: 'Ferdig',      color: '#3B6D11' },
+  annet:       { label: 'Annet',       color: '#888780' },
+};
+const fc = k => FAG[k]?.color ?? '#888780';
+
+const STATUS_OPTIONS = ['Ikke startet', 'Pågående', 'Forsinket', 'Ferdig'];
+const STATUS_COLORS  = {
+  'Ikke startet': '#64748b',
+  'Pågående':     '#2563eb',
+  'Forsinket':    '#dc2626',
+  'Ferdig':       '#16a34a',
+};
+
+const STANDARD_FASER = [
+  { name: 'Grunnarbeider',         fag: 'tomrer',     dur: 14 },
+  { name: 'Råbygg / tømrerarbeid', fag: 'tomrer',     dur: 21 },
+  { name: 'Tak',                   fag: 'tomrer',     dur: 7  },
+  { name: 'Vinduer og dører',      fag: 'tomrer',     dur: 7  },
+  { name: 'Rørlegger',             fag: 'rorlegger',  dur: 14 },
+  { name: 'Elektriker',            fag: 'elektriker', dur: 14 },
+  { name: 'Ventilasjon',           fag: 'ventilasjon',dur: 7  },
+  { name: 'Isolasjon og gips',     fag: 'tomrer',     dur: 14 },
+  { name: 'Flislegging',           fag: 'flis',       dur: 7  },
+  { name: 'Maling',                fag: 'maling',     dur: 7  },
+  { name: 'Ferdigstilling',        fag: 'ferdig',     dur: 7  },
+];
+
+// ─── AI regenerering ──────────────────────────────────────────────────────────
+
+function useFramdriftAI(project, onUpdate) {
+  const [laster, setLaster] = useState(false);
+  const [feil, setFeil] = useState('');
+
+  async function regenererMedAI() {
+    setLaster(true); setFeil('');
+    try {
+      const token = localStorage.getItem('fbs_token') || '';
+      const r = await fetch('/api/framdrift', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ regenerer: true, prosjektId: project.id }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data?.error || `Feil ${r.status}`);
+      onUpdate({
+        fdTasks: data.fdTasks,
+        fdStartWeek:  data.fdStartWeek  || project.fdStartWeek,
+        fdStartYear:  data.fdStartYear  || project.fdStartYear,
+        fdTotalWeeks: data.fdTotalWeeks || project.fdTotalWeeks,
+        fdMilepaler:  data.milepaler,
+        fdGenDato:    new Date().toISOString(),
+        fdGenAv:      'AI',
+      });
+    } catch (e) { setFeil(e.message); }
+    finally { setLaster(false); }
+  }
+
+  return { laster, feil, regenererMedAI };
+}
+
 // ─── GanttChart ───────────────────────────────────────────────────────────────
+
 function GanttChart({ project, onUpdate }) {
-  const [tasks, setTasks] = useState(project.fdTasks || []);
-  const [zoom, setZoom] = useState(1);
+  const [tasks, setTasks]   = useState(project.fdTasks || []);
+  const [zoom, setZoom]     = useState(1);
   const [newTask, setNewTask] = useState('');
-  const [newFag, setNewFag] = useState('tomrer');
+  const [newFag, setNewFag]   = useState('tomrer');
   const [dropIdx, setDropIdx] = useState(null);
-  const drag = useRef(null);
+  const drag       = useRef(null);
   const rowDragRef = useRef(null);
-  const tasksRef = useRef(tasks);
+  const tasksRef   = useRef(tasks);
 
   useEffect(() => {
     setTasks(project.fdTasks || []);
@@ -123,15 +126,15 @@ function GanttChart({ project, onUpdate }) {
 
   const { week: bw, year: by } = projStartWY(project);
   const totalWeeks = project.fdTotalWeeks || 12;
-  const totalDays = Math.max(
+  const totalDays  = Math.max(
     ...(tasks.length ? tasks.map(t => t.start + t.dur) : [0]),
     totalWeeks * 7
   );
 
   const ROW = 38, PAD = 200;
   const chartW = Math.max(totalDays * 18, 580) * zoom;
-  const dw = chartW / totalDays;
-  const svgH = Math.max(tasks.length * ROW + 56, 80);
+  const dw     = chartW / totalDays;
+  const svgH   = Math.max(tasks.length * ROW + 56, 80);
 
   const weeks = [];
   for (let d = 0; d < totalDays; d += 7) weeks.push(d);
@@ -149,8 +152,7 @@ function GanttChart({ project, onUpdate }) {
   const nowX = (noff >= 0 && noff * 7 <= totalDays) ? noff * 7 * dw : null;
 
   const save = next => {
-    tasksRef.current = next;
-    setTasks(next);
+    tasksRef.current = next; setTasks(next);
     const autoPct = calcAutoProgress(next);
     onUpdate({ fdTasks: next, ...(autoPct !== null ? { fdProgress: autoPct } : {}) });
   };
@@ -163,11 +165,10 @@ function GanttChart({ project, onUpdate }) {
       const next = prev.map(t => {
         if (t.id !== tid) return t;
         if (type === 'move')   return { ...t, start: Math.max(0, os + dx) };
-        if (type === 'resize') return { ...t, dur: Math.max(1, od + dx) };
+        if (type === 'resize') return { ...t, dur:   Math.max(1, od + dx) };
         return t;
       });
-      tasksRef.current = next;
-      return next;
+      tasksRef.current = next; return next;
     });
   };
 
@@ -186,11 +187,9 @@ function GanttChart({ project, onUpdate }) {
     drag.current = { tid, type, sx: e.clientX, os: t.start, od: t.dur };
   };
 
-  // Klikk på Gantt-bar: toggle ferdig/ikke ferdig
   const toggleDone = (e, tid) => {
     e.stopPropagation();
-    const next = tasks.map(t => t.id === tid ? { ...t, pct: (t.pct ?? 0) >= 100 ? 0 : 100 } : t);
-    save(next);
+    save(tasks.map(t => t.id === tid ? { ...t, pct: (t.pct ?? 0) >= 100 ? 0 : 100 } : t));
   };
 
   const deleteTask = id => save(tasks.filter(t => t.id !== id));
@@ -205,62 +204,52 @@ function GanttChart({ project, onUpdate }) {
   const addStandardFaser = () => {
     const existing = new Set(tasks.map(t => t.name));
     const toAdd = STANDARD_FASER.filter(f => !existing.has(f.name));
-    if (toAdd.length === 0) return;
+    if (!toAdd.length) return;
     let cursor = tasks.length ? Math.max(...tasks.map(t => t.start + t.dur)) : 0;
     const newTasks = toAdd.map(f => {
       const t = { id: uid(), name: f.name, start: cursor, dur: f.dur, pct: 0, fag: f.fag };
-      cursor += f.dur;
-      return t;
+      cursor += f.dur; return t;
     });
     save([...tasks, ...newTasks]);
   };
 
   return (
     <div>
-      {/* Legg til standardfaser */}
       {tasks.length === 0 && (
-        <div style={{ marginBottom: 12, padding: '10px 14px', background: '#f0f7ff', borderRadius: 8, border: '1px solid #bfdbfe', display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 13, color: '#1e40af' }}>Ingen oppgaver ennå.</span>
-          <button onClick={addStandardFaser}
-            style={{ fontSize: 12, padding: '5px 12px', borderRadius: 6, border: 'none', background: '#185FA5', color: '#fff', cursor: 'pointer', fontWeight: 500 }}>
+        <div className="fd2-tom-gantt">
+          <span>Ingen faser lagt til ennå.</span>
+          <button className="btn btn-primary btn-sm" onClick={addStandardFaser}>
             ➕ Legg til standard byggefaser
           </button>
         </div>
       )}
 
-      {/* Zoom + Legend */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12, color: '#666' }}>Zoom:</span>
-        <button onClick={() => setZoom(z => Math.max(0.3, +(z - 0.2).toFixed(1)))}
-          style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid #ddd', background: '#f5f5f5', cursor: 'pointer', fontSize: 15 }}>−</button>
-        <span style={{ fontSize: 12, minWidth: 30, textAlign: 'center', color: '#666' }}>{Math.round(zoom * 100)}%</span>
-        <button onClick={() => setZoom(z => Math.min(4, +(z + 0.2).toFixed(1)))}
-          style={{ width: 26, height: 26, borderRadius: 6, border: '1px solid #ddd', background: '#f5f5f5', cursor: 'pointer', fontSize: 15 }}>+</button>
-        <button onClick={() => setZoom(1)}
-          style={{ fontSize: 11, padding: '3px 8px', borderRadius: 6, border: '1px solid #ddd', background: '#f5f5f5', cursor: 'pointer', color: '#888' }}>Reset</button>
+      <div className="fd2-gantt-toolbar">
+        <span style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>Zoom:</span>
+        <button className="fd2-zoom-btn" onClick={() => setZoom(z => Math.max(0.3, +(z - 0.2).toFixed(1)))}>−</button>
+        <span className="fd2-zoom-pct">{Math.round(zoom * 100)}%</span>
+        <button className="fd2-zoom-btn" onClick={() => setZoom(z => Math.min(4, +(z + 0.2).toFixed(1)))}>+</button>
+        <button className="fd2-zoom-btn" onClick={() => setZoom(1)} style={{ fontSize: 10, width: 'auto', padding: '0 8px' }}>Reset</button>
         {tasks.length > 0 && (
-          <button onClick={addStandardFaser}
-            style={{ fontSize: 11, padding: '3px 10px', borderRadius: 6, border: '1px solid #bfdbfe', background: '#eff6ff', color: '#185FA5', cursor: 'pointer', marginLeft: 4 }}>
+          <button className="btn btn-sm" style={{ marginLeft: 8 }} onClick={addStandardFaser}>
             + Standardfaser
           </button>
         )}
-        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginLeft: 4 }}>
+        <div className="fd2-fag-legend">
           {Object.entries(FAG).filter(([k]) => k !== 'annet').map(([k, v]) => (
-            <span key={k} style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: v.color + '22', color: v.color, border: `1px solid ${v.color}55` }}>
+            <span key={k} className="fd2-fag-chip" style={{ background: v.color + '1a', color: v.color, border: `1px solid ${v.color}55` }}>
               {v.label}
             </span>
           ))}
         </div>
       </div>
 
-      {/* Gantt grid */}
-      <div style={{ display: 'flex', border: '1px solid #ddd', borderRadius: 8, overflow: 'hidden' }}>
-        {/* Left: task names + done toggle */}
-        <div style={{ flexShrink: 0, width: PAD, background: '#fff', borderRight: '1px solid #ddd', zIndex: 1 }}>
+      <div className="fd2-gantt-wrap">
+        <div className="fd2-gantt-left" style={{ width: PAD }}>
           <svg width={PAD} height={svgH} style={{ display: 'block' }}>
-            <rect x={0} y={0} width={PAD} height={40} fill="#f5f5f5" />
-            <text x={8} y={26} fontSize={11} fontWeight="500" fill="#888">Oppgave</text>
-            <text x={PAD - 34} y={26} fontSize={10} fill="#aaa" textAnchor="middle">Ferdig</text>
+            <rect x={0} y={0} width={PAD} height={40} fill="#f8fafc" />
+            <text x={10} y={26} fontSize={11} fontWeight="600" fill="#64748b">Fase</text>
+            <text x={PAD - 34} y={26} fontSize={10} fill="#94a3b8" textAnchor="middle">✓</text>
             {tasks.map((t, i) => {
               const y = i * ROW + 40;
               const done = (t.pct ?? 0) >= 100;
@@ -274,23 +263,20 @@ function GanttChart({ project, onUpdate }) {
                     }
                     rowDragRef.current = null; setDropIdx(null);
                   }}>
-                  {dropIdx === i && <rect x={0} y={y} width={PAD} height={2} fill="#378ADD" />}
-                  <rect x={0} y={y} width={PAD} height={ROW} fill={done ? '#f0fdf4' : 'transparent'} />
-                  <circle cx={10} cy={y + ROW / 2} r={5} fill={fc(t.fag)} opacity={done ? 0.4 : 1} />
-                  <clipPath id={`nc${t.id}`}><rect x={22} y={y} width={PAD - 62} height={ROW} /></clipPath>
-                  <text x={24} y={y + ROW / 2 + 5} fontSize={12} fill={done ? '#94a3b8' : '#333'}
+                  {dropIdx === i && <rect x={0} y={y} width={PAD} height={2} fill="#2563eb" />}
+                  <rect x={0} y={y} width={PAD} height={ROW} fill={done ? '#f0fdf4' : i % 2 === 0 ? '#fff' : '#fafafa'} />
+                  <circle cx={12} cy={y + ROW / 2} r={5} fill={fc(t.fag)} opacity={done ? 0.4 : 1} />
+                  <clipPath id={`nc${t.id}`}><rect x={24} y={y} width={PAD - 64} height={ROW} /></clipPath>
+                  <text x={26} y={y + ROW / 2 + 5} fontSize={12} fill={done ? '#94a3b8' : '#1e293b'}
                     style={{ userSelect: 'none', textDecoration: done ? 'line-through' : 'none' }}
                     clipPath={`url(#nc${t.id})`}>
-                    {t.name.length > 20 ? t.name.slice(0, 19) + '…' : t.name}
+                    {t.name.length > 18 ? t.name.slice(0, 17) + '…' : t.name}
                   </text>
-                  {/* Slett-knapp */}
-                  <text x={PAD - 54} y={y + ROW / 2 + 5} fontSize={11} fill="#ccc" style={{ cursor: 'pointer', userSelect: 'none' }}
-                    onClick={() => deleteTask(t.id)}>✕</text>
-                  {/* Done toggle checkbox */}
+                  <text x={PAD - 54} y={y + ROW / 2 + 5} fontSize={11} fill="#cbd5e1"
+                    style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => deleteTask(t.id)}>✕</text>
                   <rect x={PAD - 36} y={y + ROW / 2 - 9} width={18} height={18} rx={4}
-                    fill={done ? '#16a34a' : '#fff'} stroke={done ? '#16a34a' : '#ccc'} strokeWidth={1.5}
-                    style={{ cursor: 'pointer' }}
-                    onClick={e => toggleDone(e, t.id)} />
+                    fill={done ? '#16a34a' : '#fff'} stroke={done ? '#16a34a' : '#e2e8f0'} strokeWidth={1.5}
+                    style={{ cursor: 'pointer' }} onClick={e => toggleDone(e, t.id)} />
                   {done && (
                     <text x={PAD - 27} y={y + ROW / 2 + 5} fontSize={13} fill="#fff" textAnchor="middle"
                       style={{ pointerEvents: 'none', userSelect: 'none' }}>✓</text>
@@ -301,90 +287,292 @@ function GanttChart({ project, onUpdate }) {
           </svg>
         </div>
 
-        {/* Right: Gantt bars */}
-        <div style={{ overflowX: 'auto', flex: 1 }} onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
+        <div className="fd2-gantt-right" onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
           <svg width={chartW} height={svgH} style={{ display: 'block', userSelect: 'none' }}>
             {yearBands.map(b => (
               <g key={b.y}>
-                <rect x={b.s * dw} y={0} width={(b.e - b.s) * dw} height={20} fill={b.y % 2 === 0 ? '#f0f0f0' : '#e8e8e8'} />
-                <text x={b.s * dw + 5} y={14} fontSize={11} fontWeight="500" fill="#555">{b.y}</text>
+                <rect x={b.s * dw} y={0} width={(b.e - b.s) * dw} height={20} fill={b.y % 2 === 0 ? '#f1f5f9' : '#e9eef5'} />
+                <text x={b.s * dw + 6} y={14} fontSize={11} fontWeight="600" fill="#475569">{b.y}</text>
               </g>
             ))}
-            {weeks.map((d, i) => (
-              <rect key={d} x={d * dw} y={40} width={7 * dw} height={svgH - 40}
-                fill={i % 2 === 0 ? 'rgba(0,0,0,0.02)' : 'rgba(0,0,0,0.05)'} />
-            ))}
-            {weeks.map(d => {
+            {weeks.map((d, i) => {
               const { w } = wkNum(bw, by, Math.round(d / 7));
               return (
                 <g key={d}>
-                  <line x1={d * dw} y1={20} x2={d * dw} y2={svgH} stroke="#ddd" strokeWidth={0.5} />
-                  <text x={d * dw + 3} y={33} fontSize={10} fill="#aaa">U{w}</text>
+                  <rect x={d * dw} y={40} width={7 * dw} height={svgH - 40}
+                    fill={i % 2 === 0 ? 'rgba(0,0,0,0.01)' : 'rgba(0,0,0,0.03)'} />
+                  <line x1={d * dw} y1={20} x2={d * dw} y2={svgH} stroke="#e2e8f0" strokeWidth={0.5} />
+                  <text x={d * dw + 4} y={33} fontSize={10} fill="#94a3b8">U{w}</text>
                 </g>
               );
             })}
             {tasks.map((t, i) => {
-              const x = t.start * dw;
-              const w = Math.max(t.dur * dw - 2, 6);
-              const y = i * ROW + 40;
+              const x  = t.start * dw;
+              const w  = Math.max(t.dur * dw - 2, 6);
+              const y  = i * ROW + 40;
               const pct = t.pct ?? 0;
               const done = pct >= 100;
-              const col = fc(t.fag);
-              const doneW = w * pct / 100;
+              const col  = fc(t.fag);
               return (
                 <g key={t.id}>
-                  <rect x={x} y={y + 6} width={w} height={22} rx={4} fill={col} opacity={done ? 0.25 : 0.45}
+                  <rect x={x} y={y + 7} width={w} height={20} rx={5} fill={col} opacity={done ? 0.2 : 0.35}
                     style={{ cursor: 'grab' }} onMouseDown={e => startDrag(e, t.id, 'move')} />
-                  {doneW > 0 && (
-                    <rect x={x} y={y + 6} width={doneW} height={22} rx={4} fill={col} opacity={done ? 0.7 : 0.9}
+                  {w * pct / 100 > 0 && (
+                    <rect x={x} y={y + 7} width={w * pct / 100} height={20} rx={5} fill={col} opacity={done ? 0.65 : 0.85}
                       style={{ pointerEvents: 'none' }} />
                   )}
-                  <clipPath id={`bc${t.id}`}><rect x={x + 2} y={y + 6} width={Math.max(w - 18, 0)} height={22} /></clipPath>
-                  <text x={x + 5} y={y + 21} fontSize={10} fill="white" fontWeight="500"
+                  <clipPath id={`bc${t.id}`}><rect x={x + 4} y={y + 7} width={Math.max(w - 20, 0)} height={20} /></clipPath>
+                  <text x={x + 6} y={y + 21} fontSize={10} fill="white" fontWeight="600"
                     style={{ pointerEvents: 'none' }} clipPath={`url(#bc${t.id})`}>{t.name}</text>
-                  {done && w > 20 && (
+                  {done && w > 24 && (
                     <text x={x + w / 2} y={y + 21} fontSize={12} fill="white" textAnchor="middle"
                       style={{ pointerEvents: 'none' }}>✓</text>
                   )}
-                  {/* Resize handle */}
-                  <rect x={x + w - 6} y={y + 6} width={6} height={22}
-                    fill="rgba(0,0,0,0.18)" rx={2} style={{ cursor: 'ew-resize' }}
-                    onMouseDown={e => startDrag(e, t.id, 'resize')} />
+                  <rect x={x + w - 6} y={y + 7} width={6} height={20} fill="rgba(0,0,0,0.15)" rx={2}
+                    style={{ cursor: 'ew-resize' }} onMouseDown={e => startDrag(e, t.id, 'resize')} />
                 </g>
               );
             })}
             {nowX !== null && (
               <g>
-                <line x1={nowX} y1={20} x2={nowX} y2={svgH} stroke="#E24B4A" strokeWidth={2} strokeDasharray="4 3" />
-                <rect x={nowX - 16} y={21} width={32} height={16} rx={3} fill="#E24B4A" />
-                <text x={nowX} y={33} fontSize={10} fontWeight="500" fill="white" textAnchor="middle">U{nowWk}</text>
+                <line x1={nowX} y1={20} x2={nowX} y2={svgH} stroke="#dc2626" strokeWidth={2} strokeDasharray="4 3" />
+                <rect x={nowX - 16} y={21} width={32} height={16} rx={4} fill="#dc2626" />
+                <text x={nowX} y={33} fontSize={10} fontWeight="600" fill="white" textAnchor="middle">U{nowWk}</text>
               </g>
             )}
           </svg>
         </div>
       </div>
 
-      {/* Add task */}
-      <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+      <div className="fd2-add-row">
         <input value={newTask} onChange={e => setNewTask(e.target.value)}
           onKeyDown={e => e.key === 'Enter' && addTask()}
-          placeholder="+ Ny oppgave..."
-          style={{ flex: 1, minWidth: 140, fontSize: 13, padding: '6px 10px', borderRadius: 6, border: '1px solid #ddd', background: '#fafafa' }} />
+          placeholder="+ Ny fase (Enter for å legge til)"
+          className="input" style={{ flex: 1, minWidth: 140, fontSize: 13 }} />
         <select value={newFag} onChange={e => setNewFag(e.target.value)}
-          style={{ fontSize: 13, padding: '6px 8px', borderRadius: 6, border: '1px solid #ddd', background: '#fafafa' }}>
+          className="input" style={{ width: 130, fontSize: 13 }}>
           {Object.entries(FAG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
         </select>
-        <button onClick={addTask}
-          style={{ fontSize: 13, padding: '6px 14px', borderRadius: 6, border: '1px solid #ddd', background: '#fafafa', cursor: 'pointer' }}>
-          Legg til
-        </button>
+        <button className="btn btn-primary btn-sm" onClick={addTask}>Legg til</button>
       </div>
 
-      {/* Progress info */}
       {tasks.length > 0 && (
-        <div style={{ marginTop: 8, fontSize: 12, color: '#64748b' }}>
-          {tasks.filter(t => (t.pct ?? 0) >= 100).length} av {tasks.length} faser fullført
-          · Beregnet fremdrift: <strong>{calcAutoProgress(tasks)}%</strong>
+        <div className="fd2-progress-sum">
+          <span>{tasks.filter(t => (t.pct ?? 0) >= 100).length} av {tasks.length} faser fullført</span>
+          <span>·</span>
+          <span>Beregnet fremdrift: <strong>{calcAutoProgress(tasks)}%</strong></span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── ProjectDetail ────────────────────────────────────────────────────────────
+
+function ProjectDetail({ project, onBack, onUpdate }) {
+  const [status,   setStatus]   = useState(project.fdStatus || 'Pågående');
+  const [note,     setNote]     = useState(project.fdNote || '');
+  const [startWk,  setStartWk]  = useState(() => projStartWY(project).week);
+  const [startYr,  setStartYr]  = useState(() => projStartWY(project).year);
+  const [totalWk,  setTotalWk]  = useState(project.fdTotalWeeks || 12);
+  const [aktTab,   setAktTab]   = useState('gantt');
+
+  const { laster: aiLaster, feil: aiFeil, regenererMedAI } = useFramdriftAI(project, onUpdate);
+
+  useEffect(() => {
+    setStatus(project.fdStatus || 'Pågående');
+    setNote(project.fdNote || '');
+    const wy = projStartWY(project);
+    setStartWk(wy.week); setStartYr(wy.year);
+    setTotalWk(project.fdTotalWeeks || 12);
+  }, [project.id]);
+
+  const pct     = project.fdProgress ?? 0;
+  const sc      = STATUS_COLORS[status] ?? '#2563eb';
+  const harAI   = project.fdGenAv === 'AI' && Boolean(project.kildeTilbudData);
+  const harData = (project.fdTasks || []).length > 0;
+
+  return (
+    <div className="fd2-detail">
+      {/* Sticky header */}
+      <div className="fd2-detail-header">
+        <button className="btn btn-sm" onClick={onBack}>← Tilbake</button>
+        <div className="fd2-detail-tittel-wrap">
+          <h3 className="fd2-detail-tittel">{project.navn}</h3>
+          {project.adresse && <span className="fd2-detail-adr">📍 {project.adresse}</span>}
+        </div>
+        <div className="fd2-detail-badges">
+          {harAI && (
+            <span className="fd2-kilde-badge fd2-kilde-ai">✨ AI fra tilbuds-appen</span>
+          )}
+          {!harAI && harData && (
+            <span className="fd2-kilde-badge fd2-kilde-manuell">📋 Manuell framdrift</span>
+          )}
+          {project.fdGenDato && (
+            <span className="fd2-kilde-badge fd2-kilde-dato">
+              {new Date(project.fdGenDato).toLocaleDateString('nb-NO')}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Status-rad */}
+      <div className="fd2-status-rad">
+        <div className="fd2-status-gruppe">
+          <span className="fd2-status-label">Status</span>
+          <div className="fd2-status-pills">
+            {STATUS_OPTIONS.map(s => (
+              <button key={s}
+                className={`fd2-status-pill${status === s ? ' active' : ''}`}
+                style={status === s ? { background: STATUS_COLORS[s], color: '#fff', borderColor: STATUS_COLORS[s] } : { color: STATUS_COLORS[s], borderColor: STATUS_COLORS[s] + '66' }}
+                onClick={() => { setStatus(s); onUpdate({ fdStatus: s }); }}>
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="fd2-fremdrift-gruppe">
+          <span className="fd2-status-label">Fremdrift <strong>{pct}%</strong></span>
+          <div className="fd2-fremdrift-bar">
+            <div className="fd2-fremdrift-fill" style={{ width: pct + '%', background: sc }} />
+          </div>
+        </div>
+
+        {project.kildeTilbudData && (
+          <button className="btn btn-sm fd2-ai-btn"
+            onClick={regenererMedAI}
+            disabled={aiLaster}>
+            {aiLaster
+              ? <><span className="fd2-spinner" /> Genererer…</>
+              : '✨ Regenerer med AI'}
+          </button>
+        )}
+      </div>
+
+      {aiFeil && <div className="fd2-feil-banner">❌ {aiFeil}</div>}
+
+      {/* Tabs */}
+      <div className="fd2-tabs">
+        {[
+          { key: 'gantt',       label: '📊 Gantt' },
+          { key: 'innstilling', label: '⚙️ Innstillinger' },
+          { key: 'notater',     label: '📝 Notater' },
+        ].map(tab => (
+          <button key={tab.key}
+            className={`fd2-tab${aktTab === tab.key ? ' active' : ''}`}
+            onClick={() => setAktTab(tab.key)}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Gantt-tab */}
+      {aktTab === 'gantt' && (
+        <div className="fd2-tab-innhold">
+          <GanttChart project={project} onUpdate={onUpdate} />
+
+          {Array.isArray(project.fdMilepaler) && project.fdMilepaler.length > 0 && (
+            <div className="fd2-milepaler">
+              <div className="fd2-milepaler-tittel">📌 Milepæler</div>
+              <div className="fd2-milepaler-chips">
+                {project.fdMilepaler.map((m, i) => (
+                  <span key={i} className="fd2-milepael-chip">
+                    {m.navn}{m.dagFraStart != null ? ` · dag ${m.dagFraStart}` : ''}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Innstillinger-tab */}
+      {aktTab === 'innstilling' && (
+        <div className="fd2-tab-innhold">
+          <div className="fd2-innstilling-grid">
+            <div className="fd2-innstilling-felt">
+              <label className="fd2-label">Startuke</label>
+              <input type="number" min={1} max={52} value={startWk} className="input"
+                style={{ width: 80 }}
+                onChange={e => setStartWk(Number(e.target.value))}
+                onBlur={() => onUpdate({ fdStartWeek: startWk, fdStartYear: startYr })} />
+            </div>
+            <div className="fd2-innstilling-felt">
+              <label className="fd2-label">År</label>
+              <input type="number" min={2023} max={2035} value={startYr} className="input"
+                style={{ width: 90 }}
+                onChange={e => setStartYr(Number(e.target.value))}
+                onBlur={() => onUpdate({ fdStartWeek: startWk, fdStartYear: startYr })} />
+            </div>
+            <div className="fd2-innstilling-felt">
+              <label className="fd2-label">Totale uker</label>
+              <input type="number" min={1} max={200} value={totalWk} className="input"
+                style={{ width: 90 }}
+                onChange={e => setTotalWk(Number(e.target.value))}
+                onBlur={() => onUpdate({ fdTotalWeeks: totalWk })} />
+            </div>
+          </div>
+          {harAI && (
+            <div className="fd2-kilde-info">
+              <div className="fd2-kilde-info-tittel">📦 Data fra tilbuds-appen</div>
+              <div className="fd2-kilde-info-rad">
+                <span>Generert:</span>
+                <strong>{project.fdGenDato ? new Date(project.fdGenDato).toLocaleString('nb-NO') : '–'}</strong>
+              </div>
+              <div className="fd2-kilde-info-rad">
+                <span>Faser:</span>
+                <strong>{(project.fdTasks || []).length} stk</strong>
+              </div>
+              {project.kildeTilbudData?.adresse && (
+                <div className="fd2-kilde-info-rad">
+                  <span>Adresse:</span>
+                  <strong>{project.kildeTilbudData.adresse}</strong>
+                </div>
+              )}
+              {project.kildeTilbudData?.oppstart && (
+                <div className="fd2-kilde-info-rad">
+                  <span>Oppstart (fra tilbud):</span>
+                  <strong>{project.kildeTilbudData.oppstart}</strong>
+                </div>
+              )}
+              {project.kildeTilbudData?.varighet && (
+                <div className="fd2-kilde-info-rad">
+                  <span>Varighet (fra tilbud):</span>
+                  <strong>{project.kildeTilbudData.varighet}</strong>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Notater-tab */}
+      {aktTab === 'notater' && (
+        <div className="fd2-tab-innhold">
+          <div className="fd2-notater-grid">
+            <div>
+              <label className="fd2-label">Avvik / merknader</label>
+              <textarea rows={4} value={note} className="input"
+                style={{ width: '100%', resize: 'vertical', fontSize: 13 }}
+                placeholder="Beskriv avvik eller endringer…"
+                onChange={e => setNote(e.target.value)}
+                onBlur={() => onUpdate({ fdNote: note })} />
+            </div>
+            {[
+              { key: 'fdNoteOrders', label: '📦 Bestillinger & leveranser', ph: 'Vinduer bestilt 10.04…' },
+              { key: 'fdNoteSubs',   label: '👷 Underentreprenører',        ph: 'Rørlegger – Ola Hansen…' },
+            ].map(({ key, label, ph }) => (
+              <div key={key}>
+                <label className="fd2-label">{label}</label>
+                <textarea rows={4} value={project[key] || ''} className="input"
+                  style={{ width: '100%', resize: 'vertical', fontSize: 13 }}
+                  placeholder={ph}
+                  onChange={e => onUpdate({ [key]: e.target.value })}
+                  onBlur={e => onUpdate({ [key]: e.target.value })} />
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -392,241 +580,104 @@ function GanttChart({ project, onUpdate }) {
 }
 
 // ─── ProjectCard ──────────────────────────────────────────────────────────────
+
 function ProjectCard({ project, onSelect }) {
-  const pct = project.fdProgress ?? 0;
-  const tasks = project.fdTasks || [];
-  const doneTasks = tasks.filter(t => (t.pct ?? 0) >= 100).length;
-  const status = project.fdStatus || 'Pågående';
-  const sc = STATUS_COLORS[status] ?? '#888';
-  const barColor = status === 'Ferdig' ? '#1D9E75' : status === 'Forsinket' ? '#993C1D' : '#185FA5';
+  const pct      = project.fdProgress ?? 0;
+  const tasks    = project.fdTasks || [];
+  const done     = tasks.filter(t => (t.pct ?? 0) >= 100).length;
+  const status   = project.fdStatus || 'Ikke startet';
+  const sc       = STATUS_COLORS[status] ?? '#64748b';
+  const harAI    = project.fdGenAv === 'AI' && Boolean(project.kildeTilbudData);
+  const harData  = tasks.length > 0;
+  const { week } = projStartWY(project);
 
   return (
-    <div onClick={() => onSelect(project)}
-      style={{
-        background: '#fff',
-        border: `1px solid ${status === 'Forsinket' ? '#fca5a5' : '#e0e0e0'}`,
-        borderLeft: `4px solid ${sc}`,
-        borderRadius: 10,
-        padding: '12px 14px', cursor: 'pointer', transition: 'box-shadow 0.15s',
-      }}
-      onMouseEnter={e => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)'}
-      onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-        <p style={{ margin: 0, fontWeight: 600, fontSize: 13, color: '#1e293b', lineHeight: 1.3 }}>{project.navn}</p>
-        <span style={{ fontSize: 10, padding: '2px 7px', borderRadius: 99, background: sc + '18', color: sc, whiteSpace: 'nowrap', marginLeft: 6, flexShrink: 0 }}>
-          {status}
-        </span>
+    <div className="fd2-card" onClick={() => onSelect(project)}
+      style={{ borderTop: `3px solid ${sc}` }}>
+      <div className="fd2-card-header">
+        <div className="fd2-card-navn">{project.navn}</div>
+        <span className="fd2-card-status" style={{ color: sc, background: sc + '15' }}>{status}</span>
       </div>
-      <div style={{ background: '#f1f5f9', borderRadius: 99, height: 6, margin: '6px 0 4px' }}>
-        <div style={{ width: pct + '%', height: 6, borderRadius: 99, background: barColor, transition: 'width 0.3s' }} />
+      {project.adresse && <div className="fd2-card-adr">📍 {project.adresse}</div>}
+
+      <div className="fd2-card-badges">
+        {harAI && <span className="fd2-kilde-badge fd2-kilde-ai">✨ AI fra tilbuds-appen</span>}
+        {!harAI && harData && <span className="fd2-kilde-badge fd2-kilde-manuell">📋 Manuell</span>}
+        {!harData && <span className="fd2-kilde-badge" style={{ color: '#94a3b8', borderColor: '#e2e8f0', background: '#f8fafc' }}>Ingen plan</span>}
+        {project.fdStartWeek && (
+          <span className="fd2-kilde-badge" style={{ color: '#475569', borderColor: '#e2e8f0', background: '#f8fafc' }}>
+            U{week} · {project.fdTotalWeeks || '?'} uker
+          </span>
+        )}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#94a3b8' }}>
-        <span style={{ fontWeight: 600, color: pct > 0 ? barColor : '#94a3b8' }}>{pct}%</span>
-        <span>{tasks.length > 0 ? `${doneTasks}/${tasks.length} faser` : 'Ingen faser ennå'}</span>
+
+      <div className="fd2-card-progress-wrap">
+        <div className="fd2-card-progress-bar">
+          <div className="fd2-card-progress-fill" style={{ width: pct + '%', background: pct > 0 ? sc : '#cbd5e1' }} />
+        </div>
+        <span className="fd2-card-pct" style={{ color: pct > 0 ? sc : '#94a3b8' }}>{pct}%</span>
+      </div>
+      <div className="fd2-card-meta">
+        {harData ? `${done} / ${tasks.length} faser fullført` : 'Klikk for å legge til faser'}
       </div>
     </div>
   );
 }
 
-// ─── ProjectDetail ────────────────────────────────────────────────────────────
-function ProjectDetail({ project, onBack, onUpdate }) {
-  const [status, setStatus] = useState(project.fdStatus || 'Pågående');
-  const [note, setNote] = useState(project.fdNote || '');
-  const [startWk, setStartWk] = useState(() => projStartWY(project).week);
-  const [startYr, setStartYr] = useState(() => projStartWY(project).year);
-  const [totalWk, setTotalWk] = useState(project.fdTotalWeeks || 12);
-  const sc = STATUS_COLORS[status] ?? '#888';
-  const pct = project.fdProgress ?? 0;
-  const { laster: aiLaster, feil: aiFeil, regenererMedAI } = useFramdriftAI(project, onUpdate);
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
-  useEffect(() => {
-    setStatus(project.fdStatus || 'Pågående');
-    setNote(project.fdNote || '');
-    const wy = projStartWY(project);
-    setStartWk(wy.week);
-    setStartYr(wy.year);
-    setTotalWk(project.fdTotalWeeks || 12);
-  }, [project.id]);
-
-  return (
-    <div style={{ padding: '12px 16px' }}>
-      {/* Back + title */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <button onClick={onBack}
-          style={{ fontSize: 13, padding: '5px 12px', borderRadius: 6, border: '1px solid #ddd', background: 'transparent', cursor: 'pointer', color: '#666' }}>
-          ← Tilbake
-        </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          {project.fdGenAv === 'AI' && project.fdGenDato && (
-            <span style={{ fontSize: 10, padding: '2px 8px', borderRadius: 99, background: '#e0e7ff', color: '#3730a3', fontWeight: 700 }}>
-              ✨ AI-generert {new Date(project.fdGenDato).toLocaleDateString('no-NO')}
-            </span>
-          )}
-          {project.kildeTilbudData && (
-            <button
-              onClick={regenererMedAI}
-              disabled={aiLaster}
-              style={{
-                fontSize: 12, padding: '5px 12px', borderRadius: 6,
-                border: '1px solid #a5b4fc', background: aiLaster ? '#e0e7ff' : '#eef2ff',
-                color: '#3730a3', cursor: aiLaster ? 'default' : 'pointer', fontWeight: 600,
-                display: 'flex', alignItems: 'center', gap: 6,
-              }}
-              title="Generer framdriftsplan på nytt med AI basert på tilbudsdata"
-            >
-              {aiLaster
-                ? <><span style={{ width: 12, height: 12, border: '2px solid #a5b4fc', borderTopColor: '#3730a3', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} /> Genererer…</>
-                : '✨ Regenerer med AI'
-              }
-            </button>
-          )}
-          <span style={{ fontSize: 15, fontWeight: 600, color: '#1e293b' }}>{project.navn}</span>
-        </div>
-      </div>
-      {aiFeil && (
-        <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 7, padding: '8px 12px', marginBottom: 12, fontSize: 12, color: '#dc2626' }}>
-          ❌ AI-feil: {aiFeil}
-        </div>
-      )}
-
-      {/* Status + fremdrift */}
-      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14, alignItems: 'flex-end' }}>
-        <div>
-          <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 3 }}>Status</label>
-          <div style={{ display: 'flex', gap: 6 }}>
-            {STATUS_OPTIONS.map(s => (
-              <button key={s} onClick={() => { setStatus(s); onUpdate({ fdStatus: s }); }}
-                style={{
-                  fontSize: 12, padding: '5px 10px', borderRadius: 6, cursor: 'pointer',
-                  border: `1px solid ${STATUS_COLORS[s]}44`,
-                  background: status === s ? STATUS_COLORS[s] : STATUS_COLORS[s] + '18',
-                  color: status === s ? '#fff' : STATUS_COLORS[s],
-                  fontWeight: status === s ? 600 : 400,
-                }}>
-                {s}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Fremdrift-bar (read-only, beregnet fra oppgaver) */}
-        <div style={{ flex: '1 1 200px', minWidth: 180 }}>
-          <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 3 }}>
-            Fremdrift: <strong>{pct}%</strong>
-            {(project.fdTasks || []).length === 0 && (
-              <span style={{ color: '#94a3b8', fontWeight: 400 }}> — legg til faser nedenfor</span>
-            )}
-          </label>
-          <div style={{ background: '#f1f5f9', borderRadius: 99, height: 10 }}>
-            <div style={{ width: pct + '%', height: 10, borderRadius: 99, background: sc, transition: 'width 0.3s' }} />
-          </div>
-        </div>
-
-        <div>
-          <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 3 }}>Notater / avvik</label>
-          <input value={note} onChange={e => setNote(e.target.value)} onBlur={() => onUpdate({ fdNote: note })}
-            placeholder="Avvik, endringer..."
-            style={{ width: 220, fontSize: 12, padding: '5px 8px', borderRadius: 6, border: '1px solid #ddd', background: '#fafafa', boxSizing: 'border-box' }} />
-        </div>
-      </div>
-
-      {/* Gantt settings — kompakt */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        <div>
-          <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 2 }}>Startuke</label>
-          <input type="number" min={1} max={52} value={startWk}
-            onChange={e => setStartWk(Number(e.target.value))}
-            onBlur={() => onUpdate({ fdStartWeek: startWk, fdStartYear: startYr })}
-            style={{ width: 60, fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #ddd' }} />
-        </div>
-        <div>
-          <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 2 }}>År</label>
-          <input type="number" min={2023} max={2030} value={startYr}
-            onChange={e => setStartYr(Number(e.target.value))}
-            onBlur={() => onUpdate({ fdStartWeek: startWk, fdStartYear: startYr })}
-            style={{ width: 72, fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #ddd' }} />
-        </div>
-        <div>
-          <label style={{ fontSize: 11, color: '#666', display: 'block', marginBottom: 2 }}>Totale uker</label>
-          <input type="number" min={1} max={200} value={totalWk}
-            onChange={e => setTotalWk(Number(e.target.value))}
-            onBlur={() => onUpdate({ fdTotalWeeks: totalWk })}
-            style={{ width: 72, fontSize: 12, padding: '4px 6px', borderRadius: 6, border: '1px solid #ddd' }} />
-        </div>
-      </div>
-
-      {/* Gantt */}
-      <GanttChart project={project} onUpdate={onUpdate} />
-
-      {/* AI-genererte milepæler */}
-      {Array.isArray(project.fdMilepaler) && project.fdMilepaler.length > 0 && (
-        <div style={{ marginTop: 14, padding: '10px 14px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: '#16a34a', marginBottom: 6 }}>📌 Milepæler</div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {project.fdMilepaler.map((m, i) => (
-              <span key={i} style={{ fontSize: 11, padding: '3px 9px', background: '#dcfce7', border: '1px solid #86efac', borderRadius: 99, color: '#166534' }}>
-                {m.navn}{m.dagFraStart != null ? ` (dag ${m.dagFraStart})` : ''}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Notes panels */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(240px,1fr))', gap: 12, marginTop: 16 }}>
-        {[
-          { key: 'fdNoteOrders', label: '📦 Bestillinger & leveranser', ph: 'Vinduer bestilt 10.04...' },
-          { key: 'fdNoteSubs',   label: '👷 Underentreprenører',        ph: 'Rørlegger – Ola Hansen...' },
-        ].map(({ key, label, ph }) => (
-          <div key={key} style={{ background: '#f9f9f9', borderRadius: 8, padding: '10px 12px', border: '1px solid #e0e0e0' }}>
-            <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 600 }}>{label}</p>
-            <textarea rows={4} placeholder={ph} value={project[key] || ''}
-              onChange={e => onUpdate({ [key]: e.target.value })}
-              onBlur={e => onUpdate({ [key]: e.target.value })}
-              style={{ width: '100%', fontSize: 12, lineHeight: 1.6, padding: '6px 8px', borderRadius: 6, border: '1px solid #ddd', background: '#fff', resize: 'vertical', boxSizing: 'border-box' }} />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// ─── Main component ───────────────────────────────────────────────────────────
 export default function Framdriftsplan() {
   const { state, dispatch } = useApp();
   const [selectedId, setSelectedId] = useState(null);
-  const [filter, setFilter] = useState('Pågående');
+  const [filter,     setFilter]     = useState('Alle');
+  const [synker,     setSynker]     = useState(false);
+  const [sistSynk,   setSistSynk]   = useState(null);
 
-  const updateProject = (proj, extra) => {
+  // Force cloud sync når siden lastes
+  useEffect(() => { syncFraCloud(); }, []);
+
+  async function syncFraCloud() {
+    setSynker(true);
+    try {
+      const token = localStorage.getItem('fbs_token') || '';
+      const r = await fetch('/api/state', { headers: { Authorization: `Bearer ${token}` } });
+      if (!r.ok) return;
+      const data = await r.json();
+      dispatch({ type: 'LOAD_STATE', payload: data });
+      setSistSynk(new Date());
+    } catch { /* stille feil — offline OK */ }
+    finally { setSynker(false); }
+  }
+
+  const updateProject = (proj, extra) =>
     dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...proj, ...extra } });
-  };
 
-  // Ikke vis fullførte/arkiverte prosjekter her
   const aktive = state.prosjekter.filter(p => p.status !== 'fullfort');
 
+  const counts = {
+    Alle:        aktive.length,
+    'AI-plan':   aktive.filter(p => p.fdGenAv === 'AI' && p.kildeTilbudData).length,
+    Pågående:    aktive.filter(p => !p.fdStatus || p.fdStatus === 'Pågående' || p.fdStatus === 'Ikke startet').length,
+    Forsinket:   aktive.filter(p => p.fdStatus === 'Forsinket').length,
+    Ferdig:      aktive.filter(p => p.fdStatus === 'Ferdig').length,
+  };
+
   const filtered = aktive.filter(p => {
-    if (filter === 'Alle')        return true;
-    if (filter === 'Pågående')    return !p.fdStatus || p.fdStatus === 'Pågående' || p.fdStatus === 'Ikke startet';
-    if (filter === 'Forsinket')   return p.fdStatus === 'Forsinket';
-    if (filter === 'Ferdig')      return p.fdStatus === 'Ferdig';
+    if (filter === 'Alle')      return true;
+    if (filter === 'AI-plan')   return p.fdGenAv === 'AI' && Boolean(p.kildeTilbudData);
+    if (filter === 'Pågående')  return !p.fdStatus || p.fdStatus === 'Pågående' || p.fdStatus === 'Ikke startet';
+    if (filter === 'Forsinket') return p.fdStatus === 'Forsinket';
+    if (filter === 'Ferdig')    return p.fdStatus === 'Ferdig';
     return true;
   });
 
-  // Sorter: Forsinket øverst, deretter Pågående, Ikke startet, Ferdig
-  const sortOrder = { 'Forsinket': 0, 'Pågående': 1, 'Ikke startet': 2, 'Ferdig': 3 };
+  const sortOrder = { Forsinket: 0, Pågående: 1, 'Ikke startet': 2, Ferdig: 3 };
   filtered.sort((a, b) => {
     const sa = sortOrder[a.fdStatus || 'Pågående'] ?? 1;
     const sb = sortOrder[b.fdStatus || 'Pågående'] ?? 1;
     if (sa !== sb) return sa - sb;
     return (b.fdProgress ?? 0) - (a.fdProgress ?? 0);
   });
-
-  const counts = {
-    Alle:      aktive.length,
-    Pågående:  aktive.filter(p => !p.fdStatus || p.fdStatus === 'Pågående' || p.fdStatus === 'Ikke startet').length,
-    Forsinket: aktive.filter(p => p.fdStatus === 'Forsinket').length,
-    Ferdig:    aktive.filter(p => p.fdStatus === 'Ferdig').length,
-  };
 
   if (selectedId) {
     const live = state.prosjekter.find(p => p.id === selectedId);
@@ -644,38 +695,62 @@ export default function Framdriftsplan() {
   }
 
   return (
-    <div className="page" style={{ padding: '16px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+    <div className="page fd2-page">
+      <div className="fd2-page-header">
         <div>
-          <h2 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>Fremdriftsplan</h2>
-          <p style={{ fontSize: 12, color: '#888', margin: '2px 0 0' }}>{aktive.length} aktive prosjekter</p>
+          <h2 className="fd2-page-tittel">Framdriftsplan</h2>
+          <p className="fd2-page-sub">{aktive.length} aktive prosjekter</p>
         </div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {['Pågående', 'Forsinket', 'Ferdig', 'Alle'].map(f => (
-            <button key={f} onClick={() => setFilter(f)}
-              style={{
-                fontSize: 12, padding: '5px 12px', borderRadius: 99,
-                border: `1px solid ${f === 'Forsinket' ? '#fca5a5' : '#ddd'}`,
-                background: filter === f ? (f === 'Forsinket' ? '#993C1D' : '#185FA5') : 'transparent',
-                color: filter === f ? '#fff' : (f === 'Forsinket' ? '#993C1D' : '#666'),
-                cursor: 'pointer', fontWeight: filter === f ? 600 : 400,
-              }}>
-              {f} {counts[f] != null ? <span style={{ opacity: 0.7 }}>({counts[f]})</span> : null}
-            </button>
-          ))}
-        </div>
+        <button className="btn btn-sm fd2-sync-btn" onClick={syncFraCloud} disabled={synker}
+          title="Hent siste data fra sky">
+          {synker ? '⏳ Synker…' : '🔄 Synk'}
+          {sistSynk && !synker && (
+            <span className="fd2-sync-tid">
+              {sistSynk.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
+        </button>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(200px,1fr))', gap: 10 }}>
-        {filtered.map(p => (
-          <ProjectCard key={p.id} project={p} onSelect={p => setSelectedId(p.id)} />
+      <div className="fd2-filter-bar">
+        {[
+          { key: 'Alle',      label: 'Alle',            color: '#475569' },
+          { key: 'AI-plan',   label: '✨ AI-generert',  color: '#7c3aed' },
+          { key: 'Pågående',  label: 'Pågående',        color: '#2563eb' },
+          { key: 'Forsinket', label: 'Forsinket',       color: '#dc2626' },
+          { key: 'Ferdig',    label: 'Ferdig',          color: '#16a34a' },
+        ].map(f => (
+          <button key={f.key}
+            className={`fd2-filter-pill${filter === f.key ? ' active' : ''}`}
+            style={filter === f.key
+              ? { background: f.color, color: '#fff', borderColor: f.color }
+              : { color: f.color, borderColor: f.color + '55' }}
+            onClick={() => setFilter(f.key)}>
+            {f.label}
+            <span className="fd2-filter-count">{counts[f.key] ?? 0}</span>
+          </button>
         ))}
       </div>
 
-      {filtered.length === 0 && (
-        <div style={{ textAlign: 'center', padding: 48, color: '#94a3b8' }}>
-          <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
-          <p style={{ margin: 0, fontSize: 14 }}>Ingen prosjekter i denne kategorien.</p>
+      {filtered.length === 0 ? (
+        <div className="fd2-empty">
+          <div style={{ fontSize: 40, marginBottom: 10 }}>
+            {filter === 'AI-plan' ? '✨' : filter === 'Forsinket' ? '✅' : '📋'}
+          </div>
+          <p>
+            {filter === 'AI-plan'
+              ? 'Ingen prosjekter med AI-generert framdrift ennå. Send tilbud over fra tilbuds-appen!'
+              : `Ingen prosjekter i kategorien «${filter}».`}
+          </p>
+          {filter === 'AI-plan' && (
+            <button className="btn btn-sm" onClick={() => setFilter('Alle')}>Vis alle prosjekter</button>
+          )}
+        </div>
+      ) : (
+        <div className="fd2-card-grid">
+          {filtered.map(p => (
+            <ProjectCard key={p.id} project={p} onSelect={p => setSelectedId(p.id)} />
+          ))}
         </div>
       )}
     </div>
