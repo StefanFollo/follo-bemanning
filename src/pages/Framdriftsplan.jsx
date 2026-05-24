@@ -79,6 +79,212 @@ const STANDARD_FASER = [
   { name: 'Ferdigstilling',        fag: 'ferdig',     dur: 7  },
 ];
 
+// ─── GenererModal ─────────────────────────────────────────────────────────────
+
+function GenererModal({ project, onClose, onApply }) {
+  const { state } = useApp();
+  const harEgenData = !!(project.kildeTilbudData || project.poster?.length);
+  const [tab, setTab] = useState(harEgenData ? 'tilbud' : 'fritekst');
+  const [valgtId, setValgtId] = useState(project.id);
+  const [beskrivelse, setBeskrivelse] = useState('');
+  const [oppstart, setOppstart] = useState(project.oppstartTekst || '');
+  const [varighet, setVarighet] = useState(String(project.varighetUker || 4));
+  const [mannskap, setMannskap] = useState('2');
+  const [laster, setLaster] = useState(false);
+  const [feil, setFeil] = useState('');
+  const [preview, setPreview] = useState(null);
+
+  const alleMedData = (state.prosjekter || []).filter(p =>
+    (p.kildeTilbudData && (p.kildeTilbudData.poster?.length || Object.keys(p.kildeTilbudData.timer || {}).length)) ||
+    p.poster?.length > 0
+  );
+  const valgtProj = alleMedData.find(p => p.id === valgtId) || alleMedData[0];
+  const harEksisterende = (project.fdTasks || []).length > 0;
+
+  async function generer() {
+    setLaster(true); setFeil(''); setPreview(null);
+    try {
+      const token = localStorage.getItem('fbs_token') || '';
+      let body;
+      if (tab === 'tilbud') {
+        if (!valgtProj) throw new Error('Ingen prosjekter med tilbudsdata');
+        const kd = valgtProj.kildeTilbudData;
+        body = {
+          modus: 'fra-tilbud',
+          poster: kd?.poster || valgtProj.poster || [],
+          timer: kd?.timer || {},
+          oppstart: kd?.oppstart || valgtProj.oppstartTekst || '',
+          varighet: kd?.varighet || valgtProj.varighetTekst || '',
+          adresse: valgtProj.adresse || '',
+          kundenavn: valgtProj.navn || '',
+        };
+      } else {
+        if (!beskrivelse.trim()) throw new Error('Skriv inn en beskrivelse av jobben');
+        body = {
+          modus: 'fri-tekst',
+          beskrivelse: beskrivelse.trim(),
+          oppstart: oppstart.trim(),
+          varighet: parseInt(varighet) || 4,
+          mannskap: parseInt(mannskap) || 2,
+        };
+      }
+      const r = await fetch('/api/framdrift-gen', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(body),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error || `Feil ${r.status}`);
+      setPreview(data);
+    } catch (e) { setFeil(e.message); }
+    finally { setLaster(false); }
+  }
+
+  const tabBtn = (key, label) => (
+    <button onClick={() => setTab(key)} style={{
+      padding: '10px 18px', background: 'none', border: 'none',
+      borderBottom: tab === key ? '2px solid #2563eb' : '2px solid transparent',
+      color: tab === key ? '#2563eb' : '#64748b',
+      fontWeight: tab === key ? 700 : 500, cursor: 'pointer', fontSize: 13, marginBottom: -1,
+    }}>{label}</button>
+  );
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 560, maxHeight: '90vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>✨ Generer framdriftsplan med AI</h3>
+          <button className="btn-icon" onClick={onClose}>✕</button>
+        </div>
+
+        {!preview ? (
+          <>
+            <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', padding: '0 24px' }}>
+              {tabBtn('tilbud', `📋 Fra tilbudsdata${alleMedData.length === 0 ? ' (ingen)' : ''}`)}
+              {tabBtn('fritekst', '✏️ Fri beskrivelse')}
+            </div>
+
+            <div style={{ padding: '20px 24px 24px', display: 'grid', gap: 16 }}>
+              {tab === 'tilbud' && (alleMedData.length === 0 ? (
+                <div style={{ color: '#64748b', fontSize: 13, textAlign: 'center', padding: 20 }}>
+                  Ingen prosjekter med tilbudsdata funnet.<br />Bruk «Fri beskrivelse»-fanen i stedet.
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label>Velg prosjekt med tilbudsdata</label>
+                    <select className="input" value={valgtId} onChange={e => setValgtId(e.target.value)}>
+                      {alleMedData.map(p => (
+                        <option key={p.id} value={p.id}>
+                          {p.navn}{p.id === project.id ? ' (dette prosjektet)' : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {valgtProj && (
+                    <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '10px 14px', fontSize: 13, display: 'grid', gap: 3 }}>
+                      <div style={{ fontWeight: 600, color: '#15803d', marginBottom: 2 }}>📦 Tilbudsdata</div>
+                      {valgtProj.adresse && <div>📍 {valgtProj.adresse}</div>}
+                      {valgtProj.estimertSum > 0 && <div>💰 {Math.round(valgtProj.estimertSum).toLocaleString('nb-NO')} kr</div>}
+                      {valgtProj.fag?.length > 0 && <div>🔨 Fag: {valgtProj.fag.join(', ')}</div>}
+                      {(() => { const ant = (valgtProj.kildeTilbudData?.poster || valgtProj.poster || []).length; return ant > 0 ? <div>📋 {ant} tilbudsposter</div> : null; })()}
+                      {(valgtProj.kildeTilbudData?.oppstart || valgtProj.oppstartTekst) &&
+                        <div>🚀 {valgtProj.kildeTilbudData?.oppstart || valgtProj.oppstartTekst}</div>}
+                      {(valgtProj.kildeTilbudData?.varighet || valgtProj.varighetTekst) &&
+                        <div>⏱ {valgtProj.kildeTilbudData?.varighet || valgtProj.varighetTekst}</div>}
+                    </div>
+                  )}
+                </>
+              ))}
+
+              {tab === 'fritekst' && (
+                <>
+                  <div>
+                    <label>Beskriv jobben kort *</label>
+                    <textarea className="input" rows={4} value={beskrivelse}
+                      onChange={e => setBeskrivelse(e.target.value)}
+                      placeholder={'Eksempler:\n• Bad 6 m² og kjøkken-renovering 12 m²\n• Tilbygg 50 m² med skifertak og 3 vinduer\n• Rehab kjeller: pigging, drening, bad 8 m²'} />
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                    <div>
+                      <label>Oppstart</label>
+                      <input className="input" value={oppstart} onChange={e => setOppstart(e.target.value)} placeholder="uke 31" />
+                    </div>
+                    <div>
+                      <label>Varighet (uker)</label>
+                      <input type="number" min={1} max={52} className="input" value={varighet} onChange={e => setVarighet(e.target.value)} />
+                    </div>
+                    <div>
+                      <label>Mannskap</label>
+                      <input type="number" min={1} max={20} className="input" value={mannskap} onChange={e => setMannskap(e.target.value)} />
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {feil && (
+                <div style={{ color: '#dc2626', fontSize: 13, padding: '8px 12px', background: '#fef2f2', borderRadius: 6 }}>❌ {feil}</div>
+              )}
+
+              <div className="modal-actions">
+                <button className="btn" onClick={onClose}>Avbryt</button>
+                <button className="btn btn-primary" onClick={generer}
+                  disabled={laster || (tab === 'tilbud' && !valgtProj) || (tab === 'fritekst' && !beskrivelse.trim())}>
+                  {laster ? <><span className="fd2-spinner" /> Genererer…</> : '✨ Generer →'}
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div style={{ padding: '20px 24px 24px', display: 'grid', gap: 16 }}>
+            <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '12px 16px' }}>
+              <div style={{ fontWeight: 700, color: '#15803d', marginBottom: 6 }}>✅ Plan generert!</div>
+              <div style={{ fontSize: 13, color: '#374151', display: 'grid', gap: 3 }}>
+                <div>📊 <strong>{preview.fdTasks?.length} faser</strong></div>
+                <div>🗓 Startuke: <strong>U{preview.fdStartWeek}/{preview.fdStartYear}</strong></div>
+                <div>⏱ Varighet: <strong>{preview.fdTotalWeeks} uker</strong></div>
+                {preview.milepaler?.length > 0 && <div>📌 {preview.milepaler.length} milepæler</div>}
+              </div>
+            </div>
+
+            <div style={{ maxHeight: 240, overflow: 'auto', border: '1px solid #e2e8f0', borderRadius: 8 }}>
+              {(preview.fdTasks || []).map((t, i) => (
+                <div key={t.id || i} style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '7px 12px',
+                  borderBottom: i < (preview.fdTasks?.length ?? 0) - 1 ? '1px solid #f1f5f9' : 'none', fontSize: 12,
+                }}>
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: fc(t.fag), flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontWeight: 500, color: '#1e293b' }}>{t.name}</span>
+                  <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>{t.dur}d · dag {t.start}</span>
+                  <span style={{ color: FAG[t.fag]?.color || '#888', fontSize: 10, minWidth: 60, textAlign: 'right' }}>{FAG[t.fag]?.label || t.fag}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="modal-actions" style={{ flexWrap: 'wrap', gap: 8 }}>
+              <button className="btn" onClick={() => { setPreview(null); setFeil(''); }}>← Tilbake</button>
+              <button className="btn" onClick={onClose}>Avbryt</button>
+              {harEksisterende && (
+                <button className="btn" style={{ borderColor: '#f59e0b', color: '#b45309' }}
+                  onClick={() => onApply({ ...preview, replace: false })}>
+                  ➕ Legg til i eksisterende
+                </button>
+              )}
+              <button className="btn btn-primary"
+                onClick={() => {
+                  if (harEksisterende && !window.confirm('Erstatte eksisterende framdriftsplan?')) return;
+                  onApply({ ...preview, replace: true });
+                }}>
+                {harEksisterende ? '🔄 Erstatt plan' : '✅ Bruk denne planen'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── AI regenerering ──────────────────────────────────────────────────────────
 
 function useFramdriftAI(project, onUpdate) {
@@ -405,8 +611,36 @@ function ProjectDetail({ project, onBack, onUpdate }) {
   const [startYr,  setStartYr]  = useState(() => projStartWY(project).year);
   const [totalWk,  setTotalWk]  = useState(project.fdTotalWeeks || 12);
   const [aktTab,   setAktTab]   = useState('gantt');
+  const [visGenModal, setVisGenModal] = useState(false);
 
   const { laster: aiLaster, feil: aiFeil, regenererMedAI } = useFramdriftAI(project, onUpdate);
+
+  function handleAIApply({ fdTasks, fdStartWeek, fdStartYear, fdTotalWeeks, milepaler, replace }) {
+    if (replace) {
+      onUpdate({
+        fdTasks,
+        fdStartWeek,
+        fdStartYear,
+        fdTotalWeeks,
+        fdMilepaler: milepaler || [],
+        fdGenDato: new Date().toISOString(),
+        fdGenAv: 'AI',
+      });
+    } else {
+      const existing = project.fdTasks || [];
+      const offset = existing.length ? Math.max(...existing.map(t => t.start + t.dur)) : 0;
+      const merged = [
+        ...existing,
+        ...fdTasks.map(t => ({ ...t, id: uid(), start: t.start + offset })),
+      ];
+      const mergedMile = [
+        ...(project.fdMilepaler || []),
+        ...(milepaler || []).map(m => ({ ...m, dagFraStart: (m.dagFraStart || 0) + offset })),
+      ];
+      onUpdate({ fdTasks: merged, fdMilepaler: mergedMile });
+    }
+    setVisGenModal(false);
+  }
 
   useEffect(() => {
     setStatus(project.fdStatus || 'Pågående');
@@ -468,18 +702,30 @@ function ProjectDetail({ project, onBack, onUpdate }) {
           </div>
         </div>
 
-        {project.kildeTilbudData && (
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <button className="btn btn-sm fd2-ai-btn"
-            onClick={regenererMedAI}
-            disabled={aiLaster}>
-            {aiLaster
-              ? <><span className="fd2-spinner" /> Genererer…</>
-              : '✨ Regenerer med AI'}
+            onClick={() => setVisGenModal(true)}>
+            ✨ Generer med AI
           </button>
-        )}
+          {project.kildeTilbudData && (
+            <button className="btn btn-sm" style={{ fontSize: 11, padding: '4px 8px', color: '#64748b' }}
+              onClick={regenererMedAI} disabled={aiLaster}
+              title="Regenerer fra eksisterende tilbudsdata">
+              {aiLaster ? <span className="fd2-spinner" /> : '🔄'}
+            </button>
+          )}
+        </div>
       </div>
 
       {aiFeil && <div className="fd2-feil-banner">❌ {aiFeil}</div>}
+
+      {visGenModal && (
+        <GenererModal
+          project={project}
+          onClose={() => setVisGenModal(false)}
+          onApply={handleAIApply}
+        />
+      )}
 
       {/* Tabs */}
       <div className="fd2-tabs">
