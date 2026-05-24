@@ -50,6 +50,11 @@ const FAG = {
   ferdig:      { label: 'Ferdig',      color: '#3B6D11' },
   annet:       { label: 'Annet',       color: '#888780' },
 };
+const FAG_IKON = {
+  tomrer: '🔨', flis: '🔲', elektriker: '⚡', rorlegger: '🔵',
+  ventilasjon: '💨', maling: '🎨', ferdig: '✓', annet: '📋',
+};
+
 const fc = k => FAG[k]?.color ?? '#888780';
 
 const STATUS_OPTIONS = ['Ikke startet', 'Pågående', 'Forsinket', 'Ferdig'];
@@ -131,10 +136,12 @@ function GanttChart({ project, onUpdate }) {
     totalWeeks * 7
   );
 
-  const ROW = 38, PAD = 200;
+  const ROW = 38, PAD = 240;
+  const MILE_H = (project.fdMilepaler?.length > 0) ? 22 : 0;
+  const TASK_TOP = 40 + MILE_H;
   const chartW = Math.max(totalDays * 18, 580) * zoom;
   const dw     = chartW / totalDays;
-  const svgH   = Math.max(tasks.length * ROW + 56, 80);
+  const svgH   = Math.max(tasks.length * ROW + TASK_TOP + 16, 80);
 
   const weeks = [];
   for (let d = 0; d < totalDays; d += 7) weeks.push(d);
@@ -250,8 +257,11 @@ function GanttChart({ project, onUpdate }) {
             <rect x={0} y={0} width={PAD} height={40} fill="#f8fafc" />
             <text x={10} y={26} fontSize={11} fontWeight="600" fill="#64748b">Fase</text>
             <text x={PAD - 34} y={26} fontSize={10} fill="#94a3b8" textAnchor="middle">✓</text>
+            {MILE_H > 0 && (
+              <rect x={0} y={40} width={PAD} height={MILE_H} fill="#faf5ff" />
+            )}
             {tasks.map((t, i) => {
-              const y = i * ROW + 40;
+              const y = i * ROW + TASK_TOP;
               const done = (t.pct ?? 0) >= 100;
               return (
                 <g key={t.id}
@@ -263,6 +273,7 @@ function GanttChart({ project, onUpdate }) {
                     }
                     rowDragRef.current = null; setDropIdx(null);
                   }}>
+                  <title>{t.name}</title>
                   {dropIdx === i && <rect x={0} y={y} width={PAD} height={2} fill="#2563eb" />}
                   <rect x={0} y={y} width={PAD} height={ROW} fill={done ? '#f0fdf4' : i % 2 === 0 ? '#fff' : '#fafafa'} />
                   <circle cx={12} cy={y + ROW / 2} r={5} fill={fc(t.fag)} opacity={done ? 0.4 : 1} />
@@ -270,7 +281,7 @@ function GanttChart({ project, onUpdate }) {
                   <text x={26} y={y + ROW / 2 + 5} fontSize={12} fill={done ? '#94a3b8' : '#1e293b'}
                     style={{ userSelect: 'none', textDecoration: done ? 'line-through' : 'none' }}
                     clipPath={`url(#nc${t.id})`}>
-                    {t.name.length > 18 ? t.name.slice(0, 17) + '…' : t.name}
+                    {t.name.length > 22 ? t.name.slice(0, 21) + '…' : t.name}
                   </text>
                   <text x={PAD - 54} y={y + ROW / 2 + 5} fontSize={11} fill="#cbd5e1"
                     style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => deleteTask(t.id)}>✕</text>
@@ -295,11 +306,14 @@ function GanttChart({ project, onUpdate }) {
                 <text x={b.s * dw + 6} y={14} fontSize={11} fontWeight="600" fill="#475569">{b.y}</text>
               </g>
             ))}
+            {MILE_H > 0 && (
+              <rect x={0} y={40} width={chartW} height={MILE_H} fill="#faf5ff" />
+            )}
             {weeks.map((d, i) => {
               const { w } = wkNum(bw, by, Math.round(d / 7));
               return (
                 <g key={d}>
-                  <rect x={d * dw} y={40} width={7 * dw} height={svgH - 40}
+                  <rect x={d * dw} y={TASK_TOP} width={7 * dw} height={svgH - TASK_TOP}
                     fill={i % 2 === 0 ? 'rgba(0,0,0,0.01)' : 'rgba(0,0,0,0.03)'} />
                   <line x1={d * dw} y1={20} x2={d * dw} y2={svgH} stroke="#e2e8f0" strokeWidth={0.5} />
                   <text x={d * dw + 4} y={33} fontSize={10} fill="#94a3b8">U{w}</text>
@@ -309,12 +323,13 @@ function GanttChart({ project, onUpdate }) {
             {tasks.map((t, i) => {
               const x  = t.start * dw;
               const w  = Math.max(t.dur * dw - 2, 6);
-              const y  = i * ROW + 40;
+              const y  = i * ROW + TASK_TOP;
               const pct = t.pct ?? 0;
               const done = pct >= 100;
               const col  = fc(t.fag);
               return (
                 <g key={t.id}>
+                  <title>{t.name} · {t.dur} dager</title>
                   <rect x={x} y={y + 7} width={w} height={20} rx={5} fill={col} opacity={done ? 0.2 : 0.35}
                     style={{ cursor: 'grab' }} onMouseDown={e => startDrag(e, t.id, 'move')} />
                   {w * pct / 100 > 0 && (
@@ -323,7 +338,7 @@ function GanttChart({ project, onUpdate }) {
                   )}
                   <clipPath id={`bc${t.id}`}><rect x={x + 4} y={y + 7} width={Math.max(w - 20, 0)} height={20} /></clipPath>
                   <text x={x + 6} y={y + 21} fontSize={10} fill="white" fontWeight="600"
-                    style={{ pointerEvents: 'none' }} clipPath={`url(#bc${t.id})`}>{t.name}</text>
+                    style={{ pointerEvents: 'none' }} clipPath={`url(#bc${t.id})`}>{FAG_IKON[t.fag] || '■'} {t.dur}d</text>
                   {done && w > 24 && (
                     <text x={x + w / 2} y={y + 21} fontSize={12} fill="white" textAnchor="middle"
                       style={{ pointerEvents: 'none' }}>✓</text>
@@ -340,6 +355,20 @@ function GanttChart({ project, onUpdate }) {
                 <text x={nowX} y={33} fontSize={10} fontWeight="600" fill="white" textAnchor="middle">U{nowWk}</text>
               </g>
             )}
+            {MILE_H > 0 && (project.fdMilepaler || []).map((m, mi) => {
+              const mx = (m.dagFraStart || 0) * dw;
+              return (
+                <g key={mi}>
+                  <line x1={mx} y1={40} x2={mx} y2={svgH} stroke="#7c3aed" strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
+                  <polygon points={`${mx},${40+MILE_H-2} ${mx-4},${40+4} ${mx+4},${40+4}`} fill="#7c3aed" opacity={0.8} />
+                  <text x={mx + 5} y={40 + MILE_H - 5} fontSize={8} fill="#7c3aed" fontWeight="700"
+                    style={{ userSelect: 'none', pointerEvents: 'none' }}>
+                    d{m.dagFraStart}
+                  </text>
+                  <title>{m.navn} · dag {m.dagFraStart}</title>
+                </g>
+              );
+            })}
           </svg>
         </div>
       </div>
@@ -579,50 +608,7 @@ function ProjectDetail({ project, onBack, onUpdate }) {
   );
 }
 
-// ─── ProjectCard ──────────────────────────────────────────────────────────────
-
-function ProjectCard({ project, onSelect }) {
-  const pct      = project.fdProgress ?? 0;
-  const tasks    = project.fdTasks || [];
-  const done     = tasks.filter(t => (t.pct ?? 0) >= 100).length;
-  const status   = project.fdStatus || 'Ikke startet';
-  const sc       = STATUS_COLORS[status] ?? '#64748b';
-  const harAI    = project.fdGenAv === 'AI' && Boolean(project.kildeTilbudData);
-  const harData  = tasks.length > 0;
-  const { week } = projStartWY(project);
-
-  return (
-    <div className="fd2-card" onClick={() => onSelect(project)}
-      style={{ borderTop: `3px solid ${sc}` }}>
-      <div className="fd2-card-header">
-        <div className="fd2-card-navn">{project.navn}</div>
-        <span className="fd2-card-status" style={{ color: sc, background: sc + '15' }}>{status}</span>
-      </div>
-      {project.adresse && <div className="fd2-card-adr">📍 {project.adresse}</div>}
-
-      <div className="fd2-card-badges">
-        {harAI && <span className="fd2-kilde-badge fd2-kilde-ai">✨ AI fra tilbuds-appen</span>}
-        {!harAI && harData && <span className="fd2-kilde-badge fd2-kilde-manuell">📋 Manuell</span>}
-        {!harData && <span className="fd2-kilde-badge" style={{ color: '#94a3b8', borderColor: '#e2e8f0', background: '#f8fafc' }}>Ingen plan</span>}
-        {project.fdStartWeek && (
-          <span className="fd2-kilde-badge" style={{ color: '#475569', borderColor: '#e2e8f0', background: '#f8fafc' }}>
-            U{week} · {project.fdTotalWeeks || '?'} uker
-          </span>
-        )}
-      </div>
-
-      <div className="fd2-card-progress-wrap">
-        <div className="fd2-card-progress-bar">
-          <div className="fd2-card-progress-fill" style={{ width: pct + '%', background: pct > 0 ? sc : '#cbd5e1' }} />
-        </div>
-        <span className="fd2-card-pct" style={{ color: pct > 0 ? sc : '#94a3b8' }}>{pct}%</span>
-      </div>
-      <div className="fd2-card-meta">
-        {harData ? `${done} / ${tasks.length} faser fullført` : 'Klikk for å legge til faser'}
-      </div>
-    </div>
-  );
-}
+// ─── ProjectCard removed — replaced by inline list in main return ─────────────
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
@@ -686,6 +672,22 @@ export default function Framdriftsplan() {
     return (b.fdProgress ?? 0) - (a.fdProgress ?? 0);
   });
 
+  const medAIPlan  = aktive.filter(p => p.fdGenAv === 'AI' && p.kildeTilbudData).length;
+  const utenPlan   = aktive.filter(p => !(p.fdTasks || []).length).length;
+  const antForsinket = aktive.filter(p => p.fdStatus === 'Forsinket').length;
+  const { week: nw, year: ny } = nowWeekYear();
+  const krevOppmerksomhet = [
+    ...aktive.filter(p => p.fdStatus === 'Forsinket').map(p => ({ p, ikon: '🔴', info: 'Forsinket' })),
+    ...aktive.filter(p => {
+      if ((p.fdTasks || []).length > 0 || !p.fdStartWeek) return false;
+      const diff = (p.fdStartYear || ny) * 52 + p.fdStartWeek - ny * 52 - nw;
+      return diff >= 0 && diff <= 8;
+    }).map(p => {
+      const diff = (p.fdStartYear || ny) * 52 + p.fdStartWeek - ny * 52 - nw;
+      return { p, ikon: '🚀', info: `Starter om ${diff} uker — mangler plan` };
+    }),
+  ];
+
   if (selectedId) {
     const live = state.prosjekter.find(p => p.id === selectedId);
     if (live) {
@@ -703,10 +705,11 @@ export default function Framdriftsplan() {
 
   return (
     <div className="page fd2-page">
+      {/* Header */}
       <div className="fd2-page-header">
         <div>
           <h2 className="fd2-page-tittel">Framdriftsplan</h2>
-          <p className="fd2-page-sub">{aktive.length} aktive prosjekter</p>
+          <p className="fd2-page-sub">{aktive.length} aktive prosjekter · {medAIPlan} med AI-plan</p>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
           <button className="btn btn-sm fd2-sync-btn" onClick={syncFraCloud} disabled={synker}
@@ -718,53 +721,82 @@ export default function Framdriftsplan() {
               </span>
             )}
           </button>
-          {synkFeil && (
-            <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 500 }}>⚠ {synkFeil}</span>
-          )}
+          {synkFeil && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 500 }}>⚠ {synkFeil}</span>}
         </div>
       </div>
 
-      <div className="fd2-filter-bar">
+      {/* Velg prosjekt */}
+      <div className="fd2-velg-wrap">
+        <select className="fd2-velg-select" value=""
+          onChange={e => { if (e.target.value) setSelectedId(e.target.value); }}>
+          <option value="" disabled>🔍 Velg prosjekt for å se framdriftsplan…</option>
+          {[...aktive].sort((a, b) => a.navn.localeCompare(b.navn, 'nb')).map(p => (
+            <option key={p.id} value={p.id}>
+              {p.navn}
+              {(p.fdTasks || []).length > 0 ? ' ✓' : ''}
+              {p.fdGenAv === 'AI' ? ' ✨' : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {/* Stats */}
+      <div className="fd2-dashboard-stats">
         {[
-          { key: 'Alle',      label: 'Alle',            color: '#475569' },
-          { key: 'AI-plan',   label: '✨ AI-generert',  color: '#7c3aed' },
-          { key: 'Pågående',  label: 'Pågående',        color: '#2563eb' },
-          { key: 'Forsinket', label: 'Forsinket',       color: '#dc2626' },
-          { key: 'Ferdig',    label: 'Ferdig',          color: '#16a34a' },
-        ].map(f => (
-          <button key={f.key}
-            className={`fd2-filter-pill${filter === f.key ? ' active' : ''}`}
-            style={filter === f.key
-              ? { background: f.color, color: '#fff', borderColor: f.color }
-              : { color: f.color, borderColor: f.color + '55' }}
-            onClick={() => setFilter(f.key)}>
-            {f.label}
-            <span className="fd2-filter-count">{counts[f.key] ?? 0}</span>
-          </button>
+          { tall: aktive.length, label: 'Aktive prosjekter', color: '#1e293b' },
+          { tall: medAIPlan,     label: '✨ AI-plan',          color: '#7c3aed' },
+          { tall: utenPlan,      label: 'Mangler plan',        color: '#f59e0b' },
+          ...(antForsinket > 0 ? [{ tall: antForsinket, label: '🔴 Forsinket', color: '#dc2626' }] : []),
+        ].map((s, i) => (
+          <div key={i} className="fd2-stat-boks" style={{ borderTop: `3px solid ${s.color}` }}>
+            <div className="fd2-stat-tall" style={{ color: s.color }}>{s.tall}</div>
+            <div className="fd2-stat-label">{s.label}</div>
+          </div>
         ))}
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="fd2-empty">
-          <div style={{ fontSize: 40, marginBottom: 10 }}>
-            {filter === 'AI-plan' ? '✨' : filter === 'Forsinket' ? '✅' : '📋'}
-          </div>
-          <p>
-            {filter === 'AI-plan'
-              ? 'Ingen prosjekter med AI-generert framdrift ennå. Send tilbud over fra tilbuds-appen!'
-              : `Ingen prosjekter i kategorien «${filter}».`}
-          </p>
-          {filter === 'AI-plan' && (
-            <button className="btn btn-sm" onClick={() => setFilter('Alle')}>Vis alle prosjekter</button>
-          )}
-        </div>
-      ) : (
-        <div className="fd2-card-grid">
-          {filtered.map(p => (
-            <ProjectCard key={p.id} project={p} onSelect={p => setSelectedId(p.id)} />
+      {/* Krever oppmerksomhet */}
+      {krevOppmerksomhet.length > 0 && (
+        <div className="fd2-oppmerksomhet">
+          <div className="fd2-oppmerksomhet-tittel">🔥 Krever oppmerksomhet</div>
+          {krevOppmerksomhet.map(({ p, info, ikon }) => (
+            <div key={p.id} className="fd2-oppmerksomhet-rad" onClick={() => setSelectedId(p.id)}>
+              <span>{ikon}</span>
+              <span className="fd2-oppm-navn">{p.navn}</span>
+              <span className="fd2-oppm-info">{info}</span>
+            </div>
           ))}
         </div>
       )}
+
+      {/* Alle prosjekter — kompakt liste */}
+      <div className="fd2-alle-liste">
+        <div className="fd2-alle-tittel">Alle prosjekter ({aktive.length})</div>
+        {[...aktive].sort((a, b) => {
+          const so = { Forsinket: 0, Pågående: 1, 'Ikke startet': 2, Ferdig: 3 };
+          const sa = so[a.fdStatus || 'Ikke startet'] ?? 2;
+          const sb = so[b.fdStatus || 'Ikke startet'] ?? 2;
+          return sa !== sb ? sa - sb : a.navn.localeCompare(b.navn, 'nb');
+        }).map(p => {
+          const tasks = p.fdTasks || [];
+          const sc = STATUS_COLORS[p.fdStatus || 'Ikke startet'] ?? '#64748b';
+          const harAI = p.fdGenAv === 'AI' && p.kildeTilbudData;
+          return (
+            <div key={p.id} className="fd2-prosjekt-rad" onClick={() => setSelectedId(p.id)}>
+              <div className="fd2-rad-dot" style={{ background: sc }} />
+              <div className="fd2-rad-navn">{p.navn}</div>
+              <div className="fd2-rad-badges">
+                {harAI && <span className="fd2-kilde-badge fd2-kilde-ai" style={{ fontSize: 10 }}>✨</span>}
+                {tasks.length > 0
+                  ? <span className="fd2-rad-info">{tasks.filter(t=>(t.pct??0)>=100).length}/{tasks.length} faser</span>
+                  : <span className="fd2-rad-info" style={{ color: '#f59e0b' }}>Ingen plan</span>
+                }
+              </div>
+              <span className="fd2-rad-status" style={{ color: sc }}>{p.fdStatus || 'Ikke startet'}</span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

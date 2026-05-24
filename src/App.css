@@ -3655,3 +3655,32 @@ body {
   .fd2-tab-innhold { padding: 14px 12px; }
   .fd2-gantt-left { display: none; }
 }
+
+/* Dashboard */
+.fd2-velg-wrap { margin: 0 0 20px; }
+.fd2-velg-select { width: 100%; padding: 12px 16px; font-size: 15px; border: 2px solid #e2e8f0; border-radius: 10px; background: #fff; cursor: pointer; color: #1e293b; }
+.fd2-velg-select:focus { outline: none; border-color: #2563eb; }
+
+.fd2-dashboard-stats { display: flex; gap: 14px; margin: 0 0 20px; flex-wrap: wrap; }
+.fd2-stat-boks { flex: 1; min-width: 100px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; border-top-width: 3px; }
+.fd2-stat-tall { font-size: 28px; font-weight: 800; line-height: 1; margin-bottom: 4px; }
+.fd2-stat-label { font-size: 12px; color: #64748b; font-weight: 500; }
+
+.fd2-oppmerksomhet { background: #fff; border: 1px solid #fde68a; border-radius: 10px; padding: 12px 16px; margin: 0 0 20px; }
+.fd2-oppmerksomhet-tittel { font-weight: 700; font-size: 13px; color: #92400e; margin-bottom: 10px; }
+.fd2-oppmerksomhet-rad { display: flex; align-items: center; gap: 10px; padding: 6px 0; cursor: pointer; border-bottom: 1px solid #fef3c7; font-size: 13px; }
+.fd2-oppmerksomhet-rad:last-child { border-bottom: none; }
+.fd2-oppmerksomhet-rad:hover { background: #fffbeb; border-radius: 6px; }
+.fd2-oppm-navn { flex: 1; font-weight: 600; color: #1e293b; }
+.fd2-oppm-info { font-size: 12px; color: #92400e; }
+
+.fd2-alle-liste { background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; }
+.fd2-alle-tittel { padding: 12px 16px; font-weight: 700; font-size: 13px; color: #64748b; border-bottom: 1px solid #f1f5f9; background: #f8fafc; }
+.fd2-prosjekt-rad { display: flex; align-items: center; gap: 12px; padding: 10px 16px; cursor: pointer; border-bottom: 1px solid #f1f5f9; transition: background .12s; }
+.fd2-prosjekt-rad:last-child { border-bottom: none; }
+.fd2-prosjekt-rad:hover { background: #f8fafc; }
+.fd2-rad-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.fd2-rad-navn { flex: 1; font-size: 13px; font-weight: 600; color: #1e293b; }
+.fd2-rad-badges { display: flex; align-items: center; gap: 6px; }
+.fd2-rad-info { font-size: 11px; color: #64748b; }
+.fd2-rad-status { font-size: 11px; font-weight: 600; min-width: 80px; text-align: right; }
