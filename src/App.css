@@ -574,6 +574,9 @@ body {
 /* Week header row */
 .oversikt-wk-header-row {
   display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 .oversikt-corner {
   background: #1e293b;
@@ -582,7 +585,7 @@ body {
   height: 26px;
   position: sticky;
   left: 0;
-  z-index: 4;
+  z-index: 15;
 }
 .oversikt-wk-cell {
   background: #1e293b;
@@ -606,6 +609,9 @@ body {
 /* Day header row */
 .oversikt-day-header-row {
   display: flex;
+  position: sticky;
+  top: 26px;
+  z-index: 10;
 }
 .oversikt-day-corner {
   background: #f8fafc;
@@ -623,7 +629,7 @@ body {
   text-transform: uppercase;
   position: sticky;
   left: 0;
-  z-index: 4;
+  z-index: 15;
 }
 .oversikt-day-cell {
   background: #f8fafc;

@@ -68,7 +68,7 @@ export default function Bemanningsplan({ readOnly = false }) {
   const [ukeMode, setUkeMode] = useState('dag'); // 'dag' | 'uke' | 'maaned'
   const [ferieYearOffset, setFerieYearOffset] = useState(0);
   const oversiktScrollRef = useRef(null);
-  const oversiktPanRef    = useRef(null); // { startX, startScrollLeft }
+  const oversiktPanRef    = useRef(null); // { startX, startScrollLeft, pointerId, panning }
   const [ansatteOrder, setAnsatteOrder] = useState(() => {
     try { return JSON.parse(localStorage.getItem('fbs_ansatte_order_v2') || '[]'); } catch { return []; }
   });
@@ -1022,19 +1022,24 @@ export default function Bemanningsplan({ readOnly = false }) {
           onPointerDown={e => {
             if (e.target.closest('.oversikt-bar,.oversikt-handle,.oversikt-drag-handle,button')) return;
             if (dragRef.current) return;
-            oversiktPanRef.current = { startX: e.clientX, startScrollLeft: oversiktScrollRef.current.scrollLeft };
-            e.currentTarget.setPointerCapture(e.pointerId);
-            e.currentTarget.style.cursor = 'grabbing';
+            oversiktPanRef.current = { startX: e.clientX, startScrollLeft: oversiktScrollRef.current.scrollLeft, pointerId: e.pointerId, panning: false };
           }}
           onPointerMove={e => {
             if (!oversiktPanRef.current) return;
             const dx = e.clientX - oversiktPanRef.current.startX;
-            oversiktScrollRef.current.scrollLeft = oversiktPanRef.current.startScrollLeft - dx;
+            if (!oversiktPanRef.current.panning && Math.abs(dx) > 5) {
+              oversiktPanRef.current.panning = true;
+              e.currentTarget.setPointerCapture(oversiktPanRef.current.pointerId);
+              e.currentTarget.style.cursor = 'grabbing';
+            }
+            if (oversiktPanRef.current.panning) {
+              oversiktScrollRef.current.scrollLeft = oversiktPanRef.current.startScrollLeft - dx;
+            }
           }}
           onPointerUp={e => {
             if (!oversiktPanRef.current) return;
+            if (oversiktPanRef.current.panning) e.currentTarget.style.cursor = '';
             oversiktPanRef.current = null;
-            e.currentTarget.style.cursor = '';
           }}
           onPointerCancel={e => {
             oversiktPanRef.current = null;
