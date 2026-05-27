@@ -490,13 +490,14 @@ function GanttChart({ project, onUpdate }) {
                     {t.name.length > 22 ? t.name.slice(0, 21) + '…' : t.name}
                   </text>
                   <text x={PAD - 54} y={y + ROW / 2 + 5} fontSize={11} fill="#cbd5e1"
-                    style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => deleteTask(t.id)}>✕</text>
+                    className="fd2-g-ctrl" style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => deleteTask(t.id)}>✕</text>
                   <rect x={PAD - 36} y={y + ROW / 2 - 9} width={18} height={18} rx={4}
+                    className="fd2-g-ctrl"
                     fill={done ? '#16a34a' : '#fff'} stroke={done ? '#16a34a' : '#e2e8f0'} strokeWidth={1.5}
                     style={{ cursor: 'pointer' }} onClick={e => toggleDone(e, t.id)} />
                   {done && (
                     <text x={PAD - 27} y={y + ROW / 2 + 5} fontSize={13} fill="#fff" textAnchor="middle"
-                      style={{ pointerEvents: 'none', userSelect: 'none' }}>✓</text>
+                      className="fd2-g-ctrl" style={{ pointerEvents: 'none', userSelect: 'none' }}>✓</text>
                   )}
                 </g>
               );

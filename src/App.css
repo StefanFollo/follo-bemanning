@@ -1906,6 +1906,12 @@ body {
   /* Vis print-only elementer */
   .fd2-print-only { display: block !important; }
 
+  /* Skjul SVG-kontroller (slett-✕ og avkrysning) */
+  .fd2-g-ctrl { display: none !important; }
+
+  /* Bevar SVG-farger ved utskrift */
+  svg { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
   /* Tab-innhold: alltid synlig (gantt er switcha til før print) */
   .fd2-tab-innhold {
     display: block !important;
@@ -1922,14 +1928,14 @@ body {
     width: 100% !important;
   }
 
-  /* Venstre kolonne (fasenavn) beholder fast bredde */
+  /* Venstre kolonne: smalere i print (ingen plass til kontroller) */
   .fd2-gantt-left {
     flex-shrink: 0 !important;
     border-right: 1px solid #e2e8f0 !important;
   }
   .fd2-gantt-left svg {
     display: block !important;
-    width: 240px !important;
+    width: 200px !important;
     height: auto !important;
   }
 
@@ -3721,8 +3727,8 @@ body {
 }
 @keyframes fd2-spin { to { transform: rotate(360deg); } }
 
-/* Print-only elementer — skjult i normal visning */
-.fd2-print-only { display: none !important; }
+/* Print-only elementer — skjult i normal visning (ingen !important, slik at @media print kan overstyre) */
+.fd2-print-only { display: none; }
 
 /* Print-header styling (kun synlig ved @media print) */
 .fd2-print-header {
