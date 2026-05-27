@@ -79,6 +79,148 @@ const STANDARD_FASER = [
   { name: 'Ferdigstilling',        fag: 'ferdig',     dur: 7  },
 ];
 
+// ─── Print (nytt vindu med ren HTML) ─────────────────────────────────────────
+
+const FAG_COLORS_PRINT = {
+  tomrer: '#185FA5', flis: '#BA7517', elektriker: '#E24B4A',
+  rorlegger: '#0F6E56', ventilasjon: '#7F77DD', maling: '#D4537E',
+  ferdig: '#3B6D11', annet: '#888780',
+};
+const FAG_LABELS_PRINT = {
+  tomrer: 'Tømrer', flis: 'Flis/mur', elektriker: 'Elektriker',
+  rorlegger: 'Rørlegger', ventilasjon: 'Ventilasjon', maling: 'Maling',
+  ferdig: 'Ferdig', annet: 'Annet',
+};
+
+function openPrintWindow(project, status, pct) {
+  const tasks     = project.fdTasks || [];
+  const bw        = project.fdStartWeek || 1;
+  const by        = project.fdStartYear || new Date().getFullYear();
+  const totalWks  = project.fdTotalWeeks || 12;
+  const totalDays = Math.max(...(tasks.length ? tasks.map(t => t.start + t.dur) : [0]), totalWks * 7);
+
+  function wkOf(offset) {
+    let w = bw + offset, y = by;
+    while (w > 52) { w -= 52; y++; }
+    while (w < 1)  { w += 52; y--; }
+    return { w, y };
+  }
+
+  // Uke-header celler
+  const wkCells = Array.from({ length: totalWks }, (_, i) => {
+    const { w } = wkOf(i);
+    const pctW = (100 / totalWks).toFixed(4);
+    return `<div style="width:${pctW}%;flex-shrink:0;border-right:1px solid #475569;display:flex;align-items:center;padding:0 4px;font-size:9px;box-sizing:border-box;overflow:hidden;">U${w}</div>`;
+  }).join('');
+
+  // Gantt-rader
+  const taskRows = tasks.map((t, i) => {
+    const done  = (t.pct ?? 0) >= 100;
+    const col   = FAG_COLORS_PRINT[t.fag] || '#888780';
+    const lPct  = (t.start / totalDays * 100).toFixed(4);
+    const wPct  = (t.dur   / totalDays * 100).toFixed(4);
+    const rowBg = i % 2 === 0 ? '#ffffff' : '#f8fafc';
+    const wkBg  = Array.from({ length: totalWks }, (_, wi) =>
+      `<div style="position:absolute;top:0;bottom:0;left:${(wi * 7 / totalDays * 100).toFixed(4)}%;width:${(7 / totalDays * 100).toFixed(4)}%;background:${wi % 2 === 0 ? 'transparent' : 'rgba(0,0,0,0.025)'};"></div>`
+    ).join('');
+    return `
+<div style="display:flex;height:26px;background:${rowBg};border-bottom:1px solid #f1f5f9;">
+  <div style="width:190px;flex-shrink:0;display:flex;align-items:center;padding:0 8px;border-right:2px solid #e2e8f0;gap:6px;overflow:hidden;">
+    <div style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0;opacity:${done ? 0.35 : 1};"></div>
+    <span style="font-size:10px;color:${done ? '#94a3b8' : '#1e293b'};${done ? 'text-decoration:line-through;' : ''}white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</span>
+  </div>
+  <div style="flex:1;position:relative;overflow:hidden;">
+    ${wkBg}
+    <div style="position:absolute;top:3px;bottom:3px;left:${lPct}%;width:${wPct}%;background:${col};opacity:${done ? 0.3 : 0.82};border-radius:3px;display:flex;align-items:center;padding:0 5px;overflow:hidden;">
+      <span style="font-size:8px;color:white;font-weight:700;white-space:nowrap;">${done ? '✓' : ''} ${t.dur}d</span>
+    </div>
+  </div>
+</div>`;
+  }).join('');
+
+  // Faseoversikt-tabell
+  const tableRows = tasks.map((t, i) => {
+    const done  = (t.pct ?? 0) >= 100;
+    const col   = FAG_COLORS_PRINT[t.fag] || '#888780';
+    const label = FAG_LABELS_PRINT[t.fag] || t.fag;
+    const bg    = i % 2 === 0 ? '#fff' : '#f8fafc';
+    return `<tr style="background:${bg};">
+      <td style="padding:3px 6px;border-bottom:1px solid #e2e8f0;">${i + 1}</td>
+      <td style="padding:3px 6px;border-bottom:1px solid #e2e8f0;${done ? 'text-decoration:line-through;color:#94a3b8;' : ''}">${t.name}</td>
+      <td style="padding:3px 6px;border-bottom:1px solid #e2e8f0;color:${col};">${label}</td>
+      <td style="padding:3px 6px;border-bottom:1px solid #e2e8f0;">Dag ${t.start}</td>
+      <td style="padding:3px 6px;border-bottom:1px solid #e2e8f0;">${t.dur} d</td>
+      <td style="padding:3px 6px;border-bottom:1px solid #e2e8f0;color:${done ? '#16a34a' : '#64748b'};">${done ? '✓ Ferdig' : t.pct > 0 ? `${t.pct}%` : '–'}</td>
+    </tr>`;
+  }).join('');
+
+  const milepaler = (project.fdMilepaler || []);
+  const mileHtml  = milepaler.length > 0
+    ? `<div style="margin-top:10px;font-size:10px;color:#7c3aed;"><strong>Milepæler:</strong> ${milepaler.map(m => `${m.navn} (dag ${m.dagFraStart})`).join(' · ')}</div>`
+    : '';
+
+  const printDato = new Date().toLocaleDateString('nb-NO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const ferdig    = tasks.filter(t => (t.pct ?? 0) >= 100).length;
+
+  const html = `<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<title>Framdriftsplan — ${project.navn}</title>
+<style>
+  @page { size: A4 landscape; margin: 12mm; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  body { font-family: Arial, Helvetica, sans-serif; font-size: 11px; margin: 0; color: #1e293b; background: #fff; }
+</style>
+</head>
+<body>
+
+<div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:10px;border-bottom:2px solid #1e293b;margin-bottom:12px;">
+  <div>
+    <div style="font-size:20px;font-weight:800;color:#1e293b;line-height:1.2;">${project.navn}</div>
+    ${project.adresse ? `<div style="font-size:11px;color:#64748b;margin-top:3px;">📍 ${project.adresse}</div>` : ''}
+    <div style="font-size:10px;color:#64748b;margin-top:5px;">
+      ${project.fdStartWeek ? `Startuke: U${project.fdStartWeek}/${project.fdStartYear || ''} · ` : ''}${totalWks} uker · ${ferdig}/${tasks.length} faser fullført
+    </div>
+  </div>
+  <div style="text-align:right;font-size:10px;color:#64748b;line-height:1.8;">
+    <div>Skrevet ut: <strong>${printDato}</strong></div>
+    <div>Status: <strong>${status}</strong></div>
+    <div>Fremdrift: <strong>${pct}%</strong></div>
+  </div>
+</div>
+
+<div style="-webkit-print-color-adjust:exact;print-color-adjust:exact;">
+  <div style="display:flex;height:22px;background:#1e293b;color:#94a3b8;font-weight:700;letter-spacing:0.04em;">
+    <div style="width:190px;flex-shrink:0;border-right:1px solid #334155;display:flex;align-items:center;padding:0 8px;font-size:10px;color:#fff;">FASE</div>
+    <div style="flex:1;display:flex;overflow:hidden;">${wkCells}</div>
+  </div>
+  ${taskRows}
+</div>
+
+${mileHtml}
+
+<table style="width:100%;border-collapse:collapse;margin-top:14px;font-size:10px;page-break-inside:avoid;">
+  <thead>
+    <tr>
+      ${['#','Fase','Fag','Start dag','Varighet','Status'].map(h =>
+        `<th style="background:#1e293b;color:#fff;padding:4px 6px;text-align:left;font-size:10px;">${h}</th>`
+      ).join('')}
+    </tr>
+  </thead>
+  <tbody>${tableRows}</tbody>
+</table>
+
+<script>window.onload = function() { window.print(); };</script>
+</body>
+</html>`;
+
+  const w = window.open('', '_blank', 'width=1200,height=800');
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+}
+
 // ─── GenererModal ─────────────────────────────────────────────────────────────
 
 function GenererModal({ project, onClose, onApply }) {
@@ -705,7 +847,7 @@ function ProjectDetail({ project, onBack, onUpdate }) {
             </span>
           )}
           <button className="btn btn-sm" title="Skriv ut / Lagre som PDF"
-            onClick={() => { setAktTab('gantt'); setTimeout(() => window.print(), 80); }}
+            onClick={() => openPrintWindow(project, status, pct)}
             style={{ marginLeft: 4 }}>
             🖨 PDF
           </button>
