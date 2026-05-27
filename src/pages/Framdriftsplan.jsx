@@ -704,7 +704,8 @@ function ProjectDetail({ project, onBack, onUpdate }) {
             </span>
           )}
           <button className="btn btn-sm" title="Skriv ut / Lagre som PDF"
-            onClick={() => window.print()} style={{ marginLeft: 4 }}>
+            onClick={() => { setAktTab('gantt'); setTimeout(() => window.print(), 80); }}
+            style={{ marginLeft: 4 }}>
             🖨 PDF
           </button>
         </div>

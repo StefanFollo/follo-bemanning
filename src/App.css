@@ -1861,9 +1861,14 @@ body {
 }
 
 @media print {
-  /* Skjul alt unntatt bemanningsplanen */
+  @page { size: A4 landscape; margin: 12mm; }
+
+  /* ── Generelt: skjul app-chrome ─────────────────────── */
   .no-print,
-  .sidebar, nav, .topbar,
+  .app-header,
+  nav,
+  .mobile-nav,
+  .topbar,
   .tab-bar,
   .uke-nav,
   .chip-handle, .chip-handle-l, .chip-handle-r, .chip-handle-spacer,
@@ -1874,103 +1879,99 @@ body {
     display: none !important;
   }
 
-  body { background: white; margin: 0; }
-  .app-layout { display: block; }
-  .main-content { padding: 0; margin: 0; }
-  .page { padding: 10px; box-shadow: none; }
-  .page-header h2 { font-size: 18px; margin-bottom: 8px; }
+  body  { background: white; margin: 0; }
+  .app  { display: block !important; }
+  .main { padding: 0 !important; margin: 0 auto !important; max-width: none !important; }
+  .page { padding: 8px !important; box-shadow: none !important; }
 
-  /* Grid: vis alt uten scroll */
-  .uke-grid-wrap, .ressurs-grid-wrap {
-    overflow: visible !important;
-    border-radius: 0;
-  }
-  .uke-grid, .ressurs-grid {
-    border-radius: 0;
-    font-size: 10px;
-  }
-
-  /* Chips kompakt */
+  /* ── Bemanningsplan: grid uten scroll ───────────────── */
+  .uke-grid-wrap, .ressurs-grid-wrap { overflow: visible !important; border-radius: 0; }
+  .uke-grid, .ressurs-grid { border-radius: 0; font-size: 10px; }
   .tildeling-chip { font-size: 9px; padding: 1px 3px; }
   .chip-navn { font-size: 9px; }
+  .uke-prosjekt-header { padding: 4px 10px; font-size: 11px; break-before: auto; }
 
-  /* Prosjektbånd */
-  .uke-prosjekt-header { padding: 4px 10px; font-size: 11px; }
+  /* ── Framdriftsplan print ───────────────────────────── */
 
-  /* Sideskift */
-  .uke-prosjekt-header { break-before: auto; }
-
-  /* ── Framdriftsplan print ─────────────────────────────── */
+  /* Skjul alt interaktivt i prosjekt-detalj */
+  .fd2-detail-header.no-print { display: none !important; }
+  .fd2-tabs               { display: none !important; }
+  .fd2-status-rad         { display: none !important; }
+  .fd2-gantt-toolbar      { display: none !important; }
+  .fd2-add-row            { display: none !important; }
+  .fd2-progress-sum       { display: none !important; }
+  .fd2-feil-banner        { display: none !important; }
+  .fd2-milepaler .fd2-milepaler-tittel { font-size: 11px !important; }
 
   /* Vis print-only elementer */
   .fd2-print-only { display: block !important; }
 
-  /* Skjul navigasjon og interaktive elementer i framdrift-visning */
-  .fd2-detail-header.no-print { display: none !important; }
-  .fd2-tabs { display: none !important; }
-  .fd2-gantt-toolbar { display: none !important; }
-  .fd2-add-row { display: none !important; }
-  .fd2-status-rad { display: none !important; }
-  .fd2-feil-banner { display: none !important; }
+  /* Tab-innhold: alltid synlig (gantt er switcha til før print) */
+  .fd2-tab-innhold {
+    display: block !important;
+    padding: 0 !important;
+  }
 
-  /* Vis innholdet i gantt-tab (som normalt er skjult via tab-logikk) */
-  .fd2-tab-innhold { display: block !important; }
-
-  /* Gantt — fjern scroll og la SVG skalere */
+  /* Gantt container: fjern clipping og border */
   .fd2-gantt-wrap {
     overflow: visible !important;
+    border: none !important;
+    border-radius: 0 !important;
     display: flex !important;
-    flex-wrap: nowrap !important;
     align-items: flex-start !important;
+    width: 100% !important;
   }
-  .fd2-gantt-left { flex-shrink: 0 !important; }
-  .fd2-gantt-left svg { display: block !important; }
+
+  /* Venstre kolonne (fasenavn) beholder fast bredde */
+  .fd2-gantt-left {
+    flex-shrink: 0 !important;
+    border-right: 1px solid #e2e8f0 !important;
+  }
+  .fd2-gantt-left svg {
+    display: block !important;
+    width: 240px !important;
+    height: auto !important;
+  }
+
+  /* Høyre kolonne (Gantt-diagram) fyller resten og skalerer SVG */
   .fd2-gantt-right {
     overflow: visible !important;
     flex: 1 !important;
     min-width: 0 !important;
   }
   .fd2-gantt-right svg {
+    display: block !important;
     width: 100% !important;
     height: auto !important;
+    max-width: 100% !important;
   }
 
   /* Milepæler */
-  .fd2-milepaler { break-inside: avoid; }
+  .fd2-milepaler { break-inside: avoid; margin-top: 10px !important; }
 
-  /* Faseoversikt-tabell */
-  .fd2-print-tabell-wrap {
-    margin-top: 16px;
-    break-inside: avoid;
-  }
+  /* Faseoversikt-tabell — kun print */
+  .fd2-print-tabell-wrap { margin-top: 12px; break-inside: avoid; }
   .fd2-print-tabell {
     width: 100%;
     border-collapse: collapse;
     font-size: 11px;
   }
   .fd2-print-tabell th {
-    background: #1e293b;
-    color: #fff;
-    padding: 5px 8px;
+    background: #1e293b !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    color: #fff !important;
+    padding: 4px 8px;
     text-align: left;
-    font-weight: 600;
     font-size: 10px;
+    font-weight: 700;
     letter-spacing: 0.03em;
     text-transform: uppercase;
   }
-  .fd2-print-tabell td {
-    padding: 4px 8px;
-    border-bottom: 1px solid #e2e8f0;
-    color: #1e293b;
-  }
+  .fd2-print-tabell td { padding: 3px 8px; border-bottom: 1px solid #e2e8f0; }
   .fd2-print-tabell tr:nth-child(even) td { background: #f8fafc; }
   .fd2-print-rad-ferdig td { color: #94a3b8; text-decoration: line-through; }
   .fd2-print-rad-ferdig td:last-child { text-decoration: none; color: #16a34a; }
-
-  @page {
-    size: A4 landscape;
-    margin: 10mm;
-  }
 }
 
 /* ===== BEFARING & TILBUD ===== */
