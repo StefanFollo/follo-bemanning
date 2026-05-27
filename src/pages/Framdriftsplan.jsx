@@ -459,7 +459,7 @@ function GanttChart({ project, onUpdate }) {
 
       <div className="fd2-gantt-wrap">
         <div className="fd2-gantt-left" style={{ width: PAD }}>
-          <svg width={PAD} height={svgH} style={{ display: 'block' }}>
+          <svg width={PAD} height={svgH} viewBox={`0 0 ${PAD} ${svgH}`} style={{ display: 'block' }}>
             <rect x={0} y={0} width={PAD} height={40} fill="#f8fafc" />
             <text x={10} y={26} fontSize={11} fontWeight="600" fill="#64748b">Fase</text>
             <text x={PAD - 34} y={26} fontSize={10} fill="#94a3b8" textAnchor="middle">✓</text>
@@ -505,7 +505,7 @@ function GanttChart({ project, onUpdate }) {
         </div>
 
         <div className="fd2-gantt-right" onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
-          <svg width={chartW} height={svgH} style={{ display: 'block', userSelect: 'none' }}>
+          <svg width={chartW} height={svgH} viewBox={`0 0 ${chartW} ${svgH}`} style={{ display: 'block', userSelect: 'none' }}>
             {yearBands.map(b => (
               <g key={b.y}>
                 <rect x={b.s * dw} y={0} width={(b.e - b.s) * dw} height={20} fill={b.y % 2 === 0 ? '#f1f5f9' : '#e9eef5'} />
@@ -657,8 +657,35 @@ function ProjectDetail({ project, onBack, onUpdate }) {
 
   return (
     <div className="fd2-detail">
+
+      {/* Print-only header — vises kun ved utskrift */}
+      <div className="fd2-print-header fd2-print-only">
+        <div className="fd2-print-tittel-rad">
+          <div>
+            <div className="fd2-print-prosjektnavn">{project.navn}</div>
+            {project.adresse && <div className="fd2-print-adr">📍 {project.adresse}</div>}
+          </div>
+          <div className="fd2-print-meta">
+            <div>Skrevet ut: {new Date().toLocaleDateString('nb-NO', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
+            <div>Status: <strong>{status}</strong></div>
+            <div>Fremdrift: <strong>{pct}%</strong></div>
+          </div>
+        </div>
+        <div className="fd2-print-sub">
+          {project.fdStartWeek && `Startuke: U${project.fdStartWeek}/${project.fdStartYear || ''} · `}
+          {project.fdTotalWeeks ? `${project.fdTotalWeeks} uker · ` : ''}
+          {(project.fdTasks || []).filter(t => (t.pct ?? 0) >= 100).length}/{(project.fdTasks || []).length} faser fullført
+        </div>
+        {Array.isArray(project.fdMilepaler) && project.fdMilepaler.length > 0 && (
+          <div className="fd2-print-milepaler">
+            <strong>Milepæler:</strong>{' '}
+            {project.fdMilepaler.map((m, i) => `${m.navn} (dag ${m.dagFraStart})`).join(' · ')}
+          </div>
+        )}
+      </div>
+
       {/* Sticky header */}
-      <div className="fd2-detail-header">
+      <div className="fd2-detail-header no-print">
         <button className="btn btn-sm" onClick={onBack}>← Tilbake</button>
         <div className="fd2-detail-tittel-wrap">
           <h3 className="fd2-detail-tittel">{project.navn}</h3>
@@ -676,6 +703,10 @@ function ProjectDetail({ project, onBack, onUpdate }) {
               {new Date(project.fdGenDato).toLocaleDateString('nb-NO')}
             </span>
           )}
+          <button className="btn btn-sm" title="Skriv ut / Lagre som PDF"
+            onClick={() => window.print()} style={{ marginLeft: 4 }}>
+            🖨 PDF
+          </button>
         </div>
       </div>
 
@@ -746,6 +777,36 @@ function ProjectDetail({ project, onBack, onUpdate }) {
       {aktTab === 'gantt' && (
         <div className="fd2-tab-innhold">
           <GanttChart project={project} onUpdate={onUpdate} />
+
+          {/* Print-only faseoversikt-tabell */}
+          {(project.fdTasks || []).length > 0 && (
+            <div className="fd2-print-only fd2-print-tabell-wrap">
+              <table className="fd2-print-tabell">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Fase</th>
+                    <th>Fag</th>
+                    <th>Start dag</th>
+                    <th>Varighet</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(project.fdTasks || []).map((t, i) => (
+                    <tr key={t.id} className={(t.pct ?? 0) >= 100 ? 'fd2-print-rad-ferdig' : ''}>
+                      <td>{i + 1}</td>
+                      <td>{t.name}</td>
+                      <td style={{ color: fc(t.fag) }}>{FAG[t.fag]?.label || t.fag}</td>
+                      <td>Dag {t.start}</td>
+                      <td>{t.dur} d</td>
+                      <td>{(t.pct ?? 0) >= 100 ? '✓ Ferdig' : t.pct > 0 ? `${t.pct}%` : '–'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {Array.isArray(project.fdMilepaler) && project.fdMilepaler.length > 0 && (
             <div className="fd2-milepaler">

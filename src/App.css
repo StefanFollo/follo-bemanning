@@ -1900,6 +1900,73 @@ body {
   /* Sideskift */
   .uke-prosjekt-header { break-before: auto; }
 
+  /* ── Framdriftsplan print ─────────────────────────────── */
+
+  /* Vis print-only elementer */
+  .fd2-print-only { display: block !important; }
+
+  /* Skjul navigasjon og interaktive elementer i framdrift-visning */
+  .fd2-detail-header.no-print { display: none !important; }
+  .fd2-tabs { display: none !important; }
+  .fd2-gantt-toolbar { display: none !important; }
+  .fd2-add-row { display: none !important; }
+  .fd2-status-rad { display: none !important; }
+  .fd2-feil-banner { display: none !important; }
+
+  /* Vis innholdet i gantt-tab (som normalt er skjult via tab-logikk) */
+  .fd2-tab-innhold { display: block !important; }
+
+  /* Gantt — fjern scroll og la SVG skalere */
+  .fd2-gantt-wrap {
+    overflow: visible !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: flex-start !important;
+  }
+  .fd2-gantt-left { flex-shrink: 0 !important; }
+  .fd2-gantt-left svg { display: block !important; }
+  .fd2-gantt-right {
+    overflow: visible !important;
+    flex: 1 !important;
+    min-width: 0 !important;
+  }
+  .fd2-gantt-right svg {
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  /* Milepæler */
+  .fd2-milepaler { break-inside: avoid; }
+
+  /* Faseoversikt-tabell */
+  .fd2-print-tabell-wrap {
+    margin-top: 16px;
+    break-inside: avoid;
+  }
+  .fd2-print-tabell {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11px;
+  }
+  .fd2-print-tabell th {
+    background: #1e293b;
+    color: #fff;
+    padding: 5px 8px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 10px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+  .fd2-print-tabell td {
+    padding: 4px 8px;
+    border-bottom: 1px solid #e2e8f0;
+    color: #1e293b;
+  }
+  .fd2-print-tabell tr:nth-child(even) td { background: #f8fafc; }
+  .fd2-print-rad-ferdig td { color: #94a3b8; text-decoration: line-through; }
+  .fd2-print-rad-ferdig td:last-child { text-decoration: none; color: #16a34a; }
+
   @page {
     size: A4 landscape;
     margin: 10mm;
@@ -3652,6 +3719,49 @@ body {
   border-radius: 50%; animation: fd2-spin .7s linear infinite;
 }
 @keyframes fd2-spin { to { transform: rotate(360deg); } }
+
+/* Print-only elementer — skjult i normal visning */
+.fd2-print-only { display: none !important; }
+
+/* Print-header styling (kun synlig ved @media print) */
+.fd2-print-header {
+  padding: 0 0 12px;
+  border-bottom: 2px solid #1e293b;
+  margin-bottom: 14px;
+}
+.fd2-print-tittel-rad {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.fd2-print-prosjektnavn {
+  font-size: 20px;
+  font-weight: 800;
+  color: #1e293b;
+  line-height: 1.2;
+}
+.fd2-print-adr {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 3px;
+}
+.fd2-print-meta {
+  text-align: right;
+  font-size: 11px;
+  color: #64748b;
+  line-height: 1.6;
+}
+.fd2-print-sub {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 6px;
+}
+.fd2-print-milepaler {
+  font-size: 11px;
+  color: #7c3aed;
+  margin-top: 4px;
+}
 
 /* Responsiv */
 @media (max-width: 600px) {
