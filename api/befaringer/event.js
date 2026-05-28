@@ -36,7 +36,7 @@ const redis = new Redis({
 })
 
 const FARGE_PALETT = ['#6b8fc4', '#a78bfa', '#fb923c', '#34d399', '#f472b6', '#facc15', '#60a5fa', '#fb7185']
-const TILLATTE_TYPER = ['tilbud-sendt', 'vunnet', 'tapt', 'avvist']
+const TILLATTE_TYPER = ['tilbud-sendt', 'vunnet', 'tapt', 'avvist', 'kunde-aktivitet']
 
 // Type → ny befaring-status i bemanning-systemet
 const TYPE_TIL_STATUS = {
@@ -126,7 +126,7 @@ export default async function handler(req, res) {
   if (!TILLATTE_TYPER.includes(type)) {
     return res.status(400).json({ error: `Ugyldig type. Tillatte: ${TILLATTE_TYPER.join(', ')}` })
   }
-  if (!tilbudId) return res.status(400).json({ error: 'Mangler tilbudId' })
+  if (!tilbudId && type !== 'kunde-aktivitet') return res.status(400).json({ error: 'Mangler tilbudId' })
   // For vunnet kreves kunde-info (skal opprette prosjekt)
   if (type === 'vunnet') {
     if (!data?.kundenavn?.trim()) return res.status(400).json({ error: 'vunnet: mangler data.kundenavn' })
@@ -141,6 +141,58 @@ export default async function handler(req, res) {
 
     const nyStatus = TYPE_TIL_STATUS[type]
     const naa = dato || new Date().toISOString()
+
+    // ── Kunde-aktivitet (separat flyt — slår opp via tilbudId eller kildeBefaringId) ──
+    if (type === 'kunde-aktivitet') {
+      const aktivitet = body.aktivitet || {}
+      const handling = aktivitet.handling || 'ukjent'
+      const tidspunkt = aktivitet.tidspunkt || naa
+      const detaljer = aktivitet.detaljer || {}
+
+      // Finn befaring via kildeBefaringId ELLER tilbudId
+      let befaringId = kildeBefaringId
+      if (!befaringId && tilbudId) {
+        const bef = befaringer.find(b => String(b.tilbudId) === String(tilbudId))
+        if (bef) befaringId = bef.id
+      }
+      if (!befaringId) {
+        return res.status(200).json({ ok: true, skipped: 'ingen befaring funnet for tilbudId' })
+      }
+
+      const oppdatertBefaringer = befaringer.map(b => {
+        if (b.id !== befaringId) return b
+        const aktivitetListe = Array.isArray(b.kundeAktivitet) ? b.kundeAktivitet : []
+        const nyEntry = { handling, tidspunkt, detaljer }
+        // For 'aapnet': slå sammen med eventuell eksisterende aapnet-entry (tell opp)
+        let nyListe
+        if (handling === 'aapnet') {
+          const eksIdx = aktivitetListe.findIndex(a => a.handling === 'aapnet')
+          if (eksIdx >= 0) {
+            nyListe = aktivitetListe.map((a, i) =>
+              i === eksIdx
+                ? { ...a, antall: (a.antall || 1) + 1, sistTidspunkt: tidspunkt }
+                : a
+            )
+          } else {
+            nyListe = [...aktivitetListe, { ...nyEntry, antall: 1, sistTidspunkt: tidspunkt }]
+          }
+        } else {
+          nyListe = [...aktivitetListe, nyEntry]
+        }
+        return {
+          ...b,
+          kundeAktivitet: nyListe,
+          sistKundeAktivitet: tidspunkt,
+          kundeHarSettTilbud: b.kundeHarSettTilbud || handling === 'aapnet',
+          antallKundeAapninger: handling === 'aapnet' ? (b.antallKundeAapninger || 0) + 1 : (b.antallKundeAapninger || 0),
+        }
+      })
+
+      const nowTs = Date.now()
+      await redis.set('fbs_state', { ...state, befaringer: oppdatertBefaringer, _updatedAt: nowTs })
+      console.log(`POST /api/befaringer/event type:kunde-aktivitet handling:${handling} befaringId:${befaringId}`)
+      return res.status(200).json({ ok: true, befaringId, handling })
+    }
 
     // Oppdater kilde-befaring hvis ID er oppgitt og finnes
     let befaringFunnet = false

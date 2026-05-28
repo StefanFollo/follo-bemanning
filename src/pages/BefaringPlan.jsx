@@ -384,6 +384,53 @@ export default function BefaringPlan() {
           )}
         </div>
 
+        {/* Tilbud-link og kunde-aktivitet — vises på Tilbud sendt / Godkjent */}
+        {(b.tilbudLink || b.sistEventDato) && (b.status === 'tilbud_sendt' || b.status === 'godkjent') && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, margin: '6px 0', padding: '8px 10px', background: '#f8faff', border: '1px solid #e0e8f8', borderRadius: 7 }}>
+            {b.sistEventDato && (
+              <span style={{ fontSize: 11, color: '#6b7280' }}>
+                📤 Sendt: {new Date(b.sistEventDato).toLocaleDateString('nb-NO', { day: '2-digit', month: 'short' })}
+              </span>
+            )}
+            {b.kundeHarSettTilbud ? (
+              <span style={{ fontSize: 11, color: '#0891b2', fontWeight: 600 }}>
+                👁 Åpnet {b.antallKundeAapninger || 1}x
+                {(() => {
+                  const aapnet = (b.kundeAktivitet || []).find(a => a.handling === 'aapnet')
+                  if (!aapnet) return null
+                  const tid = aapnet.sistTidspunkt || aapnet.tidspunkt
+                  if (!tid) return null
+                  const d = new Date(tid)
+                  const today = new Date().toDateString()
+                  const visning = d.toDateString() === today
+                    ? d.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' }) + ' i dag'
+                    : d.toLocaleDateString('nb-NO', { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })
+                  return ` — ${visning}`
+                })()}
+              </span>
+            ) : (
+              b.status === 'tilbud_sendt' && <span style={{ fontSize: 11, color: '#9ca3af' }}>👁 Ikke åpnet ennå</span>
+            )}
+            {(b.kundeAktivitet || []).some(a => a.handling === 'klikket-sporsmal') && (
+              <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>💬 Klikket Spørsmål</span>
+            )}
+            {(b.kundeAktivitet || []).some(a => a.handling === 'klikket-aksepter') && (
+              <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>✅ Klikket Aksepter</span>
+            )}
+            {b.tilbudLink && (
+              <a
+                href={b.tilbudLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                style={{ fontSize: 11, color: '#2874a6', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2 }}
+              >
+                🔗 Åpne kundens tilbudside ↗
+              </a>
+            )}
+          </div>
+        )}
+
         <div className="bef-k-datoer">
           {b.tilbudFrist && (
             <span className="bef-k-dato-rad" style={{ color: fristFarge }}>

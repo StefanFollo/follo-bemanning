@@ -119,6 +119,27 @@ export default function Dashboard({ onNavigate }) {
 
   const ukedagNavn = UKEDAGER[todayDate.getDay()];
 
+  // ── Kunde-aktivitet siste 24 timer ────────────────────────
+  const for24t = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const kundeAktivitet24t = (state.befaringer || [])
+    .filter(b => b.sistKundeAktivitet && b.sistKundeAktivitet >= for24t)
+    .sort((a, b) => b.sistKundeAktivitet.localeCompare(a.sistKundeAktivitet));
+
+  function aktivitetTekst(b) {
+    const akt = b.kundeAktivitet || [];
+    if (akt.some(a => a.handling === 'klikket-aksepter')) return '✅ Klikket Aksepter'
+    if (akt.some(a => a.handling === 'klikket-sporsmal')) return '💬 Klikket Spørsmål'
+    if (b.kundeHarSettTilbud) return `👁 Åpnet tilbudet ${b.antallKundeAapninger || 1}x`
+    return '👁 Sett tilbudet'
+  }
+  function tidRelativt(iso) {
+    if (!iso) return ''
+    const d = new Date(iso);
+    const today2 = new Date().toDateString();
+    if (d.toDateString() === today2) return d.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' }) + ' i dag'
+    return d.toLocaleDateString('nb-NO', { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })
+  }
+
   return (
     <div className="dash-side">
       {/* ── Topplinje ── */}
@@ -151,6 +172,57 @@ export default function Dashboard({ onNavigate }) {
           <div className="dash-stat-label">Aktive reklamasjoner</div>
           <div className="dash-stat-sub">{reklamasjonerUtenFrist > 0 ? `${reklamasjonerUtenFrist} uten frist` : 'Alle har frist'}</div>
         </div>
+      </div>
+
+      {/* ── Kunde-aktivitet siste 24t ── */}
+      <div className="dash-seksjon" style={{ marginBottom: 16 }}>
+        <div className="dash-seksjon-header">
+          <span>🎯 Kunde-aktivitet siste 24 timer</span>
+          {kundeAktivitet24t.length > 0 && <span className="dash-seksjon-teller">{kundeAktivitet24t.length}</span>}
+        </div>
+        {kundeAktivitet24t.length === 0 ? (
+          <div className="dash-tom">Ingen kunde-aktivitet siste 24 timer.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {kundeAktivitet24t.map(b => {
+              const fristDgr = dagerTil(b.tilbudFrist);
+              return (
+                <div
+                  key={b.id}
+                  onClick={() => onNavigate && onNavigate('befaring')}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', background: '#f8faff', border: '1px solid #e0e8f8', borderRadius: 7, cursor: 'pointer', transition: 'background 0.12s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#eef3fb'}
+                  onMouseLeave={e => e.currentTarget.style.background = '#f8faff'}
+                >
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {b.kontaktNavn} — {b.adresse}
+                    </div>
+                    <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>
+                      {aktivitetTekst(b)}
+                      {fristDgr !== null && fristDgr <= 3 && (
+                        <span style={{ marginLeft: 8, color: fristDgr < 0 ? '#dc2626' : '#f59e0b', fontWeight: 700 }}>
+                          ⏰ Frist: {datoKort(b.tilbudFrist)}{fristDgr === 0 ? ' (i dag!)' : fristDgr < 0 ? ` (${Math.abs(fristDgr)}d over)` : ` (${fristDgr}d)`}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 11, color: '#9ca3af', flexShrink: 0 }}>{tidRelativt(b.sistKundeAktivitet)}</div>
+                  {b.tilbudLink && (
+                    <a
+                      href={b.tilbudLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={e => e.stopPropagation()}
+                      title="Åpne kundens tilbudside"
+                      style={{ color: '#2874a6', fontSize: 15, flexShrink: 0, textDecoration: 'none' }}
+                    >🔗</a>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="dash-grid">
