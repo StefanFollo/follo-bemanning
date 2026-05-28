@@ -70,6 +70,7 @@ function tomModal() {
     notat: '',
     kommentar: '',
     prosjektlederId: '',
+    ansvarligBefaringId: '',
     estimertBelop: '',
     tilbudFrist: '',
     nesteKontakt: '',
@@ -330,6 +331,7 @@ export default function BefaringPlan() {
   // ---- Kort-komponent ----
   function BefKort({ b }) {
     const s = STATUS[b.status] || STATUS.planlagt;
+    const ansattBefaring = b.ansvarligBefaringId ? state.ansatte.find(a => a.id === b.ansvarligBefaringId) : null;
     const ansatt = b.prosjektlederId ? state.ansatte.find(a => a.id === b.prosjektlederId) : null;
     const belopVis = b.estimertBelop
       ? new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(Number(b.estimertBelop))
@@ -365,8 +367,18 @@ export default function BefaringPlan() {
             </span>
           )}
           {belopVis && <span className="bef-k-chip bef-k-chip--belop">💰 {belopVis}</span>}
-          {ansatt && (
-            <span className="bef-k-chip bef-k-chip--ansatt" style={{ background: ansattFarge(b.prosjektlederId) + '22', color: ansattFarge(b.prosjektlederId) }}>
+          {ansattBefaring && (
+            <span className="bef-k-chip bef-k-chip--ansatt" style={{ background: ansattFarge(b.ansvarligBefaringId) + '22', color: ansattFarge(b.ansvarligBefaringId) }} title="Ansvarlig befaring">
+              🏗 {ansattBefaring.navn.split(' ')[0]}
+            </span>
+          )}
+          {ansatt && ansatt.id !== ansattBefaring?.id && (
+            <span className="bef-k-chip bef-k-chip--ansatt" style={{ background: ansattFarge(b.prosjektlederId) + '22', color: ansattFarge(b.prosjektlederId) }} title="Ansvarlig tilbud">
+              📋 {ansatt.navn.split(' ')[0]}
+            </span>
+          )}
+          {ansatt && !ansattBefaring && (
+            <span className="bef-k-chip bef-k-chip--ansatt" style={{ background: ansattFarge(b.prosjektlederId) + '22', color: ansattFarge(b.prosjektlederId) }} title="Ansvarlig tilbud">
               👤 {ansatt.navn.split(' ')[0]}
             </span>
           )}
@@ -634,7 +646,8 @@ export default function BefaringPlan() {
               .sort((a, b) => a.dato.localeCompare(b.dato))
               .map(b => {
                 const s = STATUS[b.status] || STATUS.planlagt;
-                const ansatt = b.prosjektlederId ? state.ansatte.find(a => a.id === b.prosjektlederId) : null;
+                const ansattBefaring = b.ansvarligBefaringId ? state.ansatte.find(a => a.id === b.ansvarligBefaringId) : null;
+                const ansattTilbud = b.prosjektlederId ? state.ansatte.find(a => a.id === b.prosjektlederId) : null;
                 return (
                   <div key={b.id} className="bef-kort" onClick={() => apneRediger(b)}>
                     <div className="bef-kort-farge" style={{ background: s.farge }} />
@@ -647,7 +660,9 @@ export default function BefaringPlan() {
                           {b.tid ? ` kl. ${b.tid}` : ''}
                         </span>
                         <span className="bef-kort-type">{b.jobbType}</span>
-                        {ansatt && <span className="bef-kort-pl">👤 {ansatt.navn}</span>}
+                        {ansattBefaring && <span className="bef-kort-pl" title="Ansvarlig befaring">🏗 {ansattBefaring.navn.split(' ')[0]}</span>}
+                        {ansattTilbud && ansattTilbud.id !== ansattBefaring?.id && <span className="bef-kort-pl" title="Ansvarlig tilbud">📋 {ansattTilbud.navn.split(' ')[0]}</span>}
+                        {ansattTilbud && !ansattBefaring && <span className="bef-kort-pl" title="Ansvarlig tilbud">👤 {ansattTilbud.navn.split(' ')[0]}</span>}
                       </div>
                     </div>
                     <div className="bef-kort-status" style={{ color: s.farge, background: s.bg }}>
@@ -709,7 +724,16 @@ export default function BefaringPlan() {
                     </select>
                   </div>
                   <div>
-                    <label>Ansvarlig person</label>
+                    <label>Ansvarlig befaring</label>
+                    <select className="input" value={form.ansvarligBefaringId} onChange={e => setForm(f => ({ ...f, ansvarligBefaringId: e.target.value }))}>
+                      <option value="">– Velg ansvarlig –</option>
+                      {[...state.ansatte].sort((a, b) => a.navn.localeCompare(b.navn, 'nb')).map(a => (
+                        <option key={a.id} value={a.id}>{a.navn}{a.fag ? ` (${a.fag})` : ''}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label>Ansvarlig tilbud</label>
                     <select className="input" value={form.prosjektlederId} onChange={e => setForm(f => ({ ...f, prosjektlederId: e.target.value }))}>
                       <option value="">– Velg ansvarlig –</option>
                       {[...state.ansatte].sort((a, b) => a.navn.localeCompare(b.navn, 'nb')).map(a => (
@@ -968,7 +992,7 @@ export default function BefaringPlan() {
               {/* Automatisk tildeling */}
               {visKapasitet?.prosjektlederId && (
                 <div className="bef-modal-seksjon">
-                  <div className="bef-modal-seksjon-tittel">Ansvarlig person</div>
+                  <div className="bef-modal-seksjon-tittel">Ansvarlig tilbud</div>
                   {(() => {
                     const ansatt = state.ansatte.find(a => a.id === visKapasitet.prosjektlederId);
                     return ansatt ? (
