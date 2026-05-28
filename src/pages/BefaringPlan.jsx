@@ -166,7 +166,7 @@ export default function BefaringPlan() {
     setVisModal(true);
   }
   function lagre() {
-    if (!form.kontaktNavn.trim() || !form.adresse.trim()) return;
+    if (!form.kontaktNavn.trim() || !form.adresse.trim() || !form.ansvarligBefaringId || !form.prosjektlederId) return;
     if (redigerer) {
       // Manuell lagring i edit-modus: avbryt eventuell auto-save og lagre nå
       if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
@@ -724,8 +724,8 @@ export default function BefaringPlan() {
                     </select>
                   </div>
                   <div>
-                    <label>Ansvarlig befaring</label>
-                    <select className="input" value={form.ansvarligBefaringId} onChange={e => setForm(f => ({ ...f, ansvarligBefaringId: e.target.value }))}>
+                    <label>Ansvarlig befaring *</label>
+                    <select className="input" value={form.ansvarligBefaringId} onChange={e => setForm(f => ({ ...f, ansvarligBefaringId: e.target.value }))} style={!form.ansvarligBefaringId ? { borderColor: '#f87171' } : {}}>
                       <option value="">– Velg ansvarlig –</option>
                       {[...state.ansatte].sort((a, b) => a.navn.localeCompare(b.navn, 'nb')).map(a => (
                         <option key={a.id} value={a.id}>{a.navn}{a.fag ? ` (${a.fag})` : ''}</option>
@@ -733,8 +733,8 @@ export default function BefaringPlan() {
                     </select>
                   </div>
                   <div>
-                    <label>Ansvarlig tilbud</label>
-                    <select className="input" value={form.prosjektlederId} onChange={e => setForm(f => ({ ...f, prosjektlederId: e.target.value }))}>
+                    <label>Ansvarlig tilbud *</label>
+                    <select className="input" value={form.prosjektlederId} onChange={e => setForm(f => ({ ...f, prosjektlederId: e.target.value }))} style={!form.prosjektlederId ? { borderColor: '#f87171' } : {}}>
                       <option value="">– Velg ansvarlig –</option>
                       {[...state.ansatte].sort((a, b) => a.navn.localeCompare(b.navn, 'nb')).map(a => (
                         <option key={a.id} value={a.id}>{a.navn}{a.fag ? ` (${a.fag})` : ''}</option>
@@ -876,7 +876,7 @@ export default function BefaringPlan() {
                   </button>
                 ) : (
                   // Ny befaring: opprett og bytt til edit-modus
-                  <button className="btn btn-primary" onClick={lagre} disabled={!form.kontaktNavn.trim() || !form.adresse.trim()}>
+                  <button className="btn btn-primary" onClick={lagre} disabled={!form.kontaktNavn.trim() || !form.adresse.trim() || !form.ansvarligBefaringId || !form.prosjektlederId}>
                     Opprett befaring
                   </button>
                 )}
