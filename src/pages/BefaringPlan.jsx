@@ -89,6 +89,10 @@ export default function BefaringPlan() {
   const [redigerer, setRedigerer] = useState(null);
   const [form, setForm] = useState(tomModal());
   const [autoSaveSts, setAutoSaveSts] = useState(null); // null | 'saving' | 'saved'
+  const [modalFane, setModalFane] = useState('detaljer'); // 'detaljer' | 'aktivitet'
+  const [aktivitetLog, setAktivitetLog] = useState([]);
+  const [aktivitetLaster, setAktivitetLaster] = useState(false);
+  const [konfliktBef, setKonfliktBef] = useState(null); // befaring med .konflikt som venter på beslutning
   const autoSaveRef  = useRef(null);
   const isFirstRender = useRef(true);
 
@@ -158,12 +162,21 @@ export default function BefaringPlan() {
     isFirstRender.current = true;
     setVisModal(true);
   }
-  function apneRediger(b) {
+  async function apneRediger(b) {
     setForm({ ...tomModal(), ...b });
     setRedigerer(b);
     setAutoSaveSts(null);
+    setModalFane('detaljer');
+    setAktivitetLog([]);
     isFirstRender.current = true;
     setVisModal(true);
+    // Hent aktivitetslogg i bakgrunnen
+    setAktivitetLaster(true);
+    fetch(`/api/befaringer/audit?befaringId=${encodeURIComponent(b.id)}`)
+      .then(r => r.ok ? r.json() : { entries: [] })
+      .then(d => setAktivitetLog((d.entries || []).reverse()))
+      .catch(() => {})
+      .finally(() => setAktivitetLaster(false));
   }
   function lagre() {
     if (!form.kontaktNavn.trim() || !form.adresse.trim() || !form.ansvarligBefaringId || !form.prosjektlederId) return;
@@ -497,13 +510,63 @@ export default function BefaringPlan() {
           <select
             className="bef-k-status-select"
             value={b.status}
-            onChange={e => dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, status: e.target.value } })}
+            onChange={e => {
+              const nyStatus = e.target.value;
+              const naa = new Date().toISOString();
+              dispatch({
+                type: 'UPDATE_BEFARING',
+                payload: {
+                  ...b,
+                  status: nyStatus,
+                  manueltOverstyrtAv: 'manuell',
+                  manueltOverstyrtDato: naa,
+                  konflikt: undefined,
+                },
+              });
+              // Logg manuell statusendring til audit-log
+              fetch('/api/befaringer/audit-log', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  objektId: b.id,
+                  felt: 'status',
+                  fraVerdi: b.status,
+                  tilVerdi: nyStatus,
+                  endretAv: 'manuell (kanban)',
+                  kilde: 'bemannings-app',
+                }),
+              }).catch(() => {});
+            }}
           >
             {Object.entries(STATUS).map(([key, s]) => (
               <option key={key} value={key}>{s.ikon} {s.label}</option>
             ))}
           </select>
         </div>
+
+        {/* Konflikt-banner: manuell overstyring vs. automatisk event */}
+        {b.konflikt && (
+          <div style={{ margin: '6px 0', padding: '8px 10px', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 7 }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#92400e', marginBottom: 4 }}>
+              ⚠️ Konflikt oppdaget!
+            </div>
+            <div style={{ fontSize: 11, color: '#78350f', lineHeight: 1.5 }}>
+              Manuelt satt: <strong>{STATUS[b.konflikt.manuellStatus]?.label || b.konflikt.manuellStatus}</strong><br />
+              Fra tilbuds-app: <strong>{STATUS[b.konflikt.inkommendStatus]?.label || b.konflikt.inkommendStatus}</strong>
+            </div>
+            <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+              <button style={{ fontSize: 11, padding: '3px 8px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
+                onClick={() => dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, konflikt: undefined, manueltOverstyrtAv: 'manuell', manueltOverstyrtDato: new Date().toISOString() } })}>
+                Behold {STATUS[b.konflikt.manuellStatus]?.ikon}
+              </button>
+              <button style={{ fontSize: 11, padding: '3px 8px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
+                onClick={() => dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, status: b.konflikt.inkommendStatus, konflikt: undefined, manueltOverstyrtAv: undefined, manueltOverstyrtDato: undefined } })}>
+                Endre til {STATUS[b.konflikt.inkommendStatus]?.ikon}
+              </button>
+            </div>
+          </div>
+        )}
 
         {b.status === 'godkjent' && (
           <div className="bef-k-prosjekt-rad" onClick={e => e.stopPropagation()}>
@@ -753,21 +816,62 @@ export default function BefaringPlan() {
           <div className="modal bef-modal" style={{ maxWidth: 580 }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3>{redigerer ? 'Rediger befaring' : 'Ny befaring'}</h3>
-              {/* Auto-save indikator */}
               {redigerer && (
-                <span style={{
-                  fontSize: 12, marginRight: 8,
-                  color: autoSaveSts === 'saved' ? '#16a34a' : autoSaveSts === 'saving' ? '#f59e0b' : '#94a3b8',
-                  display: 'flex', alignItems: 'center', gap: 4, transition: 'color 0.3s',
-                }}>
-                  {autoSaveSts === 'saving' && <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⏳</span>}
-                  {autoSaveSts === 'saved'  && '✓'}
-                  {autoSaveSts === 'saving' ? 'Lagrer…' : autoSaveSts === 'saved' ? 'Lagret automatisk' : 'Auto-lagring på'}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginRight: 4 }}>
+                  {/* Fane-veksler */}
+                  <div style={{ display: 'flex', gap: 2, background: '#f1f5f9', padding: 2, borderRadius: 6 }}>
+                    <button onClick={() => setModalFane('detaljer')}
+                      style={{ fontSize: 12, padding: '3px 10px', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: modalFane === 'detaljer' ? 700 : 400, background: modalFane === 'detaljer' ? '#fff' : 'transparent', color: modalFane === 'detaljer' ? '#1e293b' : '#64748b' }}>
+                      Detaljer
+                    </button>
+                    <button onClick={() => setModalFane('aktivitet')}
+                      style={{ fontSize: 12, padding: '3px 10px', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: modalFane === 'aktivitet' ? 700 : 400, background: modalFane === 'aktivitet' ? '#fff' : 'transparent', color: modalFane === 'aktivitet' ? '#1e293b' : '#64748b' }}>
+                      📜 Aktivitet {aktivitetLog.length > 0 ? `(${aktivitetLog.length})` : ''}
+                    </button>
+                  </div>
+                  {/* Auto-save indikator */}
+                  <span style={{ fontSize: 12, color: autoSaveSts === 'saved' ? '#16a34a' : autoSaveSts === 'saving' ? '#f59e0b' : '#94a3b8', display: 'flex', alignItems: 'center', gap: 4, transition: 'color 0.3s' }}>
+                    {autoSaveSts === 'saving' && <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⏳</span>}
+                    {autoSaveSts === 'saved' && '✓'}
+                    {autoSaveSts === 'saving' ? 'Lagrer…' : autoSaveSts === 'saved' ? 'Lagret' : ''}
+                  </span>
+                </div>
               )}
               <button className="btn-icon" onClick={() => setVisModal(false)}>✕</button>
             </div>
-            <div className="form">
+
+            {/* Aktivitet-fane */}
+            {modalFane === 'aktivitet' && redigerer && (
+              <div style={{ padding: '16px 20px', maxHeight: 420, overflowY: 'auto' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 12 }}>📜 Endringshistorikk</div>
+                {aktivitetLaster && <div style={{ color: '#94a3b8', fontSize: 13 }}>Laster historikk…</div>}
+                {!aktivitetLaster && aktivitetLog.length === 0 && (
+                  <div style={{ color: '#94a3b8', fontSize: 13 }}>Ingen loggede endringer ennå.</div>
+                )}
+                {aktivitetLog.map((entry, i) => {
+                  const dato = new Date(entry.endretDato || entry.endring?.tilDato)
+                  const datoVis = dato.toLocaleDateString('nb-NO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+                  return (
+                    <div key={entry.id || i} style={{ display: 'flex', gap: 10, marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #f1f5f9' }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#6366f1', marginTop: 5, flexShrink: 0 }} />
+                      <div>
+                        <div style={{ fontSize: 12, color: '#64748b' }}>📅 {datoVis}</div>
+                        <div style={{ fontSize: 13, color: '#1e293b', marginTop: 2 }}>
+                          <strong>{entry.endring?.felt || 'ukjent felt'}</strong>:
+                          {entry.endring?.fraVerdi && <span style={{ color: '#dc2626' }}> {entry.endring.fraVerdi}</span>}
+                          {entry.endring?.fraVerdi && ' → '}
+                          <span style={{ color: '#16a34a' }}>{entry.endring?.tilVerdi || '–'}</span>
+                        </div>
+                        {entry.begrunnelse && <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>💬 {entry.begrunnelse}</div>}
+                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Kilde: {entry.kilde || '–'}</div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            <div className="form" style={{ display: modalFane === 'aktivitet' ? 'none' : undefined }}>
 
               {/* Grunninfo */}
               <div className="bef-modal-seksjon">
