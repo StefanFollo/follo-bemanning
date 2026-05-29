@@ -413,6 +413,12 @@ export default function BefaringPlan() {
               👤 {ansatt.navn.split(' ')[0]}
             </span>
           )}
+          {b.kilde === 'tilbuds-app-direkte' && (
+            <span className="bef-k-chip" style={{ background: '#f0f9ff', color: '#0369a1', fontSize: 10 }}
+              title={`Opprettet direkte fra tilbuds-app av ${b.opprettetAv || 'ukjent'}`}>
+              ✨ Fra tilbuds-app
+            </span>
+          )}
         </div>
 
         {/* Tilbud-link og kunde-aktivitet — vises på Tilbud sendt / Godkjent */}

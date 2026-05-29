@@ -25,6 +25,7 @@
 import { Redis } from '@upstash/redis'
 import { Resend } from 'resend'
 import { validerInterAppToken } from '../_interApp.js'
+import { appendAuditLog, appendSnapshot, byggAuditEntry } from '../_dataIntegritet.js'
 
 export const config = {
   api: { bodyParser: { sizeLimit: '4mb' } },
@@ -36,7 +37,7 @@ const redis = new Redis({
 })
 
 const FARGE_PALETT = ['#6b8fc4', '#a78bfa', '#fb923c', '#34d399', '#f472b6', '#facc15', '#60a5fa', '#fb7185']
-const TILLATTE_TYPER = ['tilbud-sendt', 'vunnet', 'tapt', 'avvist', 'kunde-aktivitet']
+const TILLATTE_TYPER = ['tilbud-sendt', 'vunnet', 'tapt', 'avvist', 'kunde-aktivitet', 'befaring-opprettet-fra-tilbud']
 
 // Type → ny befaring-status i bemanning-systemet
 const TYPE_TIL_STATUS = {
@@ -132,6 +133,11 @@ export default async function handler(req, res) {
     if (!data?.kundenavn?.trim()) return res.status(400).json({ error: 'vunnet: mangler data.kundenavn' })
     if (!data?.adresse?.trim()) return res.status(400).json({ error: 'vunnet: mangler data.adresse' })
   }
+  // For befaring-opprettet-fra-tilbud kreves minimum kunde + adresse
+  if (type === 'befaring-opprettet-fra-tilbud') {
+    if (!data?.kundenavn?.trim()) return res.status(400).json({ error: 'befaring-opprettet-fra-tilbud: mangler data.kundenavn' })
+    if (!data?.adresse?.trim()) return res.status(400).json({ error: 'befaring-opprettet-fra-tilbud: mangler data.adresse' })
+  }
 
   try {
     const state = (await redis.get('fbs_state')) || {}
@@ -198,6 +204,172 @@ export default async function handler(req, res) {
     let befaringFunnet = false
     let plKontakt = null
     let oppdatertBefaringer = befaringer
+
+    // ── Befaring opprettet direkte fra tilbuds-app (toveis sync) ──
+    if (type === 'befaring-opprettet-fra-tilbud') {
+      const d = data || {}
+      const kundenavn = (d.kundenavn || '').trim()
+      const adresse = (d.adresse || '').trim()
+
+      // Normaliser for duplikat-sjekk (case-insensitive, trim whitespace)
+      const normKunde = kundenavn.toLowerCase().replace(/\s+/g, ' ')
+      const normAdresse = adresse.toLowerCase().replace(/\s+/g, ' ')
+      const AKTIVE_STATUSER = new Set(['planlagt', 'tilbud_arbeid'])
+
+      const eksisterende = befaringer.find(b =>
+        AKTIVE_STATUSER.has(b.status) &&
+        (b.kontaktNavn || '').toLowerCase().replace(/\s+/g, ' ') === normKunde &&
+        (b.adresse || '').toLowerCase().replace(/\s+/g, ' ') === normAdresse
+      )
+
+      if (eksisterende) {
+        // Duplikat funnet — knytt tilbudId til eksisterende befaring (idempotent)
+        if (tilbudId && !eksisterende.tilbudId) {
+          const nyeBefaringer = befaringer.map(b =>
+            b.id === eksisterende.id
+              ? { ...b, tilbudId, tilbudLink: tilbudLink || b.tilbudLink, sistEvent: type, sistEventDato: naa }
+              : b
+          )
+          await redis.set('fbs_state', { ...state, befaringer: nyeBefaringer, _updatedAt: Date.now() })
+          await appendAuditLog(redis, byggAuditEntry({
+            objekt: 'befaring',
+            objektId: eksisterende.id,
+            felt: 'tilbudId',
+            fraVerdi: null,
+            tilVerdi: String(tilbudId),
+            endretAv: d.kontaktperson || 'tilbuds-app',
+            kilde: 'tilbuds-app',
+            begrunnelse: 'Koblet til eksisterende befaring fra toveis-sync duplikat-sjekk',
+          }))
+        }
+        console.log(`[event] befaring-opprettet-fra-tilbud → duplikat: ${eksisterende.id} (${kundenavn})`)
+        return res.status(200).json({
+          ok: true,
+          nySkapt: false,
+          kildeBefaringId: eksisterende.id,
+          beskjed: `Koblet til eksisterende befaring: ${eksisterende.adresse}`,
+        })
+      }
+
+      // Slå opp ansatt fra kontaktperson-navn (fuzzy match på fornavn)
+      const kontaktpersonNavn = (d.kontaktperson || '').toLowerCase().split(' ')[0]
+      const matchAnsatt = kontaktpersonNavn
+        ? ansatte.find(a => (a.navn || '').toLowerCase().startsWith(kontaktpersonNavn))
+        : null
+      const ansattId = matchAnsatt?.id || ''
+
+      // Bygg ny befaring
+      const nyBefaringId = nyId('bf')
+      const datoStr = (dato || naa).slice(0, 10)
+      const nyBefaring = {
+        id: nyBefaringId,
+        kontaktNavn: kundenavn,
+        adresse,
+        telefon: d.telefon || '',
+        epost: d.epost || '',
+        jobbType: d.type || d.jobbType || 'Ny bygg',
+        dato: datoStr,
+        tid: '09:00',
+        status: 'planlagt',
+        notat: '',
+        kommentar: d.kommentar || '',
+        prosjektlederId: ansattId,
+        ansvarligBefaringId: ansattId,
+        estimertBelop: '',
+        tilbudFrist: '',
+        nesteKontakt: '',
+        oensketOppstart: d.oensketOppstart || d['ønsketOppstart'] || '',
+        resultat: '',
+        tapArsak: '',
+        // Toveis-sync-metadata
+        kilde: 'tilbuds-app-direkte',
+        opprettetAv: d.kontaktperson || 'ukjent',
+        opprinneligTilbudId: tilbudId || null,
+        tilbudId: tilbudId || null,
+        tilbudLink: tilbudLink || '',
+        sistEvent: type,
+        sistEventDato: naa,
+      }
+
+      // Snapshot av starttilstand (dokumenterer opprettelsen)
+      await appendSnapshot(redis, {
+        objekt: 'befaring',
+        objektId: nyBefaringId,
+        dataFør: nyBefaring,
+        utløstAv: 'befaring-opprettet-fra-tilbud',
+      })
+
+      await redis.set('fbs_state', {
+        ...state,
+        befaringer: [...befaringer, nyBefaring],
+        _updatedAt: Date.now(),
+      })
+
+      // Audit-log: første oppføring fra dag 1
+      await appendAuditLog(redis, byggAuditEntry({
+        objekt: 'befaring',
+        objektId: nyBefaringId,
+        felt: 'status',
+        fraVerdi: null,
+        tilVerdi: 'planlagt',
+        endretAv: d.kontaktperson || 'tilbuds-app',
+        kilde: 'tilbuds-app',
+        begrunnelse: `Opprettet av ${d.kontaktperson || 'ukjent'} direkte fra tilbuds-app${d.kommentar ? ` — "${d.kommentar}"` : ''}`,
+      }))
+
+      console.log(`[event] befaring-opprettet-fra-tilbud → ny: ${nyBefaringId} (${kundenavn} / ${adresse})`)
+      return res.status(200).json({
+        ok: true,
+        nySkapt: true,
+        kildeBefaringId: nyBefaringId,
+        beskjed: `Ny befaring opprettet i Planlagt-kolonnen: ${adresse}`,
+      })
+    }
+
+    // --- Konfliktvern: sjekk om befaring er manuelt overstyrt ---
+    if (kildeBefaringId && nyStatus) {
+      const befaringObj = befaringer.find(b => b.id === kildeBefaringId)
+      if (befaringObj?.manueltOverstyrtAv && befaringObj.status !== nyStatus) {
+        // Lagre konflikt-flagg uten å endre status
+        const konfliktBef = {
+          ...befaringObj,
+          konflikt: {
+            manuellStatus: befaringObj.status,
+            manuellDato: befaringObj.manueltOverstyrtDato || null,
+            manuellAv: befaringObj.manueltOverstyrtAv,
+            inkommendStatus: nyStatus,
+            inkommendFra: 'tilbuds-app',
+            inkommendType: type,
+            inkommendDato: naa,
+          },
+        }
+        await redis.set('fbs_state', {
+          ...state,
+          befaringer: befaringer.map(b => b.id === kildeBefaringId ? konfliktBef : b),
+          _updatedAt: Date.now(),
+        })
+        console.log(`[event] Konflikt oppdaget — befaringId:${kildeBefaringId} manuell:${befaringObj.status} vs inkommend:${nyStatus}`)
+        return res.status(200).json({
+          ok: true,
+          konflikt: true,
+          beskjed: 'Manuell override beskyttet — konflikt lagret for bruker-avgjørelse',
+        })
+      }
+    }
+
+    // --- Snapshot FØR kritisk statusendring ---
+    if (kildeBefaringId && (type === 'tilbud-sendt' || type === 'vunnet' || type === 'tapt' || type === 'avvist')) {
+      const befaringFørEndring = befaringer.find(b => b.id === kildeBefaringId)
+      if (befaringFørEndring) {
+        await appendSnapshot(redis, {
+          objekt: 'befaring',
+          objektId: kildeBefaringId,
+          dataFør: befaringFørEndring,
+          utløstAv: type,
+        })
+      }
+    }
+
     if (kildeBefaringId) {
       oppdatertBefaringer = befaringer.map(b => {
         if (b.id !== kildeBefaringId) return b
@@ -330,16 +502,39 @@ export default async function handler(req, res) {
           _updatedAt: nowTs,
         }
         await redis.set('fbs_state', oppdatertState)
+        // Audit-log: prosjekt opprettet
+        await appendAuditLog(redis, byggAuditEntry({
+          objekt: 'befaring',
+          objektId: kildeBefaringId || `tilbud-${tilbudId}`,
+          felt: 'status',
+          fraVerdi: befaringer.find(b => b.id === kildeBefaringId)?.status || 'ukjent',
+          tilVerdi: 'godkjent',
+          endretAv: 'tilbuds-app',
+          kilde: 'tilbuds-app',
+          begrunnelse: `vunnet-event fra tilbuds-app — prosjekt ${nyttProsjektId} opprettet`,
+        }))
         // Send e-post-varsel
         const host = req.headers.host || 'follo-bemanning.vercel.app'
         const proto = host.startsWith('localhost') ? 'http' : 'https'
         varslingResultat = await sendProsjektVarsel(plKontakt, body, `${proto}://${host}`)
       }
     } else {
-      // Ikke-vunnet: bare oppdater state med ny befaring-status
+      // Ikke-vunnet: oppdater state med ny befaring-status
       if (befaringFunnet) {
-        const oppdatertState = { ...state, befaringer: oppdatertBefaringer }
+        const oppdatertState = { ...state, befaringer: oppdatertBefaringer, _updatedAt: Date.now() }
         await redis.set('fbs_state', oppdatertState)
+        // Audit-log: statusendring
+        const fraStatus = befaringer.find(b => b.id === kildeBefaringId)?.status || 'ukjent'
+        await appendAuditLog(redis, byggAuditEntry({
+          objekt: 'befaring',
+          objektId: kildeBefaringId,
+          felt: 'status',
+          fraVerdi: fraStatus,
+          tilVerdi: nyStatus,
+          endretAv: 'tilbuds-app',
+          kilde: 'tilbuds-app',
+          begrunnelse: `${type}-event mottatt fra tilbuds-app`,
+        }))
       }
     }
 
