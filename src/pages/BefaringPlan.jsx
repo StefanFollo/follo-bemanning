@@ -341,16 +341,34 @@ export default function BefaringPlan() {
     const kontaktDager = dagerTil(b.nesteKontakt);
     const kontaktFarge = kontaktDager !== null ? (kontaktDager < 0 ? '#dc2626' : kontaktDager <= 2 ? '#f59e0b' : '#64748b') : '#64748b';
 
+    const erForsinket = fristDager !== null && fristDager < 0;
+    const erIdag = fristDager === 0;
+
     return (
-      <div className="bef-k-kort" onClick={() => apneRediger(b)}>
+      <div className="bef-k-kort" onClick={() => apneRediger(b)}
+        style={erForsinket ? { borderLeft: '3px solid #dc2626' } : {}}>
         <div className="bef-k-kort-topp">
           <div style={{ minWidth: 0 }}>
             <div className="bef-k-navn">{b.adresse}</div>
             <div className="bef-k-adresse">{b.kontaktNavn}</div>
             {(b.telefon || b.epost) && (
               <div className="bef-k-kontakt">
-                {b.telefon && <a href={`tel:${b.telefon}`} onClick={e => e.stopPropagation()} className="bef-k-kontakt-link">📱 {b.telefon}</a>}
-                {b.epost && <a href={`mailto:${b.epost}`} onClick={e => e.stopPropagation()} className="bef-k-kontakt-link">✉️ {b.epost}</a>}
+                {b.telefon && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                    <a href={`tel:${b.telefon}`} onClick={e => e.stopPropagation()} className="bef-k-kontakt-link">📱 {b.telefon}</a>
+                    <button onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(b.telefon); }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', fontSize: 11, opacity: 0.5, lineHeight: 1 }}
+                      title="Kopier telefonnummer">📋</button>
+                  </span>
+                )}
+                {b.epost && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                    <a href={`mailto:${b.epost}`} onClick={e => e.stopPropagation()} className="bef-k-kontakt-link">✉️ {b.epost}</a>
+                    <button onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(b.epost); }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', fontSize: 11, opacity: 0.5, lineHeight: 1 }}
+                      title="Kopier e-post">📋</button>
+                  </span>
+                )}
               </div>
             )}
           </div>
@@ -433,7 +451,14 @@ export default function BefaringPlan() {
 
         <div className="bef-k-datoer">
           {b.tilbudFrist && (
-            <span className="bef-k-dato-rad" style={{ color: fristFarge }}>
+            <span className="bef-k-dato-rad" style={{
+              color: erForsinket ? '#fff' : erIdag ? '#92400e' : fristFarge,
+              background: erForsinket ? '#dc2626' : erIdag ? '#fef3c7' : 'transparent',
+              padding: (erForsinket || erIdag) ? '2px 7px' : undefined,
+              borderRadius: (erForsinket || erIdag) ? 5 : undefined,
+              fontWeight: (erForsinket || erIdag) ? 700 : undefined,
+              display: 'inline-block',
+            }}>
               ⏰ Tilbudsfrist: {datoKort(b.tilbudFrist)}
               {fristDager !== null && <em> ({fristDager < 0 ? `${Math.abs(fristDager)}d over` : fristDager === 0 ? 'i dag' : `${fristDager}d`})</em>}
             </span>
