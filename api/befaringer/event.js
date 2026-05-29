@@ -37,15 +37,20 @@ const redis = new Redis({
 })
 
 const FARGE_PALETT = ['#6b8fc4', '#a78bfa', '#fb923c', '#34d399', '#f472b6', '#facc15', '#60a5fa', '#fb7185']
-const TILLATTE_TYPER = ['tilbud-sendt', 'vunnet', 'tapt', 'avvist', 'kunde-aktivitet', 'befaring-opprettet-fra-tilbud']
+const TILLATTE_TYPER = ['tilbud-sendt', 'tilbud-under-arbeid', 'trukket', 'vunnet', 'tapt', 'avvist', 'kunde-aktivitet', 'befaring-opprettet-fra-tilbud']
 
 // Type → ny befaring-status i bemanning-systemet
 const TYPE_TIL_STATUS = {
   'tilbud-sendt': 'tilbud_sendt',
+  'tilbud-under-arbeid': 'tilbud_arbeid',
+  'trukket': 'tilbud_arbeid',
   'vunnet': 'godkjent',
   'tapt': 'tapt',
   'avvist': 'tapt',  // SPEC: samme som tapt for nå
 }
+
+// Status-rekkefølge for fremover-kun-regelen (trukket er unntaket)
+const STATUS_ORDEN = { planlagt: 0, tilbud_arbeid: 1, tilbud_sendt: 2, godkjent: 3, tapt: 3 }
 
 function nyId(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
@@ -148,6 +153,15 @@ export default async function handler(req, res) {
     const nyStatus = TYPE_TIL_STATUS[type]
     const naa = dato || new Date().toISOString()
 
+    // ── Idempotens: tilbudId + type → siste behandlede tidspunkt ──
+    const tidspunktStr = body.tidspunkt || naa
+    const dupKey = tilbudId ? `${tilbudId}:${type}` : null
+    const dedupUpdate = dupKey ? { eventDedup: { ...(state.eventDedup || {}), [dupKey]: tidspunktStr } } : {}
+    if (dupKey && state.eventDedup?.[dupKey] && tidspunktStr <= state.eventDedup[dupKey]) {
+      console.log(`[event] Duplikat ignorert: ${dupKey} (${tidspunktStr} <= ${state.eventDedup[dupKey]})`)
+      return res.status(200).json({ ok: true, duplikat: true })
+    }
+
     // ── Kunde-aktivitet (separat flyt — slår opp via tilbudId eller kildeBefaringId) ──
     if (type === 'kunde-aktivitet') {
       const aktivitet = body.aktivitet || {}
@@ -195,7 +209,7 @@ export default async function handler(req, res) {
       })
 
       const nowTs = Date.now()
-      await redis.set('fbs_state', { ...state, befaringer: oppdatertBefaringer, _fieldTs: { ...(state._fieldTs || {}), befaringer: nowTs }, _updatedAt: nowTs })
+      await redis.set('fbs_state', { ...state, befaringer: oppdatertBefaringer, _fieldTs: { ...(state._fieldTs || {}), befaringer: nowTs }, ...dedupUpdate, _updatedAt: nowTs })
       console.log(`POST /api/befaringer/event type:kunde-aktivitet handling:${handling} befaringId:${befaringId}`)
       return res.status(200).json({ ok: true, befaringId, handling })
     }
@@ -231,7 +245,7 @@ export default async function handler(req, res) {
               : b
           )
           const dupTs = Date.now()
-          await redis.set('fbs_state', { ...state, befaringer: nyeBefaringer, _fieldTs: { ...(state._fieldTs || {}), befaringer: dupTs }, _updatedAt: dupTs })
+          await redis.set('fbs_state', { ...state, befaringer: nyeBefaringer, _fieldTs: { ...(state._fieldTs || {}), befaringer: dupTs }, ...dedupUpdate, _updatedAt: dupTs })
           await appendAuditLog(redis, byggAuditEntry({
             objekt: 'befaring',
             objektId: eksisterende.id,
@@ -305,6 +319,7 @@ export default async function handler(req, res) {
         ...state,
         befaringer: [...befaringer, nyBefaring],
         _fieldTs: { ...(state._fieldTs || {}), befaringer: nyBefaringTs },
+        ...dedupUpdate,
         _updatedAt: nyBefaringTs,
       })
 
@@ -351,6 +366,7 @@ export default async function handler(req, res) {
           ...state,
           befaringer: befaringer.map(b => b.id === kildeBefaringId ? konfliktBef : b),
           _fieldTs: { ...(state._fieldTs || {}), befaringer: konfliktTs },
+          ...dedupUpdate,
           _updatedAt: konfliktTs,
         })
         console.log(`[event] Konflikt oppdaget — befaringId:${kildeBefaringId} manuell:${befaringObj.status} vs inkommend:${nyStatus}`)
@@ -363,7 +379,7 @@ export default async function handler(req, res) {
     }
 
     // --- Snapshot FØR kritisk statusendring ---
-    if (kildeBefaringId && (type === 'tilbud-sendt' || type === 'vunnet' || type === 'tapt' || type === 'avvist')) {
+    if (kildeBefaringId && (type === 'tilbud-sendt' || type === 'trukket' || type === 'vunnet' || type === 'tapt' || type === 'avvist')) {
       const befaringFørEndring = befaringer.find(b => b.id === kildeBefaringId)
       if (befaringFørEndring) {
         await appendSnapshot(redis, {
@@ -372,6 +388,23 @@ export default async function handler(req, res) {
           dataFør: befaringFørEndring,
           utløstAv: type,
         })
+      }
+    }
+
+    // Fremover-kun: ikke rull tilbake status (unntatt trukket som er lov å rulle tilbake)
+    if (kildeBefaringId && nyStatus && type !== 'trukket') {
+      const bef = befaringer.find(b => b.id === kildeBefaringId)
+      if (bef) {
+        const gjeldende = STATUS_ORDEN[bef.status] ?? -1
+        const nyttOrdrenr = STATUS_ORDEN[nyStatus] ?? -1
+        if (nyttOrdrenr < gjeldende) {
+          if (dupKey) {
+            const nowTs = Date.now()
+            await redis.set('fbs_state', { ...state, ...dedupUpdate, _updatedAt: nowTs })
+          }
+          console.log(`[event] Fremover-kun: ignorerer ${type}→${nyStatus} for ${kildeBefaringId} (allerede ${bef.status})`)
+          return res.status(200).json({ ok: true, foroverKunStatus: true, gjeldende: bef.status, forsøkt: nyStatus })
+        }
       }
     }
 
@@ -413,6 +446,13 @@ export default async function handler(req, res) {
         if (type === 'avvist') {
           oppdatert.resultat = 'avvist'
           oppdatert.tapDato = naa
+        }
+        if (type === 'tilbud-under-arbeid' && data?.tilbudFørsteLagring && !b.tilbudFørsteLagring) {
+          oppdatert.tilbudFørsteLagring = data.tilbudFørsteLagring
+        }
+        if (type === 'trukket') {
+          oppdatert.trukketDato = naa
+          oppdatert.resultat = ''  // Nullstill eventuelt gammel resultat
         }
         return oppdatert
       })
@@ -504,6 +544,7 @@ export default async function handler(req, res) {
           prosjekter: [...prosjekter, nyttProsjekt],
           befaringer: oppdatertBefaringer,
           _fieldTs: { ...(state._fieldTs || {}), prosjekter: nowTs, befaringer: nowTs },
+          ...dedupUpdate,
           _updatedAt: nowTs,
         }
         await redis.set('fbs_state', oppdatertState)
@@ -527,7 +568,7 @@ export default async function handler(req, res) {
       // Ikke-vunnet: oppdater state med ny befaring-status
       if (befaringFunnet) {
         const ikkevunnetTs = Date.now()
-        const oppdatertState = { ...state, befaringer: oppdatertBefaringer, _fieldTs: { ...(state._fieldTs || {}), befaringer: ikkevunnetTs }, _updatedAt: ikkevunnetTs }
+        const oppdatertState = { ...state, befaringer: oppdatertBefaringer, _fieldTs: { ...(state._fieldTs || {}), befaringer: ikkevunnetTs }, ...dedupUpdate, _updatedAt: ikkevunnetTs }
         await redis.set('fbs_state', oppdatertState)
         // Audit-log: statusendring
         const fraStatus = befaringer.find(b => b.id === kildeBefaringId)?.status || 'ukjent'
