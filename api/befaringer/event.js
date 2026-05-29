@@ -195,7 +195,7 @@ export default async function handler(req, res) {
       })
 
       const nowTs = Date.now()
-      await redis.set('fbs_state', { ...state, befaringer: oppdatertBefaringer, _updatedAt: nowTs })
+      await redis.set('fbs_state', { ...state, befaringer: oppdatertBefaringer, _fieldTs: { ...(state._fieldTs || {}), befaringer: nowTs }, _updatedAt: nowTs })
       console.log(`POST /api/befaringer/event type:kunde-aktivitet handling:${handling} befaringId:${befaringId}`)
       return res.status(200).json({ ok: true, befaringId, handling })
     }
@@ -230,7 +230,8 @@ export default async function handler(req, res) {
               ? { ...b, tilbudId, tilbudLink: tilbudLink || b.tilbudLink, sistEvent: type, sistEventDato: naa }
               : b
           )
-          await redis.set('fbs_state', { ...state, befaringer: nyeBefaringer, _updatedAt: Date.now() })
+          const dupTs = Date.now()
+          await redis.set('fbs_state', { ...state, befaringer: nyeBefaringer, _fieldTs: { ...(state._fieldTs || {}), befaringer: dupTs }, _updatedAt: dupTs })
           await appendAuditLog(redis, byggAuditEntry({
             objekt: 'befaring',
             objektId: eksisterende.id,
@@ -299,10 +300,12 @@ export default async function handler(req, res) {
         utløstAv: 'befaring-opprettet-fra-tilbud',
       })
 
+      const nyBefaringTs = Date.now()
       await redis.set('fbs_state', {
         ...state,
         befaringer: [...befaringer, nyBefaring],
-        _updatedAt: Date.now(),
+        _fieldTs: { ...(state._fieldTs || {}), befaringer: nyBefaringTs },
+        _updatedAt: nyBefaringTs,
       })
 
       // Audit-log: første oppføring fra dag 1
@@ -343,10 +346,12 @@ export default async function handler(req, res) {
             inkommendDato: naa,
           },
         }
+        const konfliktTs = Date.now()
         await redis.set('fbs_state', {
           ...state,
           befaringer: befaringer.map(b => b.id === kildeBefaringId ? konfliktBef : b),
-          _updatedAt: Date.now(),
+          _fieldTs: { ...(state._fieldTs || {}), befaringer: konfliktTs },
+          _updatedAt: konfliktTs,
         })
         console.log(`[event] Konflikt oppdaget — befaringId:${kildeBefaringId} manuell:${befaringObj.status} vs inkommend:${nyStatus}`)
         return res.status(200).json({
@@ -498,7 +503,7 @@ export default async function handler(req, res) {
           ...state,
           prosjekter: [...prosjekter, nyttProsjekt],
           befaringer: oppdatertBefaringer,
-          _fieldTs: { ...(state._fieldTs || {}), prosjekter: nowTs },
+          _fieldTs: { ...(state._fieldTs || {}), prosjekter: nowTs, befaringer: nowTs },
           _updatedAt: nowTs,
         }
         await redis.set('fbs_state', oppdatertState)
@@ -521,7 +526,8 @@ export default async function handler(req, res) {
     } else {
       // Ikke-vunnet: oppdater state med ny befaring-status
       if (befaringFunnet) {
-        const oppdatertState = { ...state, befaringer: oppdatertBefaringer, _updatedAt: Date.now() }
+        const ikkevunnetTs = Date.now()
+        const oppdatertState = { ...state, befaringer: oppdatertBefaringer, _fieldTs: { ...(state._fieldTs || {}), befaringer: ikkevunnetTs }, _updatedAt: ikkevunnetTs }
         await redis.set('fbs_state', oppdatertState)
         // Audit-log: statusendring
         const fraStatus = befaringer.find(b => b.id === kildeBefaringId)?.status || 'ukjent'
