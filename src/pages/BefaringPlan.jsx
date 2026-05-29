@@ -50,11 +50,15 @@ function dayOfWeek(iso) {
 }
 function datoKort(iso) {
   if (!iso) return '';
-  return new Date(iso + 'T00:00:00').toLocaleDateString('nb-NO', { day: '2-digit', month: 'short' });
+  const d = new Date(iso.slice(0, 10) + 'T00:00:00');
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('nb-NO', { day: '2-digit', month: 'short' });
 }
 function dagerTil(iso) {
   if (!iso) return null;
-  return Math.round((new Date(iso + 'T00:00:00') - new Date()) / 86400000);
+  const d = new Date(iso.slice(0, 10) + 'T00:00:00');
+  if (isNaN(d.getTime())) return null;
+  return Math.round((d - new Date()) / 86400000);
 }
 
 function tomModal() {
@@ -85,8 +89,10 @@ export default function BefaringPlan() {
   const befaringer = state.befaringer || [];
   const today = dateToIso(new Date());
 
+  const isAdmin = localStorage.getItem('fbs_role') === 'admin';
   const [visModal, setVisModal] = useState(false);
   const [redigerer, setRedigerer] = useState(null);
+  const [dedupPanel, setDedupPanel] = useState(null); // null | {loading} | {dry, plan, ...}
   const [form, setForm] = useState(tomModal());
   const [autoSaveSts, setAutoSaveSts] = useState(null); // null | 'saving' | 'saved'
   const [modalFane, setModalFane] = useState('detaljer'); // 'detaljer' | 'aktivitet'
@@ -152,6 +158,24 @@ export default function BefaringPlan() {
     }
     while (dager.length % 7 !== 0) dager.push(null);
     return dager;
+  }
+
+  // ---- Admin: dedup befaringer ----
+  async function kjorDedup(dry) {
+    setDedupPanel({ loading: true });
+    try {
+      const token = localStorage.getItem('fbs_token') || '';
+      const r = await fetch('/api/admin/dedup-befaringer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ dry }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      setDedupPanel({ ...data, loading: false });
+    } catch (e) {
+      setDedupPanel({ error: e.message, loading: false });
+    }
   }
 
   // ---- CRUD ----
@@ -628,8 +652,73 @@ export default function BefaringPlan() {
             <button className={`bef-view-tab${viewTab === 'kalender' ? ' aktiv' : ''}`} onClick={() => setViewTab('kalender')}>📅 Kalender</button>
           </div>
           <button className="btn btn-primary" onClick={() => apneNy()}>+ Ny befaring</button>
+          {isAdmin && (
+            <button
+              onClick={() => dedupPanel ? setDedupPanel(null) : kjorDedup(true)}
+              title="Finn og rydd opp duplikate befaringer"
+              style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: 13, color: '#475569' }}
+            >
+              🔧 Dedup
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Admin: dedup-panel */}
+      {isAdmin && dedupPanel && (
+        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px', margin: '0 0 12px 0', fontSize: 13 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <strong style={{ color: '#1e293b' }}>🔧 Dedup befaringer</strong>
+            <button onClick={() => setDedupPanel(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#94a3b8' }}>✕</button>
+          </div>
+
+          {dedupPanel.loading && <div style={{ color: '#64748b' }}>⏳ Henter duplikater...</div>}
+
+          {dedupPanel.error && <div style={{ color: '#dc2626' }}>⚠️ Feil: {dedupPanel.error}</div>}
+
+          {!dedupPanel.loading && !dedupPanel.error && dedupPanel.funnetDuplikater === 0 && (
+            <div style={{ color: '#16a34a' }}>✅ Ingen duplikater funnet</div>
+          )}
+
+          {!dedupPanel.loading && !dedupPanel.error && dedupPanel.duplikatGrupper > 0 && (
+            <>
+              <div style={{ color: '#1e293b', marginBottom: 8 }}>
+                Funnet <strong>{dedupPanel.duplikatGrupper}</strong> duplikatgrupper
+                → vil slette <strong>{dedupPanel.skalSlettes}</strong> befaringer
+                (beholder {dedupPanel.gjenværendeEtter})
+              </div>
+              <div style={{ maxHeight: 180, overflowY: 'auto', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 10px', marginBottom: 10 }}>
+                {(dedupPanel.plan || []).map((g, i) => (
+                  <div key={i} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: i < dedupPanel.plan.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                    <div style={{ fontWeight: 600 }}>Beholder: {g.behold.adresse} — {g.behold.kontaktNavn}</div>
+                    <div style={{ color: '#64748b', fontSize: 12 }}>id: {g.behold.id} · {g.behold.dato} · {g.behold.status}</div>
+                    {g.slett.map(s => (
+                      <div key={s.id} style={{ color: '#dc2626', fontSize: 12, paddingLeft: 10 }}>
+                        🗑 {s.id} · {s.dato} · {s.status}{s.kilde ? ` (${s.kilde})` : ''}
+                      </div>
+                    ))}
+                    {g.mergeTilbudId && <div style={{ color: '#0891b2', fontSize: 12, paddingLeft: 10 }}>→ Overfører tilbudId {g.mergeTilbudId} til keeper</div>}
+                  </div>
+                ))}
+              </div>
+              {dedupPanel.dry !== false && (
+                <button
+                  onClick={() => {
+                    if (!window.confirm(`Slette ${dedupPanel.skalSlettes} duplikate befaringer?\nDette kan ikke angres (men snapshots tas).`)) return;
+                    kjorDedup(false);
+                  }}
+                  style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontWeight: 600 }}
+                >
+                  🗑 Slett {dedupPanel.skalSlettes} duplikater
+                </button>
+              )}
+              {dedupPanel.dry === false && (
+                <div style={{ color: '#16a34a', fontWeight: 600 }}>✅ Slettet {dedupPanel.slettet} duplikater · {dedupPanel.gjenværende} befaringer igjen</div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {/* Pipeline */}
       <div className="bef-pipeline">
