@@ -344,9 +344,26 @@ export default async function handler(req, res) {
       })
     }
 
+    // ── Resolve kildeBefaringId (direkte fra body, eller fallback via tilbudId) ──
+    // Tilbuds-appen skal nå alltid sende kildeBefaringId, men eldre/manuelle events
+    // kan mangle det. Fallback: slå opp via tilbudId i state.
+    let resolvedBefaringId = kildeBefaringId || null
+    let oppslagsKilde = kildeBefaringId ? 'via kildeBefaringId' : null
+    if (!resolvedBefaringId && tilbudId) {
+      const bef = befaringer.find(b => String(b.tilbudId) === String(tilbudId))
+      if (bef) {
+        resolvedBefaringId = bef.id
+        oppslagsKilde = 'via tilbudId-mapping'
+        console.log(`[event] tilbudId-mapping: ${tilbudId} → ${resolvedBefaringId} (type:${type})`)
+      } else {
+        oppslagsKilde = 'befaring ikke funnet'
+        console.warn(`[event] WARN: type:${type} tilbudId:${tilbudId} — ingen befaring funnet (kildeBefaringId mangler og tilbudId-mapping slo ikke til)`)
+      }
+    }
+
     // --- Konfliktvern: sjekk om befaring er manuelt overstyrt ---
-    if (kildeBefaringId && nyStatus) {
-      const befaringObj = befaringer.find(b => b.id === kildeBefaringId)
+    if (resolvedBefaringId && nyStatus) {
+      const befaringObj = befaringer.find(b => b.id === resolvedBefaringId)
       if (befaringObj?.manueltOverstyrtAv && befaringObj.status !== nyStatus) {
         // Lagre konflikt-flagg uten å endre status
         const konfliktBef = {
@@ -364,12 +381,12 @@ export default async function handler(req, res) {
         const konfliktTs = Date.now()
         await redis.set('fbs_state', {
           ...state,
-          befaringer: befaringer.map(b => b.id === kildeBefaringId ? konfliktBef : b),
+          befaringer: befaringer.map(b => b.id === resolvedBefaringId ? konfliktBef : b),
           _fieldTs: { ...(state._fieldTs || {}), befaringer: konfliktTs },
           ...dedupUpdate,
           _updatedAt: konfliktTs,
         })
-        console.log(`[event] Konflikt oppdaget — befaringId:${kildeBefaringId} manuell:${befaringObj.status} vs inkommend:${nyStatus}`)
+        console.log(`[event] Konflikt oppdaget — befaringId:${resolvedBefaringId} manuell:${befaringObj.status} vs inkommend:${nyStatus} (${oppslagsKilde})`)
         return res.status(200).json({
           ok: true,
           konflikt: true,
@@ -379,12 +396,12 @@ export default async function handler(req, res) {
     }
 
     // --- Snapshot FØR kritisk statusendring ---
-    if (kildeBefaringId && (type === 'tilbud-sendt' || type === 'trukket' || type === 'vunnet' || type === 'tapt' || type === 'avvist')) {
-      const befaringFørEndring = befaringer.find(b => b.id === kildeBefaringId)
+    if (resolvedBefaringId && (type === 'tilbud-sendt' || type === 'trukket' || type === 'vunnet' || type === 'tapt' || type === 'avvist')) {
+      const befaringFørEndring = befaringer.find(b => b.id === resolvedBefaringId)
       if (befaringFørEndring) {
         await appendSnapshot(redis, {
           objekt: 'befaring',
-          objektId: kildeBefaringId,
+          objektId: resolvedBefaringId,
           dataFør: befaringFørEndring,
           utløstAv: type,
         })
@@ -392,8 +409,8 @@ export default async function handler(req, res) {
     }
 
     // Fremover-kun: ikke rull tilbake status (unntatt trukket som er lov å rulle tilbake)
-    if (kildeBefaringId && nyStatus && type !== 'trukket') {
-      const bef = befaringer.find(b => b.id === kildeBefaringId)
+    if (resolvedBefaringId && nyStatus && type !== 'trukket') {
+      const bef = befaringer.find(b => b.id === resolvedBefaringId)
       if (bef) {
         const gjeldende = STATUS_ORDEN[bef.status] ?? -1
         const nyttOrdrenr = STATUS_ORDEN[nyStatus] ?? -1
@@ -402,15 +419,15 @@ export default async function handler(req, res) {
             const nowTs = Date.now()
             await redis.set('fbs_state', { ...state, ...dedupUpdate, _updatedAt: nowTs })
           }
-          console.log(`[event] Fremover-kun: ignorerer ${type}→${nyStatus} for ${kildeBefaringId} (allerede ${bef.status})`)
+          console.log(`[event] Fremover-kun: ignorerer ${type}→${nyStatus} for ${resolvedBefaringId} (allerede ${bef.status}, ${oppslagsKilde})`)
           return res.status(200).json({ ok: true, foroverKunStatus: true, gjeldende: bef.status, forsøkt: nyStatus })
         }
       }
     }
 
-    if (kildeBefaringId) {
+    if (resolvedBefaringId) {
       oppdatertBefaringer = befaringer.map(b => {
-        if (b.id !== kildeBefaringId) return b
+        if (b.id !== resolvedBefaringId) return b
         befaringFunnet = true
         // Slå opp PL-kontakt så vi kan varsle
         if (b.prosjektlederId) {
@@ -508,7 +525,7 @@ export default async function handler(req, res) {
           farge,
           beskrivelse,
           kildeTilbudId: tilbudId,
-          kildeBefaringId: kildeBefaringId || null,
+          kildeBefaringId: resolvedBefaringId || null,
           kunde: {
             navn: data.kundenavn,
             adresse: data.adresse,
@@ -533,9 +550,9 @@ export default async function handler(req, res) {
         }
         nyttProsjektId = nyttProsjekt.id
         // Knytt prosjekt-ID på befaringen
-        if (kildeBefaringId) {
+        if (resolvedBefaringId) {
           oppdatertBefaringer = oppdatertBefaringer.map(b =>
-            b.id === kildeBefaringId ? { ...b, prosjektId: nyttProsjektId } : b
+            b.id === resolvedBefaringId ? { ...b, prosjektId: nyttProsjektId } : b
           )
         }
         const nowTs = Date.now()
@@ -551,13 +568,13 @@ export default async function handler(req, res) {
         // Audit-log: prosjekt opprettet
         await appendAuditLog(redis, byggAuditEntry({
           objekt: 'befaring',
-          objektId: kildeBefaringId || `tilbud-${tilbudId}`,
+          objektId: resolvedBefaringId || `tilbud-${tilbudId}`,
           felt: 'status',
-          fraVerdi: befaringer.find(b => b.id === kildeBefaringId)?.status || 'ukjent',
+          fraVerdi: befaringer.find(b => b.id === resolvedBefaringId)?.status || 'ukjent',
           tilVerdi: 'godkjent',
           endretAv: 'tilbuds-app',
           kilde: 'tilbuds-app',
-          begrunnelse: `vunnet-event fra tilbuds-app — prosjekt ${nyttProsjektId} opprettet`,
+          begrunnelse: `vunnet-event fra tilbuds-app — prosjekt ${nyttProsjektId} opprettet (${oppslagsKilde || 'ingen befaring'})`,
         }))
         // Send e-post-varsel
         const host = req.headers.host || 'follo-bemanning.vercel.app'
@@ -571,26 +588,27 @@ export default async function handler(req, res) {
         const oppdatertState = { ...state, befaringer: oppdatertBefaringer, _fieldTs: { ...(state._fieldTs || {}), befaringer: ikkevunnetTs }, ...dedupUpdate, _updatedAt: ikkevunnetTs }
         await redis.set('fbs_state', oppdatertState)
         // Audit-log: statusendring
-        const fraStatus = befaringer.find(b => b.id === kildeBefaringId)?.status || 'ukjent'
+        const fraStatus = befaringer.find(b => b.id === resolvedBefaringId)?.status || 'ukjent'
         await appendAuditLog(redis, byggAuditEntry({
           objekt: 'befaring',
-          objektId: kildeBefaringId,
+          objektId: resolvedBefaringId,
           felt: 'status',
           fraVerdi: fraStatus,
           tilVerdi: nyStatus,
           endretAv: 'tilbuds-app',
           kilde: 'tilbuds-app',
-          begrunnelse: `${type}-event mottatt fra tilbuds-app`,
+          begrunnelse: `${type}-event mottatt fra tilbuds-app (${oppslagsKilde || 'ingen befaring'})`,
         }))
       }
     }
 
-    console.log(`POST /api/befaringer/event type:${type} tilbudId:${tilbudId} befaringId:${kildeBefaringId || '–'} → status:${nyStatus} prosjekt:${nyttProsjektId || '–'}`)
+    console.log(`POST /api/befaringer/event type:${type} tilbudId:${tilbudId} befaringId:${resolvedBefaringId || '–'} (${oppslagsKilde || '–'}) → status:${nyStatus} prosjekt:${nyttProsjektId || '–'}`)
 
     return res.status(200).json({
       ok: true,
       befaringStatus: nyStatus,
       befaringFunnet,
+      oppslagsKilde: oppslagsKilde || null,
       ...(nyttProsjektId ? { prosjektId: nyttProsjektId } : {}),
       ...(alleredeOpprettet ? { alleredeOpprettet: true } : {}),
       varsling: type === 'vunnet'
