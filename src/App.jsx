@@ -15,6 +15,7 @@ import LoginPage from './pages/LoginPage';
 import ResetPassword from './pages/ResetPassword';
 import AdminUsers from './pages/AdminUsers';
 import KS from './pages/KS';
+import Biler from './pages/Biler';
 import './App.css';
 
 const ADMIN_TABS = [
@@ -28,6 +29,7 @@ const ADMIN_TABS = [
   { id: 'rorlegger', label: 'Rørlegger', icon: '🔧' },
   { id: 'framdrift', label: 'Framdrift', icon: '📊' },
   { id: 'ks', label: 'KS / HMS', icon: '✅' },
+  { id: 'biler', label: 'Biler', icon: '🚐' },
   { id: 'brukere', label: 'Brukere', icon: '👥' },
 ];
 
@@ -40,6 +42,7 @@ const KONTOR_TABS = [
   { id: 'ansatte', label: 'Ansatte', icon: '👷' },
   { id: 'framdrift', label: 'Framdrift', icon: '📊' },
   { id: 'ks', label: 'KS / HMS', icon: '✅' },
+  { id: 'biler', label: 'Biler', icon: '🚐' },
 ];
 
 const RORLEGGER_TABS = [
@@ -212,6 +215,7 @@ function App() {
           {activeTab === 'rorlegger' && (isAdmin || isKontor || isRorlegger) && <RorleggerPlan />}
           {activeTab === 'framdrift' && (isAdmin || isKontor) && <Framdriftsplan />}
           {activeTab === 'ks' && (isAdmin || isKontor) && <KS />}
+          {activeTab === 'biler' && (isAdmin || isKontor) && <Biler />}
           {activeTab === 'brukere' && isAdmin && <AdminUsers />}
         </main>
 

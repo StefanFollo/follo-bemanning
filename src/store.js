@@ -270,7 +270,29 @@ export const FIELD_MAP = {
   befaringer:   'fbs_befaringer',
   reklamasjoner:'fbs_reklamasjoner',
   serviceJobber:'fbs_service_jobber',
+  biler:        'fbs_biler',
 };
+
+const SEED_BILER = [
+  { id:'bil-1',  modell:'Transporter', regNr:'AY 47266', sjafor:'Glenn Fosser',           abax:'', euKontroll:'2029-02-25', dekkType:'S', dekklagring:'Dekkhotell', km:'22375',  kmDato:'2026-05-22', kommentar:'Må bestilles takstativ' },
+  { id:'bil-2',  modell:'E-NV200',     regNr:'EB 21664', sjafor:'Kenneth Grinde',          abax:'', euKontroll:'2028-01-21', dekkType:'V', dekklagring:'Dekkhotell', km:'',       kmDato:'',           kommentar:'Dårlig skyvedør fører side. Dekkskift bestillt.' },
+  { id:'bil-3',  modell:'E-NV200',     regNr:'EB 25111', sjafor:'Mario',                   abax:'', euKontroll:'2028-03-16', dekkType:'',  dekklagring:'',           km:'',       kmDato:'',           kommentar:'' },
+  { id:'bil-4',  modell:'E-NV200',     regNr:'EB 35416', sjafor:'',                        abax:'', euKontroll:'2028-04-27', dekkType:'V', dekklagring:'',           km:'',       kmDato:'',           kommentar:'Dekkskifte bestillt.' },
+  { id:'bil-5',  modell:'E-NV200',     regNr:'EB 44983', sjafor:'Arturas Maciuta',          abax:'', euKontroll:'2026-04-24', dekkType:'V', dekklagring:'Dekkhotell', km:'',       kmDato:'',           kommentar:'Dekkskift og Eukontroll bestillt.' },
+  { id:'bil-6',  modell:'Jumpy',       regNr:'EC 15011', sjafor:'Imad Muhammad Abouzraa',  abax:'', euKontroll:'2027-02-10', dekkType:'',  dekklagring:'',           km:'',       kmDato:'',           kommentar:'' },
+  { id:'bil-7',  modell:'Vivaro',      regNr:'EC 21700', sjafor:'',                        abax:'', euKontroll:'2027-08-28', dekkType:'V', dekklagring:'Dekkhotell', km:'',       kmDato:'',           kommentar:'Dekkskifte bestillt.' },
+  { id:'bil-8',  modell:'Proace',      regNr:'EC 22708', sjafor:'Richard Fosser Minge',    abax:'', euKontroll:'2027-04-25', dekkType:'S', dekklagring:'Dekkhotell', km:'',       kmDato:'',           kommentar:'' },
+  { id:'bil-9',  modell:'Proace',      regNr:'EC 33302', sjafor:'Rytis Jauniskis',         abax:'', euKontroll:'2027-04-04', dekkType:'',  dekklagring:'',           km:'',       kmDato:'',           kommentar:'' },
+  { id:'bil-10', modell:'Proace',      regNr:'EC 41331', sjafor:'Lars Fagerli',            abax:'', euKontroll:'2027-04-07', dekkType:'',  dekklagring:'',           km:'',       kmDato:'',           kommentar:'' },
+  { id:'bil-11', modell:'Expert',      regNr:'EC 57932', sjafor:'Pyrros Christou',         abax:'', euKontroll:'2027-05-16', dekkType:'',  dekklagring:'',           km:'',       kmDato:'',           kommentar:'' },
+  { id:'bil-12', modell:'Expert',      regNr:'EC 57935', sjafor:'Andrius Jauniskis',       abax:'', euKontroll:'2027-05-14', dekkType:'S', dekklagring:'Dekkhotell', km:'133764', kmDato:'2026-05-22', kommentar:'' },
+  { id:'bil-13', modell:'Expert',      regNr:'EC 57939', sjafor:'Marius Elviken',          abax:'', euKontroll:'2027-03-12', dekkType:'',  dekklagring:'',           km:'',       kmDato:'',           kommentar:'' },
+  { id:'bil-14', modell:'Expert',      regNr:'EC 85765', sjafor:'Tomasz Miroslaw Czop',    abax:'', euKontroll:'2027-03-25', dekkType:'',  dekklagring:'',           km:'',       kmDato:'',           kommentar:'Bil står hjemme hos Tomasz' },
+  { id:'bil-15', modell:'Proace',      regNr:'EE 55317', sjafor:'',                        abax:'', euKontroll:'2026-09-14', dekkType:'S', dekklagring:'Dekkhotell', km:'',       kmDato:'',           kommentar:'' },
+  { id:'bil-16', modell:'E-NV200',     regNr:'EV 71103', sjafor:'',                        abax:'', euKontroll:'2027-10-19', dekkType:'',  dekklagring:'Dekkhotell', km:'102565', kmDato:'2026-05-22', kommentar:'' },
+  { id:'bil-17', modell:'Transporter', regNr:'HJ 98271', sjafor:'Tommy Fredriksen',        abax:'', euKontroll:'2027-07-23', dekkType:'S', dekklagring:'Dekkhotell', km:'156230', kmDato:'2026-05-22', kommentar:'Trenger service og oljeskift' },
+  { id:'bil-18', modell:'Caddy',       regNr:'LS 90475', sjafor:'Petros Potsis',           abax:'', euKontroll:'2026-06-27', dekkType:'',  dekklagring:'',           km:'',       kmDato:'',           kommentar:'' },
+];
 
 function save(key, value, field) {
   localStorage.setItem(key, JSON.stringify(value));
@@ -442,6 +464,7 @@ export function loadState() {
     befaringer: load('fbs_befaringer', []),
     reklamasjoner: load('fbs_reklamasjoner', []),
     serviceJobber: load('fbs_service_jobber', []),
+    biler: load('fbs_biler', SEED_BILER),
   };
 }
 
@@ -456,6 +479,7 @@ export function saveTeams(data)         { save('fbs_teams',           data, 'tea
 export function saveBefaringer(data)    { save('fbs_befaringer',     data, 'befaringer'); }
 export function saveReklamasjoner(data) { save('fbs_reklamasjoner',  data, 'reklamasjoner'); }
 export function saveServiceJobber(data) { save('fbs_service_jobber', data, 'serviceJobber'); }
+export function saveBiler(data)         { save('fbs_biler',          data, 'biler'); }
 
 export function uid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
