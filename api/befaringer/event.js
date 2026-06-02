@@ -435,7 +435,7 @@ export default async function handler(req, res) {
           if (pl) plKontakt = { navn: pl.navn || pl.fornavn || null, epost: pl.epost || pl.email || null }
         }
         const oppdatert = { ...b, status: nyStatus, sistEvent: type, sistEventDato: naa }
-        // Lagre alle tilbuds-data-felter på befaringen (Steg 2)
+        // Lagre alle tilbuds-data-felter på befaringen — kjente felt flatt + FULL payload
         if (data) {
           if (data.telefon != null && data.telefon !== '') oppdatert.telefon = data.telefon
           if (data.epost != null && data.epost !== '') oppdatert.epost = data.epost
@@ -449,6 +449,8 @@ export default async function handler(req, res) {
           if (Array.isArray(data.fag) && data.fag.length > 0) oppdatert.fag = data.fag
           if (Array.isArray(data.poster) && data.poster.length > 0) oppdatert.poster = data.poster
           if (Array.isArray(data.valgteOpsjoner)) oppdatert.valgteOpsjoner = data.valgteOpsjoner
+          // Full payload-snapshot: bevarer alle felt inkl. fremtidige (byggInfo, soner, totalSum osv.)
+          oppdatert.tilbudPayload = { ...data, _mottattType: type, _mottattDato: naa }
         }
         if (tilbudLink) oppdatert.tilbudLink = tilbudLink
         if (tilbudId) oppdatert.tilbudId = tilbudId

@@ -276,6 +276,14 @@ export default function BefaringPlan() {
         tilbudLink: bef.tilbudLink || '',
         kildeBefaringId: bef.id || '',
         ...(kildeTilbudData ? { kildeTilbudData } : {}),
+        // Full payload-snapshot fra tilbuds-appen (byggInfo, soner, totalSum osv.)
+        ...(bef.tilbudPayload ? { tilbudPayload: bef.tilbudPayload } : {}),
+        kunde: {
+          navn: bef.kontaktNavn || '',
+          adresse: bef.adresse || '',
+          telefon: bef.telefon || '',
+          epost: bef.epost || '',
+        },
       },
     });
     if (prosjektForm.lagTildeling && visKapasitet?.prosjektlederId && prosjektForm.startDato) {
@@ -1088,6 +1096,39 @@ export default function BefaringPlan() {
                         🔗 Åpne tilbud →
                       </a>
                     )}
+                    {/* Utvidede felt fra tilbudPayload (byggInfo, soner, totalSum osv.) */}
+                    {redigerer.tilbudPayload && (() => {
+                      const p = redigerer.tilbudPayload;
+                      return (
+                        <>
+                          {p.totalSum != null && p.totalSum > 0 && (
+                            <div>💰 Akseptert sum: <strong>{fmtKr(p.totalSum)}</strong></div>
+                          )}
+                          {p.byggInfo && (
+                            <div style={{ marginTop: 4 }}>
+                              <span style={{ fontWeight: 600 }}>🏗 Byggeinfo:</span>
+                              <div style={{ paddingLeft: 8, color: '#374151', fontSize: 12, whiteSpace: 'pre-wrap' }}>{p.byggInfo}</div>
+                            </div>
+                          )}
+                          {Array.isArray(p.soner) && p.soner.length > 0 && (
+                            <div style={{ marginTop: 4 }}>
+                              <span style={{ fontWeight: 600 }}>📍 Soner ({p.soner.length}):</span>
+                              {p.soner.map((s, i) => (
+                                <div key={i} style={{ paddingLeft: 8, color: '#374151', fontSize: 12 }}>
+                                  • {s.navn || s.name || `Sone ${i + 1}`}{s.areal ? ` — ${s.areal} m²` : ''}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {p.kundeKommentar && (
+                            <div style={{ marginTop: 4 }}>
+                              <span style={{ fontWeight: 600 }}>💬 Kundekommentar:</span>
+                              <div style={{ paddingLeft: 8, color: '#374151', fontSize: 12, fontStyle: 'italic' }}>"{p.kundeKommentar}"</div>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               )}
