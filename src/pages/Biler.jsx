@@ -61,6 +61,12 @@ export default function Biler() {
   const [form, setForm] = useState(TOM_BIL);
   const [sok, setSok] = useState('');
   const [filter, setFilter] = useState('alle'); // 'alle' | 'ledig' | 'eu-varsel'
+  const [lagretMsg, setLagretMsg] = useState('');
+
+  function visLagret(msg = '✅ Lagret automatisk') {
+    setLagretMsg(msg);
+    setTimeout(() => setLagretMsg(''), 2500);
+  }
 
   // Statistikk
   const ledigCount   = biler.filter(b => !b.sjafor).length;
@@ -104,14 +110,19 @@ export default function Biler() {
     if (!form.regNr.trim()) return;
     if (editing) {
       dispatch({ type: 'UPDATE_BIL', payload: { ...form, id: editing.id } });
+      visLagret('✅ Endringer lagret');
     } else {
       dispatch({ type: 'ADD_BIL', payload: { ...form, id: uid() } });
+      visLagret('✅ Bil lagt til');
     }
     setShowModal(false);
   }
 
   function slett(id) {
-    if (confirm('Slette bilen?')) dispatch({ type: 'DELETE_BIL', id });
+    if (confirm('Slette bilen?')) {
+      dispatch({ type: 'DELETE_BIL', id });
+      visLagret('🗑 Bil slettet');
+    }
   }
 
   const summaryCards = [
@@ -125,7 +136,14 @@ export default function Biler() {
     <div className="page">
       <div className="page-header">
         <h2>🚐 Firmabiler <span className="count-badge">{biler.length}</span></h2>
-        <button className="btn btn-primary" onClick={apneNy}>+ Legg til bil</button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {lagretMsg && (
+            <span style={{ fontSize: 13, color: lagretMsg.startsWith('🗑') ? '#64748b' : '#16a34a', fontWeight: 600, transition: 'opacity .3s' }}>
+              {lagretMsg}
+            </span>
+          )}
+          <button className="btn btn-primary" onClick={apneNy}>+ Legg til bil</button>
+        </div>
       </div>
 
       {/* Summary-kort */}
