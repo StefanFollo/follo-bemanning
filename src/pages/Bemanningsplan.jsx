@@ -1285,8 +1285,8 @@ export default function Bemanningsplan({ readOnly = false }) {
 
               function renderTeamHeader(team, count) {
                 return (
-                  <div key={`th-${team.id}`} style={{ display: 'flex', height: 30, alignItems: 'center', background: team.farge + '18', borderTop: `2px solid ${team.farge}`, borderBottom: `1px solid ${team.farge}33`, minWidth: LABEL_W + totalW }}>
-                    <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '0 12px' }}>
+                  <div key={`th-${team.id}`} style={{ display: 'flex', height: 30, alignItems: 'stretch', background: team.farge + '18', borderTop: `2px solid ${team.farge}`, borderBottom: `1px solid ${team.farge}33`, minWidth: LABEL_W + totalW }}>
+                    <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '0 12px', position: 'sticky', left: 0, zIndex: 3, background: '#fff', borderRight: `2px solid ${team.farge}33` }}>
                       <div style={{ width: 10, height: 10, borderRadius: '50%', background: team.farge, flexShrink: 0 }} />
                       <span style={{ fontWeight: 700, fontSize: 12, color: team.farge, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{team.navn}</span>
                       <span style={{ fontSize: 11, color: '#94a3b8', flexShrink: 0 }}>{count}</span>
@@ -1313,8 +1313,8 @@ export default function Bemanningsplan({ readOnly = false }) {
               const unassigned = filteredAnsatte.filter(a => !assignedIds.has(a.id));
               if (unassigned.length > 0) {
                 rows.push(
-                  <div key="th-uten" style={{ display: 'flex', height: 30, alignItems: 'center', background: '#f1f5f9', borderTop: '2px solid #94a3b8', borderBottom: '1px solid #e2e8f0', minWidth: LABEL_W + totalW }}>
-                    <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '0 12px' }}>
+                  <div key="th-uten" style={{ display: 'flex', height: 30, alignItems: 'stretch', background: '#f1f5f9', borderTop: '2px solid #94a3b8', borderBottom: '1px solid #e2e8f0', minWidth: LABEL_W + totalW }}>
+                    <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '0 12px', position: 'sticky', left: 0, zIndex: 3, background: '#fff', borderRight: '2px solid #e2e8f0' }}>
                       <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#94a3b8', flexShrink: 0 }} />
                       <span style={{ fontWeight: 700, fontSize: 12, color: '#64748b' }}>Uten team</span>
                       <span style={{ fontSize: 11, color: '#94a3b8' }}>{unassigned.length}</span>
