@@ -440,7 +440,7 @@ function nextAutoColor(prosjekter) {
 
 const JOBB_TYPER = ['Ny bygg', 'Tilbygg', 'Tak jobb', 'Fasade jobb', 'Bad', 'Tømrer', 'Maling', 'Rørlegger', 'Flislegging', 'Elektro', 'Rehabilitering', 'Annet'];
 
-const EMPTY = { navn: '', adresse: '', jobbType: '', startDato: '', sluttDato: '', status: 'jobber_med', beskrivelse: '', farge: PROSJEKT_PALETTE[0], belop: '', manskapAntall: '', prosjektlederId: '' };
+const EMPTY = { navn: '', adresse: '', kundeNavn: '', kundeTlf: '', kundeEpost: '', jobbType: '', startDato: '', sluttDato: '', status: 'jobber_med', beskrivelse: '', farge: PROSJEKT_PALETTE[0], belop: '', manskapAntall: '', prosjektlederId: '' };
 
 // Normaliser gammel status til visningsgruppe
 function normStatus(s) {
@@ -526,16 +526,29 @@ export default function Prosjekter() {
 
   function openEdit(p) {
     setEditing(p);
-    setForm({ ...p });
+    setForm({
+      ...p,
+      kundeNavn: p.kunde?.navn || '',
+      kundeTlf:  p.kunde?.telefon || '',
+      kundeEpost: p.kunde?.epost || '',
+    });
     setShowModal(true);
   }
 
   function handleSave() {
     if (!form.navn.trim()) return;
+    const kunde = {
+      ...(editing?.kunde || {}),
+      navn:     form.kundeNavn  || '',
+      telefon:  form.kundeTlf   || '',
+      epost:    form.kundeEpost || '',
+      adresse:  form.adresse    || '',
+    };
+    const payload = { ...form, kunde };
     if (editing) {
-      dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...form, id: editing.id } });
+      dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...payload, id: editing.id } });
     } else {
-      dispatch({ type: 'ADD_PROSJEKT', payload: form });
+      dispatch({ type: 'ADD_PROSJEKT', payload });
     }
     setShowModal(false);
   }
@@ -1013,6 +1026,18 @@ export default function Prosjekter() {
             <input value={form.navn} onChange={e => setForm(f => ({ ...f, navn: e.target.value }))} placeholder="Prosjektnavn" />
             <label>Adresse</label>
             <input value={form.adresse} onChange={e => setForm(f => ({ ...f, adresse: e.target.value }))} placeholder="Adresse" />
+            <label>Kundenavn</label>
+            <input value={form.kundeNavn} onChange={e => setForm(f => ({ ...f, kundeNavn: e.target.value }))} placeholder="For- og etternavn" />
+            <div className="form-row">
+              <div>
+                <label>Telefon</label>
+                <input type="tel" value={form.kundeTlf} onChange={e => setForm(f => ({ ...f, kundeTlf: e.target.value }))} placeholder="99 99 99 99" />
+              </div>
+              <div>
+                <label>E-post</label>
+                <input type="email" value={form.kundeEpost} onChange={e => setForm(f => ({ ...f, kundeEpost: e.target.value }))} placeholder="kunde@eksempel.no" />
+              </div>
+            </div>
             <label>Type jobb</label>
             <select value={form.jobbType || ''} onChange={e => setForm(f => ({ ...f, jobbType: e.target.value }))}>
               <option value="">– Velg type –</option>
