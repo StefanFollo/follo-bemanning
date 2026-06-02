@@ -482,140 +482,39 @@ export default async function handler(req, res) {
       if (pl) plKontakt = { navn: pl.navn || null, epost: pl.epost || pl.email || null }
     }
 
-    // Vunnet: opprett prosjekt (idempotent på tilbudId)
-    let nyttProsjektId = null
-    let varslingResultat = { sendt: false, grunn: 'ikke vunnet' }
-    let alleredeOpprettet = false
-
-    if (type === 'vunnet') {
-      const eksisterende = prosjekter.find(p => p.kildeTilbudId === tilbudId)
-      if (eksisterende) {
-        nyttProsjektId = eksisterende.id
-        alleredeOpprettet = true
-      } else {
-        const farge = FARGE_PALETT[prosjekter.length % FARGE_PALETT.length]
-        const navn = `${data.kundenavn} — ${data.adresse}`.slice(0, 100)
-        const beskrivelse = [
-          data.pristype ? `Pristype: ${data.pristype}` : '',
-          data.fag?.length ? `Fag: ${data.fag.join(', ')}` : '',
-          data.estimertSum ? `Estimert: ${fmt(data.estimertSum)} kr` : '',
-          tilbudLink ? `Tilbud: ${tilbudLink}` : '',
-        ].filter(Boolean).join('\n')
-        // Bygg timer-dict fra poster-kalkyle for AI-framdrift
-        const poster = Array.isArray(data.poster) ? data.poster : []
-        const timerPerFag = {}
-        for (const post of poster) {
-          if (Array.isArray(post.kalkyle?.timer)) {
-            for (const rad of post.kalkyle.timer) {
-              const fag = (rad.fag || 'annet').toLowerCase()
-              timerPerFag[fag] = (timerPerFag[fag] || 0) + (parseFloat(rad.antall) || 0)
-            }
-          }
-        }
-        const kildeTilbudData = (poster.length > 0 || Object.keys(timerPerFag).length > 0)
-          ? { poster, timer: timerPerFag, oppstart: data.oppstart || '', varighet: data.varighet || '', kundenavn: data.kundenavn || '' }
-          : null
-        const nyttProsjekt = {
-          id: nyId('p'),
-          navn,
-          adresse: data.adresse,
-          startDato: '',
-          sluttDato: '',
-          status: 'aktiv',
-          farge,
-          beskrivelse,
-          kildeTilbudId: tilbudId,
-          kildeBefaringId: resolvedBefaringId || null,
-          kunde: {
-            navn: data.kundenavn,
-            adresse: data.adresse,
-            telefon: data.telefon || '',
-            epost: data.epost || '',
-          },
-          kontaktperson: data.kontaktperson || '',
-          pristype: data.pristype || '',
-          fag: Array.isArray(data.fag) ? data.fag : [],
-          estimertSum: parseFloat(data.estimertSum) || 0,
-          oppstartTekst: data.oppstart || '',
-          oppstartDato: data.oppstartDato || '',
-          varighetTekst: data.varighet || '',
-          varighetUker: data.varighetUker || null,
-          tilbudsfrist: data.tilbudsfrist || '',
-          poster,
-          valgteOpsjoner: Array.isArray(data.valgteOpsjoner) ? data.valgteOpsjoner : [],
-          tilbudLink: tilbudLink || '',
-          opprettet: naa,
-          opprettetFra: 'tilbud-app',
-          ...(kildeTilbudData ? { kildeTilbudData } : {}),
-        }
-        nyttProsjektId = nyttProsjekt.id
-        // Knytt prosjekt-ID på befaringen
-        if (resolvedBefaringId) {
-          oppdatertBefaringer = oppdatertBefaringer.map(b =>
-            b.id === resolvedBefaringId ? { ...b, prosjektId: nyttProsjektId } : b
-          )
-        }
-        const nowTs = Date.now()
-        const oppdatertState = {
-          ...state,
-          prosjekter: [...prosjekter, nyttProsjekt],
-          befaringer: oppdatertBefaringer,
-          _fieldTs: { ...(state._fieldTs || {}), prosjekter: nowTs, befaringer: nowTs },
-          ...dedupUpdate,
-          _updatedAt: nowTs,
-        }
-        await redis.set('fbs_state', oppdatertState)
-        // Audit-log: prosjekt opprettet
-        await appendAuditLog(redis, byggAuditEntry({
-          objekt: 'befaring',
-          objektId: resolvedBefaringId || `tilbud-${tilbudId}`,
-          felt: 'status',
-          fraVerdi: befaringer.find(b => b.id === resolvedBefaringId)?.status || 'ukjent',
-          tilVerdi: 'godkjent',
-          endretAv: 'tilbuds-app',
-          kilde: 'tilbuds-app',
-          begrunnelse: `vunnet-event fra tilbuds-app — prosjekt ${nyttProsjektId} opprettet (${oppslagsKilde || 'ingen befaring'})`,
-        }))
-        // Send e-post-varsel
-        const host = req.headers.host || 'follo-bemanning.vercel.app'
-        const proto = host.startsWith('localhost') ? 'http' : 'https'
-        varslingResultat = await sendProsjektVarsel(plKontakt, body, `${proto}://${host}`)
-      }
-    } else {
-      // Ikke-vunnet: oppdater state med ny befaring-status
-      if (befaringFunnet) {
-        const ikkevunnetTs = Date.now()
-        const oppdatertState = { ...state, befaringer: oppdatertBefaringer, _fieldTs: { ...(state._fieldTs || {}), befaringer: ikkevunnetTs }, ...dedupUpdate, _updatedAt: ikkevunnetTs }
-        await redis.set('fbs_state', oppdatertState)
-        // Audit-log: statusendring
-        const fraStatus = befaringer.find(b => b.id === resolvedBefaringId)?.status || 'ukjent'
-        await appendAuditLog(redis, byggAuditEntry({
-          objekt: 'befaring',
-          objektId: resolvedBefaringId,
-          felt: 'status',
-          fraVerdi: fraStatus,
-          tilVerdi: nyStatus,
-          endretAv: 'tilbuds-app',
-          kilde: 'tilbuds-app',
-          begrunnelse: `${type}-event mottatt fra tilbuds-app (${oppslagsKilde || 'ingen befaring'})`,
-        }))
-      }
+    // Oppdater befaring-status for ALLE event-typer (inkl. vunnet).
+    // MERK: vunnet oppretter IKKE lenger prosjekt automatisk — Stefans beslutning 29.05.2026.
+    // PL bruker "Opprett prosjekt"-knappen manuelt på Godkjent-kortet.
+    if (befaringFunnet) {
+      const nowTs = Date.now()
+      await redis.set('fbs_state', {
+        ...state,
+        befaringer: oppdatertBefaringer,
+        _fieldTs: { ...(state._fieldTs || {}), befaringer: nowTs },
+        ...dedupUpdate,
+        _updatedAt: nowTs,
+      })
+      const fraStatus = befaringer.find(b => b.id === resolvedBefaringId)?.status || 'ukjent'
+      await appendAuditLog(redis, byggAuditEntry({
+        objekt: 'befaring',
+        objektId: resolvedBefaringId,
+        felt: 'status',
+        fraVerdi: fraStatus,
+        tilVerdi: nyStatus,
+        endretAv: 'tilbuds-app',
+        kilde: 'tilbuds-app',
+        begrunnelse: `${type}-event mottatt fra tilbuds-app (${oppslagsKilde || 'ingen befaring'})`,
+      }))
     }
 
-    console.log(`POST /api/befaringer/event type:${type} tilbudId:${tilbudId} befaringId:${resolvedBefaringId || '–'} (${oppslagsKilde || '–'}) → status:${nyStatus} prosjekt:${nyttProsjektId || '–'}`)
+    console.log(`POST /api/befaringer/event type:${type} tilbudId:${tilbudId} befaringId:${resolvedBefaringId || '–'} (${oppslagsKilde || '–'}) → status:${nyStatus}`)
 
     return res.status(200).json({
       ok: true,
       befaringStatus: nyStatus,
       befaringFunnet,
       oppslagsKilde: oppslagsKilde || null,
-      ...(nyttProsjektId ? { prosjektId: nyttProsjektId } : {}),
-      ...(alleredeOpprettet ? { alleredeOpprettet: true } : {}),
-      varsling: type === 'vunnet'
-        ? (varslingResultat.sendt
-            ? `E-post sendt til ${(varslingResultat.mottakere || []).join(', ')}`
-            : `Ingen varsel: ${varslingResultat.grunn}`)
-        : null,
+      ...(type === 'vunnet' ? { melding: 'Status satt til godkjent. Bruk "Opprett prosjekt"-knappen i bemannings-appen.' } : {}),
     })
   } catch (e) {
     console.error('befaringer/event feil:', e.message)
