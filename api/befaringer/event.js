@@ -128,6 +128,7 @@ export default async function handler(req, res) {
 
   const body = req.body || {}
   const { type, kildeBefaringId, tilbudId, tilbudLink, dato, data } = body
+  const matchingFallback = body.matchingFallback || null  // { kundenavn, adresse, telefon, epost }
 
   if (!TILLATTE_TYPER.includes(type)) {
     return res.status(400).json({ error: `Ugyldig type. Tillatte: ${TILLATTE_TYPER.join(', ')}` })
@@ -355,9 +356,95 @@ export default async function handler(req, res) {
         resolvedBefaringId = bef.id
         oppslagsKilde = 'via tilbudId-mapping'
         console.log(`[event] tilbudId-mapping: ${tilbudId} → ${resolvedBefaringId} (type:${type})`)
+      } else if (matchingFallback?.kundenavn && matchingFallback?.adresse) {
+        // Fallback 3: normalisert navn+adresse-oppslag via matchingFallback
+        const normFn = s => (s || '').toLowerCase().replace(/\s+/g, ' ').trim()
+        const mfKunde = normFn(matchingFallback.kundenavn)
+        const mfAdresse = normFn(matchingFallback.adresse)
+        const matchBef = befaringer.find(b =>
+          normFn(b.kontaktNavn) === mfKunde && normFn(b.adresse) === mfAdresse
+        )
+        if (matchBef) {
+          // Funnet — fortsett med vanlig status-flyt (tilbudId kobles i hoved-map-en)
+          resolvedBefaringId = matchBef.id
+          oppslagsKilde = 'via matchingFallback-adresse'
+          console.log(`[event] matchingFallback-match: "${mfKunde}" / "${mfAdresse}" → ${resolvedBefaringId}`)
+        } else {
+          // Ingen treff — auto-opprett ny befaring med status fra dette event-et
+          oppslagsKilde = 'auto-opprettet via matchingFallback'
+          console.log(`[event] matchingFallback-autoOpprett: "${mfKunde}" / "${mfAdresse}" type:${type}`)
+          const nyBefaringId = nyId('bf')
+          const kontaktpersonNavn = (data?.kontaktperson || '').toLowerCase().split(' ')[0]
+          const matchAnsatt = kontaktpersonNavn
+            ? ansatte.find(a => (a.navn || '').toLowerCase().startsWith(kontaktpersonNavn))
+            : null
+          const nyBefaring = {
+            id: nyBefaringId,
+            kontaktNavn: matchingFallback.kundenavn,
+            adresse: matchingFallback.adresse,
+            telefon: matchingFallback.telefon || data?.telefon || '',
+            epost: matchingFallback.epost || data?.epost || '',
+            jobbType: data?.jobbType || '',
+            dato: (dato || naa).slice(0, 10),
+            tid: '09:00',
+            status: nyStatus || 'planlagt',
+            notat: '',
+            kommentar: '',
+            prosjektlederId: matchAnsatt?.id || '',
+            ansvarligBefaringId: matchAnsatt?.id || '',
+            estimertBelop: '',
+            tilbudFrist: data?.tilbudsfrist || '',
+            nesteKontakt: '',
+            oensketOppstart: data?.oppstart || '',
+            resultat: type === 'tapt' ? 'tapt' : type === 'avvist' ? 'avvist' : type === 'vunnet' ? 'vunnet' : '',
+            tapDato: (type === 'tapt' || type === 'avvist') ? naa : '',
+            kilde: 'auto-matchingFallback',
+            opprettetAv: data?.kontaktperson || 'auto-sync',
+            tilbudId: tilbudId || null,
+            tilbudLink: tilbudLink || '',
+            sistEvent: type,
+            sistEventDato: naa,
+            estimertSum: data?.estimertSum ? parseFloat(data.estimertSum) || 0 : 0,
+            pristype: data?.pristype || '',
+            fag: Array.isArray(data?.fag) ? data.fag : [],
+            poster: Array.isArray(data?.poster) ? data.poster : [],
+            valgteOpsjoner: Array.isArray(data?.valgteOpsjoner) ? data.valgteOpsjoner : [],
+            varighetTekst: data?.varighet || '',
+            varighetUker: data?.varighetUker ?? null,
+            oppstartTekst: data?.oppstart || '',
+            ...(data ? { tilbudPayload: { ...data, _mottattType: type, _mottattDato: naa } } : {}),
+          }
+          await appendSnapshot(redis, { objekt: 'befaring', objektId: nyBefaringId, dataFør: nyBefaring, utløstAv: `auto-${type}` })
+          const nowTs = Date.now()
+          await redis.set('fbs_state', {
+            ...state,
+            befaringer: [...befaringer, nyBefaring],
+            _fieldTs: { ...(state._fieldTs || {}), befaringer: nowTs },
+            ...dedupUpdate,
+            _updatedAt: nowTs,
+          })
+          await appendAuditLog(redis, byggAuditEntry({
+            objekt: 'befaring',
+            objektId: nyBefaringId,
+            felt: 'status',
+            fraVerdi: null,
+            tilVerdi: nyStatus || 'planlagt',
+            endretAv: data?.kontaktperson || 'auto-sync',
+            kilde: 'matchingFallback',
+            begrunnelse: `Auto-opprettet via matchingFallback ved ${type}-event — ingen forhåndssynk`,
+          }))
+          return res.status(200).json({
+            ok: true,
+            nySkapt: true,
+            kildeBefaringId: nyBefaringId,
+            befaringStatus: nyStatus || 'planlagt',
+            oppslagsKilde: 'auto-opprettet via matchingFallback',
+            beskjed: `Ny befaring auto-opprettet: ${matchingFallback.adresse}`,
+          })
+        }
       } else {
         oppslagsKilde = 'befaring ikke funnet'
-        console.warn(`[event] WARN: type:${type} tilbudId:${tilbudId} — ingen befaring funnet (kildeBefaringId mangler og tilbudId-mapping slo ikke til)`)
+        console.warn(`[event] WARN: type:${type} tilbudId:${tilbudId} — ingen befaring funnet (kildeBefaringId og matchingFallback mangler begge)`)
       }
     }
 
