@@ -585,7 +585,10 @@ export default function Prosjekter() {
         (p.adresse || '').toLowerCase().includes(q) ||
         (p.jobbType || '').toLowerCase().includes(q) ||
         (p.beskrivelse || '').toLowerCase().includes(q) ||
-        (pl?.navn || '').toLowerCase().includes(q);
+        (pl?.navn || '').toLowerCase().includes(q) ||
+        (p.kunde?.navn || '').toLowerCase().includes(q) ||
+        (p.kunde?.telefon || '').includes(q) ||
+        (p.kunde?.epost || '').toLowerCase().includes(q);
       if (!match) return false;
     }
     if (plFilter && p.prosjektlederId !== plFilter) return false;
@@ -767,6 +770,12 @@ export default function Prosjekter() {
                     const varsel = sluttDatoInfo(p.sluttDato, p.status);
                     const isExpanded = expandedId === p.id;
 
+                    // Vis adresse som tittel; trekk kundeinfo fra p.kunde eller fra p.navn ("Navn — Adresse")
+                    const visAdresse = p.adresse || (p.navn.includes(' — ') ? p.navn.split(' — ').slice(1).join(' — ').trim() : p.navn);
+                    const kundeNavn   = p.kunde?.navn || (p.navn.includes(' — ') ? p.navn.split(' — ')[0].trim() : null);
+                    const kundeTlf    = p.kunde?.telefon || '';
+                    const kundeEpost  = p.kunde?.epost || '';
+
                     return (
                       <div key={p.id} className="ct-row-wrap">
                         <div
@@ -778,11 +787,38 @@ export default function Prosjekter() {
                             <span className="prosjekt-farge-dot" style={{ background: barColor }} />
                             <div style={{ minWidth: 0 }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                <span className="ct-prosjekt-navn">{p.navn}</span>
+                                <span className="ct-prosjekt-navn">{visAdresse}</span>
                                 <span className="ct-expand-chevron">{isExpanded ? '▾' : '▸'}</span>
                               </div>
+                              {/* Kunde: navn, telefon, e-post */}
+                              {(kundeNavn || kundeTlf || kundeEpost) && (
+                                <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 1, flexWrap: 'wrap' }}>
+                                  {kundeNavn && (
+                                    <span style={{ fontSize: 12, color: '#475569', fontWeight: 500 }}>
+                                      👤 {kundeNavn}
+                                    </span>
+                                  )}
+                                  {kundeTlf && (
+                                    <a
+                                      href={`tel:${kundeTlf}`}
+                                      onClick={e => e.stopPropagation()}
+                                      style={{ fontSize: 12, color: '#0369a1', textDecoration: 'none' }}
+                                    >
+                                      📱 {kundeTlf}
+                                    </a>
+                                  )}
+                                  {kundeEpost && (
+                                    <a
+                                      href={`mailto:${kundeEpost}`}
+                                      onClick={e => e.stopPropagation()}
+                                      style={{ fontSize: 12, color: '#0369a1', textDecoration: 'none' }}
+                                    >
+                                      ✉️ {kundeEpost}
+                                    </a>
+                                  )}
+                                </div>
+                              )}
                               <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
-                                {p.adresse && <span className="ct-sub">{p.adresse}</span>}
                                 {ansatteCount > 0 && (
                                   <span className="ansatte-tooltip-wrap">
                                     <span className="ansatte-badge">👷 {ansatteCount}</span>
