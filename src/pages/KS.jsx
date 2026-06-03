@@ -308,10 +308,67 @@ function TildelModal({ sl, ansatteIProsj, onLagre, onLukk }) {
   )
 }
 
+// ── Avvik-registrerings-modal ─────────────────────────────────────────────────
+
+function AvvikRegistrerModal({ ansatteIProsj = [], onLagre, onAvbryt }) {
+  const [besk, setBesk] = useState('')
+  const [ansvarlig, setAnsvarlig] = useState(BRUKER())
+  const [frist, setFrist] = useState('')
+
+  function settFrist(dager) {
+    const d = new Date()
+    d.setDate(d.getDate() + dager)
+    setFrist(d.toISOString().slice(0, 10))
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      onClick={onAvbryt}>
+      <div style={{ background: '#fff', borderRadius: 16, padding: '22px 20px', maxWidth: 400, width: '100%', boxShadow: '0 20px 48px rgba(0,0,0,.3)' }}
+        onClick={e => e.stopPropagation()}>
+        <div style={{ fontWeight: 800, fontSize: 16, color: '#dc2626', marginBottom: 16 }}>⚠ Registrer avvik</div>
+
+        <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>Beskrivelse *</label>
+        <textarea autoFocus className="input" rows={3} value={besk} onChange={e => setBesk(e.target.value)}
+          placeholder="Beskriv avviket..." style={{ marginBottom: 14 }} />
+
+        <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>Hvem løser?</label>
+        {ansatteIProsj.length > 0 ? (
+          <select className="input" value={ansvarlig} onChange={e => setAnsvarlig(e.target.value)} style={{ marginBottom: 14 }}>
+            <option value={BRUKER()}>{BRUKER()} (meg)</option>
+            {ansatteIProsj.filter(n => n !== BRUKER()).map(n => <option key={n} value={n}>{n}</option>)}
+          </select>
+        ) : (
+          <input className="input" value={ansvarlig} onChange={e => setAnsvarlig(e.target.value)}
+            placeholder="Navn på ansvarlig..." style={{ marginBottom: 14 }} />
+        )}
+
+        <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 6 }}>Frist</label>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+          {[{ label: 'I dag', d: 0 }, { label: 'I morgen', d: 1 }, { label: '3 dager', d: 3 }, { label: '7 dager', d: 7 }].map(v => (
+            <button key={v.d} className="btn" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => settFrist(v.d)}>{v.label}</button>
+          ))}
+        </div>
+        <input type="date" className="input" value={frist} onChange={e => setFrist(e.target.value)} style={{ marginBottom: 18 }} />
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button className="btn" onClick={onAvbryt}>Avbryt</button>
+          <button className="btn btn-primary" style={{ background: '#dc2626', borderColor: '#dc2626' }}
+            disabled={!besk.trim()}
+            onClick={() => onLagre({ beskrivelse: besk, ansvarlig, frist })}>
+            ⚠ Lagre avvik
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Sjekkpunkt-rad ────────────────────────────────────────────────────────────
 
-function PunktRad({ punkt, idx, kanSkrive, onChange, onSigner, onAiHjelp, onLastOppBilde, opplaster }) {
+function PunktRad({ punkt, idx, kanSkrive, onChange, onSigner, onAiHjelp, onLastOppBilde, opplaster, ansatteIProsj = [] }) {
   const [utvidet, setUtvidet] = useState(false)
+  const [visAvvikModal, setVisAvvikModal] = useState(false)
   const filRef = useRef()
   const harDetaljer = punkt.beskrivelse || punkt.regelverkLenker?.length > 0 || punkt.krever_bilde || punkt.krever_signering
   const cfg = PUNKT_STATUS_CFG[punkt.status] || PUNKT_STATUS_CFG['ikke-utfort']
@@ -356,6 +413,12 @@ function PunktRad({ punkt, idx, kanSkrive, onChange, onSigner, onAiHjelp, onLast
               ✍️ Signert av {punkt.signert_av} · {new Date(punkt.signert_dato).toLocaleDateString('nb-NO')}
             </div>
           )}
+          {punkt.status === 'avvik' && punkt.avvikAnsvarlig && !utvidet && (
+            <div style={{ fontSize: 11, color: '#dc2626', marginTop: 3, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <span>👤 {punkt.avvikAnsvarlig}</span>
+              {punkt.avvikFrist && <span>📅 {new Date(punkt.avvikFrist + 'T00:00:00').toLocaleDateString('nb-NO')}</span>}
+            </div>
+          )}
           {punkt.kommentar && !utvidet && (
             <div style={{ fontSize: 12, color: '#475569', marginTop: 3, fontStyle: 'italic' }}>💬 {punkt.kommentar}</div>
           )}
@@ -365,12 +428,28 @@ function PunktRad({ punkt, idx, kanSkrive, onChange, onSigner, onAiHjelp, onLast
             {['ok', 'avvik', 'ikke-aktuelt'].map(s => (
               <button key={s} className={`ks-pkt-btn ${punkt.status === s ? 'aktiv' : ''}`}
                 style={punkt.status === s ? { background: PUNKT_STATUS_CFG[s].bg, color: PUNKT_STATUS_CFG[s].farge, borderColor: PUNKT_STATUS_CFG[s].farge } : {}}
-                onClick={() => settStatus(s)}>
+                onClick={() => {
+                  if (s === 'avvik' && punkt.status !== 'avvik') {
+                    setVisAvvikModal(true)
+                  } else {
+                    settStatus(s)
+                  }
+                }}>
                 {PUNKT_STATUS_CFG[s].label}
               </button>
             ))}
             <button className="ks-pkt-btn" onClick={() => setUtvidet(v => !v)} title="Mer">{utvidet ? '▲' : '▼'}</button>
           </div>
+        )}
+        {visAvvikModal && (
+          <AvvikRegistrerModal
+            ansatteIProsj={ansatteIProsj}
+            onLagre={({ beskrivelse, ansvarlig, frist }) => {
+              onChange({ ...punkt, status: 'avvik', utfort_av: brukernavn, utfort_dato: new Date().toISOString(), kommentar: beskrivelse, avvikAnsvarlig: ansvarlig, avvikFrist: frist })
+              setVisAvvikModal(false)
+            }}
+            onAvbryt={() => setVisAvvikModal(false)}
+          />
         )}
         {!kanSkrive && (
           <StatusPill status={punkt.status === 'ok' ? 'ferdig' : punkt.status === 'ikke-utfort' ? 'ikke-startet' : 'pagar'} />
@@ -676,6 +755,7 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
               onAiHjelp={p => { setAiPunkt(p); setAiModus('hjelp') }}
               onLastOppBilde={lastOppBilde}
               opplaster={opplaster}
+              ansatteIProsj={ansatteIProsj}
             />
           ))}
         </div>
@@ -1388,10 +1468,29 @@ function AvvikOversikt({ prosjekter, onTilbake }) {
     </div>
   )
 
-  const apne = avvik.filter(a => a.status === 'apen').length
-  const iArbeid = avvik.filter(a => a.status === 'i-arbeid').length
-  const lukket = avvik.filter(a => a.status === 'lukket').length
-  const kritiske = avvik.filter(a => a.alvorlighet === 'kritisk' && a.status !== 'lukket').length
+  const naa = new Date()
+  const ms30d = 30 * 24 * 60 * 60 * 1000
+
+  function seksjonFilter(a) {
+    if (filProsjekt && a.prosjektId !== filProsjekt) return false
+    if (filAlv && a.alvorlighet !== filAlv) return false
+    return true
+  }
+
+  const aapne = avvik.filter(a => a.status !== 'lukket' && seksjonFilter(a))
+  const lukket30d = avvik.filter(a => a.status === 'lukket' && seksjonFilter(a) &&
+    (naa - new Date(a.lukket_dato || a.sist_endret || 0)) <= ms30d)
+  const eldre = avvik.filter(a => a.status === 'lukket' && seksjonFilter(a) &&
+    (naa - new Date(a.lukket_dato || a.sist_endret || 0)) > ms30d)
+
+  function SeksjonHeader({ tittel, antall, farge }) {
+    return (
+      <div style={{ fontWeight: 700, fontSize: 14, color: farge, marginBottom: 10, marginTop: 20, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ width: 4, height: 16, background: farge, borderRadius: 2, display: 'inline-block' }} />
+        {tittel} ({antall})
+      </div>
+    )
+  }
 
   return (
     <div className="ks-side">
@@ -1403,37 +1502,11 @@ function AvvikOversikt({ prosjekter, onTilbake }) {
         <div style={{ fontSize: 13, color: '#94a3b8' }}>{avvik.length} avvik totalt</div>
       </div>
 
-      <div className="ks-stats" style={{ marginBottom: 20 }}>
-        <div className="ks-stat-kort" style={{ borderColor: '#dc2626' }}>
-          <div className="ks-stat-tall" style={{ color: '#dc2626' }}>{apne}</div>
-          <div className="ks-stat-label">Åpne</div>
-        </div>
-        <div className="ks-stat-kort" style={{ borderColor: '#f59e0b' }}>
-          <div className="ks-stat-tall" style={{ color: '#ca8a04' }}>{iArbeid}</div>
-          <div className="ks-stat-label">I arbeid</div>
-        </div>
-        {kritiske > 0 && (
-          <div className="ks-stat-kort" style={{ borderColor: '#dc2626', background: '#fef2f2' }}>
-            <div className="ks-stat-tall" style={{ color: '#dc2626' }}>{kritiske}</div>
-            <div className="ks-stat-label">Kritiske</div>
-          </div>
-        )}
-        <div className="ks-stat-kort" style={{ borderColor: '#16a34a' }}>
-          <div className="ks-stat-tall" style={{ color: '#16a34a' }}>{lukket}</div>
-          <div className="ks-stat-label">Lukket</div>
-        </div>
-      </div>
-
+      {/* Filtre */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
         <select className="input" style={{ padding: '6px 10px', flex: 1, minWidth: 160, maxWidth: 220 }} value={filProsjekt} onChange={e => setFilProsjekt(e.target.value)}>
           <option value="">Alle prosjekter</option>
           {prosjekter.map(p => <option key={p.id} value={p.id}>{p.navn}</option>)}
-        </select>
-        <select className="input" style={{ padding: '6px 10px', minWidth: 140 }} value={filStatus} onChange={e => setFilStatus(e.target.value)}>
-          <option value="">Alle statuser</option>
-          <option value="apen">Åpen</option>
-          <option value="i-arbeid">I arbeid</option>
-          <option value="lukket">Lukket</option>
         </select>
         <select className="input" style={{ padding: '6px 10px', minWidth: 140 }} value={filAlv} onChange={e => setFilAlv(e.target.value)}>
           <option value="">Alle alvorligheter</option>
@@ -1441,14 +1514,55 @@ function AvvikOversikt({ prosjekter, onTilbake }) {
         </select>
       </div>
 
-      {filtrert.length === 0 ? (
-        <div style={{ textAlign: 'center', color: '#94a3b8', padding: '40px 0' }}>
-          {avvik.length === 0 ? '✅ Ingen avvik registrert' : 'Ingen avvik matcher filtrene'}
+      {avvik.length === 0 ? (
+        <div style={{ textAlign: 'center', color: '#94a3b8', padding: '60px 0' }}>
+          ✅ Ingen avvik registrert
         </div>
-      ) : filtrert.map(a => (
-        <AvvikKort key={a.id} avvik={a} prosjekter={prosjekter} kanAdmin={kanAdmin}
-          onOppdater={data => oppdater(a.id, data)} />
-      ))}
+      ) : (
+        <>
+          {/* Seksjonsteller */}
+          <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+            {[
+              { label: 'Åpne', v: aapne.length, clr: '#dc2626', bg: '#fff5f5' },
+              { label: 'Lukket 30d', v: lukket30d.length, clr: '#16a34a', bg: '#f0fdf4' },
+              { label: 'Eldre', v: eldre.length, clr: '#94a3b8', bg: '#f8fafc' },
+            ].map(s => (
+              <div key={s.label} style={{ flex: 1, background: s.bg, border: '1px solid ' + s.clr + '40', borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}>
+                <div style={{ fontSize: 20, fontWeight: 800, color: s.clr }}>{s.v}</div>
+                <div style={{ fontSize: 11, color: s.clr, fontWeight: 600 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Åpne */}
+          {aapne.length > 0 && (
+            <>
+              <SeksjonHeader tittel="🚨 Åpne" antall={aapne.length} farge="#dc2626" />
+              {aapne.map(a => <AvvikKort key={a.id} avvik={a} prosjekter={prosjekter} kanAdmin={kanAdmin} onOppdater={data => oppdater(a.id, data)} />)}
+            </>
+          )}
+
+          {/* Lukket siste 30 dager */}
+          {lukket30d.length > 0 && (
+            <>
+              <SeksjonHeader tittel="✅ Lukket siste 30 dager" antall={lukket30d.length} farge="#16a34a" />
+              {lukket30d.map(a => <AvvikKort key={a.id} avvik={a} prosjekter={prosjekter} kanAdmin={kanAdmin} onOppdater={data => oppdater(a.id, data)} />)}
+            </>
+          )}
+
+          {/* Eldre */}
+          {eldre.length > 0 && (
+            <>
+              <SeksjonHeader tittel="📦 Eldre" antall={eldre.length} farge="#94a3b8" />
+              {eldre.map(a => <AvvikKort key={a.id} avvik={a} prosjekter={prosjekter} kanAdmin={kanAdmin} onOppdater={data => oppdater(a.id, data)} />)}
+            </>
+          )}
+
+          {aapne.length === 0 && lukket30d.length === 0 && eldre.length === 0 && (
+            <div style={{ textAlign: 'center', color: '#94a3b8', padding: '40px 0' }}>Ingen avvik matcher filteret</div>
+          )}
+        </>
+      )}
     </div>
   )
 }
@@ -1899,11 +2013,20 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
   const [sokProsjekt, setSokProsjekt] = useState('')
 
   // KPI beregninger
-  const iGangIds = new Set(sjekklister.filter(s => s.status !== 'ferdig').map(s => s.prosjektId))
-  const avvikAapne = sjekklister.filter(s => (s.punkter || []).some(p => p.status === 'avvik')).length
+  // I gang: prosjekter med aktive sjekklister (API) ELLER ksSjekklister
+  const iGangIds = new Set([
+    ...sjekklister.filter(s => s.status !== 'ferdig').map(s => s.prosjektId),
+    ...prosjekter.filter(p => (p.ksSjekklister || []).some(k => k.status !== 'fullfort')).map(p => p.id),
+  ])
+  // Avvik åpne: fra API-sjekklister ELLER ksSjekklister med avvik
+  const avvikAapne = sjekklister.filter(s => (s.punkter || []).some(p => p.status === 'avvik')).length +
+    prosjekter.reduce((sum, p) => sum + (p.ksSjekklister || []).filter(k => k.status === 'avvik').length, 0)
   const klarSlutt = prosjekter.filter(p => {
     const mine = sjekklister.filter(s => s.prosjektId === p.id)
-    return mine.length > 0 && mine.some(s => s.status === 'ferdig') && !mine.some(s => s.malId === 'mal-sluttkontroll')
+    const ksItems = p.ksSjekklister || []
+    const harFerdig = mine.some(s => s.status === 'ferdig') || ksItems.some(k => k.status === 'fullfort')
+    const harSlutt = mine.some(s => s.malId === 'mal-sluttkontroll') || ksItems.some(k => k.malId === 'mal-sluttkontroll')
+    return (mine.length > 0 || ksItems.length > 0) && harFerdig && !harSlutt
   }).length
   const prosjektIds = new Set(prosjekter.map(p => p.id))
   const ugyldigeSl = sjekklister.filter(s => !prosjektIds.has(s.prosjektId))
@@ -1911,14 +2034,25 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
   const malerUtenBeskrivelse = maler.filter(m => !m.punkter?.some(p => p.beskrivelse))
 
   // "Min dag" — topp 3 sjekklister som bør gjøres
-  const dagensOppgaver = sjekklister
+  // Slå sammen API-sjekklister og ksSjekklister til "Min dag"-oppgaver
+  const fraapiSl = sjekklister
     .filter(sl => sl.status !== 'ferdig')
-    .map(sl => ({ sl, prosjekt: prosjekter.find(p => p.id === sl.prosjektId), mal: maler.find(m => m.id === sl.malId) }))
+    .map(sl => ({ id: sl.id, navn: sl.navn, malId: sl.malId, prosjekt: prosjekter.find(p => p.id === sl.prosjektId), mal: maler.find(m => m.id === sl.malId), pst: prosent(sl.punkter), avvikAnt: (sl.punkter || []).filter(p => p.status === 'avvik').length, kilde: 'api' }))
     .filter(x => x.prosjekt)
+  const fraKsSl = prosjekter.flatMap(p => (p.ksSjekklister || [])
+    .filter(k => k.status !== 'fullfort')
+    .map(k => {
+      const mal = maler.find(m => m.id === k.malId)
+      return { id: 'ks-' + k.malId + '-' + p.id, navn: mal?.navn || k.malId, malId: k.malId, prosjekt: p, mal, pst: k.framdrift?.totalt > 0 ? Math.round((k.framdrift.utfylt || 0) / k.framdrift.totalt * 100) : 0, avvikAnt: (k.avvik || []).length, kilde: 'ks' }
+    }))
+  const alleOppgaver = [...fraapiSl, ...fraKsSl]
+  const sett = new Set()
+  const dagensOppgaver = alleOppgaver
+    .filter(x => { const k = x.prosjekt.id + ':' + x.malId; if (sett.has(k)) return false; sett.add(k); return true })
     .sort((a, b) => {
       if (a.mal?.obligatorisk && !b.mal?.obligatorisk) return -1
       if (!a.mal?.obligatorisk && b.mal?.obligatorisk) return 1
-      return prosent(a.sl.punkter) - prosent(b.sl.punkter)
+      return a.pst - b.pst
     })
     .slice(0, 3)
 
@@ -1946,25 +2080,21 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: dagensOppgaver.length ? 16 : 4, opacity: .9 }}>{dagLabel}</div>
         {dagensOppgaver.length === 0 ? (
           <div style={{ opacity: .6, fontSize: 13 }}>Ingen aktive sjekklister — knytt maler til prosjekter for å komme i gang.</div>
-        ) : dagensOppgaver.map(({ sl, prosjekt, mal }) => {
-          const pst = prosent(sl.punkter)
-          const avvikAnt = (sl.punkter || []).filter(p => p.status === 'avvik').length
-          return (
-            <div key={sl.id} onClick={() => onVelgProsjekt(prosjekt)}
-              style={{ background: 'rgba(255,255,255,.1)', borderRadius: 10, padding: '11px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11, opacity: .7, marginBottom: 2 }}>📍 {prosjekt.navn}</div>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>{sl.navn}</div>
-                <div style={{ fontSize: 11, opacity: .7, marginTop: 3 }}>
-                  {mal?.fase === 'daglig' ? 'Daglig' : mal?.obligatorisk ? 'OBLIGATORISK' : 'Bygg-arbeid'}
-                  {' · '}{sl.punkter?.length || 0} pkt · {pst}% fylt
-                  {avvikAnt > 0 && <span style={{ color: '#fca5a5', marginLeft: 6 }}>⚠ {avvikAnt}</span>}
-                </div>
+        ) : dagensOppgaver.map(oppg => (
+          <div key={oppg.id} onClick={() => onVelgProsjekt(oppg.prosjekt)}
+            style={{ background: 'rgba(255,255,255,.1)', borderRadius: 10, padding: '11px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11, opacity: .7, marginBottom: 2 }}>📍 {oppg.prosjekt.navn}</div>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>{oppg.navn}</div>
+              <div style={{ fontSize: 11, opacity: .7, marginTop: 3 }}>
+                {oppg.mal?.fase === 'daglig' ? 'Daglig' : oppg.mal?.obligatorisk ? 'OBLIGATORISK' : 'Bygg-arbeid'}
+                {' · '}{oppg.pst}% fylt
+                {oppg.avvikAnt > 0 && <span style={{ color: '#fca5a5', marginLeft: 6 }}>⚠ {oppg.avvikAnt}</span>}
               </div>
-              <span style={{ fontSize: 18, opacity: .7 }}>→</span>
             </div>
-          )
-        })}
+            <span style={{ fontSize: 18, opacity: .7 }}>→</span>
+          </div>
+        ))}
       </div>
 
       {/* ── KPI × 4 ─────────────────────────────────────────────── */}
