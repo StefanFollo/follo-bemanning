@@ -370,76 +370,14 @@ export default async function handler(req, res) {
           oppslagsKilde = 'via matchingFallback-adresse'
           console.log(`[event] matchingFallback-match: "${mfKunde}" / "${mfAdresse}" → ${resolvedBefaringId}`)
         } else {
-          // Ingen treff — auto-opprett ny befaring med status fra dette event-et
-          oppslagsKilde = 'auto-opprettet via matchingFallback'
-          console.log(`[event] matchingFallback-autoOpprett: "${mfKunde}" / "${mfAdresse}" type:${type}`)
-          const nyBefaringId = nyId('bf')
-          const kontaktpersonNavn = (data?.kontaktperson || '').toLowerCase().split(' ')[0]
-          const matchAnsatt = kontaktpersonNavn
-            ? ansatte.find(a => (a.navn || '').toLowerCase().startsWith(kontaktpersonNavn))
-            : null
-          const nyBefaring = {
-            id: nyBefaringId,
-            kontaktNavn: matchingFallback.kundenavn,
-            adresse: matchingFallback.adresse,
-            telefon: matchingFallback.telefon || data?.telefon || '',
-            epost: matchingFallback.epost || data?.epost || '',
-            jobbType: data?.jobbType || '',
-            dato: (dato || naa).slice(0, 10),
-            tid: '09:00',
-            status: nyStatus || 'planlagt',
-            notat: '',
-            kommentar: '',
-            prosjektlederId: matchAnsatt?.id || '',
-            ansvarligBefaringId: matchAnsatt?.id || '',
-            estimertBelop: '',
-            tilbudFrist: data?.tilbudsfrist || '',
-            nesteKontakt: '',
-            oensketOppstart: data?.oppstart || '',
-            resultat: type === 'tapt' ? 'tapt' : type === 'avvist' ? 'avvist' : type === 'vunnet' ? 'vunnet' : '',
-            tapDato: (type === 'tapt' || type === 'avvist') ? naa : '',
-            kilde: 'auto-matchingFallback',
-            opprettetAv: data?.kontaktperson || 'auto-sync',
-            tilbudId: tilbudId || null,
-            tilbudLink: tilbudLink || '',
-            sistEvent: type,
-            sistEventDato: naa,
-            estimertSum: data?.estimertSum ? parseFloat(data.estimertSum) || 0 : 0,
-            pristype: data?.pristype || '',
-            fag: Array.isArray(data?.fag) ? data.fag : [],
-            poster: Array.isArray(data?.poster) ? data.poster : [],
-            valgteOpsjoner: Array.isArray(data?.valgteOpsjoner) ? data.valgteOpsjoner : [],
-            varighetTekst: data?.varighet || '',
-            varighetUker: data?.varighetUker ?? null,
-            oppstartTekst: data?.oppstart || '',
-            ...(data ? { tilbudPayload: { ...data, _mottattType: type, _mottattDato: naa } } : {}),
-          }
-          await appendSnapshot(redis, { objekt: 'befaring', objektId: nyBefaringId, dataFør: nyBefaring, utløstAv: `auto-${type}` })
-          const nowTs = Date.now()
-          await redis.set('fbs_state', {
-            ...state,
-            befaringer: [...befaringer, nyBefaring],
-            _fieldTs: { ...(state._fieldTs || {}), befaringer: nowTs },
-            ...dedupUpdate,
-            _updatedAt: nowTs,
-          })
-          await appendAuditLog(redis, byggAuditEntry({
-            objekt: 'befaring',
-            objektId: nyBefaringId,
-            felt: 'status',
-            fraVerdi: null,
-            tilVerdi: nyStatus || 'planlagt',
-            endretAv: data?.kontaktperson || 'auto-sync',
-            kilde: 'matchingFallback',
-            begrunnelse: `Auto-opprettet via matchingFallback ved ${type}-event — ingen forhåndssynk`,
-          }))
+          // Ingen treff — IKKE auto-opprett (Stefan 03.06.2026: befaringer skal ikke opprettes automatisk)
+          oppslagsKilde = 'befaring ikke funnet'
+          console.warn(`[event] WARN: type:${type} tilbudId:${tilbudId} matchingFallback="${mfKunde}" / "${mfAdresse}" — ingen befaring funnet, opprett manuelt i bemannings-app`)
           return res.status(200).json({
             ok: true,
-            nySkapt: true,
-            kildeBefaringId: nyBefaringId,
-            befaringStatus: nyStatus || 'planlagt',
-            oppslagsKilde: 'auto-opprettet via matchingFallback',
-            beskjed: `Ny befaring auto-opprettet: ${matchingFallback.adresse}`,
+            befaringFunnet: false,
+            oppslagsKilde: 'befaring ikke funnet',
+            beskjed: 'Ingen befaring funnet. Opprett befaring manuelt i bemannings-app og koble til tilbudet.',
           })
         }
       } else {

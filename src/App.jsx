@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { AppProvider } from './context/AppContext';
 import { useApp } from './context/AppContext';
-import { saveToCloud } from './store';
+import { saveToCloud, forceTimestampAlleFields } from './store';
 import Prosjekter from './pages/Prosjekter';
 import Ansatte from './pages/Ansatte';
 import Bemanningsplan from './pages/Bemanningsplan';
@@ -76,6 +76,9 @@ function SaveButton() {
 
   async function handleSave() {
     if (status === 'saving') return;
+    // Bump alle lokale timestamps til nå slik at brukerens state alltid
+    // vinner over cloud-skrivinger fra event.js ved mergeWithCloud-konflikt
+    forceTimestampAlleFields();
     setStatus('saving');
     const result = await saveToCloud(state);
     setStatus(result === 'error' ? 'error' : 'ok');

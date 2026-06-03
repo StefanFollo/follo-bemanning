@@ -541,6 +541,18 @@ export function saveReklamasjoner(data) { save('fbs_reklamasjoner',  data, 'rekl
 export function saveServiceJobber(data) { save('fbs_service_jobber', data, 'serviceJobber'); }
 export function saveBiler(data)         { save('fbs_biler',          data, 'biler'); }
 
+// Brukes av "Lagre nå"-knappen for å garantere at brukerens lokale state
+// vinner over cloud-endringer fra event.js ved neste mergeWithCloud.
+// Uten dette kan event.js bumpe _fieldTs i cloud etter brukerens siste
+// lagring → cloud vinner → brukerens slettinger/endringer overskrives.
+export function forceTimestampAlleFields() {
+  const now = Date.now().toString()
+  localStorage.setItem('fbs_updated_at', now)
+  for (const field of Object.keys(FIELD_MAP)) {
+    localStorage.setItem(`fbs_ts_${field}`, now)
+  }
+}
+
 export function uid() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
