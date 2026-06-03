@@ -1087,9 +1087,9 @@ function MalRedigerPanel({ mal, onLagre, onLukk }) {
     setLagrer(false)
   }
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 400, overflow: 'auto', padding: '20px 16px' }}
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 400, overflow: 'auto', padding: '16px' }}
       onClick={onLukk}>
-      <div style={{ background: '#fff', borderRadius: 16, maxWidth: 600, margin: '0 auto', padding: '22px 20px' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: '#fff', borderRadius: 16, maxWidth: 860, width: '100%', margin: '0 auto', padding: '24px 28px' }} onClick={e => e.stopPropagation()}>
         <div style={{ fontWeight: 800, fontSize: 17, marginBottom: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           Rediger mal
           <button className="btn-icon" onClick={onLukk}>✕</button>
@@ -1134,7 +1134,7 @@ function MalRedigerPanel({ mal, onLagre, onLukk }) {
         <div style={{ fontWeight: 700, fontSize: 13, color: '#1e293b', marginBottom: 10 }}>
           Sjekkpunkter ({punkter.length})
         </div>
-        <div style={{ maxHeight: 400, overflowY: 'auto', marginBottom: 10 }}>
+        <div style={{ maxHeight: 'calc(100vh - 340px)', minHeight: 200, overflowY: 'auto', marginBottom: 10 }}>
           {punkter.map((p, i) => (
             <div key={p.id || i} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', marginBottom: 8, background: '#fafafa' }}>
               <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
@@ -1143,8 +1143,8 @@ function MalRedigerPanel({ mal, onLagre, onLukk }) {
                   <button className="btn" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => flytt(i, 1)} disabled={i === punkter.length - 1}>↓</button>
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <textarea className="input" rows={2} value={p.tekst} onChange={e => oppdaterPunkt(i, 'tekst', e.target.value)}
-                    placeholder="Sjekkpunkt-tekst..." style={{ marginBottom: 5, fontSize: 13 }} />
+                  <textarea className="input" rows={3} value={p.tekst} onChange={e => oppdaterPunkt(i, 'tekst', e.target.value)}
+                    placeholder="Sjekkpunkt-tekst..." style={{ marginBottom: 5, fontSize: 13, resize: 'vertical' }} />
                   <input className="input" value={p.veiledning_kort || ''} onChange={e => oppdaterPunkt(i, 'veiledning_kort', e.target.value)}
                     placeholder="Kort veiledning (mobil-hint)..." style={{ marginBottom: 6, fontSize: 12 }} />
                   <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12 }}>
