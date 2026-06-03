@@ -35,10 +35,22 @@ export default async function handler(req, res) {
       if (m.gruppe === 'Sluttkontroll' || m.id === 'mal-el-slutt') return 'slutt'
       return 'bygg'
     }
+    function tildelKategoriBibliotek(m) {
+      const g = m.gruppe || ''
+      if (g === 'HMS' || g === 'Sluttkontroll') return 'hms'
+      if (g === 'Utførelse bad') return 'bad'
+      if (g === 'Utførelse fasade') return 'yttervegg'
+      if (g === 'Utførelse tak') return 'tak'
+      if (g === 'Utførelse innvendig') return 'innvendig'
+      if (g === 'Rørlegger' || g === 'Elektrisk') return 'teknisk'
+      if (m.id === 'mal-maling-utvendig') return 'yttervegg'
+      return 'annet'
+    }
     const enriched = maler.map(m => ({
       ...m,
       fase: m.fase || tildelFase(m),
       kilde: m.kilde || 'follo',
+      kategoriBibliotek: m.kategoriBibliotek || tildelKategoriBibliotek(m),
     }))
     return res.status(200).json(enriched)
   }

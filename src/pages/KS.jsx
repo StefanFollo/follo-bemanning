@@ -1602,6 +1602,294 @@ function ProsjektVelger({ prosjekter, sjekklister, onVelg, valgt, autoOpen = fal
   )
 }
 
+// ── KS Prosjektvelger (rullegardin) ──────────────────────────────────────────
+
+function KSProsjektVelger({ prosjekter, sjekklister, onVelg }) {
+  const [aapen, setAapen] = useState(false)
+  const [sok, setSok] = useState('')
+  const ref = useRef()
+
+  useEffect(() => {
+    if (!aapen) return
+    function lukk(e) { if (ref.current && !ref.current.contains(e.target)) setAapen(false) }
+    document.addEventListener('mousedown', lukk)
+    return () => document.removeEventListener('mousedown', lukk)
+  }, [aapen])
+
+  const filtrert = prosjekter.filter(p =>
+    !sok || p.navn.toLowerCase().includes(sok.toLowerCase()) ||
+    (p.kunde?.navn || '').toLowerCase().includes(sok.toLowerCase()) ||
+    (p.adresse || '').toLowerCase().includes(sok.toLowerCase())
+  )
+
+  return (
+    <div ref={ref} style={{ position: 'relative', marginBottom: 16 }}>
+      <div onClick={() => setAapen(v => !v)}
+        style={{ padding: '14px 18px', border: '2px solid ' + (aapen ? '#3b82f6' : '#e2e8f0'), borderRadius: 12, background: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: aapen ? '0 0 0 3px #bfdbfe' : 'none', transition: 'all .15s' }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: '#1e293b' }}>Velg prosjekt for KS-arbeid</div>
+          <div style={{ fontSize: 12, color: '#64748b', marginTop: 1 }}>Klikk for å velge fra {prosjekter.length} prosjekter</div>
+        </div>
+        <span style={{ color: '#64748b', fontSize: 18, transition: 'transform .2s', display: 'inline-block', transform: aapen ? 'rotate(180deg)' : 'none' }}>▼</span>
+      </div>
+
+      {aapen && (
+        <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 200, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 12px 32px rgba(0,0,0,.14)', overflow: 'hidden' }}>
+          <div style={{ padding: '10px 12px', borderBottom: '1px solid #f1f5f9' }}>
+            <input className="input" autoFocus placeholder="🔍 Søk adresse eller kundenavn..."
+              value={sok} onChange={e => setSok(e.target.value)} style={{ fontSize: 13 }} />
+          </div>
+          <div style={{ overflow: 'auto', maxHeight: 360 }}>
+            {filtrert.length === 0 ? (
+              <div style={{ padding: '24px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>Ingen prosjekter funnet</div>
+            ) : filtrert.map(p => {
+              const mine = sjekklister.filter(s => s.prosjektId === p.id)
+              const ksItems = p.ksSjekklister || []
+              const avvikTot = mine.filter(s => (s.punkter || []).some(pt => pt.status === 'avvik')).length
+              const ferdig = ksItems.filter(k => k.status === 'fullfort').length
+              return (
+                <div key={p.id} onClick={() => { setAapen(false); setSok(''); onVelg(p) }}
+                  style={{ padding: '12px 16px', borderBottom: '1px solid #f8fafc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
+                  onMouseLeave={e => e.currentTarget.style.background = ''}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.navn}</div>
+                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                      {p.jobbType && <span style={{ marginRight: 8 }}>{p.jobbType}</span>}
+                      {ksItems.length > 0
+                        ? <span>{ferdig}/{ksItems.length} sjekklister</span>
+                        : mine.length > 0
+                          ? <span>{mine.filter(s => s.status === 'ferdig').length}/{mine.length} (API)</span>
+                          : <span style={{ color: '#cbd5e1' }}>Ingen sjekklister ennå</span>}
+                    </div>
+                  </div>
+                  {avvikTot > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', background: '#fee2e2', padding: '2px 8px', borderRadius: 8 }}>⚠ {avvikTot}</span>}
+                  <span style={{ color: '#94a3b8', fontSize: 16 }}>›</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── KS Prosjekt-detalj (to-kolonner med drag-drop) ────────────────────────────
+
+const KAT_INFO_KS = {
+  hms:       { label: '🛡 HMS',       farge: '#dc2626' },
+  bad:       { label: '🛁 Bad',       farge: '#0891b2' },
+  yttervegg: { label: '🏠 Yttervegg', farge: '#ea580c' },
+  tak:       { label: '🏗 Tak',       farge: '#7c3aed' },
+  innvendig: { label: '🪟 Innvendig', farge: '#854d0e' },
+  teknisk:   { label: '⚡ Teknisk',   farge: '#f59e0b' },
+  annet:     { label: '📦 Annet',     farge: '#64748b' },
+}
+const KAT_ORDEN_KS = ['hms', 'bad', 'yttervegg', 'tak', 'innvendig', 'teknisk', 'annet']
+
+function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, onOppdaterProsjekt }) {
+  const [dragType, setDragType] = useState(null)
+  const [dragData, setDragData] = useState(null)
+  const [dragOver, setDragOver] = useState(false)
+  const [toast, setToast] = useState(null)
+  const [soekBibliotek, setSoekBibliotek] = useState('')
+
+  const ksSjekklister = prosjekt.ksSjekklister || []
+  const tildelteMalIds = new Set(ksSjekklister.map(k => k.malId))
+
+  function visToast(msg, type = 'info') {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  function leggTilMal(malId, kilde) {
+    if (tildelteMalIds.has(malId)) { visToast('Allerede tildelt', 'warn'); return false }
+    const mal = maler.find(m => m.id === malId)
+    if (!mal) return false
+    const ny = {
+      malId, tildeltDato: new Date().toISOString(), tildeltAv: kilde,
+      status: 'ikke-startet', framdrift: { utfylt: 0, totalt: mal.punkter?.length || 0 }, svar: [], avvik: [],
+    }
+    onOppdaterProsjekt({ ...prosjekt, ksSjekklister: [...ksSjekklister, ny] })
+    return true
+  }
+
+  function leggTilGruppe(kategori, kilde) {
+    const gruppeMaler = maler.filter(m => (m.kategoriBibliotek || 'annet') === kategori)
+    const nye = gruppeMaler.filter(m => !tildelteMalIds.has(m.id))
+    const dup = gruppeMaler.length - nye.length
+    if (nye.length === 0) { visToast('Alle i gruppen er allerede tildelt', 'warn'); return }
+    const nyeKS = nye.map(m => ({
+      malId: m.id, tildeltDato: new Date().toISOString(), tildeltAv: kilde,
+      status: 'ikke-startet', framdrift: { utfylt: 0, totalt: m.punkter?.length || 0 }, svar: [], avvik: [],
+    }))
+    onOppdaterProsjekt({ ...prosjekt, ksSjekklister: [...ksSjekklister, ...nyeKS] })
+    visToast(dup > 0 ? `La til ${nye.length} nye. ${dup} fantes allerede.` : `La til ${nye.length} sjekklister.`, 'ok')
+  }
+
+  async function aapneKSSjekkliste(ks) {
+    const existing = sjekklister.find(s => s.malId === ks.malId && s.prosjektId === prosjekt.id)
+    if (existing) { onAapneSl(existing); return }
+    const mal = maler.find(m => m.id === ks.malId)
+    if (!mal) return
+    try {
+      const ny = await apiFetch('/api/ks/sjekklister', { method: 'POST', body: {
+        malId: mal.id, navn: mal.navn, prosjektId: prosjekt.id,
+        gruppe: mal.gruppe || 'Annet', kategori: mal.kategori || 'annet',
+        punkter: (mal.punkter || []).map(p => ({ ...p, status: 'ikke-utfort', kommentar: '', bilder: [] })),
+        status: 'ikke-startet', ansvarlig: [], frist: '',
+      }})
+      onAapneSl(ny)
+    } catch (e) { visToast('Kunne ikke åpne: ' + e.message, 'error') }
+  }
+
+  function onDrop(e) {
+    e.preventDefault(); setDragOver(false)
+    if (dragType === 'mal') leggTilMal(dragData, 'drag:enkelt')
+    else if (dragType === 'gruppe') leggTilGruppe(dragData, 'drag:gruppe-' + dragData)
+    setDragType(null); setDragData(null)
+  }
+
+  // Grupper maler
+  const soekLow = soekBibliotek.toLowerCase()
+  const biblPerKat = {}
+  for (const m of maler) {
+    if (soekBibliotek && !m.navn.toLowerCase().includes(soekLow)) continue
+    const kat = m.kategoriBibliotek || 'annet'
+    if (!biblPerKat[kat]) biblPerKat[kat] = []
+    biblPerKat[kat].push(m)
+  }
+  const tildeltPerKat = {}
+  for (const ks of ksSjekklister) {
+    const mal = maler.find(m => m.id === ks.malId)
+    const kat = mal?.kategoriBibliotek || 'annet'
+    if (!tildeltPerKat[kat]) tildeltPerKat[kat] = []
+    tildeltPerKat[kat].push({ ...ks, mal })
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ padding: '12px 16px', borderBottom: '2px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 10, background: '#fff', flexShrink: 0, flexWrap: 'wrap' }}>
+        <button className="btn" onClick={onTilbake}>← Tilbake</button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 800, fontSize: 15, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{prosjekt.navn}</div>
+          {(prosjekt.kunde?.navn || prosjekt.adresse) && (
+            <div style={{ fontSize: 11, color: '#64748b' }}>
+              {prosjekt.kunde?.navn && <span>{prosjekt.kunde.navn} · </span>}{prosjekt.adresse}
+            </div>
+          )}
+        </div>
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, background: '#eff6ff', color: '#2563eb', borderRadius: 6, padding: '3px 10px', fontWeight: 600 }}>
+            {ksSjekklister.length} sjekklister
+          </span>
+        </div>
+      </div>
+
+      {/* Toast */}
+      {toast && (
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: toast.type === 'warn' ? '#f59e0b' : toast.type === 'ok' ? '#16a34a' : toast.type === 'error' ? '#dc2626' : '#1e293b', color: '#fff', padding: '10px 20px', borderRadius: 10, zIndex: 9999, fontSize: 13, fontWeight: 600, boxShadow: '0 4px 12px rgba(0,0,0,.2)', maxWidth: 320, textAlign: 'center' }}>
+          {toast.msg}
+        </div>
+      )}
+
+      {/* To kolonner */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+
+        {/* VENSTRE: Tildelte */}
+        <div style={{ flex: 1, overflow: 'auto', padding: 16, borderRight: '2px solid #e2e8f0', minWidth: 0 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, color: '#475569', marginBottom: 14 }}>
+            📋 Tildelte sjekklister ({ksSjekklister.length})
+          </div>
+          {KAT_ORDEN_KS.map(kat => {
+            const liste = tildeltPerKat[kat] || []
+            if (liste.length === 0) return null
+            const info = KAT_INFO_KS[kat]
+            return (
+              <div key={kat} style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: info.farge, marginBottom: 6 }}>{info.label} ({liste.length})</div>
+                {liste.map(ks => {
+                  const ut = ks.framdrift?.utfylt || 0
+                  const tot = Math.max(ks.framdrift?.totalt || 0, 1)
+                  const pst = Math.round((ut / tot) * 100)
+                  const harAvvik = ks.avvik?.length > 0
+                  return (
+                    <div key={ks.malId} onClick={() => aapneKSSjekkliste(ks)}
+                      style={{ padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 8, marginBottom: 6, cursor: 'pointer', background: harAvvik ? '#fff5f5' : pst === 100 ? '#f0fdf4' : '#fff', display: 'flex', alignItems: 'center', gap: 10 }}
+                      onMouseEnter={e => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,.08)'}
+                      onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>{ks.mal?.navn || ks.malId}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                          <div style={{ flex: 1, maxWidth: 100, height: 3, background: '#e2e8f0', borderRadius: 2 }}>
+                            <div style={{ width: pst + '%', height: '100%', background: pst === 100 ? '#16a34a' : harAvvik ? '#dc2626' : '#3b82f6', borderRadius: 2 }} />
+                          </div>
+                          <span style={{ fontSize: 10, color: '#94a3b8' }}>{ut}/{ks.framdrift?.totalt || 0}</span>
+                        </div>
+                      </div>
+                      {harAvvik && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 700 }}>⚠</span>}
+                      {pst === 100 && !harAvvik && <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 700 }}>✓</span>}
+                      <span style={{ color: '#cbd5e1', fontSize: 14 }}>›</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })}
+
+          {/* Drop-sone */}
+          <div onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={onDrop}
+            style={{ border: '2px dashed ' + (dragOver ? '#3b82f6' : '#cbd5e1'), borderRadius: 10, padding: '20px 16px', textAlign: 'center', color: dragOver ? '#3b82f6' : '#94a3b8', fontSize: 13, marginTop: 8, background: dragOver ? '#eff6ff' : 'transparent', transition: 'all .15s' }}>
+            {dragOver ? '📥 Slipp for å tildele' : '+ Slipp sjekkliste eller gruppe her'}
+          </div>
+        </div>
+
+        {/* HØYRE: Bibliotek */}
+        <div style={{ width: 300, flexShrink: 0, overflow: 'auto', padding: 16, background: '#f8fafc' }}>
+          <div style={{ fontWeight: 700, fontSize: 13, color: '#475569', marginBottom: 10 }}>📚 Bibliotek ({maler.length})</div>
+          <input className="input" placeholder="🔍 Søk mal..." value={soekBibliotek} onChange={e => setSoekBibliotek(e.target.value)} style={{ marginBottom: 12, fontSize: 12 }} />
+          {KAT_ORDEN_KS.map(kat => {
+            const liste = biblPerKat[kat] || []
+            if (liste.length === 0) return null
+            const info = KAT_INFO_KS[kat]
+            return (
+              <div key={kat} style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: info.farge, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span draggable onDragStart={e => { setDragType('gruppe'); setDragData(kat); e.dataTransfer.effectAllowed = 'copy' }}
+                    title={`Dra hele ${info.label}-gruppen`}
+                    style={{ cursor: 'grab', fontSize: 12, opacity: .7, padding: '2px 5px', borderRadius: 4, background: 'rgba(0,0,0,.06)' }}>☰</span>
+                  {info.label} ({liste.length})
+                </div>
+                {liste.map(m => {
+                  const erTildelt = tildelteMalIds.has(m.id)
+                  return (
+                    <div key={m.id}
+                      draggable={!erTildelt}
+                      onDragStart={erTildelt ? undefined : e => { setDragType('mal'); setDragData(m.id); e.dataTransfer.effectAllowed = 'copy' }}
+                      onClick={erTildelt ? undefined : () => { if (leggTilMal(m.id, 'klikk')) visToast(`"${m.navn}" tildelt`, 'ok') }}
+                      title={erTildelt ? 'Allerede tildelt' : 'Dra eller klikk for å tildele'}
+                      style={{ padding: '7px 10px', border: '1px solid ' + (erTildelt ? '#f1f5f9' : '#e2e8f0'), borderRadius: 7, marginBottom: 4, fontSize: 12, cursor: erTildelt ? 'default' : 'grab', background: erTildelt ? 'transparent' : '#fff', color: erTildelt ? '#cbd5e1' : '#374151', display: 'flex', alignItems: 'center', gap: 6 }}
+                      onMouseEnter={erTildelt ? undefined : e => e.currentTarget.style.background = '#eff6ff'}
+                      onMouseLeave={erTildelt ? undefined : e => e.currentTarget.style.background = '#fff'}>
+                      <span style={{ fontSize: 10, opacity: .6 }}>{erTildelt ? '✓' : '⠿'}</span>
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.navn}</span>
+                      <span style={{ fontSize: 10, color: '#94a3b8', flexShrink: 0 }}>{m.punkter?.length || 0}p</span>
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Oversiktsskjerm ───────────────────────────────────────────────────────────
 
 function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliotek, onVisAvvik, onRensTestData, onOppdaterMaler }) {
@@ -1648,6 +1936,9 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
 
   return (
     <div className="ks-side">
+
+      {/* ── Prosjektvelger (rullegardin) ────────────────────────── */}
+      <KSProsjektVelger prosjekter={prosjekter} sjekklister={sjekklister} onVelg={onVelgProsjekt} />
 
       {/* ── Min dag ─────────────────────────────────────────────── */}
       <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)', borderRadius: 16, padding: '18px 20px', marginBottom: 20, color: '#fff' }}>
@@ -1789,7 +2080,7 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
 // ── Rot-komponent ─────────────────────────────────────────────────────────────
 
 export default function KS() {
-  const { state } = useApp()
+  const { state, dispatch } = useApp()
   const [maler, setMaler] = useState([])
   const [sjekklister, setSjekklister] = useState([])
   const [laster, setLaster] = useState(true)
@@ -1801,12 +2092,26 @@ export default function KS() {
   const [lasterProsjekt, setLasterProsjekt] = useState(false)
 
   function velgProsjekt(p) {
+    // Brukes fra KSProsjektVelger → ny to-kolonne-visning
+    startTransition(() => {
+      setValgtProsjekt(p)
+      setView('ks-prosjekt-detalj')
+    })
+  }
+
+  function velgProsjektGammel(p) {
+    // Gammel ProsjektVisning (behold for bakoverkompat)
     setLasterProsjekt(true)
     startTransition(() => {
       setValgtProsjekt(p)
       setView('prosjekt')
       setLasterProsjekt(false)
     })
+  }
+
+  function oppdaterProsjektKS(p) {
+    dispatch({ type: 'UPDATE_PROSJEKT', payload: p })
+    setValgtProsjekt(p)
   }
 
   async function rensOrphans(ids) {
@@ -1868,7 +2173,7 @@ export default function KS() {
           setSjekklister(prev => prev.map(s => s.id === opp.id ? opp : s))
           setValgtSl(opp)
         }}
-        onTilbake={() => setView('prosjekt')}
+        onTilbake={() => setView(valgtProsjekt ? 'ks-prosjekt-detalj' : 'prosjekt')}
       />
     )
   }
@@ -1893,6 +2198,26 @@ export default function KS() {
         onTilbake={() => setView('oversikt')}
         onAapneSl={sl => { setValgtSl(sl); setView('sjekkliste') }}
         onByttProsjekt={velgProsjekt}
+      />
+    )
+  }
+
+  // ── KS Prosjekt-detalj (ny to-kolonne-visning) ───────────────────────────────
+  if (view === 'ks-prosjekt-detalj' && valgtProsjekt) {
+    // Finn oppdatert prosjekt fra state (ksSjekklister kan ha endret seg)
+    const oppdatertProsjekt = state.prosjekter?.find(p => p.id === valgtProsjekt.id) || valgtProsjekt
+    return (
+      <KSProsjektDetalj
+        prosjekt={oppdatertProsjekt}
+        maler={maler}
+        sjekklister={sjekklister}
+        onTilbake={() => setView('oversikt')}
+        onAapneSl={sl => {
+          setSjekklister(prev => prev.some(s => s.id === sl.id) ? prev : [...prev, sl])
+          setValgtSl(sl)
+          setView('sjekkliste')
+        }}
+        onOppdaterProsjekt={oppdaterProsjektKS}
       />
     )
   }
