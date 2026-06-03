@@ -2235,40 +2235,6 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
   const harMismatch = ugyldigeSl.length > 0 && sjekklister.length > 0
   const malerUtenBeskrivelse = maler.filter(m => !m.punkter?.some(p => p.beskrivelse))
 
-  // "Min dag" — topp 3 sjekklister som bør gjøres
-  // Slå sammen API-sjekklister og ksSjekklister til "Min dag"-oppgaver
-  const fraapiSl = sjekklister
-    .filter(sl => sl.status !== 'ferdig')
-    .map(sl => ({ id: sl.id, navn: sl.navn, malId: sl.malId, prosjekt: prosjekter.find(p => p.id === sl.prosjektId), mal: maler.find(m => m.id === sl.malId), pst: prosent(sl.punkter), avvikAnt: (sl.punkter || []).filter(p => p.status === 'avvik').length, kilde: 'api' }))
-    .filter(x => x.prosjekt)
-  const fraKsSl = prosjekter.flatMap(p => (p.ksSjekklister || [])
-    .filter(k => k.status !== 'fullfort')
-    .map(k => {
-      const mal = maler.find(m => m.id === k.malId)
-      return { id: 'ks-' + k.malId + '-' + p.id, navn: mal?.navn || k.malId, malId: k.malId, prosjekt: p, mal, pst: k.framdrift?.totalt > 0 ? Math.round((k.framdrift.utfylt || 0) / k.framdrift.totalt * 100) : 0, avvikAnt: (k.avvik || []).length, kilde: 'ks' }
-    }))
-  const alleOppgaver = [...fraapiSl, ...fraKsSl]
-  const sett = new Set()
-  const dagensOppgaver = alleOppgaver
-    .filter(x => { const k = x.prosjekt.id + ':' + x.malId; if (sett.has(k)) return false; sett.add(k); return true })
-    .sort((a, b) => {
-      if (a.mal?.obligatorisk && !b.mal?.obligatorisk) return -1
-      if (!a.mal?.obligatorisk && b.mal?.obligatorisk) return 1
-      return a.pst - b.pst
-    })
-    .slice(0, 3)
-
-  // Aktive prosjekter med KS
-  const aktiveKS = prosjekter.filter(p => sjekklister.some(s => s.prosjektId === p.id))
-  const prosjekterVist = aktiveKS
-    .filter(p => !sokProsjekt || p.navn.toLowerCase().includes(sokProsjekt.toLowerCase()))
-    .slice(0, visAlleProsjekter ? 999 : 4)
-
-  // Ukedag
-  const DAGER = ['Søndag','Mandag','Tirsdag','Onsdag','Torsdag','Fredag','Lørdag']
-  const MANEDER = ['januar','februar','mars','april','mai','juni','juli','august','september','oktober','november','desember']
-  const naaObj = new Date()
-  const dagLabel = DAGER[naaObj.getDay()] + ' ' + naaObj.getDate() + '. ' + MANEDER[naaObj.getMonth()]
 
   return (
     <div className="ks-side">
