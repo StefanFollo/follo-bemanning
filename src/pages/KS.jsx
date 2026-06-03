@@ -2021,7 +2021,12 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
   const [dragOver, setDragOver] = useState(false)
   const [toast, setToast] = useState(null)
   const [soekBibliotek, setSoekBibliotek] = useState('')
-  const [kollapset, setKollapset] = useState({})
+  const [kollapset, setKollapset] = useState(() => {
+    // Bibliotek sub-grupper starter kollapset; fase-grupper åpne
+    const init = {}
+    BYGGRUPPE_ORDEN.forEach(kat => { init['b-bygg-' + kat] = true })
+    return init
+  })
 
   const ksSjekklister = prosjekt.ksSjekklister || []
   const tildelteMalIds = new Set(ksSjekklister.map(k => k.malId))
@@ -2118,9 +2123,9 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
           style={{ padding: '6px 10px', border: '1px solid ' + (erTildelt ? '#f1f5f9' : '#e2e8f0'), borderRadius: 7, marginBottom: 3, fontSize: 12, cursor: erTildelt ? 'default' : 'grab', background: erTildelt ? 'transparent' : '#fff', color: erTildelt ? '#cbd5e1' : '#374151', display: 'flex', alignItems: 'center', gap: 5 }}
           onMouseEnter={erTildelt ? undefined : e => e.currentTarget.style.background = '#eff6ff'}
           onMouseLeave={erTildelt ? undefined : e => e.currentTarget.style.background = '#fff'}>
-          <span style={{ fontSize: 9, opacity: .5 }}>{erTildelt ? '✓' : '⠿'}</span>
+          <span style={{ fontSize: 10, color: erTildelt ? '#cbd5e1' : '#94a3b8', flexShrink: 0 }}>{erTildelt ? '✓' : '⠿'}</span>
           <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.navn}</span>
-          <span style={{ fontSize: 9, color: '#94a3b8', flexShrink: 0 }}>{m.punkter?.length || 0}p</span>
+          <span style={{ fontSize: 10, color: '#94a3b8', flexShrink: 0 }}>{m.punkter?.length || 0} pkt</span>
         </div>
       )
     })
@@ -2161,9 +2166,10 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
           <div style={{ fontWeight: 700, fontSize: 13, color: '#475569', marginBottom: 12 }}>📋 Tildelte ({ksSjekklister.length})</div>
 
           {ksSjekklister.length === 0 && (
-            <div style={{ textAlign: 'center', padding: '40px 16px', color: '#94a3b8', fontSize: 13 }}>
-              <div style={{ fontSize: 28, marginBottom: 10 }}>📋</div>
-              Dra maler fra biblioteket til høyre<br/>— eller klikk på dem for å tildele
+            <div style={{ border: '2px dashed #e2e8f0', borderRadius: 12, padding: '32px 20px', textAlign: 'center', color: '#94a3b8', fontSize: 13, margin: '8px 0' }}>
+              <div style={{ fontSize: 26, marginBottom: 8 }}>📋</div>
+              <div style={{ fontWeight: 600, marginBottom: 4, color: '#64748b' }}>Ingen sjekklister tildelt ennå</div>
+              Dra fra biblioteket til høyre<br/>— eller bruk + Slipp-feltet nedenfor
             </div>
           )}
 

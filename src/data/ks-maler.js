@@ -684,16 +684,35 @@ const KS_MALER_RAW = [
 //   Sluttkontroll + el-slutt → 'slutt'
 //   Alt annet (bygg-arbeid) → 'bygg'
 function tildelFase(m) {
+  const n = (m.navn || '').toLowerCase()
+  const g = m.gruppe || ''
   if (m.id === 'mal-hms-daglig') return 'daglig'
-  if (m.gruppe === 'HMS') return 'oppstart'
-  if (m.gruppe === 'Sluttkontroll' || m.id === 'mal-el-slutt') return 'slutt'
+  if (g === 'Sluttkontroll' || m.id === 'mal-el-slutt') return 'slutt'
+  if (n.includes('sluttkontroll') && n.includes('elektrisk')) return 'slutt'
+  if (g === 'HMS' || n.includes('risikovurdering') || n.includes('sha') || n.includes('sikker jobb')) return 'oppstart'
+  if (n.includes('stillas')) return 'oppstart'
   return 'bygg'
+}
+
+function tildelKategoriBibliotekFraKsMaler(m) {
+  const n = (m.navn || '').toLowerCase()
+  const g = m.gruppe || ''
+  if (g === 'Utførelse bad') return 'bad'
+  if (n.includes('bad') || n.includes('membran') || n.includes('våtrom') || n.includes('flislegg')) return 'bad'
+  if (n.includes('fasade') || n.includes('vinduer og dør') || n.includes('panel og kledning') || n.includes('beslag og tetting') || n.includes('maling utvendig')) return 'yttervegg'
+  if (g === 'Utførelse tak' || (n.includes('tak') && !n.includes('stillas'))) return 'tak'
+  if (g === 'Utførelse innvendig' || n.includes('innvendig') || n.includes('gips') || n.includes('sparkling') || n.includes('gulvlegg') || n.includes('bærekonstruk') || n.includes('isolasjon og dampsperre')) return 'innvendig'
+  if (g === 'Maling') return n.includes('utvendig') ? 'yttervegg' : 'innvendig'
+  if (g === 'Rørlegger' || n.includes('vvs') || n.includes('sanitær') || n.includes('avløp') || n.includes('varmtvann')) return 'ror'
+  if (g === 'Elektrisk' || n.includes('kurssikring') || (n.includes('elektrisk') && !n.includes('sluttkontroll'))) return 'el'
+  return 'annet'
 }
 
 export const KS_MALER = KS_MALER_RAW.map(m => ({
   ...m,
-  fase: m.fase || tildelFase(m),
+  fase: tildelFase(m),
   kilde: m.kilde || 'follo',
+  kategoriBibliotek: tildelKategoriBibliotekFraKsMaler(m),
 }))
 
 // ─── Pakke-definisjoner ─────────────────────────────────────────────────

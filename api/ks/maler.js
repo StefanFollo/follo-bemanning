@@ -28,29 +28,42 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     const maler = (await redis.get('fbs_ks_maler')) || []
-    // Berik med fase/kilde for eksisterende maler som ble seedet uten disse feltene
+    // Berik med fase/kategori basert på navn og gruppe (alltid reberegn for riktig tagging)
     function tildelFase(m) {
+      const n = (m.navn || '').toLowerCase()
+      const g = m.gruppe || ''
       if (m.id === 'mal-hms-daglig') return 'daglig'
-      if (m.gruppe === 'HMS') return 'oppstart'
-      if (m.gruppe === 'Sluttkontroll' || m.id === 'mal-el-slutt') return 'slutt'
+      if (g === 'Sluttkontroll' || m.id === 'mal-el-slutt') return 'slutt'
+      if (n.includes('sluttkontroll') && n.includes('elektrisk')) return 'slutt'
+      if (g === 'HMS' || n.includes('risikovurdering') || n.includes('sha') || n.includes('sikker jobb')) return 'oppstart'
+      if (n.includes('stillas')) return 'oppstart'
       return 'bygg'
     }
     function tildelKategoriBibliotek(m) {
+      const n = (m.navn || '').toLowerCase()
       const g = m.gruppe || ''
-      if (g === 'HMS' || g === 'Sluttkontroll') return 'hms'
+      // Bad (gruppe-prioritet fanger "Sanitæranlegg — rørlegger" i bad-kontekst)
       if (g === 'Utførelse bad') return 'bad'
-      if (g === 'Utførelse fasade') return 'yttervegg'
-      if (g === 'Utførelse tak') return 'tak'
-      if (g === 'Utførelse innvendig') return 'innvendig'
-      if (g === 'Rørlegger' || g === 'Elektrisk') return 'teknisk'
-      if (m.id === 'mal-maling-utvendig') return 'yttervegg'
+      if (n.includes('bad') || n.includes('membran') || n.includes('våtrom') || n.includes('flislegg')) return 'bad'
+      // Yttervegg/fasade
+      if (n.includes('fasade') || n.includes('vinduer og dør') || n.includes('panel og kledning') || n.includes('beslag og tetting') || n.includes('maling utvendig')) return 'yttervegg'
+      // Tak
+      if (g === 'Utførelse tak' || (n.includes('tak') && !n.includes('stillas'))) return 'tak'
+      // Innvendig
+      if (g === 'Utførelse innvendig' || n.includes('innvendig') || n.includes('gips') || n.includes('sparkling') || n.includes('gulvlegg') || n.includes('bærekonstruk') || n.includes('isolasjon og dampsperre')) return 'innvendig'
+      if (g === 'Maling') return n.includes('utvendig') ? 'yttervegg' : 'innvendig'
+      // Rør
+      if (g === 'Rørlegger' || n.includes('vvs') || n.includes('sanitær') || n.includes('avløp') || n.includes('varmtvann')) return 'ror'
+      // El (ikke sluttkontroll)
+      if (g === 'Elektrisk' || n.includes('kurssikring') || (n.includes('elektrisk') && !n.includes('sluttkontroll'))) return 'el'
       return 'annet'
     }
     const enriched = maler.map(m => ({
       ...m,
-      fase: m.fase || tildelFase(m),
+      // Alltid reberegn fase og kategoriBibliotek (override lagret verdi for riktig tagging)
+      fase: tildelFase(m),
       kilde: m.kilde || 'follo',
-      kategoriBibliotek: m.kategoriBibliotek || tildelKategoriBibliotek(m),
+      kategoriBibliotek: tildelKategoriBibliotek(m),
     }))
     return res.status(200).json(enriched)
   }
