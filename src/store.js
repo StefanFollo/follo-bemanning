@@ -152,6 +152,49 @@ const DEFAULT_FAG = ['Anleggsleder', 'Montør', 'Lærling Tømrer', 'Maler', 'R�
 
 function mkId(n) { return 'seed' + n; }
 
+// Kontaktinfo fra Ansatte (2).xlsx — Follo Byggservice AS
+const ANSATTE_KONTAKT = {
+  'Abdul Malik':                { telefon: '40160842',       epost: 'abdulmalik1997@hotmail.com'      },
+  'Aleksej Kursakov':           { telefon: '+46701417617',   epost: 'aleksej.kursakov.narva@gmail.com'},
+  'Alexis K. Lusimbwa':         { telefon: '92119472',       epost: 'alexlusimbwa@gmail.com'          },
+  'Andrius Jauniskis':          { telefon: '46372475',       epost: 'andriusjauniskis@gmail.com'      },
+  'Antun Tkalec':               { telefon: '93635036',       epost: 'antuncis8@gmail.com'             },
+  'Arturas Maciuta':            { telefon: '40589938',       epost: 'artumaciuta@gmail.com'           },
+  'Brage Grinde':               { telefon: '90297878',       epost: 'bragegrinde@gmail.no'            },
+  'Dawod Azizian':              { telefon: '+46764114816',   epost: 'azizian.davood1989@gmail.com'    },
+  'Dawod Azizian Brogen':       { telefon: '+46764114816',   epost: 'azizian.davood1989@gmail.com'    },
+  'Brogen Ernst Kristian Stølen':{ telefon: '93829757',      epost: 'ernst@follobyggservice.no'       },
+  'Ernst Kristian Stølen':      { telefon: '93829757',       epost: 'ernst@follobyggservice.no'       },
+  'Glenn Fosser':               { telefon: '40849958',       epost: 'glenn.fosser@gmail.com'          },
+  'Helena Espeland Tryg':       { telefon: '45175465',       epost: 'helena.e.trygg@hotmail.com'      },
+  'Imad Muhammad Abouzraa':     { telefon: '92509198',       epost: 'emad.abouzraa@gmail.com'         },
+  'James Paul Klassen':         { telefon: '41373467',       epost: 'jamesklassen91@gmail.com'        },
+  'Joachim Norenberg':          { telefon: '92487480',       epost: 'joachim@follobyggservice.no'     },
+  'Kateryna Barabanova':        { telefon: '40563288',       epost: 'kateryna@follobyggservice.no'    },
+  'Kenneth Grinde':             { telefon: '47370191',       epost: 'kennethgrinde@hotmail.com'       },
+  'Kristoffer Olsen Tollofsen': { telefon: '47899180',       epost: 'kristoffer.tollofsen@icloud.com' },
+  'Krzysztof Slabon':           { telefon: '47723663',       epost: 'kris041073@gmail.com'            },
+  'Leif Anders Nysveen Grøv':   { telefon: '40099658',       epost: 'leifanders06@gmail.com'          },
+  'Lucas G Fosser':             { telefon: '92339384',       epost: 'lucasfosser159@gmail.com'        },
+  'Malin Kristin Dolk':         { telefon: '40161442',       epost: 'malinkd0506@gmail.com'           },
+  'Mario Deila':                { telefon: '93241833',       epost: 'mariodeila@hotmail.com'          },
+  'Martins Cerins':             { telefon: '92088304',       epost: 'marchaa69@gmail.com'             },
+  'Mikkel Heggen Kulsrud':      { telefon: '95428009',       epost: 'mikkel.kulsrud@hotmail.com'      },
+  'Muhammed Sarr':              { telefon: '47947788',       epost: 'muhammedsarr.sarr@hotmail.no'    },
+  'Petros Potsis':              { telefon: '46388267',       epost: 'petrospotsis@gmail.com'          },
+  'Pyrros Christou':            { telefon: '95038404',       epost: 'pyrroschristou@gmail.com'        },
+  'Richard Fosser Minge':       { telefon: '94807433',       epost: 'byggmesterminge@outlook.com'     },
+  'Richard Havnegjerde Ekroll': { telefon: '94801943',       epost: 'richard-ekroll@hotmail.com'      },
+  'Rytis Jackevicius':          { telefon: '98039748',       epost: 'rytukasbygg@gmail.com'           },
+  'Rytis Jauniskis':            { telefon: '46585762',       epost: 'tomrerrytis@gmail.com'           },
+  'Serhii Pieniev':             { telefon: '46351299',       epost: 'hanter.210281@gmail.com'         },
+  'Sigurd Lind Aanby':          { telefon: '90402196',       epost: 'sigurd.lind@hotmail.com'         },
+  'Stanislaw Kostrubiec':       { telefon: '96870278',       epost: 'k.staszek04@op.pl'               },
+  'Tomas Strumilas':            { telefon: '40055226',       epost: 'strumilas@gmail.com'             },
+  'Tomasz Miroslaw Czop':       { telefon: '45454566',       epost: 'tomasz@follobyggservice.no'      },
+  'Tommy Fredriksen':           { telefon: '40056114',       epost: 'fredriksent6@gmail.com'          },
+}
+
 const SEED_ANSATTE = [
   'Abdul Malik','Aleksej Kursakov','Alexis K. Lusimbwa','Andrius Jauniskis',
   'Antun Tkalec','Arturas Maciuta','Brage Grinde','Dawod Azizian',
@@ -164,7 +207,10 @@ const SEED_ANSATTE = [
   'Richard Havnegjerde Ekroll','Rytis Jackevicius','Rytis Jauniskis',
   'Serhii Pieniev','Sigurd Lind Aanby','Stanislaw Kostrubiec',
   'Tomas Strumilas','Tomasz Miroslaw Czop','Tommy Fredriksen',
-].map((navn, i) => ({ id: mkId('a' + i), navn, fag: 'Montør', telefon: '', epost: '' }));
+].map((navn, i) => {
+  const k = ANSATTE_KONTAKT[navn] || {}
+  return { id: mkId('a' + i), navn, fag: 'Montør', telefon: k.telefon || '', epost: k.epost || '' }
+});
 
 const PROJ_PALETTE = [
   '#2563eb','#16a34a','#dc2626','#9333ea','#ea580c','#0891b2',
@@ -348,6 +394,20 @@ export function loadState() {
   if (!seeded && (!existing || existing.length === 0)) {
     saveRaw('fbs_tildelinger', SEED_TILDELINGER);
     localStorage.setItem('fbs_tildelinger_seeded', '1');
+  }
+
+  // One-time migration: legg til telefon/epost på eksisterende ansatte
+  if (!localStorage.getItem('fbs_ansatte_kontakt_done')) {
+    const eksisterendeAnsatte = load('fbs_ansatte', null)
+    if (eksisterendeAnsatte) {
+      const oppdatert = eksisterendeAnsatte.map(a => {
+        const k = ANSATTE_KONTAKT[a.navn]
+        if (!k) return a
+        return { ...a, telefon: a.telefon || k.telefon, epost: a.epost || k.epost }
+      })
+      saveRaw('fbs_ansatte', oppdatert)
+    }
+    localStorage.setItem('fbs_ansatte_kontakt_done', '1')
   }
 
   // One-time migration: importer befaringer fra Steddy-eksport
