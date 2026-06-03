@@ -125,6 +125,7 @@ export default function BefaringPlan() {
   const [viewTab, setViewTab] = useState('oversikt'); // 'oversikt' | 'kalender'
   const [sok, setSok] = useState('');
   const [pipelineFilter, setPipelineFilter] = useState(null);
+  const [ansvarligFilter, setAnsvarligFilter] = useState('');
 
   function ansattFarge(ansattId) {
     if (!ansattId) return null;
@@ -340,6 +341,11 @@ export default function BefaringPlan() {
     return b.status === pipelineFilter;
   }
 
+  function ansvarligFilterFn(b) {
+    if (!ansvarligFilter) return true;
+    return b.prosjektlederId === ansvarligFilter || b.ansvarligBefaringId === ansvarligFilter;
+  }
+
   function sumKr(arr) {
     const total = arr.reduce((s, b) => s + (Number(b.estimertBelop) || 0), 0);
     return total > 0
@@ -351,24 +357,28 @@ export default function BefaringPlan() {
     .filter(b => b.status === 'planlagt')
     .filter(sokFilter)
     .filter(statusFilter)
+    .filter(ansvarligFilterFn)
     .sort((a, b) => a.dato.localeCompare(b.dato));
 
   const tilbudArbeid = [...aktive]
     .filter(b => b.status === 'tilbud_arbeid')
     .filter(sokFilter)
     .filter(statusFilter)
+    .filter(ansvarligFilterFn)
     .sort((a, b) => (a.tilbudFrist || '9999').localeCompare(b.tilbudFrist || '9999'));
 
   const tilbudSendt = [...aktive]
     .filter(b => b.status === 'tilbud_sendt')
     .filter(sokFilter)
     .filter(statusFilter)
+    .filter(ansvarligFilterFn)
     .sort((a, b) => (a.tilbudFrist || '9999').localeCompare(b.tilbudFrist || '9999'));
 
   const godkjente = [...aktive]
     .filter(b => b.status === 'godkjent')
     .filter(sokFilter)
     .filter(statusFilter)
+    .filter(ansvarligFilterFn)
     .sort((a, b) => b.dato.localeCompare(a.dato));
 
   const uker = kapasitetPerUke();
@@ -655,6 +665,26 @@ export default function BefaringPlan() {
             value={sok}
             onChange={e => setSok(e.target.value)}
           />
+          {(() => {
+            // Ansatte som har minst én aktiv befaring
+            const ansatteIds = [...new Set(aktive.flatMap(b => [b.prosjektlederId, b.ansvarligBefaringId].filter(Boolean)))];
+            if (ansatteIds.length === 0) return null;
+            return (
+              <select
+                className="input"
+                style={{ height: 36, fontSize: 13, minWidth: 140 }}
+                value={ansvarligFilter}
+                onChange={e => setAnsvarligFilter(e.target.value)}
+                title="Filtrer på ansvarlig person"
+              >
+                <option value="">👤 Alle ansvarlige</option>
+                {ansatteIds.map(id => {
+                  const a = state.ansatte.find(x => x.id === id);
+                  return a ? <option key={id} value={id}>{a.navn}</option> : null;
+                })}
+              </select>
+            );
+          })()}
           <div className="bef-view-tabs">
             <button className={`bef-view-tab${viewTab === 'oversikt' ? ' aktiv' : ''}`} onClick={() => setViewTab('oversikt')}>📋 Oversikt</button>
             <button className={`bef-view-tab${viewTab === 'kalender' ? ' aktiv' : ''}`} onClick={() => setViewTab('kalender')}>📅 Kalender</button>
