@@ -683,9 +683,15 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
         <Fremdriftsbar pst={pst} avvik={avvikLokale.length > 0} hoyde={8} />
       </div>
 
-      {/* 4 faner */}
+      {/* Faner */}
       <div className="ks-faner">
-        {[['punkter', `✓ Sjekkpunkter (${lokale.length})`], ['detaljer', '📋 Detaljer'], ['avvik-fane', `⚠️ Avvik${avvik.length ? ` (${avvik.length})` : ''}`], ['vedlegg', '📎 Vedlegg']].map(([id, label]) => (
+        {[
+          ['punkter',   `✓ Sjekkpunkter (${lokale.length})`],
+          ['rediger',   '✏️ Rediger'],
+          ['detaljer',  '📋 Detaljer'],
+          ['avvik-fane',`⚠️ Avvik${avvik.length ? ` (${avvik.length})` : ''}`],
+          ['vedlegg',   '📎 Vedlegg'],
+        ].map(([id, label]) => (
           <button key={id} className={`ks-fane-btn ${fane === id ? 'aktiv' : ''}`} onClick={() => setFane(id)}>{label}</button>
         ))}
       </div>
@@ -758,6 +764,66 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
               ansatteIProsj={ansatteIProsj}
             />
           ))}
+        </div>
+      )}
+
+      {/* ── Rediger-fane ── */}
+      {fane === 'rediger' && (
+        <div className="ks-fane-innhold">
+          <div style={{ fontSize: 13, color: '#64748b', marginBottom: 14 }}>
+            Legg til, endre eller slett punkter i denne sjekklisten.
+            Klikk <strong>Lagre</strong> øverst for å lagre endringene.
+          </div>
+          {lokale.map((p, i) => (
+            <div key={p.id || i} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', marginBottom: 8, background: '#fafafa', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+              {/* Flytt opp/ned */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flexShrink: 0 }}>
+                <button className="btn" style={{ fontSize: 10, padding: '2px 6px', lineHeight: 1 }}
+                  onClick={() => {
+                    if (i === 0) return
+                    const ny = [...lokale]; [ny[i], ny[i-1]] = [ny[i-1], ny[i]]; setLokale(ny)
+                  }} disabled={i === 0}>↑</button>
+                <button className="btn" style={{ fontSize: 10, padding: '2px 6px', lineHeight: 1 }}
+                  onClick={() => {
+                    if (i === lokale.length - 1) return
+                    const ny = [...lokale]; [ny[i], ny[i+1]] = [ny[i+1], ny[i]]; setLokale(ny)
+                  }} disabled={i === lokale.length - 1}>↓</button>
+              </div>
+
+              {/* Innhold */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <textarea className="input" rows={2} value={p.tekst || ''}
+                  onChange={e => setLokale(prev => prev.map((x, idx) => idx === i ? { ...x, tekst: e.target.value } : x))}
+                  placeholder="Punkt-tekst..." style={{ marginBottom: 5, fontSize: 13 }} />
+                <input className="input" value={p.veiledning_kort || ''}
+                  onChange={e => setLokale(prev => prev.map((x, idx) => idx === i ? { ...x, veiledning_kort: e.target.value } : x))}
+                  placeholder="Kort veiledning / hint..." style={{ marginBottom: 6, fontSize: 12 }} />
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12, color: '#475569' }}>
+                  {[['krever_bilde','📷 Foto-krav'],['krever_signering','✍️ Signatur'],['kommentar_pakrevd','💬 Kommentar']].map(([k, l]) => (
+                    <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={!!p[k]}
+                        onChange={e => setLokale(prev => prev.map((x, idx) => idx === i ? { ...x, [k]: e.target.checked } : x))} />
+                      {l}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Slett */}
+              <button className="btn" style={{ fontSize: 11, color: '#dc2626', borderColor: '#fca5a5', flexShrink: 0 }}
+                onClick={() => setLokale(prev => prev.filter((_, idx) => idx !== i))}>🗑</button>
+            </div>
+          ))}
+
+          {/* Legg til nytt punkt */}
+          <button className="btn" style={{ width: '100%', marginTop: 4 }}
+            onClick={() => setLokale(prev => [...prev, {
+              id: 'ny-' + Date.now(), tekst: '', beskrivelse: '', veiledning_kort: '',
+              regelverkLenker: [], krever_bilde: false, krever_signering: false, kommentar_pakrevd: false,
+              status: 'ikke-utfort', kommentar: '', bilder: [],
+            }])}>
+            + Legg til punkt
+          </button>
         </div>
       )}
 
