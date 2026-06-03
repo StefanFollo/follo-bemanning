@@ -915,6 +915,7 @@ function Bibliotek({ maler, onTilbake, onOppdaterMaler }) {
   const [aiModus, setAiModus] = useState(null)
   const [valgtMal, setValgtMal] = useState(null)
   const [fyller, setFyller] = useState(null)
+  const [faneLib, setFaneLib] = useState('alle')  // 'alle'|'fag'|'fase'|'oblig'
   const [fyllerAlle, setFyllerAlle] = useState(false)
   const [fyllerProgress, setFyllerProgress] = useState({ gjort: 0, total: 0 })
   const kanAdmin = ROLLE() === 'admin' || ROLLE() === 'kontor'
@@ -1020,44 +1021,108 @@ function Bibliotek({ maler, onTilbake, onOppdaterMaler }) {
         </div>
       )}
 
-      {grupper.map(g => (
-        <div key={g} style={{ marginBottom: 24 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ width: 3, height: 16, background: '#3b82f6', borderRadius: 2, display: 'inline-block' }} />
-            {g} ({gruppert[g].length})
-          </div>
-          <div className="ks-bib-grid">
-            {gruppert[g].map(m => {
-              const harBeskrivelse = m.punkter?.some(p => p.beskrivelse)
-              return (
-                <div key={m.id} className="ks-bib-kort">
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                    <div style={{ fontWeight: 700, fontSize: 14 }}>{m.navn}</div>
-                    {m.obligatorisk && <span style={{ fontSize: 10, background: '#fef3c7', color: '#92400e', borderRadius: 4, padding: '1px 5px' }}>Obligatorisk</span>}
-                  </div>
-                  <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>{m.punkter?.length || 0} punkter · v{m.versjon || 1} · {m.fag?.join(', ') || 'alle fag'}</div>
-                  {m.punkter?.slice(0, 2).map(p => (
-                    <div key={p.id} style={{ fontSize: 11, color: '#64748b', padding: '2px 0', borderTop: '1px solid #f8fafc' }}>
-                      · {p.tekst}{p.krever_signering ? ' ✍️' : ''}{p.krever_bilde ? ' 📷' : ''}
-                    </div>
-                  ))}
-                  {(m.punkter?.length || 0) > 2 && <div style={{ fontSize: 11, color: '#94a3b8' }}>+ {m.punkter.length - 2} til...</div>}
-                  {kanAdmin && (
-                    <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                      <button className="ks-bib-btn" onClick={() => { setValgtMal(m); setAiModus('endre') }}>✨ Endre</button>
-                      {!harBeskrivelse && (
-                        <button className="ks-bib-btn" onClick={() => fyllAIBeskrivelse(m)} disabled={fyller === m.id} style={{ color: '#0891b2' }}>
-                          {fyller === m.id ? '⏳ AI...' : '📖 Fyll beskrivelser'}
-                        </button>
-                      )}
-                    </div>
+      {/* ── Fane-bar ─────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, borderBottom: '2px solid #e2e8f0', paddingBottom: 0, flexWrap: 'wrap' }}>
+        {[
+          { key: 'alle',  label: `Alle (${maler.length})` },
+          { key: 'fag',   label: 'Per fag' },
+          { key: 'fase',  label: 'Per fase' },
+          { key: 'oblig', label: `Obligatorisk (${maler.filter(m => m.obligatorisk).length})` },
+        ].map(f => (
+          <button key={f.key} onClick={() => setFaneLib(f.key)}
+            style={{ padding: '7px 14px', border: 'none', borderBottom: faneLib === f.key ? '2px solid #2563eb' : '2px solid transparent', marginBottom: -2, background: 'none', cursor: 'pointer', fontWeight: faneLib === f.key ? 700 : 400, color: faneLib === f.key ? '#2563eb' : '#64748b', fontSize: 13 }}>
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Hjelpefunksjon: rendrer ett mal-kort ─────────────────────── */}
+      {(() => {
+        function MalKort({ m }) {
+          const harBeskrivelse = m.punkter?.some(p => p.beskrivelse)
+          return (
+            <div className="ks-bib-kort">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{m.navn}</div>
+                {m.obligatorisk && <span style={{ fontSize: 10, background: '#fef3c7', color: '#92400e', borderRadius: 4, padding: '1px 5px', flexShrink: 0 }}>Obligatorisk</span>}
+              </div>
+              <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 6 }}>
+                {m.punkter?.length || 0} punkter · v{m.versjon || 1}
+                {m.fase && <span style={{ marginLeft: 5, background: '#eff6ff', color: '#2563eb', borderRadius: 4, padding: '1px 5px', fontSize: 10 }}>{m.fase}</span>}
+                {m.fag?.length > 0 && <span style={{ marginLeft: 4 }}>· {m.fag.join(', ')}</span>}
+              </div>
+              {m.punkter?.slice(0, 2).map(p => (
+                <div key={p.id} style={{ fontSize: 11, color: '#64748b', padding: '2px 0', borderTop: '1px solid #f8fafc' }}>
+                  · {p.tekst}{p.krever_signering ? ' ✍️' : ''}{p.krever_bilde ? ' 📷' : ''}
+                </div>
+              ))}
+              {(m.punkter?.length || 0) > 2 && <div style={{ fontSize: 11, color: '#94a3b8' }}>+ {m.punkter.length - 2} til...</div>}
+              {kanAdmin && (
+                <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                  <button className="ks-bib-btn" onClick={() => { setValgtMal(m); setAiModus('endre') }}>✨ Endre</button>
+                  {!harBeskrivelse && (
+                    <button className="ks-bib-btn" onClick={() => fyllAIBeskrivelse(m)} disabled={fyller === m.id} style={{ color: '#0891b2' }}>
+                      {fyller === m.id ? '⏳ AI...' : '📖 Fyll beskrivelser'}
+                    </button>
                   )}
                 </div>
-              )
-            })}
+              )}
+            </div>
+          )
+        }
+
+        function GruppeBlokk({ tittel, liste }) {
+          if (!liste || liste.length === 0) return null
+          return (
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 3, height: 16, background: '#3b82f6', borderRadius: 2, display: 'inline-block' }} />
+                {tittel} ({liste.length})
+              </div>
+              <div className="ks-bib-grid">
+                {liste.map(m => <MalKort key={m.id} m={m} />)}
+              </div>
+            </div>
+          )
+        }
+
+        // ── Alle ───────────────────────────────────────────────────────
+        if (faneLib === 'alle') return grupper.map(g =>
+          <GruppeBlokk key={g} tittel={g} liste={gruppert[g]} />
+        )
+
+        // ── Per fag ────────────────────────────────────────────────────
+        if (faneLib === 'fag') return [
+          { key: 'alle',   label: '🦺 HMS / Alle fag', match: m => !m.fag || m.fag.length === 0 },
+          { key: 'tomrer', label: '🔨 Tømrer',          match: m => (m.fag || []).some(f => ['tomrer','flis'].includes(f)) },
+          { key: 'ror',    label: '🚰 Rør',             match: m => (m.fag || []).includes('ror') },
+          { key: 'el',     label: '⚡ El',              match: m => (m.fag || []).includes('el') },
+          { key: 'maler',  label: '🎨 Maler',           match: m => (m.fag || []).includes('maler') },
+        ].map(fg => <GruppeBlokk key={fg.key} tittel={fg.label} liste={maler.filter(fg.match)} />)
+
+        // ── Per fase ───────────────────────────────────────────────────
+        if (faneLib === 'fase') return [
+          { key: 'daglig',  label: '☀️ Daglig',          match: m => m.fase === 'daglig' },
+          { key: 'oppstart',label: '📅 Oppstart',         match: m => m.fase === 'oppstart' },
+          { key: 'bygg',    label: '🔧 Bygg-arbeid',      match: m => m.fase === 'bygg' },
+          { key: 'slutt',   label: '✅ Sluttkontroll',    match: m => m.fase === 'slutt' },
+          { key: 'ukjent',  label: '❓ Ukjent fase',      match: m => !m.fase },
+        ].map(fg => <GruppeBlokk key={fg.key} tittel={fg.label} liste={maler.filter(fg.match)} />)
+
+        // ── Obligatorisk ───────────────────────────────────────────────
+        if (faneLib === 'oblig') return (
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#92400e', marginBottom: 10 }}>
+              🔒 Obligatoriske maler ({maler.filter(m => m.obligatorisk).length})
+            </div>
+            <div className="ks-bib-grid">
+              {maler.filter(m => m.obligatorisk).map(m => <MalKort key={m.id} m={m} />)}
+            </div>
           </div>
-        </div>
-      ))}
+        )
+
+        return null
+      })()}
       {aiModus && <AiModal modus={aiModus} mal={valgtMal} onFerdig={aiHandter} onLukk={() => { setAiModus(null); setValgtMal(null) }} />}
     </div>
   )
@@ -1542,119 +1607,176 @@ function ProsjektVelger({ prosjekter, sjekklister, onVelg, valgt, autoOpen = fal
 function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliotek, onVisAvvik, onRensTestData, onOppdaterMaler }) {
   const [aiModal, setAiModal] = useState(false)
   const [visdiag, setVisdiag] = useState(false)
-  const totalFerdig = sjekklister.filter(s => s.status === 'ferdig').length
-  const totalAvvik = sjekklister.filter(s => (s.punkter || []).some(p => p.status === 'avvik')).length
-  // Nylig brukt (lagres i localStorage)
-  const [nyligBrukt, setNyligBrukt] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('ks_nylig_brukt') || '[]') } catch { return [] }
-  })
-  function velgOgHusk(p) {
-    const oppdatert = [p.id, ...nyligBrukt.filter(id => id !== p.id)].slice(0, 4)
-    setNyligBrukt(oppdatert)
-    localStorage.setItem('ks_nylig_brukt', JSON.stringify(oppdatert))
-    onVelgProsjekt(p)
-  }
-  const nyligeProsjekter = nyligBrukt.map(id => prosjekter.find(p => p.id === id)).filter(Boolean)
+  const [visAlleProsjekter, setVisAlleProsjekter] = useState(false)
+  const [sokProsjekt, setSokProsjekt] = useState('')
 
-  // Diagnostikk: sjekklister som ikke matcher noen prosjekt
+  // KPI beregninger
+  const iGangIds = new Set(sjekklister.filter(s => s.status !== 'ferdig').map(s => s.prosjektId))
+  const avvikAapne = sjekklister.filter(s => (s.punkter || []).some(p => p.status === 'avvik')).length
+  const klarSlutt = prosjekter.filter(p => {
+    const mine = sjekklister.filter(s => s.prosjektId === p.id)
+    return mine.length > 0 && mine.some(s => s.status === 'ferdig') && !mine.some(s => s.malId === 'mal-sluttkontroll')
+  }).length
   const prosjektIds = new Set(prosjekter.map(p => p.id))
   const ugyldigeSl = sjekklister.filter(s => !prosjektIds.has(s.prosjektId))
   const harMismatch = ugyldigeSl.length > 0 && sjekklister.length > 0
+  const malerUtenBeskrivelse = maler.filter(m => !m.punkter?.some(p => p.beskrivelse))
+
+  // "Min dag" — topp 3 sjekklister som bør gjøres
+  const dagensOppgaver = sjekklister
+    .filter(sl => sl.status !== 'ferdig')
+    .map(sl => ({ sl, prosjekt: prosjekter.find(p => p.id === sl.prosjektId), mal: maler.find(m => m.id === sl.malId) }))
+    .filter(x => x.prosjekt)
+    .sort((a, b) => {
+      if (a.mal?.obligatorisk && !b.mal?.obligatorisk) return -1
+      if (!a.mal?.obligatorisk && b.mal?.obligatorisk) return 1
+      return prosent(a.sl.punkter) - prosent(b.sl.punkter)
+    })
+    .slice(0, 3)
+
+  // Aktive prosjekter med KS
+  const aktiveKS = prosjekter.filter(p => sjekklister.some(s => s.prosjektId === p.id))
+  const prosjekterVist = aktiveKS
+    .filter(p => !sokProsjekt || p.navn.toLowerCase().includes(sokProsjekt.toLowerCase()))
+    .slice(0, visAlleProsjekter ? 999 : 4)
+
+  // Ukedag
+  const DAGER = ['Søndag','Mandag','Tirsdag','Onsdag','Torsdag','Fredag','Lørdag']
+  const MANEDER = ['januar','februar','mars','april','mai','juni','juli','august','september','oktober','november','desember']
+  const naaObj = new Date()
+  const dagLabel = DAGER[naaObj.getDay()] + ' ' + naaObj.getDate() + '. ' + MANEDER[naaObj.getMonth()]
 
   return (
     <div className="ks-side">
-      {/* AI-banner */}
-      <div className="ks-ai-banner" onClick={() => setAiModal(true)}>
-        <div className="ks-ai-banner-ikon">✨</div>
-        <div>
-          <div className="ks-ai-banner-tittel">Spør AI</div>
-          <div className="ks-ai-banner-sub">Lag ny sjekkliste · Endre eksisterende · Få hjelp</div>
-        </div>
-      </div>
 
-      {/* Stat-kort */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
-        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 14, padding: '16px 18px', textAlign: 'center' }}>
-          <div style={{ fontSize: 28, fontWeight: 800, color: '#1d4ed8' }}>{prosjekter.length}</div>
-          <div style={{ fontSize: 12, color: '#3b82f6', fontWeight: 600, marginTop: 2 }}>Prosjekter</div>
-        </div>
-        <div style={{ background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 14, padding: '16px 18px', textAlign: 'center' }}>
-          <div style={{ fontSize: 28, fontWeight: 800, color: '#16a34a' }}>{totalFerdig}</div>
-          <div style={{ fontSize: 12, color: '#22c55e', fontWeight: 600, marginTop: 2 }}>Ferdig</div>
-        </div>
-        <div style={{ background: totalAvvik > 0 ? '#fff7ed' : '#f8fafc', border: `1px solid ${totalAvvik > 0 ? '#fed7aa' : '#e2e8f0'}`, borderRadius: 14, padding: '16px 18px', textAlign: 'center', cursor: totalAvvik > 0 ? 'pointer' : 'default' }} onClick={totalAvvik > 0 ? onVisAvvik : undefined}>
-          <div style={{ fontSize: 28, fontWeight: 800, color: totalAvvik > 0 ? '#ea580c' : '#94a3b8' }}>{totalAvvik}</div>
-          <div style={{ fontSize: 12, color: totalAvvik > 0 ? '#ea580c' : '#94a3b8', fontWeight: 600, marginTop: 2 }}>Avvik {totalAvvik > 0 ? '↗' : ''}</div>
-        </div>
-      </div>
-
-      {/* Prosjektvelger */}
-      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '18px 20px 20px', marginBottom: 16, boxShadow: '0 1px 4px rgba(0,0,0,.04)' }}>
-        <div style={{ fontWeight: 700, fontSize: 13, color: '#475569', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.04em' }}>📁 Velg prosjekt for å jobbe</div>
-        <ProsjektVelger prosjekter={prosjekter} sjekklister={sjekklister} onVelg={velgOgHusk} valgt={null} />
-        {nyligeProsjekter.length > 0 && (
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.04em' }}>🕐 Nylig brukt</div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {nyligeProsjekter.map(p => {
-                const mine = sjekklister.filter(s => s.prosjektId === p.id)
-                const pst = mine.length ? Math.round(mine.reduce((sum, s) => sum + prosent(s.punkter), 0) / mine.length) : 0
-                return (
-                  <button key={p.id} onClick={() => velgOgHusk(p)}
-                    style={{ fontSize: 12, padding: '5px 12px', border: '1px solid #e2e8f0', borderRadius: 8, background: '#f8fafc', cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontWeight: 600 }}>{p.navn.length > 24 ? p.navn.slice(0, 22) + '…' : p.navn}</span>
-                    {mine.length > 0 && <span style={{ color: pst === 100 ? '#16a34a' : '#64748b', fontWeight: 700 }}>{pst}%</span>}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Knapper */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 20 }}>
-        <button onClick={onVisBibliotek}
-          style={{ padding: '14px 16px', border: 'none', borderRadius: 12, background: '#1e293b', color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-          📚 Mal-bibliotek <span style={{ fontSize: 12, background: 'rgba(255,255,255,.2)', borderRadius: 6, padding: '1px 7px' }}>{maler.length}</span>
-        </button>
-        <button onClick={onVisAvvik}
-          style={{ padding: '14px 16px', border: '2px solid #fee2e2', borderRadius: 12, background: '#fff', color: '#dc2626', cursor: 'pointer', fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8 }}>
-          ⚠️ Avvik-register {totalAvvik > 0 && <span style={{ fontSize: 12, background: '#fee2e2', borderRadius: 6, padding: '1px 7px' }}>{totalAvvik}</span>}
-        </button>
-      </div>
-
-      {/* Diagnostikk-banner: sjekklister koblet til ukjente prosjekter */}
-      {harMismatch && (
-        <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 12, padding: '12px 16px', marginTop: 4 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setVisdiag(v => !v)}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#92400e' }}>
-              ⚠️ {ugyldigeSl.length} sjekklister er koblet til prosjekter som ikke finnes {visdiag ? '▲' : '▼'}
-            </span>
-            {onRensTestData && (
-              <button className="btn" style={{ fontSize: 11, padding: '3px 10px', background: '#dc2626', color: '#fff', border: 'none' }}
-                onClick={e => { e.stopPropagation(); onRensTestData(ugyldigeSl.map(s => s.id)) }}>
-                🗑 Slett disse
-              </button>
-            )}
-          </div>
-          {visdiag && (
-            <div style={{ marginTop: 10, fontSize: 12, color: '#92400e' }}>
-              <div style={{ marginBottom: 6, fontWeight: 600 }}>ProsjektIder i systemet: {[...prosjektIds].slice(0, 5).join(', ')}{prosjektIds.size > 5 ? ` +${prosjektIds.size - 5} til` : ''}</div>
-              {[...new Set(ugyldigeSl.map(s => s.prosjektId))].map(id => (
-                <div key={id} style={{ padding: '2px 0' }}>
-                  • ID <code style={{ background: '#fef9c3', padding: '0 3px', borderRadius: 2 }}>{id}</code> — {ugyldigeSl.filter(s => s.prosjektId === id).length} sjekklister
+      {/* ── Min dag ─────────────────────────────────────────────── */}
+      <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)', borderRadius: 16, padding: '18px 20px', marginBottom: 20, color: '#fff' }}>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', opacity: .7, textTransform: 'uppercase', marginBottom: 4 }}>⚡ Min dag</div>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: dagensOppgaver.length ? 16 : 4, opacity: .9 }}>{dagLabel}</div>
+        {dagensOppgaver.length === 0 ? (
+          <div style={{ opacity: .6, fontSize: 13 }}>Ingen aktive sjekklister — knytt maler til prosjekter for å komme i gang.</div>
+        ) : dagensOppgaver.map(({ sl, prosjekt, mal }) => {
+          const pst = prosent(sl.punkter)
+          const avvikAnt = (sl.punkter || []).filter(p => p.status === 'avvik').length
+          return (
+            <div key={sl.id} onClick={() => onVelgProsjekt(prosjekt)}
+              style={{ background: 'rgba(255,255,255,.1)', borderRadius: 10, padding: '11px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, opacity: .7, marginBottom: 2 }}>📍 {prosjekt.navn}</div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{sl.navn}</div>
+                <div style={{ fontSize: 11, opacity: .7, marginTop: 3 }}>
+                  {mal?.fase === 'daglig' ? 'Daglig' : mal?.obligatorisk ? 'OBLIGATORISK' : 'Bygg-arbeid'}
+                  {' · '}{sl.punkter?.length || 0} pkt · {pst}% fylt
+                  {avvikAnt > 0 && <span style={{ color: '#fca5a5', marginLeft: 6 }}>⚠ {avvikAnt}</span>}
                 </div>
+              </div>
+              <span style={{ fontSize: 18, opacity: .7 }}>→</span>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* ── KPI × 4 ─────────────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
+        {[
+          { v: prosjekter.length, label: 'Prosjekter', bg: '#eff6ff', border: '#bfdbfe', clr: '#1d4ed8' },
+          { v: iGangIds.size,     label: 'I gang',     bg: '#f0fdf4', border: '#bbf7d0', clr: '#16a34a' },
+          { v: klarSlutt,         label: 'Klar slutt', bg: klarSlutt > 0 ? '#fef3c7' : '#f8fafc', border: klarSlutt > 0 ? '#fde68a' : '#e2e8f0', clr: klarSlutt > 0 ? '#d97706' : '#94a3b8' },
+          { v: avvikAapne,        label: 'Avvik åpne', bg: avvikAapne > 0 ? '#fff5f5' : '#f8fafc', border: avvikAapne > 0 ? '#fca5a5' : '#e2e8f0', clr: avvikAapne > 0 ? '#dc2626' : '#94a3b8', klikk: avvikAapne > 0 ? onVisAvvik : undefined },
+        ].map((kpi, i) => (
+          <div key={i} onClick={kpi.klikk}
+            style={{ background: kpi.bg, border: '1px solid ' + kpi.border, borderRadius: 12, padding: '12px 8px', textAlign: 'center', cursor: kpi.klikk ? 'pointer' : 'default' }}>
+            <div style={{ fontSize: 22, fontWeight: 800, color: kpi.clr }}>{kpi.v}</div>
+            <div style={{ fontSize: 10, color: kpi.clr, fontWeight: 600, marginTop: 2 }}>{kpi.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Trenger oppmerksomhet ────────────────────────────────── */}
+      {(malerUtenBeskrivelse.length > 0 || harMismatch) && (
+        <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 12, padding: '12px 16px', marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 13, color: '#92400e', marginBottom: 6 }}>🚨 Trenger oppmerksomhet</div>
+          {malerUtenBeskrivelse.length > 0 && (
+            <div style={{ fontSize: 13, color: '#92400e', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+              ⚠️ {malerUtenBeskrivelse.length} maler mangler regelverk-beskrivelse
+              <button className="btn" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => setAiModal(true)}>✨ Fyll med AI</button>
+            </div>
+          )}
+          {harMismatch && (
+            <div style={{ fontSize: 13, color: '#92400e', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setVisdiag(v => !v)}>
+              <span>⚠️ {ugyldigeSl.length} sjekklister koblet til ukjente prosjekter {visdiag ? '▲' : '▼'}</span>
+              {onRensTestData && <button className="btn" style={{ fontSize: 11, padding: '2px 8px', background: '#dc2626', color: '#fff', border: 'none' }} onClick={e => { e.stopPropagation(); onRensTestData(ugyldigeSl.map(s => s.id)) }}>🗑 Slett</button>}
+            </div>
+          )}
+          {visdiag && harMismatch && (
+            <div style={{ marginTop: 8, fontSize: 12, color: '#92400e' }}>
+              {[...new Set(ugyldigeSl.map(s => s.prosjektId))].map(id => (
+                <div key={id}>• ID {id} — {ugyldigeSl.filter(s => s.prosjektId === id).length} sjekklister</div>
               ))}
             </div>
           )}
         </div>
       )}
 
+      {/* ── Prosjekter med KS ────────────────────────────────────── */}
+      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '16px 18px', marginBottom: 16 }}>
+        <div style={{ fontWeight: 700, fontSize: 13, color: '#475569', marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>📋 {aktiveKS.length > 0 ? 'Prosjekter med KS' : 'Velg prosjekt'}</span>
+          {aktiveKS.length > 0 && <span style={{ fontSize: 11, color: '#94a3b8' }}>{aktiveKS.length}/{prosjekter.length}</span>}
+        </div>
+        {aktiveKS.length > 0 && (
+          <input className="input" placeholder="🔍 Søk prosjekt..." value={sokProsjekt} onChange={e => setSokProsjekt(e.target.value)} style={{ marginBottom: 10, fontSize: 13 }} />
+        )}
+        {prosjekterVist.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {prosjekterVist.map(p => {
+              const mine = sjekklister.filter(s => s.prosjektId === p.id)
+              const pst = mine.length ? Math.round(mine.reduce((sum, sl) => sum + prosent(sl.punkter), 0) / mine.length) : 0
+              const avvik = mine.filter(s => (s.punkter || []).some(pt => pt.status === 'avvik')).length
+              return (
+                <div key={p.id} onClick={() => onVelgProsjekt(p)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid #f1f5f9', borderRadius: 10, cursor: 'pointer', background: '#f8fafc' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{p.navn}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ flex: 1, height: 4, background: '#e2e8f0', borderRadius: 2 }}>
+                        <div style={{ width: pst + '%', height: '100%', background: pst === 100 ? '#16a34a' : '#3b82f6', borderRadius: 2 }} />
+                      </div>
+                      <span style={{ fontSize: 11, color: '#64748b', flexShrink: 0 }}>{mine.filter(s => s.status === 'ferdig').length}/{mine.length}</span>
+                    </div>
+                  </div>
+                  {avvik > 0 && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 700 }}>⚠ {avvik}</span>}
+                  <span style={{ color: '#94a3b8', fontSize: 16 }}>›</span>
+                </div>
+              )
+            })}
+            {aktiveKS.length > 4 && !visAlleProsjekter && (
+              <button className="btn" style={{ width: '100%', fontSize: 12 }} onClick={() => setVisAlleProsjekter(true)}>
+                Vis alle {aktiveKS.length} prosjekter ↓
+              </button>
+            )}
+          </div>
+        ) : (
+          <ProsjektVelger prosjekter={prosjekter} sjekklister={sjekklister} onVelg={onVelgProsjekt} valgt={null} />
+        )}
+      </div>
+
+      {/* ── Knapper ──────────────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <button onClick={onVisBibliotek}
+          style={{ padding: '13px 16px', border: 'none', borderRadius: 12, background: '#1e293b', color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>
+          📚 Mal-bibliotek <span style={{ fontSize: 12, background: 'rgba(255,255,255,.2)', borderRadius: 6, padding: '1px 7px', marginLeft: 4 }}>{maler.length}</span>
+        </button>
+        <button onClick={onVisAvvik}
+          style={{ padding: '13px 16px', border: '2px solid #fee2e2', borderRadius: 12, background: '#fff', color: '#dc2626', cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>
+          ⚠️ Avvik-register {avvikAapne > 0 && <span style={{ fontSize: 12, background: '#fee2e2', borderRadius: 6, padding: '1px 7px', marginLeft: 4 }}>{avvikAapne}</span>}
+        </button>
+      </div>
+
       {aiModal && <AiModal modus="ny" onFerdig={async ({ type, mal }) => {
         if (type === 'ny-mal' && mal && onOppdaterMaler) {
-          const id = `mal-${Date.now()}`
-          await apiFetch('/api/ks/maler', { method: 'POST', body: { ...mal, id } }).catch(() => {})
+          const nyttMalId = 'mal-' + (maler.length + sjekklister.length + 1)
+          await apiFetch('/api/ks/maler', { method: 'POST', body: { ...mal, id: nyttMalId } }).catch(() => {})
           const friske = await apiFetch('/api/ks/maler').catch(() => null)
           if (friske) onOppdaterMaler(friske)
         }

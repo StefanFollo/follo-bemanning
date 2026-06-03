@@ -18,7 +18,7 @@ function p(id, tekst, opts = {}) {
   };
 }
 
-export const KS_MALER = [
+const KS_MALER_RAW = [
 
   // ════════════════════════════════════════════════════════════════════
   //  GRUPPE: HMS
@@ -675,5 +675,61 @@ export const KS_MALER = [
     opprettet: naa, sist_endret: naa, endret_av: 'System', versjon: 1,
   },
 ];
+
+// ─── Berik maler med fase og kilde ─────────────────────────────────────
+// Gjøres via map() slik at INGEN eksisterende punkter eller beskrivelser endres.
+// Fase-logikk basert på gruppe og ID:
+//   HMS daglig → 'daglig'
+//   HMS (risikovurdering, SHA) → 'oppstart'
+//   Sluttkontroll + el-slutt → 'slutt'
+//   Alt annet (bygg-arbeid) → 'bygg'
+function tildelFase(m) {
+  if (m.id === 'mal-hms-daglig') return 'daglig'
+  if (m.gruppe === 'HMS') return 'oppstart'
+  if (m.gruppe === 'Sluttkontroll' || m.id === 'mal-el-slutt') return 'slutt'
+  return 'bygg'
+}
+
+export const KS_MALER = KS_MALER_RAW.map(m => ({
+  ...m,
+  fase: m.fase || tildelFase(m),
+  kilde: m.kilde || 'follo',
+}))
+
+// ─── Pakke-definisjoner ─────────────────────────────────────────────────
+// Brukes for auto-forslag ved prosjekt-opprettelse.
+// autoVed: 'alle' | jobbType-nøkkel | 'slutt'
+export const KS_PAKKER = [
+  {
+    id: 'pakke-hms', navn: 'HMS-pakke', ikon: '🦺',
+    beskrivelse: 'Obligatorisk på alle prosjekter',
+    malIds: ['mal-hms-daglig', 'mal-risikovurdering-oppstart', 'mal-sha-sja', 'mal-sluttkontroll'],
+    autoVed: 'alle',
+  },
+  {
+    id: 'pakke-bad', navn: 'Bad-rehab', ikon: '🛁',
+    beskrivelse: 'Automatisk for bad-prosjekter',
+    malIds: ['mal-bad-riving', 'mal-bad-membran', 'mal-bad-flis', 'mal-bad-ror'],
+    autoVed: 'bad',
+  },
+  {
+    id: 'pakke-fasade', navn: 'Fasade-rehab', ikon: '🏠',
+    beskrivelse: 'Automatisk for fasade-prosjekter',
+    malIds: ['mal-fasade-stillas', 'mal-fasade-riving', 'mal-fasade-underlag', 'mal-fasade-kledning', 'mal-fasade-vinduer', 'mal-fasade-beslag', 'mal-maling-utvendig', 'mal-tak-beslag'],
+    autoVed: 'fasade',
+  },
+  {
+    id: 'pakke-tilbygg', navn: 'Tilbygg', ikon: '🏗',
+    beskrivelse: 'Automatisk for tilbygg-prosjekter',
+    malIds: ['mal-risikovurdering-oppstart', 'mal-sha-sja', 'mal-tomrer-riving', 'mal-tomrer-baerende', 'mal-tomrer-isolasjon', 'mal-tomrer-gips', 'mal-tomrer-gulv', 'mal-fasade-stillas', 'mal-tak-stillas', 'mal-tak-undertak', 'mal-tak-tekking', 'mal-el-innvendig', 'mal-sluttkontroll'],
+    autoVed: 'tilbygg',
+  },
+  {
+    id: 'pakke-slutt', navn: 'Sluttkontroll', ikon: '🔨',
+    beskrivelse: 'Automatisk ved slutt-fase i framdriftsplan',
+    malIds: ['mal-sluttkontroll', 'mal-el-slutt'],
+    autoVed: 'slutt',
+  },
+]
 
 export default KS_MALER;

@@ -28,7 +28,19 @@ export default async function handler(req, res) {
 
   if (req.method === 'GET') {
     const maler = (await redis.get('fbs_ks_maler')) || []
-    return res.status(200).json(maler)
+    // Berik med fase/kilde for eksisterende maler som ble seedet uten disse feltene
+    function tildelFase(m) {
+      if (m.id === 'mal-hms-daglig') return 'daglig'
+      if (m.gruppe === 'HMS') return 'oppstart'
+      if (m.gruppe === 'Sluttkontroll' || m.id === 'mal-el-slutt') return 'slutt'
+      return 'bygg'
+    }
+    const enriched = maler.map(m => ({
+      ...m,
+      fase: m.fase || tildelFase(m),
+      kilde: m.kilde || 'follo',
+    }))
+    return res.status(200).json(enriched)
   }
 
   if (req.method === 'POST') {
