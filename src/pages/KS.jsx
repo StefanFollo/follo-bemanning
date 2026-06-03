@@ -2074,29 +2074,6 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
       {/* ── Prosjektvelger (rullegardin) ────────────────────────── */}
       <KSProsjektVelger prosjekter={prosjekter} sjekklister={sjekklister} onVelg={onVelgProsjekt} />
 
-      {/* ── Min dag ─────────────────────────────────────────────── */}
-      <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #334155 100%)', borderRadius: 16, padding: '18px 20px', marginBottom: 20, color: '#fff' }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', opacity: .7, textTransform: 'uppercase', marginBottom: 4 }}>⚡ Min dag</div>
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: dagensOppgaver.length ? 16 : 4, opacity: .9 }}>{dagLabel}</div>
-        {dagensOppgaver.length === 0 ? (
-          <div style={{ opacity: .6, fontSize: 13 }}>Ingen aktive sjekklister — knytt maler til prosjekter for å komme i gang.</div>
-        ) : dagensOppgaver.map(oppg => (
-          <div key={oppg.id} onClick={() => onVelgProsjekt(oppg.prosjekt)}
-            style={{ background: 'rgba(255,255,255,.1)', borderRadius: 10, padding: '11px 14px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 11, opacity: .7, marginBottom: 2 }}>📍 {oppg.prosjekt.navn}</div>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>{oppg.navn}</div>
-              <div style={{ fontSize: 11, opacity: .7, marginTop: 3 }}>
-                {oppg.mal?.fase === 'daglig' ? 'Daglig' : oppg.mal?.obligatorisk ? 'OBLIGATORISK' : 'Bygg-arbeid'}
-                {' · '}{oppg.pst}% fylt
-                {oppg.avvikAnt > 0 && <span style={{ color: '#fca5a5', marginLeft: 6 }}>⚠ {oppg.avvikAnt}</span>}
-              </div>
-            </div>
-            <span style={{ fontSize: 18, opacity: .7 }}>→</span>
-          </div>
-        ))}
-      </div>
-
       {/* ── KPI × 4 ─────────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
         {[
