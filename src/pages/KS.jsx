@@ -989,11 +989,130 @@ function ProsjektVisning({ prosjekt, sjekklister, maler, ansatte, alleProsjekter
   )
 }
 
+// ── Manuelt redigeringspanel for mal ─────────────────────────────────────────
+
+function MalRedigerPanel({ mal, onLagre, onLukk }) {
+  const [navn, setNavn] = useState(mal.navn)
+  const [fase, setFase] = useState(mal.fase || 'bygg')
+  const [kategori, setKategori] = useState(mal.kategoriBibliotek || 'annet')
+  const [punkter, setPunkter] = useState(mal.punkter || [])
+  const [lagrer, setLagrer] = useState(false)
+
+  function oppdaterPunkt(i, felt, verdi) {
+    setPunkter(prev => prev.map((p, idx) => idx === i ? { ...p, [felt]: verdi } : p))
+  }
+  function slettPunkt(i) { setPunkter(prev => prev.filter((_, idx) => idx !== i)) }
+  function flytt(i, d) {
+    const ny = [...punkter]; const j = i + d
+    if (j < 0 || j >= ny.length) return;
+    [ny[i], ny[j]] = [ny[j], ny[i]]; setPunkter(ny)
+  }
+  function leggTilPunkt() {
+    setPunkter(prev => [...prev, { id: 'ny-' + prev.length, tekst: '', beskrivelse: '', veiledning_kort: '', regelverkLenker: [], krever_bilde: false, krever_signering: false, kommentar_pakrevd: false }])
+  }
+  async function lagre() {
+    if (!navn.trim()) return
+    setLagrer(true)
+    try {
+      const oppdatert = { ...mal, navn, fase, kategoriBibliotek: kategori, punkter, versjon: (mal.versjon || 1) + 1, sist_endret: new Date().toISOString(), endret_av: BRUKER() }
+      await apiFetch('/api/ks/maler?id=' + mal.id, { method: 'PUT', body: oppdatert })
+      onLagre(oppdatert)
+    } catch (e) { alert('Feil ved lagring: ' + e.message) }
+    setLagrer(false)
+  }
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 400, overflow: 'auto', padding: '20px 16px' }}
+      onClick={onLukk}>
+      <div style={{ background: '#fff', borderRadius: 16, maxWidth: 600, margin: '0 auto', padding: '22px 20px' }} onClick={e => e.stopPropagation()}>
+        <div style={{ fontWeight: 800, fontSize: 17, marginBottom: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          Rediger mal
+          <button className="btn-icon" onClick={onLukk}>✕</button>
+        </div>
+
+        {/* Meta */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 18 }}>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 3 }}>Tittel</label>
+            <input className="input" value={navn} onChange={e => setNavn(e.target.value)} />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 3 }}>Fase</label>
+            <select className="input" value={fase} onChange={e => setFase(e.target.value)}>
+              <option value="daglig">Daglig</option>
+              <option value="oppstart">Oppstart</option>
+              <option value="bygg">Bygg-fase</option>
+              <option value="slutt">Sluttkontroll</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 3 }}>Kategori</label>
+            <select className="input" value={kategori} onChange={e => setKategori(e.target.value)}>
+              <option value="hms">HMS</option>
+              <option value="bad">Bad</option>
+              <option value="yttervegg">Yttervegg</option>
+              <option value="tak">Tak</option>
+              <option value="innvendig">Innvendig</option>
+              <option value="ror">Rør</option>
+              <option value="el">El</option>
+              <option value="annet">Annet</option>
+            </select>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+            <div style={{ padding: '8px 12px', background: '#f8fafc', borderRadius: 8, fontSize: 12, color: '#64748b', width: '100%' }}>
+              v{mal.versjon || 1} → v{(mal.versjon || 1) + 1} ved lagring
+            </div>
+          </div>
+        </div>
+
+        {/* Punkter */}
+        <div style={{ fontWeight: 700, fontSize: 13, color: '#1e293b', marginBottom: 10 }}>
+          Sjekkpunkter ({punkter.length})
+        </div>
+        <div style={{ maxHeight: 400, overflowY: 'auto', marginBottom: 10 }}>
+          {punkter.map((p, i) => (
+            <div key={p.id || i} style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '10px 12px', marginBottom: 8, background: '#fafafa' }}>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 3, flexShrink: 0 }}>
+                  <button className="btn" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => flytt(i, -1)} disabled={i === 0}>↑</button>
+                  <button className="btn" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => flytt(i, 1)} disabled={i === punkter.length - 1}>↓</button>
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <textarea className="input" rows={2} value={p.tekst} onChange={e => oppdaterPunkt(i, 'tekst', e.target.value)}
+                    placeholder="Sjekkpunkt-tekst..." style={{ marginBottom: 5, fontSize: 13 }} />
+                  <input className="input" value={p.veiledning_kort || ''} onChange={e => oppdaterPunkt(i, 'veiledning_kort', e.target.value)}
+                    placeholder="Kort veiledning (mobil-hint)..." style={{ marginBottom: 6, fontSize: 12 }} />
+                  <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12 }}>
+                    {[['krever_bilde','📷 Foto-krav'],['krever_signering','✍️ Signatur'],['kommentar_pakrevd','💬 Kommentar']].map(([k,l]) => (
+                      <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', color: '#475569' }}>
+                        <input type="checkbox" checked={!!p[k]} onChange={e => oppdaterPunkt(i, k, e.target.checked)} /> {l}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <button className="btn" style={{ fontSize: 11, color: '#dc2626', borderColor: '#fca5a5', flexShrink: 0 }} onClick={() => slettPunkt(i)}>🗑</button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button className="btn" style={{ width: '100%', marginBottom: 18 }} onClick={leggTilPunkt}>+ Legg til punkt</button>
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button className="btn" onClick={onLukk}>Avbryt</button>
+          <button className="btn btn-primary" onClick={lagre} disabled={lagrer || !navn.trim()}>
+            {lagrer ? '⏳ Lagrer...' : '💾 Lagre (v' + ((mal.versjon || 1) + 1) + ')'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Mal-bibliotek ─────────────────────────────────────────────────────────────
 
 function Bibliotek({ maler, onTilbake, onOppdaterMaler }) {
   const [aiModus, setAiModus] = useState(null)
   const [valgtMal, setValgtMal] = useState(null)
+  const [redigerMal, setRedigerMal] = useState(null)  // åpner MalRedigerPanel
   const [fyller, setFyller] = useState(null)
   const [faneLib, setFaneLib] = useState('alle')  // 'alle'|'fag'|'fase'|'oblig'
   const [fyllerAlle, setFyllerAlle] = useState(false)
@@ -1139,7 +1258,8 @@ function Bibliotek({ maler, onTilbake, onOppdaterMaler }) {
               {(m.punkter?.length || 0) > 2 && <div style={{ fontSize: 11, color: '#94a3b8' }}>+ {m.punkter.length - 2} til...</div>}
               {kanAdmin && (
                 <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                  <button className="ks-bib-btn" onClick={() => { setValgtMal(m); setAiModus('endre') }}>✨ Endre</button>
+                  <button className="ks-bib-btn" onClick={() => setRedigerMal(m)}>✏️ Endre</button>
+                  <button className="ks-bib-btn" style={{ color: '#6366f1', fontSize: 10 }} onClick={() => { setValgtMal(m); setAiModus('endre') }}>✨ AI</button>
                   {!harBeskrivelse && (
                     <button className="ks-bib-btn" onClick={() => fyllAIBeskrivelse(m)} disabled={fyller === m.id} style={{ color: '#0891b2' }}>
                       {fyller === m.id ? '⏳ AI...' : '📖 Fyll beskrivelser'}
@@ -1203,6 +1323,7 @@ function Bibliotek({ maler, onTilbake, onOppdaterMaler }) {
 
         return null
       })()}
+      {redigerMal && <MalRedigerPanel mal={redigerMal} onLagre={oppdatert => { onOppdaterMaler(maler.map(m => m.id === oppdatert.id ? oppdatert : m)); setRedigerMal(null) }} onLukk={() => setRedigerMal(null)} />}
       {aiModus && <AiModal modus={aiModus} mal={valgtMal} onFerdig={aiHandter} onLukk={() => { setAiModus(null); setValgtMal(null) }} />}
     </div>
   )
@@ -1791,6 +1912,32 @@ function KSProsjektVelger({ prosjekter, sjekklister, onVelg }) {
 
 // ── KS Prosjekt-detalj (to-kolonner med drag-drop) ────────────────────────────
 
+// Fase-basert strukturering
+const FASE_INFO_KS = {
+  oppstart: { label: '📅 Oppstart', farge: '#3b82f6' },
+  bygg:     { label: '🔨 Bygg-fase', farge: '#f59e0b' },
+  slutt:    { label: '✅ Sluttkontroll', farge: '#16a34a' },
+}
+const FASE_ORDEN_KS = ['oppstart', 'bygg', 'slutt']
+
+const BYGGRUPPE_INFO = {
+  bad:       { label: '🛁 Bad',       farge: '#0891b2' },
+  yttervegg: { label: '🏠 Yttervegg', farge: '#ea580c' },
+  tak:       { label: '🏗 Tak',       farge: '#7c3aed' },
+  innvendig: { label: '🪟 Innvendig', farge: '#854d0e' },
+  ror:       { label: '💧 Rør',       farge: '#1d4ed8' },
+  el:        { label: '⚡ El',        farge: '#f59e0b' },
+  annet:     { label: '📦 Annet',     farge: '#64748b' },
+}
+const BYGGRUPPE_ORDEN = ['bad', 'yttervegg', 'tak', 'innvendig', 'ror', 'el', 'annet']
+
+function getFase(m) {
+  const f = m.fase
+  if (f === 'daglig' || f === 'oppstart') return 'oppstart'
+  if (f === 'slutt') return 'slutt'
+  return 'bygg'
+}
+
 const KAT_INFO_KS = {
   hms:       { label: '🛡 HMS',       farge: '#dc2626' },
   bad:       { label: '🛁 Bad',       farge: '#0891b2' },
@@ -1803,42 +1950,36 @@ const KAT_INFO_KS = {
 const KAT_ORDEN_KS = ['hms', 'bad', 'yttervegg', 'tak', 'innvendig', 'teknisk', 'annet']
 
 function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, onOppdaterProsjekt }) {
-  const [dragType, setDragType] = useState(null)
+  const [dragType, setDragType] = useState(null)   // 'mal' | 'fase' | 'subgruppe'
   const [dragData, setDragData] = useState(null)
   const [dragOver, setDragOver] = useState(false)
   const [toast, setToast] = useState(null)
   const [soekBibliotek, setSoekBibliotek] = useState('')
+  const [kollapset, setKollapset] = useState({})
 
   const ksSjekklister = prosjekt.ksSjekklister || []
   const tildelteMalIds = new Set(ksSjekklister.map(k => k.malId))
 
-  function visToast(msg, type = 'info') {
-    setToast({ msg, type })
-    setTimeout(() => setToast(null), 3000)
+  function visToast(msg, type = 'info') { setToast({ msg, type }); setTimeout(() => setToast(null), 3000) }
+  function toggleKollaps(key) { setKollapset(k => ({ ...k, [key]: !k[key] })) }
+
+  function lagNyKS(m, kilde) {
+    return { malId: m.id, tildeltDato: new Date().toISOString(), tildeltAv: kilde, status: 'ikke-startet', framdrift: { utfylt: 0, totalt: m.punkter?.length || 0 }, svar: [], avvik: [] }
   }
 
   function leggTilMal(malId, kilde) {
     if (tildelteMalIds.has(malId)) { visToast('Allerede tildelt', 'warn'); return false }
     const mal = maler.find(m => m.id === malId)
     if (!mal) return false
-    const ny = {
-      malId, tildeltDato: new Date().toISOString(), tildeltAv: kilde,
-      status: 'ikke-startet', framdrift: { utfylt: 0, totalt: mal.punkter?.length || 0 }, svar: [], avvik: [],
-    }
-    onOppdaterProsjekt({ ...prosjekt, ksSjekklister: [...ksSjekklister, ny] })
+    onOppdaterProsjekt({ ...prosjekt, ksSjekklister: [...ksSjekklister, lagNyKS(mal, kilde)] })
     return true
   }
 
-  function leggTilGruppe(kategori, kilde) {
-    const gruppeMaler = maler.filter(m => (m.kategoriBibliotek || 'annet') === kategori)
-    const nye = gruppeMaler.filter(m => !tildelteMalIds.has(m.id))
-    const dup = gruppeMaler.length - nye.length
-    if (nye.length === 0) { visToast('Alle i gruppen er allerede tildelt', 'warn'); return }
-    const nyeKS = nye.map(m => ({
-      malId: m.id, tildeltDato: new Date().toISOString(), tildeltAv: kilde,
-      status: 'ikke-startet', framdrift: { utfylt: 0, totalt: m.punkter?.length || 0 }, svar: [], avvik: [],
-    }))
-    onOppdaterProsjekt({ ...prosjekt, ksSjekklister: [...ksSjekklister, ...nyeKS] })
+  function leggTilListe(malListe, kilde) {
+    const nye = malListe.filter(m => !tildelteMalIds.has(m.id))
+    const dup = malListe.length - nye.length
+    if (nye.length === 0) { visToast('Alle er allerede tildelt', 'warn'); return }
+    onOppdaterProsjekt({ ...prosjekt, ksSjekklister: [...ksSjekklister, ...nye.map(m => lagNyKS(m, kilde))] })
     visToast(dup > 0 ? `La til ${nye.length} nye. ${dup} fantes allerede.` : `La til ${nye.length} sjekklister.`, 'ok')
   }
 
@@ -1860,26 +2001,63 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
 
   function onDrop(e) {
     e.preventDefault(); setDragOver(false)
+    const fl = soekBibliotek.toLowerCase()
+    const filtrert = maler.filter(m => !soekBibliotek || m.navn.toLowerCase().includes(fl))
     if (dragType === 'mal') leggTilMal(dragData, 'drag:enkelt')
-    else if (dragType === 'gruppe') leggTilGruppe(dragData, 'drag:gruppe-' + dragData)
+    else if (dragType === 'fase') leggTilListe(filtrert.filter(m => getFase(m) === dragData), 'drag:fase-' + dragData)
+    else if (dragType === 'subgruppe') leggTilListe(filtrert.filter(m => getFase(m) === 'bygg' && (m.kategoriBibliotek || 'annet') === dragData), 'drag:sub-' + dragData)
     setDragType(null); setDragData(null)
   }
 
-  // Grupper maler
   const soekLow = soekBibliotek.toLowerCase()
-  const biblPerKat = {}
-  for (const m of maler) {
-    if (soekBibliotek && !m.navn.toLowerCase().includes(soekLow)) continue
-    const kat = m.kategoriBibliotek || 'annet'
-    if (!biblPerKat[kat]) biblPerKat[kat] = []
-    biblPerKat[kat].push(m)
+  const biblFiltrert = maler.filter(m => !soekBibliotek || m.navn.toLowerCase().includes(soekLow))
+
+  function renderTildeltListe(malListe) {
+    return malListe.map(ks => {
+      const ut = ks.framdrift?.utfylt || 0
+      const tot = Math.max(ks.framdrift?.totalt || 0, 1)
+      const pst = Math.round((ut / tot) * 100)
+      const harAvvik = ks.avvik?.length > 0
+      return (
+        <div key={ks.malId} onClick={() => aapneKSSjekkliste(ks)}
+          style={{ padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: 8, marginBottom: 5, cursor: 'pointer', background: harAvvik ? '#fff5f5' : pst === 100 ? '#f0fdf4' : '#fff', display: 'flex', alignItems: 'center', gap: 10 }}
+          onMouseEnter={e => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,.08)'}
+          onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>{ks.mal?.navn || ks.malId}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
+              <div style={{ flex: 1, maxWidth: 80, height: 3, background: '#e2e8f0', borderRadius: 2 }}>
+                <div style={{ width: pst + '%', height: '100%', background: pst === 100 ? '#16a34a' : harAvvik ? '#dc2626' : '#3b82f6', borderRadius: 2 }} />
+              </div>
+              <span style={{ fontSize: 10, color: '#94a3b8' }}>{ut}/{ks.framdrift?.totalt || 0}</span>
+            </div>
+          </div>
+          {harAvvik && <span style={{ fontSize: 11, color: '#dc2626' }}>⚠</span>}
+          {pst === 100 && !harAvvik && <span style={{ fontSize: 11, color: '#16a34a' }}>✓</span>}
+          <span style={{ color: '#cbd5e1', fontSize: 14 }}>›</span>
+        </div>
+      )
+    })
   }
-  const tildeltPerKat = {}
-  for (const ks of ksSjekklister) {
-    const mal = maler.find(m => m.id === ks.malId)
-    const kat = mal?.kategoriBibliotek || 'annet'
-    if (!tildeltPerKat[kat]) tildeltPerKat[kat] = []
-    tildeltPerKat[kat].push({ ...ks, mal })
+
+  function renderBibliotekListe(malListe) {
+    return malListe.map(m => {
+      const erTildelt = tildelteMalIds.has(m.id)
+      return (
+        <div key={m.id}
+          draggable={!erTildelt}
+          onDragStart={erTildelt ? undefined : e => { setDragType('mal'); setDragData(m.id); e.dataTransfer.effectAllowed = 'copy' }}
+          onClick={erTildelt ? undefined : () => { if (leggTilMal(m.id, 'klikk')) visToast(`"${m.navn}" tildelt`, 'ok') }}
+          title={erTildelt ? 'Allerede tildelt' : 'Dra eller klikk for å tildele'}
+          style={{ padding: '6px 10px', border: '1px solid ' + (erTildelt ? '#f1f5f9' : '#e2e8f0'), borderRadius: 7, marginBottom: 3, fontSize: 12, cursor: erTildelt ? 'default' : 'grab', background: erTildelt ? 'transparent' : '#fff', color: erTildelt ? '#cbd5e1' : '#374151', display: 'flex', alignItems: 'center', gap: 5 }}
+          onMouseEnter={erTildelt ? undefined : e => e.currentTarget.style.background = '#eff6ff'}
+          onMouseLeave={erTildelt ? undefined : e => e.currentTarget.style.background = '#fff'}>
+          <span style={{ fontSize: 9, opacity: .5 }}>{erTildelt ? '✓' : '⠿'}</span>
+          <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.navn}</span>
+          <span style={{ fontSize: 9, color: '#94a3b8', flexShrink: 0 }}>{m.punkter?.length || 0}p</span>
+        </div>
+      )
+    })
   }
 
   return (
@@ -1912,89 +2090,104 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
       {/* To kolonner */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
-        {/* VENSTRE: Tildelte */}
+        {/* VENSTRE: Tildelte — grupprt etter fase */}
         <div style={{ flex: 1, overflow: 'auto', padding: 16, borderRight: '2px solid #e2e8f0', minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: '#475569', marginBottom: 14 }}>
-            📋 Tildelte sjekklister ({ksSjekklister.length})
-          </div>
-          {KAT_ORDEN_KS.map(kat => {
-            const liste = tildeltPerKat[kat] || []
-            if (liste.length === 0) return null
-            const info = KAT_INFO_KS[kat]
+          <div style={{ fontWeight: 700, fontSize: 13, color: '#475569', marginBottom: 12 }}>📋 Tildelte ({ksSjekklister.length})</div>
+
+          {ksSjekklister.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '40px 16px', color: '#94a3b8', fontSize: 13 }}>
+              <div style={{ fontSize: 28, marginBottom: 10 }}>📋</div>
+              Dra maler fra biblioteket til høyre<br/>— eller klikk på dem for å tildele
+            </div>
+          )}
+
+          {FASE_ORDEN_KS.map(fase => {
+            const faseMaler = ksSjekklister.filter(ks => getFase(maler.find(x => x.id === ks.malId) || {})=== fase)
+              .map(ks => ({ ...ks, mal: maler.find(x => x.id === ks.malId) }))
+            if (faseMaler.length === 0) return null
+            const info = FASE_INFO_KS[fase]
+            const erk = !!kollapset['t-' + fase]
             return (
-              <div key={kat} style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: info.farge, marginBottom: 6 }}>{info.label} ({liste.length})</div>
-                {liste.map(ks => {
-                  const ut = ks.framdrift?.utfylt || 0
-                  const tot = Math.max(ks.framdrift?.totalt || 0, 1)
-                  const pst = Math.round((ut / tot) * 100)
-                  const harAvvik = ks.avvik?.length > 0
-                  return (
-                    <div key={ks.malId} onClick={() => aapneKSSjekkliste(ks)}
-                      style={{ padding: '10px 12px', border: '1px solid #e2e8f0', borderRadius: 8, marginBottom: 6, cursor: 'pointer', background: harAvvik ? '#fff5f5' : pst === 100 ? '#f0fdf4' : '#fff', display: 'flex', alignItems: 'center', gap: 10 }}
-                      onMouseEnter={e => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,.08)'}
-                      onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: 13 }}>{ks.mal?.navn || ks.malId}</div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                          <div style={{ flex: 1, maxWidth: 100, height: 3, background: '#e2e8f0', borderRadius: 2 }}>
-                            <div style={{ width: pst + '%', height: '100%', background: pst === 100 ? '#16a34a' : harAvvik ? '#dc2626' : '#3b82f6', borderRadius: 2 }} />
+              <div key={fase} style={{ marginBottom: 10 }}>
+                <div onClick={() => toggleKollaps('t-' + fase)}
+                  style={{ fontSize: 13, fontWeight: 700, color: info.farge, marginBottom: erk ? 0 : 8, display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', userSelect: 'none', padding: '4px 0' }}>
+                  <span style={{ fontSize: 9 }}>{erk ? '▶' : '▼'}</span>
+                  {info.label} <span style={{ fontSize: 11, fontWeight: 400, color: '#94a3b8' }}>({faseMaler.length})</span>
+                </div>
+                {!erk && (fase === 'bygg'
+                  ? BYGGRUPPE_ORDEN.map(subkat => {
+                      const sub = faseMaler.filter(ks => (ks.mal?.kategoriBibliotek || 'annet') === subkat)
+                      if (sub.length === 0) return null
+                      const sInfo = BYGGRUPPE_INFO[subkat]
+                      const sk = !!kollapset['t-bygg-' + subkat]
+                      return (
+                        <div key={subkat} style={{ marginBottom: 6, paddingLeft: 10 }}>
+                          <div onClick={() => toggleKollaps('t-bygg-' + subkat)}
+                            style={{ fontSize: 12, fontWeight: 600, color: sInfo.farge, marginBottom: sk ? 0 : 5, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                            <span style={{ fontSize: 8 }}>{sk ? '▶' : '▼'}</span>
+                            {sInfo.label} <span style={{ fontSize: 10, fontWeight: 400, color: '#94a3b8' }}>({sub.length})</span>
                           </div>
-                          <span style={{ fontSize: 10, color: '#94a3b8' }}>{ut}/{ks.framdrift?.totalt || 0}</span>
+                          {!sk && renderTildeltListe(sub)}
                         </div>
-                      </div>
-                      {harAvvik && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 700 }}>⚠</span>}
-                      {pst === 100 && !harAvvik && <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 700 }}>✓</span>}
-                      <span style={{ color: '#cbd5e1', fontSize: 14 }}>›</span>
-                    </div>
-                  )
-                })}
+                      )
+                    })
+                  : renderTildeltListe(faseMaler)
+                )}
               </div>
             )
           })}
 
-          {/* Drop-sone */}
           <div onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-            onDragLeave={() => setDragOver(false)}
-            onDrop={onDrop}
-            style={{ border: '2px dashed ' + (dragOver ? '#3b82f6' : '#cbd5e1'), borderRadius: 10, padding: '20px 16px', textAlign: 'center', color: dragOver ? '#3b82f6' : '#94a3b8', fontSize: 13, marginTop: 8, background: dragOver ? '#eff6ff' : 'transparent', transition: 'all .15s' }}>
-            {dragOver ? '📥 Slipp for å tildele' : '+ Slipp sjekkliste eller gruppe her'}
+            onDragLeave={() => setDragOver(false)} onDrop={onDrop}
+            style={{ border: '2px dashed ' + (dragOver ? '#3b82f6' : '#cbd5e1'), borderRadius: 10, padding: '16px', textAlign: 'center', color: dragOver ? '#3b82f6' : '#94a3b8', fontSize: 13, marginTop: 8, background: dragOver ? '#eff6ff' : 'transparent', transition: 'all .15s' }}>
+            {dragOver ? '📥 Slipp for å tildele' : '+ Slipp fase, gruppe eller enkelt mal'}
           </div>
         </div>
 
-        {/* HØYRE: Bibliotek */}
-        <div style={{ width: 300, flexShrink: 0, overflow: 'auto', padding: 16, background: '#f8fafc' }}>
+        {/* HØYRE: Bibliotek — fase-basert */}
+        <div style={{ width: 310, flexShrink: 0, overflow: 'auto', padding: 16, background: '#f8fafc' }}>
           <div style={{ fontWeight: 700, fontSize: 13, color: '#475569', marginBottom: 10 }}>📚 Bibliotek ({maler.length})</div>
           <input className="input" placeholder="🔍 Søk mal..." value={soekBibliotek} onChange={e => setSoekBibliotek(e.target.value)} style={{ marginBottom: 12, fontSize: 12 }} />
-          {KAT_ORDEN_KS.map(kat => {
-            const liste = biblPerKat[kat] || []
-            if (liste.length === 0) return null
-            const info = KAT_INFO_KS[kat]
+
+          {FASE_ORDEN_KS.map(fase => {
+            const faseMaler = biblFiltrert.filter(m => getFase(m) === fase)
+            if (faseMaler.length === 0) return null
+            const info = FASE_INFO_KS[fase]
+            const erk = !!kollapset['b-' + fase]
             return (
-              <div key={kat} style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: info.farge, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span draggable onDragStart={e => { setDragType('gruppe'); setDragData(kat); e.dataTransfer.effectAllowed = 'copy' }}
-                    title={`Dra hele ${info.label}-gruppen`}
-                    style={{ cursor: 'grab', fontSize: 12, opacity: .7, padding: '2px 5px', borderRadius: 4, background: 'rgba(0,0,0,.06)' }}>☰</span>
-                  {info.label} ({liste.length})
+              <div key={fase} style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: info.farge, marginBottom: erk ? 0 : 8, display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <span draggable onDragStart={e => { setDragType('fase'); setDragData(fase); e.dataTransfer.effectAllowed = 'copy' }}
+                    title={'Dra hele ' + info.label}
+                    style={{ cursor: 'grab', padding: '2px 4px', borderRadius: 3, background: 'rgba(0,0,0,.06)', fontSize: 10 }}>☰</span>
+                  <span onClick={() => toggleKollaps('b-' + fase)} style={{ cursor: 'pointer', flex: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontSize: 9 }}>{erk ? '▶' : '▼'}</span>
+                    {info.label} <span style={{ fontSize: 10, fontWeight: 400, color: '#94a3b8' }}>({faseMaler.length})</span>
+                  </span>
                 </div>
-                {liste.map(m => {
-                  const erTildelt = tildelteMalIds.has(m.id)
-                  return (
-                    <div key={m.id}
-                      draggable={!erTildelt}
-                      onDragStart={erTildelt ? undefined : e => { setDragType('mal'); setDragData(m.id); e.dataTransfer.effectAllowed = 'copy' }}
-                      onClick={erTildelt ? undefined : () => { if (leggTilMal(m.id, 'klikk')) visToast(`"${m.navn}" tildelt`, 'ok') }}
-                      title={erTildelt ? 'Allerede tildelt' : 'Dra eller klikk for å tildele'}
-                      style={{ padding: '7px 10px', border: '1px solid ' + (erTildelt ? '#f1f5f9' : '#e2e8f0'), borderRadius: 7, marginBottom: 4, fontSize: 12, cursor: erTildelt ? 'default' : 'grab', background: erTildelt ? 'transparent' : '#fff', color: erTildelt ? '#cbd5e1' : '#374151', display: 'flex', alignItems: 'center', gap: 6 }}
-                      onMouseEnter={erTildelt ? undefined : e => e.currentTarget.style.background = '#eff6ff'}
-                      onMouseLeave={erTildelt ? undefined : e => e.currentTarget.style.background = '#fff'}>
-                      <span style={{ fontSize: 10, opacity: .6 }}>{erTildelt ? '✓' : '⠿'}</span>
-                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.navn}</span>
-                      <span style={{ fontSize: 10, color: '#94a3b8', flexShrink: 0 }}>{m.punkter?.length || 0}p</span>
-                    </div>
-                  )
-                })}
+                {!erk && (fase === 'bygg'
+                  ? BYGGRUPPE_ORDEN.map(subkat => {
+                      const subMaler = faseMaler.filter(m => (m.kategoriBibliotek || 'annet') === subkat)
+                      if (subMaler.length === 0) return null
+                      const sInfo = BYGGRUPPE_INFO[subkat]
+                      const sk = !!kollapset['b-bygg-' + subkat]
+                      return (
+                        <div key={subkat} style={{ marginBottom: 6, paddingLeft: 8 }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: sInfo.farge, marginBottom: sk ? 0 : 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span draggable onDragStart={e => { setDragType('subgruppe'); setDragData(subkat); e.dataTransfer.effectAllowed = 'copy' }}
+                              title={'Dra ' + sInfo.label}
+                              style={{ cursor: 'grab', padding: '1px 3px', borderRadius: 3, background: 'rgba(0,0,0,.06)', fontSize: 9 }}>☰</span>
+                            <span onClick={() => toggleKollaps('b-bygg-' + subkat)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3, flex: 1 }}>
+                              <span style={{ fontSize: 8 }}>{sk ? '▶' : '▼'}</span>
+                              {sInfo.label} <span style={{ fontWeight: 400, color: '#94a3b8' }}>({subMaler.length})</span>
+                            </span>
+                          </div>
+                          {!sk && renderBibliotekListe(subMaler)}
+                        </div>
+                      )
+                    })
+                  : renderBibliotekListe(faseMaler)
+                )}
               </div>
             )
           })}
@@ -2009,8 +2202,17 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
 function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliotek, onVisAvvik, onRensTestData, onOppdaterMaler }) {
   const [aiModal, setAiModal] = useState(false)
   const [visdiag, setVisdiag] = useState(false)
-  const [visAlleProsjekter, setVisAlleProsjekter] = useState(false)
-  const [sokProsjekt, setSokProsjekt] = useState('')
+  const [nyligBrukt, setNyligBrukt] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('ks_nylig_brukt') || '[]') } catch { return [] }
+  })
+
+  function velgOgHusk(p) {
+    const oppdatert = [p.id, ...nyligBrukt.filter(id => id !== p.id)].slice(0, 3)
+    setNyligBrukt(oppdatert)
+    localStorage.setItem('ks_nylig_brukt', JSON.stringify(oppdatert))
+    onVelgProsjekt(p)
+  }
+  const nyligeProsjekter = nyligBrukt.map(id => prosjekter.find(p => p.id === id)).filter(Boolean)
 
   // KPI beregninger
   // I gang: prosjekter med aktive sjekklister (API) ELLER ksSjekklister
@@ -2072,7 +2274,26 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
     <div className="ks-side">
 
       {/* ── Prosjektvelger (rullegardin) ────────────────────────── */}
-      <KSProsjektVelger prosjekter={prosjekter} sjekklister={sjekklister} onVelg={onVelgProsjekt} />
+      <KSProsjektVelger prosjekter={prosjekter} sjekklister={sjekklister} onVelg={velgOgHusk} />
+
+      {/* ── Nylig brukt ─────────────────────────────────────────── */}
+      {nyligeProsjekter.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12, marginTop: -8 }}>
+          {nyligeProsjekter.map(p => {
+            const ksItems = p.ksSjekklister || []
+            const avvik = ksItems.filter(k => k.status === 'avvik').length
+            const ferdig = ksItems.filter(k => k.status === 'fullfort').length
+            return (
+              <button key={p.id} onClick={() => velgOgHusk(p)}
+                style={{ fontSize: 12, padding: '4px 12px', border: '1px solid #e2e8f0', borderRadius: 20, background: '#f8fafc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, color: '#475569' }}>
+                🕐 {p.navn.length > 22 ? p.navn.slice(0, 20) + '…' : p.navn}
+                {ksItems.length > 0 && <span style={{ color: '#94a3b8', fontSize: 10 }}>{ferdig}/{ksItems.length}</span>}
+                {avvik > 0 && <span style={{ color: '#dc2626', fontSize: 10 }}>⚠</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       {/* ── KPI × 4 ─────────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 20 }}>
@@ -2116,54 +2337,11 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
         </div>
       )}
 
-      {/* ── Prosjekter med KS ────────────────────────────────────── */}
-      <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 14, padding: '16px 18px', marginBottom: 16 }}>
-        <div style={{ fontWeight: 700, fontSize: 13, color: '#475569', marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>📋 {aktiveKS.length > 0 ? 'Prosjekter med KS' : 'Velg prosjekt'}</span>
-          {aktiveKS.length > 0 && <span style={{ fontSize: 11, color: '#94a3b8' }}>{aktiveKS.length}/{prosjekter.length}</span>}
-        </div>
-        {aktiveKS.length > 0 && (
-          <input className="input" placeholder="🔍 Søk prosjekt..." value={sokProsjekt} onChange={e => setSokProsjekt(e.target.value)} style={{ marginBottom: 10, fontSize: 13 }} />
-        )}
-        {prosjekterVist.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {prosjekterVist.map(p => {
-              const mine = sjekklister.filter(s => s.prosjektId === p.id)
-              const pst = mine.length ? Math.round(mine.reduce((sum, sl) => sum + prosent(sl.punkter), 0) / mine.length) : 0
-              const avvik = mine.filter(s => (s.punkter || []).some(pt => pt.status === 'avvik')).length
-              return (
-                <div key={p.id} onClick={() => onVelgProsjekt(p)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', border: '1px solid #f1f5f9', borderRadius: 10, cursor: 'pointer', background: '#f8fafc' }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{p.navn}</div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ flex: 1, height: 4, background: '#e2e8f0', borderRadius: 2 }}>
-                        <div style={{ width: pst + '%', height: '100%', background: pst === 100 ? '#16a34a' : '#3b82f6', borderRadius: 2 }} />
-                      </div>
-                      <span style={{ fontSize: 11, color: '#64748b', flexShrink: 0 }}>{mine.filter(s => s.status === 'ferdig').length}/{mine.length}</span>
-                    </div>
-                  </div>
-                  {avvik > 0 && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 700 }}>⚠ {avvik}</span>}
-                  <span style={{ color: '#94a3b8', fontSize: 16 }}>›</span>
-                </div>
-              )
-            })}
-            {aktiveKS.length > 4 && !visAlleProsjekter && (
-              <button className="btn" style={{ width: '100%', fontSize: 12 }} onClick={() => setVisAlleProsjekter(true)}>
-                Vis alle {aktiveKS.length} prosjekter ↓
-              </button>
-            )}
-          </div>
-        ) : (
-          <ProsjektVelger prosjekter={prosjekter} sjekklister={sjekklister} onVelg={onVelgProsjekt} valgt={null} />
-        )}
-      </div>
-
       {/* ── Knapper ──────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 4 }}>
         <button onClick={onVisBibliotek}
-          style={{ padding: '13px 16px', border: 'none', borderRadius: 12, background: '#1e293b', color: '#fff', cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>
-          📚 Mal-bibliotek <span style={{ fontSize: 12, background: 'rgba(255,255,255,.2)', borderRadius: 6, padding: '1px 7px', marginLeft: 4 }}>{maler.length}</span>
+          style={{ padding: '13px 16px', border: '2px solid #16a34a', borderRadius: 12, background: '#fff', color: '#16a34a', cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>
+          📚 Mal-bibliotek <span style={{ fontSize: 12, background: '#dcfce7', borderRadius: 6, padding: '1px 7px', marginLeft: 4 }}>{maler.length}</span>
         </button>
         <button onClick={onVisAvvik}
           style={{ padding: '13px 16px', border: '2px solid #fee2e2', borderRadius: 12, background: '#fff', color: '#dc2626', cursor: 'pointer', fontWeight: 700, fontSize: 14 }}>
