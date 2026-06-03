@@ -297,9 +297,9 @@ export default function BefaringPlan() {
         },
       });
     }
-    // Merk befaringen som konvertert til prosjekt
+    // Merk befaringen som konvertert til prosjekt og flytt til arkiv
     if (visKapasitet) {
-      dispatch({ type: 'UPDATE_BEFARING', payload: { ...visKapasitet, prosjektId } });
+      dispatch({ type: 'UPDATE_BEFARING', payload: { ...visKapasitet, prosjektId, arkivert: true } });
     }
     setVisKapasitet(null);
     setVisProsjektModal(false);
