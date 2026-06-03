@@ -449,6 +449,125 @@ function normStatus(s) {
   return s;
 }
 
+// ── KS-plan forslag (laster maler lazy fra API) ───────────────────────────────
+function ProsjektKSPlanKnapp({ project, onOppdater }) {
+  const [laster, setLaster] = useState(false)
+  const [maler, setMaler] = useState(null)
+  const [visModal, setVisModal] = useState(false)
+  const [valgte, setValgte] = useState(new Set())
+  const ksSjekklister = project.ksSjekklister || []
+  const tildeltIds = new Set(ksSjekklister.map(k => k.malId))
+
+  function getFaseKs(m) {
+    const n = (m.navn || '').toLowerCase(), g = m.gruppe || ''
+    if (g === 'Sluttkontroll' || m.id === 'mal-el-slutt') return 'slutt'
+    if (n.includes('sluttkontroll') && n.includes('elektrisk')) return 'slutt'
+    if (g === 'HMS' || n.includes('risikovurdering') || n.includes('sha') || n.includes('stillas')) return 'oppstart'
+    return 'bygg'
+  }
+
+  function lagForslag(maler) {
+    const jt = (project.jobbType || '').toLowerCase()
+    const ctx = jt + ' ' + (project.navn || '').toLowerCase() + ' ' + (project.beskrivelse || '').toLowerCase()
+    const ids = new Set(['mal-hms-daglig','mal-risikovurdering-oppstart','mal-sha-sja','mal-sluttkontroll','mal-el-slutt'])
+    if (ctx.includes('bad') || ctx.includes('våtrom') || ctx.includes('rehabilitering'))
+      ['mal-bad-riving','mal-bad-membran','mal-bad-flis','mal-bad-ror','mal-bad-el'].forEach(id => ids.add(id))
+    if (ctx.includes('fasade') || ctx.includes('kledning') || ctx.includes('yttervegg'))
+      ['mal-fasade-stillas','mal-fasade-riving','mal-fasade-underlag','mal-fasade-kledning','mal-fasade-vinduer','mal-fasade-beslag','mal-maling-utvendig'].forEach(id => ids.add(id))
+    if (ctx.includes('tak') || ctx.includes('tekking'))
+      ['mal-tak-stillas','mal-tak-riving','mal-tak-undertak','mal-tak-tekking','mal-tak-beslag'].forEach(id => ids.add(id))
+    if (ctx.includes('tilbygg'))
+      ['mal-tomrer-riving','mal-tomrer-baerende','mal-tomrer-isolasjon','mal-tomrer-gips','mal-tomrer-gulv'].forEach(id => ids.add(id))
+    if (ctx.includes('innvendig') || ctx.includes('oppussing'))
+      ['mal-tomrer-riving','mal-tomrer-gips','mal-tomrer-gulv','mal-maling-sparkling','mal-maling-innvendig'].forEach(id => ids.add(id))
+    return maler.filter(m => ids.has(m.id))
+  }
+
+  async function aapneForslag() {
+    setLaster(true)
+    try {
+      const token = localStorage.getItem('fbs_token') || ''
+      const data = await fetch('/api/ks/maler', { headers: { Authorization: 'Bearer ' + token } }).then(r => r.json())
+      setMaler(data)
+      const forslag = lagForslag(data)
+      setValgte(new Set(forslag.filter(m => !tildeltIds.has(m.id)).map(m => m.id)))
+      setVisModal(true)
+    } catch (e) { alert('Kunne ikke laste maler: ' + e.message) }
+    setLaster(false)
+  }
+
+  function bekreft() {
+    const nyeKS = (maler || []).filter(m => valgte.has(m.id)).map(m => ({
+      malId: m.id, tildeltDato: new Date().toISOString(), tildeltAv: 'forslag:auto',
+      status: 'ikke-startet', framdrift: { utfylt: 0, totalt: m.punkter?.length || 0 }, svar: [], avvik: [],
+    }))
+    onOppdater({ ...project, ksSjekklister: [...ksSjekklister, ...nyeKS] })
+    setVisModal(false)
+  }
+
+  const forslatteMaler = maler ? lagForslag(maler) : []
+  const FASER = [
+    { id: 'oppstart', label: '📅 Oppstart', farge: '#3b82f6' },
+    { id: 'bygg', label: '🔨 Bygg-fase', farge: '#f59e0b' },
+    { id: 'slutt', label: '✅ Sluttkontroll', farge: '#16a34a' },
+  ]
+
+  return (
+    <>
+      <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button className="btn btn-primary" onClick={aapneForslag} disabled={laster} style={{ fontSize: 13 }}>
+          {laster ? '⏳ Laster...' : '✨ Foreslå KS-sjekkliste-plan'}
+        </button>
+        {ksSjekklister.length > 0 && (
+          <span style={{ fontSize: 12, color: '#64748b' }}>{ksSjekklister.length} sjekklister tildelt</span>
+        )}
+      </div>
+
+      {visModal && maler && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+          onClick={() => setVisModal(false)}>
+          <div style={{ background: '#fff', borderRadius: 16, maxWidth: 520, width: '100%', padding: '22px 20px', maxHeight: '88vh', overflow: 'auto', boxShadow: '0 20px 48px rgba(0,0,0,.25)' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ fontWeight: 800, fontSize: 17, marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
+              ✨ Foreslått sjekkliste-plan
+              <button className="btn-icon" onClick={() => setVisModal(false)}>✕</button>
+            </div>
+            <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+              Basert på <strong>"{project.jobbType || project.navn}"</strong> — juster gjerne utvalget
+            </div>
+            {FASER.map(fase => {
+              const fm = forslatteMaler.filter(m => getFaseKs(m) === fase.id || (fase.id === 'oppstart' && getFaseKs(m) === 'daglig'))
+              if (fm.length === 0) return null
+              return (
+                <div key={fase.id} style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: fase.farge, marginBottom: 5 }}>{fase.label}</div>
+                  {fm.map(m => {
+                    const er = tildeltIds.has(m.id)
+                    return (
+                      <label key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, cursor: er ? 'default' : 'pointer', background: valgte.has(m.id) ? '#eff6ff' : 'transparent' }}>
+                        <input type="checkbox" checked={er || valgte.has(m.id)} disabled={er}
+                          onChange={e => { const s = new Set(valgte); if (e.target.checked) s.add(m.id); else s.delete(m.id); setValgte(s) }} />
+                        <span style={{ fontSize: 13, color: er ? '#94a3b8' : '#1e293b', flex: 1 }}>{m.navn}</span>
+                        {er ? <span style={{ fontSize: 10, color: '#94a3b8' }}>✓</span> : <span style={{ fontSize: 10, color: '#94a3b8' }}>{m.punkter?.length || 0} pkt</span>}
+                      </label>
+                    )
+                  })}
+                </div>
+              )
+            })}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16, borderTop: '1px solid #f1f5f9', paddingTop: 14 }}>
+              <button className="btn" onClick={() => setVisModal(false)}>Avbryt</button>
+              <button className="btn btn-primary" disabled={valgte.size === 0} onClick={bekreft}>
+                ✅ Legg til {valgte.size} sjekklister
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
 export default function Prosjekter() {
   const { state, dispatch } = useApp();
   const [showModal, setShowModal] = useState(false);
@@ -920,6 +1039,14 @@ export default function Prosjekter() {
                                 🗓 Framdriftsplan{p.framdriftsplan ? ' ✓' : ''}
                               </button>
                             </div>
+
+                            {/* KS-plan-knapp — alltid synlig i Info-fanen */}
+                            {(detailFane[p.id] ?? 'info') === 'info' && (
+                              <ProsjektKSPlanKnapp
+                                project={p}
+                                onOppdater={oppdatert => dispatch({ type: 'UPDATE_PROSJEKT', payload: oppdatert })}
+                              />
+                            )}
 
                             {/* Framdriftsplan-fane */}
                             {detailFane[p.id] === 'framdrift' ? (

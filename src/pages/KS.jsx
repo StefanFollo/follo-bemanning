@@ -2015,12 +2015,140 @@ const KAT_INFO_KS = {
 }
 const KAT_ORDEN_KS = ['hms', 'bad', 'yttervegg', 'tak', 'innvendig', 'teknisk', 'annet']
 
+// ── Foreslå sjekkliste-plan basert på prosjektinfo ───────────────────────────
+
+function lagForslagListe(prosjekt, maler) {
+  const jt = (prosjekt.jobbType || '').toLowerCase()
+  const nav = (prosjekt.navn || '').toLowerCase()
+  const besk = (prosjekt.beskrivelse || '').toLowerCase()
+  const fag = (prosjekt.fag || []).map(f => f.toLowerCase())
+  const ctx = jt + ' ' + nav + ' ' + besk
+
+  const ids = new Set([
+    // Alltid: HMS-grunnpakke
+    'mal-hms-daglig', 'mal-risikovurdering-oppstart', 'mal-sha-sja',
+    // Alltid: sluttkontroll
+    'mal-sluttkontroll', 'mal-el-slutt',
+  ])
+
+  if (ctx.includes('bad') || ctx.includes('våtrom') || ctx.includes('rehabilitering') || ctx.includes('bad-rehab')) {
+    ['mal-bad-riving','mal-bad-membran','mal-bad-flis','mal-bad-ror','mal-bad-el'].forEach(id => ids.add(id))
+  }
+  if (ctx.includes('fasade') || ctx.includes('kledning') || ctx.includes('yttervegg') || ctx.includes('fasade-rehab')) {
+    ['mal-fasade-stillas','mal-fasade-riving','mal-fasade-underlag','mal-fasade-kledning','mal-fasade-vinduer','mal-fasade-beslag','mal-maling-utvendig'].forEach(id => ids.add(id))
+  }
+  if (ctx.includes('tak') || ctx.includes('tekking')) {
+    ['mal-tak-stillas','mal-tak-riving','mal-tak-undertak','mal-tak-tekking','mal-tak-beslag'].forEach(id => ids.add(id))
+  }
+  if (ctx.includes('tilbygg')) {
+    ['mal-tomrer-riving','mal-tomrer-baerende','mal-tomrer-isolasjon','mal-tomrer-gips','mal-tomrer-gulv','mal-fasade-stillas','mal-tak-stillas'].forEach(id => ids.add(id))
+  }
+  if (ctx.includes('innvendig') || ctx.includes('oppussing') || ctx.includes('rehab')) {
+    ['mal-tomrer-riving','mal-tomrer-isolasjon','mal-tomrer-gips','mal-tomrer-gulv','mal-maling-sparkling','mal-maling-innvendig'].forEach(id => ids.add(id))
+  }
+  if (fag.some(f => f.includes('ror') || f.includes('vvs')) || ctx.includes('rørlegger') || ctx.includes('vvs')) {
+    ['mal-ror-vvs','mal-ror-varme','mal-ror-avlop'].forEach(id => ids.add(id))
+  }
+  if (fag.some(f => f.includes('el')) || ctx.includes('elektrisk')) {
+    ['mal-el-innvendig','mal-el-kurs'].forEach(id => ids.add(id))
+  }
+
+  return maler.filter(m => ids.has(m.id))
+}
+
+function ForslagModal({ prosjekt, maler, tildelteMalIds, onBekreft, onLukk }) {
+  const forslatte = lagForslagListe(prosjekt, maler)
+  const [valgte, setValgte] = useState(() => new Set(
+    forslatte.filter(m => !tildelteMalIds.has(m.id)).map(m => m.id)
+  ))
+
+  const nyeMaler = forslatte.filter(m => !tildelteMalIds.has(m.id))
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      onClick={onLukk}>
+      <div style={{ background: '#fff', borderRadius: 16, maxWidth: 520, width: '100%', padding: '22px 20px', maxHeight: '88vh', overflow: 'auto', boxShadow: '0 20px 48px rgba(0,0,0,.25)' }}
+        onClick={e => e.stopPropagation()}>
+        <div style={{ fontWeight: 800, fontSize: 17, marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          ✨ Foreslått sjekkliste-plan
+          <button className="btn-icon" onClick={onLukk}>✕</button>
+        </div>
+        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 4 }}>
+          Basert på prosjekttype <strong>"{prosjekt.jobbType || prosjekt.navn || 'ukjent'}"</strong>
+        </div>
+        <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 16 }}>
+          Huk av/fra de du vil ta med — klikk Bekreft for å legge til.
+        </div>
+
+        {/* Valg alle/ingen */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+          <button className="btn" style={{ fontSize: 11, padding: '3px 10px' }}
+            onClick={() => setValgte(new Set(nyeMaler.map(m => m.id)))}>Velg alle</button>
+          <button className="btn" style={{ fontSize: 11, padding: '3px 10px' }}
+            onClick={() => setValgte(new Set())}>Ingen</button>
+        </div>
+
+        {/* Gruppert per fase */}
+        {FASE_ORDEN_KS.map(fase => {
+          const faseMaler = forslatte.filter(m => {
+            const f = getFase(m)
+            return fase === 'oppstart' ? (f === 'oppstart' || f === 'daglig') : f === fase
+          })
+          if (faseMaler.length === 0) return null
+          const info = FASE_INFO_KS[fase]
+          return (
+            <div key={fase} style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: info.farge, marginBottom: 6 }}>{info.label}</div>
+              {faseMaler.map(m => {
+                const erTildelt = tildelteMalIds.has(m.id)
+                return (
+                  <label key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 7, cursor: erTildelt ? 'default' : 'pointer', background: valgte.has(m.id) ? '#eff6ff' : 'transparent' }}>
+                    <input type="checkbox"
+                      checked={erTildelt || valgte.has(m.id)}
+                      disabled={erTildelt}
+                      onChange={e => {
+                        const ny = new Set(valgte)
+                        if (e.target.checked) ny.add(m.id); else ny.delete(m.id)
+                        setValgte(ny)
+                      }} />
+                    <span style={{ fontSize: 13, color: erTildelt ? '#94a3b8' : '#1e293b', flex: 1 }}>
+                      {m.navn}
+                    </span>
+                    {erTildelt
+                      ? <span style={{ fontSize: 10, color: '#94a3b8' }}>✓ tildelt</span>
+                      : <span style={{ fontSize: 10, color: '#94a3b8' }}>{m.punkter?.length || 0} pkt</span>}
+                  </label>
+                )
+              })}
+            </div>
+          )
+        })}
+
+        {forslatte.length === 0 && (
+          <div style={{ color: '#94a3b8', fontSize: 13, padding: '12px 0' }}>
+            Fant ingen spesifikke forslag — legg til jobbType på prosjektet for bedre forslag.
+          </div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16, paddingTop: 16, borderTop: '1px solid #f1f5f9' }}>
+          <button className="btn" onClick={onLukk}>Avbryt</button>
+          <button className="btn btn-primary" disabled={valgte.size === 0}
+            onClick={() => onBekreft(maler.filter(m => valgte.has(m.id)))}>
+            ✅ Legg til {valgte.size} sjekklister
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, onOppdaterProsjekt }) {
   const [dragType, setDragType] = useState(null)   // 'mal' | 'fase' | 'subgruppe'
   const [dragData, setDragData] = useState(null)
   const [dragOver, setDragOver] = useState(false)
   const [toast, setToast] = useState(null)
   const [soekBibliotek, setSoekBibliotek] = useState('')
+  const [visForslagsModal, setVisForslagsModal] = useState(false)
   const [kollapset, setKollapset] = useState(() => {
     // Bibliotek sub-grupper starter kollapset; fase-grupper åpne
     const init = {}
@@ -2144,10 +2272,14 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
             </div>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: 6, flexShrink: 0, alignItems: 'center' }}>
           <span style={{ fontSize: 11, background: '#eff6ff', color: '#2563eb', borderRadius: 6, padding: '3px 10px', fontWeight: 600 }}>
             {ksSjekklister.length} sjekklister
           </span>
+          <button className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px' }}
+            onClick={() => setVisForslagsModal(true)} title="Foreslå sjekkliste-plan basert på prosjektinfo">
+            ✨ Foreslå plan
+          </button>
         </div>
       </div>
 
@@ -2158,6 +2290,20 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
         </div>
       )}
 
+      {/* Forslags-modal */}
+      {visForslagsModal && (
+        <ForslagModal
+          prosjekt={prosjekt}
+          maler={maler}
+          tildelteMalIds={tildelteMalIds}
+          onBekreft={forslatteMaler => {
+            leggTilListe(forslatteMaler, 'forslag:auto')
+            setVisForslagsModal(false)
+          }}
+          onLukk={() => setVisForslagsModal(false)}
+        />
+      )}
+
       {/* To kolonner */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
@@ -2166,10 +2312,13 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
           <div style={{ fontWeight: 700, fontSize: 13, color: '#475569', marginBottom: 12 }}>📋 Tildelte ({ksSjekklister.length})</div>
 
           {ksSjekklister.length === 0 && (
-            <div style={{ border: '2px dashed #e2e8f0', borderRadius: 12, padding: '32px 20px', textAlign: 'center', color: '#94a3b8', fontSize: 13, margin: '8px 0' }}>
+            <div style={{ border: '2px dashed #e2e8f0', borderRadius: 12, padding: '28px 20px', textAlign: 'center', color: '#94a3b8', fontSize: 13, margin: '8px 0' }}>
               <div style={{ fontSize: 26, marginBottom: 8 }}>📋</div>
-              <div style={{ fontWeight: 600, marginBottom: 4, color: '#64748b' }}>Ingen sjekklister tildelt ennå</div>
-              Dra fra biblioteket til høyre<br/>— eller bruk + Slipp-feltet nedenfor
+              <div style={{ fontWeight: 600, marginBottom: 6, color: '#64748b' }}>Ingen sjekklister tildelt ennå</div>
+              <button className="btn btn-primary" style={{ marginBottom: 10 }} onClick={() => setVisForslagsModal(true)}>
+                ✨ Foreslå sjekkliste-plan
+              </button>
+              <div style={{ fontSize: 12 }}>— eller dra fra biblioteket til høyre</div>
             </div>
           )}
 
