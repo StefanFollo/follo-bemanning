@@ -350,6 +350,16 @@ export default async function handler(req, res) {
     // kan mangle det. Fallback: slå opp via tilbudId i state.
     let resolvedBefaringId = kildeBefaringId || null
     let oppslagsKilde = kildeBefaringId ? 'via kildeBefaringId' : null
+
+    // ── Ghost ID-sjekk: kildeBefaringId mottatt men finnes IKKE i state ──────
+    // Skjer ved fixSync-race conditions eller gamle localStorage-verdier i tilbuds-app.
+    // Nullstill og la fallback-blokken under finne riktig befaring via andre metoder.
+    if (resolvedBefaringId && !befaringer.find(b => b.id === resolvedBefaringId)) {
+      console.warn(`[event] GHOST ID: kildeBefaringId:${resolvedBefaringId} finnes ikke (type:${type}, tilbudId:${tilbudId}) — prøver fallback`)
+      resolvedBefaringId = null
+      oppslagsKilde = null
+    }
+
     if (!resolvedBefaringId && tilbudId) {
       const bef = befaringer.find(b => String(b.tilbudId) === String(tilbudId))
       if (bef) {
@@ -378,6 +388,93 @@ export default async function handler(req, res) {
             befaringFunnet: false,
             oppslagsKilde: 'befaring ikke funnet',
             beskjed: 'Ingen befaring funnet. Opprett befaring manuelt i bemannings-app og koble til tilbudet.',
+          })
+        }
+      } else if (data?.kundenavn && data?.adresse) {
+        // Fallback 4: normalisert adresse+kundenavn fra data-feltet (ghost ID + vunnet/tilbud-events)
+        const normFn = s => (s || '').toLowerCase().replace(/\s+/g, ' ').trim()
+        const dKunde = normFn(data.kundenavn)
+        const dAdresse = normFn(data.adresse)
+        const matchBef = befaringer.find(b =>
+          !['tapt', 'trukket'].includes(b.status) &&
+          normFn(b.kontaktNavn) === dKunde &&
+          normFn(b.adresse) === dAdresse
+        )
+        if (matchBef) {
+          resolvedBefaringId = matchBef.id
+          oppslagsKilde = 'via data-adresse+kunde (ghost-id fallback)'
+          console.log(`[event] ghost-id data-match: "${dKunde}" / "${dAdresse}" → ${resolvedBefaringId} (ghost var:${kildeBefaringId})`)
+        } else {
+          // Ingen treff på adresse+kunde — opprett ny befaring i riktig status-kolonne
+          oppslagsKilde = 'auto-opprettet ghost-id-fallback'
+          console.warn(`[event] ghost-id: ingen match "${dKunde}" / "${dAdresse}" type:${type} — oppretter ny befaring`)
+          const nyBefaringId = nyId('bf')
+          const kontaktpersonNavn = (data.kontaktperson || '').toLowerCase().split(' ')[0]
+          const matchAnsatt = kontaktpersonNavn
+            ? ansatte.find(a => (a.navn || '').toLowerCase().startsWith(kontaktpersonNavn))
+            : null
+          const nyBefaring = {
+            id: nyBefaringId,
+            kontaktNavn: data.kundenavn,
+            adresse: data.adresse,
+            telefon: data.telefon || '',
+            epost: data.epost || '',
+            jobbType: data.jobbType || '',
+            dato: (dato || naa).slice(0, 10),
+            tid: '09:00',
+            status: nyStatus || 'planlagt',
+            notat: '', kommentar: '',
+            prosjektlederId: matchAnsatt?.id || '',
+            ansvarligBefaringId: matchAnsatt?.id || '',
+            estimertBelop: '',
+            tilbudFrist: data.tilbudsfrist || '',
+            nesteKontakt: '',
+            oensketOppstart: data.oppstart || '',
+            resultat: type === 'tapt' ? 'tapt' : type === 'avvist' ? 'avvist' : type === 'vunnet' ? 'vunnet' : '',
+            tapDato: (type === 'tapt' || type === 'avvist') ? naa : '',
+            kilde: 'ghost-id-fallback',
+            opprettetAv: data.kontaktperson || 'auto-sync',
+            tilbudId: tilbudId || null,
+            tilbudLink: tilbudLink || '',
+            sistEvent: type,
+            sistEventDato: naa,
+            estimertSum: data.estimertSum ? parseFloat(data.estimertSum) || 0 : 0,
+            pristype: data.pristype || '',
+            fag: Array.isArray(data.fag) ? data.fag : [],
+            poster: Array.isArray(data.poster) ? data.poster : [],
+            valgteOpsjoner: Array.isArray(data.valgteOpsjoner) ? data.valgteOpsjoner : [],
+            varighetTekst: data.varighet || '',
+            varighetUker: data.varighetUker ?? null,
+            oppstartTekst: data.oppstart || '',
+            ...(data ? { tilbudPayload: { ...data, _mottattType: type, _mottattDato: naa } } : {}),
+          }
+          await appendSnapshot(redis, { objekt: 'befaring', objektId: nyBefaringId, dataFør: nyBefaring, utløstAv: `ghost-fallback-${type}` })
+          const nowTs = Date.now()
+          await redis.set('fbs_state', {
+            ...state,
+            befaringer: [...befaringer, nyBefaring],
+            _fieldTs: { ...(state._fieldTs || {}), befaringer: nowTs },
+            ...dedupUpdate,
+            _updatedAt: nowTs,
+          })
+          await appendAuditLog(redis, byggAuditEntry({
+            objekt: 'befaring',
+            objektId: nyBefaringId,
+            felt: 'status',
+            fraVerdi: null,
+            tilVerdi: nyStatus || 'planlagt',
+            endretAv: data.kontaktperson || 'auto-sync',
+            kilde: 'ghost-id-fallback',
+            begrunnelse: `Ny befaring opprettet via ghost-ID-fallback ved ${type}-event. Original ghost-ID: ${kildeBefaringId}`,
+          }))
+          return res.status(200).json({
+            ok: true,
+            nySkapt: true,
+            kildeBefaringId: nyBefaringId,
+            befaringStatus: nyStatus || 'planlagt',
+            oppslagsKilde: 'auto-opprettet ghost-id-fallback',
+            ghostId: kildeBefaringId,
+            beskjed: `Ghost ID "${kildeBefaringId}" ikke funnet. Ny befaring opprettet: ${data.adresse}`,
           })
         }
       } else {
