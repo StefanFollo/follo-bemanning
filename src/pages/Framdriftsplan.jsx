@@ -463,14 +463,30 @@ function useFramdriftAI(project, onUpdate) {
 // ─── GanttChart ───────────────────────────────────────────────────────────────
 
 function GanttChart({ project, onUpdate }) {
-  const [tasks, setTasks]   = useState(project.fdTasks || []);
-  const [zoom, setZoom]     = useState(1);
+  const [tasks, setTasks]     = useState(project.fdTasks || []);
+  const [zoom, setZoom]       = useState(1);
   const [newTask, setNewTask] = useState('');
   const [newFag, setNewFag]   = useState('tomrer');
   const [dropIdx, setDropIdx] = useState(null);
+  const [dayView, setDayView] = useState(false);            // dag-visning vs uke
+  const [colColors, setColColors] = useState(project.fdColColors || {});  // { colIdx: '#rrggbb' }
+  const [pickerTaskId, setPickerTaskId] = useState(null);   // id for fargevalgsdialog
+  const [pickerMode, setPickerMode]     = useState('bar');  // 'bar' | 'row'
   const drag       = useRef(null);
   const rowDragRef = useRef(null);
   const tasksRef   = useRef(tasks);
+
+  // ── Lane/rad-beregning (aktiviteter på samme linje) ───────────────────────
+  // lane = t.lane ?? index — tasks med samme lane-verdi deler visuell rad
+  const laneOf      = tasks.map((t, i) => t.lane ?? i);
+  const uniqueLanes = [];
+  const seenL       = new Set();
+  laneOf.forEach(l => { if (!seenL.has(l)) { uniqueLanes.push(l); seenL.add(l); } });
+  const rowCount    = uniqueLanes.length;
+  const rowOfTask   = laneOf.map(l => uniqueLanes.indexOf(l)); // visual row index per task
+
+  const COL_CYCLE = ['rgba(250,204,21,.28)', 'rgba(134,239,172,.28)', 'rgba(147,197,253,.28)', 'rgba(249,168,212,.28)'];
+  const SWATCH_COLORS = ['#185FA5','#E24B4A','#0F6E56','#D4537E','#7F77DD','#BA7517','#16a34a','#64748b','#ea580c','#0891b2'];
 
   useEffect(() => {
     setTasks(project.fdTasks || []);
@@ -489,10 +505,12 @@ function GanttChart({ project, onUpdate }) {
   const TASK_TOP = 40 + MILE_H;
   const chartW = Math.max(totalDays * 18, 580) * zoom;
   const dw     = chartW / totalDays;
-  const svgH   = Math.max(tasks.length * ROW + TASK_TOP + 16, 80);
+  const svgH   = Math.max(rowCount * ROW + TASK_TOP + 16, 80);
 
   const weeks = [];
   for (let d = 0; d < totalDays; d += 7) weeks.push(d);
+  // Dag-visning: alle individuelle dager
+  const allDays = dayView ? Array.from({ length: totalDays }, (_, d) => d) : [];
 
   const yearBands = [];
   weeks.forEach(d => {
@@ -506,11 +524,12 @@ function GanttChart({ project, onUpdate }) {
   const noff = (nowYr * 52 + nowWk) - (by * 52 + bw);
   const nowX = (noff >= 0 && noff * 7 <= totalDays) ? noff * 7 * dw : null;
 
-  const save = next => {
+  const save = (next, nextCols) => {
     tasksRef.current = next; setTasks(next);
     const autoPct = calcAutoProgress(next);
-    onUpdate({ fdTasks: next, ...(autoPct !== null ? { fdProgress: autoPct } : {}) });
+    onUpdate({ fdTasks: next, fdColColors: nextCols ?? colColors, ...(autoPct !== null ? { fdProgress: autoPct } : {}) });
   };
+  const saveCols = nc => { setColColors(nc); onUpdate({ fdColColors: nc }); };
 
   const onMouseMove = e => {
     if (!drag.current) return;
@@ -585,6 +604,11 @@ function GanttChart({ project, onUpdate }) {
         <span className="fd2-zoom-pct">{Math.round(zoom * 100)}%</span>
         <button className="fd2-zoom-btn" onClick={() => setZoom(z => Math.min(4, +(z + 0.2).toFixed(1)))}>+</button>
         <button className="fd2-zoom-btn" onClick={() => setZoom(1)} style={{ fontSize: 10, width: 'auto', padding: '0 8px' }}>Reset</button>
+        <button className="fd2-zoom-btn" onClick={() => setDayView(v => !v)}
+          style={{ fontSize: 10, width: 'auto', padding: '0 8px', background: dayView ? '#2563eb' : undefined, color: dayView ? '#fff' : undefined }}
+          title={dayView ? 'Bytt til uke-visning' : 'Bytt til dag-visning (viser helger)'}>
+          {dayView ? '📅 Dag' : '📅 Uke'}
+        </button>
         {tasks.length > 0 && (
           <button className="btn btn-sm" style={{ marginLeft: 8 }} onClick={addStandardFaser}>
             + Standardfaser
@@ -609,8 +633,10 @@ function GanttChart({ project, onUpdate }) {
               <rect x={0} y={40} width={PAD} height={MILE_H} fill="#faf5ff" />
             )}
             {tasks.map((t, i) => {
-              const y = i * ROW + TASK_TOP;
+              const y = rowOfTask[i] * ROW + TASK_TOP;
               const done = (t.pct ?? 0) >= 100;
+              const barCol = t.customColor || fc(t.fag);
+              const rowBg = t.rowColor || (done ? '#f0fdf4' : rowOfTask[i] % 2 === 0 ? '#fff' : '#fafafa');
               return (
                 <g key={t.id}
                   onMouseDown={() => { rowDragRef.current = i; }}
@@ -621,16 +647,36 @@ function GanttChart({ project, onUpdate }) {
                     }
                     rowDragRef.current = null; setDropIdx(null);
                   }}>
-                  <title>{t.name}</title>
+                  <title>{t.name} — klikk sirkel for farge</title>
                   {dropIdx === i && <rect x={0} y={y} width={PAD} height={2} fill="#2563eb" />}
-                  <rect x={0} y={y} width={PAD} height={ROW} fill={done ? '#f0fdf4' : i % 2 === 0 ? '#fff' : '#fafafa'} />
-                  <circle cx={12} cy={y + ROW / 2} r={5} fill={fc(t.fag)} opacity={done ? 0.4 : 1} />
-                  <clipPath id={`nc${t.id}`}><rect x={24} y={y} width={PAD - 64} height={ROW} /></clipPath>
+                  <rect x={0} y={y} width={PAD} height={ROW} fill={rowBg} />
+                  {/* Farge-dot: klikk for å velge fargea */}
+                  <circle cx={12} cy={y + ROW / 2} r={6} fill={barCol} opacity={done ? 0.4 : 1}
+                    className="fd2-g-ctrl" style={{ cursor: 'pointer' }}
+                    onClick={e => { e.stopPropagation(); setPickerMode('bar'); setPickerTaskId(pickerTaskId === t.id ? null : t.id); }} />
+                  {/* Rad-farge-dot (lang-klikk / shift+klikk) */}
+                  <rect x={0} y={y} width={4} height={ROW}
+                    fill={t.rowColor || 'transparent'} rx={0}
+                    className="fd2-g-ctrl" style={{ cursor: 'pointer' }}
+                    onClick={e => { e.stopPropagation(); setPickerMode('row'); setPickerTaskId(pickerTaskId === t.id ? null : t.id); }}
+                    title="Klikk for å sette radfarge" />
+                  <clipPath id={`nc${t.id}`}><rect x={24} y={y} width={PAD - 76} height={ROW} /></clipPath>
                   <text x={26} y={y + ROW / 2 + 5} fontSize={12} fill={done ? '#94a3b8' : '#1e293b'}
                     style={{ userSelect: 'none', textDecoration: done ? 'line-through' : 'none' }}
                     clipPath={`url(#nc${t.id})`}>
-                    {t.name.length > 22 ? t.name.slice(0, 21) + '…' : t.name}
+                    {t.name.length > 20 ? t.name.slice(0, 19) + '…' : t.name}
                   </text>
+                  {/* Merge/split rad-knapper */}
+                  {i > 0 && <text x={PAD - 70} y={y + ROW / 2 + 4} fontSize={10} fill="#cbd5e1"
+                    className="fd2-g-ctrl" style={{ cursor: 'pointer', userSelect: 'none' }}
+                    title="Slå sammen med raden over"
+                    onClick={e => { e.stopPropagation(); save(tasks.map((tt, ii) => ii === i ? { ...tt, lane: laneOf[i - 1] } : tt)); }}>⇑</text>}
+                  {laneOf[i] === laneOf[i] && tasks.some((tt, ii) => ii !== i && laneOf[ii] === laneOf[i]) && (
+                    <text x={PAD - 70} y={y + ROW / 2 + 14} fontSize={10} fill="#f59e0b"
+                      className="fd2-g-ctrl" style={{ cursor: 'pointer', userSelect: 'none' }}
+                      title="Skill ut på egen rad"
+                      onClick={e => { e.stopPropagation(); save(tasks.map((tt, ii) => ii === i ? { ...tt, lane: Date.now() + ii } : tt)); }}>⇓</text>
+                  )}
                   <text x={PAD - 54} y={y + ROW / 2 + 5} fontSize={11} fill="#cbd5e1"
                     className="fd2-g-ctrl" style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => deleteTask(t.id)}>✕</text>
                   <rect x={PAD - 36} y={y + ROW / 2 - 9} width={18} height={18} rx={4}
@@ -658,24 +704,61 @@ function GanttChart({ project, onUpdate }) {
             {MILE_H > 0 && (
               <rect x={0} y={40} width={chartW} height={MILE_H} fill="#faf5ff" />
             )}
-            {weeks.map((d, i) => {
+            {/* Rad-bakgrunnsfarger (høyre panel) */}
+            {tasks.map((t, i) => t.rowColor ? (
+              <rect key={'rbg' + t.id} x={0} y={rowOfTask[i] * ROW + TASK_TOP} width={chartW} height={ROW}
+                fill={t.rowColor} opacity={0.22} style={{ pointerEvents: 'none' }} />
+            ) : null)}
+
+            {/* Dagvisning: individuelle dager med helge-markering */}
+            {dayView ? allDays.map(d => {
+              const dow = d % 7; // 0=Man,1=Tir,...,5=Lør,6=Søn
+              const erHelg = dow === 5 || dow === 6;
+              const wkStart = Math.floor(d / 7);
+              const { w } = wkNum(bw, by, wkStart);
+              const showHeader = d % 7 === 0; // uke-label første dag i uka
+              return (
+                <g key={'day' + d}>
+                  <rect x={d * dw} y={TASK_TOP} width={dw} height={svgH - TASK_TOP}
+                    fill={erHelg ? 'rgba(148,163,184,.18)' : 'transparent'} />
+                  <line x1={d * dw} y1={20} x2={d * dw} y2={svgH} stroke={erHelg ? '#cbd5e1' : '#f1f5f9'} strokeWidth={0.5} />
+                  {showHeader && <text x={d * dw + 4} y={33} fontSize={9} fill="#94a3b8">U{w}</text>}
+                  {dw > 14 && <text x={d * dw + dw / 2} y={33} fontSize={8} fill={erHelg ? '#94a3b8' : '#cbd5e1'} textAnchor="middle">
+                    {['M','T','O','T','F','L','S'][dow]}
+                  </text>}
+                </g>
+              );
+            }) : weeks.map((d, i) => {
               const { w } = wkNum(bw, by, Math.round(d / 7));
+              const cc = colColors[String(i)];
               return (
                 <g key={d}>
                   <rect x={d * dw} y={TASK_TOP} width={7 * dw} height={svgH - TASK_TOP}
-                    fill={i % 2 === 0 ? 'rgba(0,0,0,0.01)' : 'rgba(0,0,0,0.03)'} />
+                    fill={cc || (i % 2 === 0 ? 'rgba(0,0,0,0.01)' : 'rgba(0,0,0,0.03)')} />
                   <line x1={d * dw} y1={20} x2={d * dw} y2={svgH} stroke="#e2e8f0" strokeWidth={0.5} />
-                  <text x={d * dw + 4} y={33} fontSize={10} fill="#94a3b8">U{w}</text>
+                  <text x={d * dw + 4} y={33} fontSize={10} fill="#94a3b8"
+                    style={{ cursor: 'pointer' }}
+                    title="Klikk for å farge kolonnen"
+                    onClick={() => {
+                      const key = String(i)
+                      const cur = colColors[key]
+                      const next = { ...colColors }
+                      const idx = COL_CYCLE.indexOf(cur)
+                      if (idx === COL_CYCLE.length - 1 || idx < 0 && cur) delete next[key]
+                      else next[key] = COL_CYCLE[(idx + 1) % COL_CYCLE.length]
+                      saveCols(next)
+                    }}>U{w}</text>
                 </g>
               );
             })}
+
             {tasks.map((t, i) => {
               const x  = t.start * dw;
               const w  = Math.max(t.dur * dw - 2, 6);
-              const y  = i * ROW + TASK_TOP;
+              const y  = rowOfTask[i] * ROW + TASK_TOP;
               const pct = t.pct ?? 0;
               const done = pct >= 100;
-              const col  = fc(t.fag);
+              const col  = t.customColor || fc(t.fag);
               return (
                 <g key={t.id}>
                   <title>{t.name} · {t.dur} dager</title>
@@ -721,6 +804,36 @@ function GanttChart({ project, onUpdate }) {
           </svg>
         </div>
       </div>
+
+      {/* Farge-popup for bar-farge og rad-farge */}
+      {pickerTaskId && (() => {
+        const t = tasks.find(x => x.id === pickerTaskId)
+        if (!t) return null
+        const isModeRow = pickerMode === 'row'
+        return (
+          <div style={{ position: 'relative', zIndex: 50, margin: '4px 0 4px 0' }}
+            onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1e293b', borderRadius: 10, padding: '8px 12px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                {isModeRow ? '🎨 Radfarge:' : '🎨 Streke-farge:'} <strong style={{ color: '#e2e8f0' }}>{t.name.slice(0, 20)}</strong>
+              </span>
+              {SWATCH_COLORS.map(c => (
+                <div key={c} style={{ width: 20, height: 20, borderRadius: 4, background: c, cursor: 'pointer', border: ((isModeRow ? t.rowColor : t.customColor) === c) ? '2px solid #fff' : '2px solid transparent' }}
+                  onClick={() => { save(tasks.map(tt => tt.id === t.id ? { ...tt, [isModeRow ? 'rowColor' : 'customColor']: c } : tt)); }} />
+              ))}
+              <div style={{ width: 20, height: 20, borderRadius: 4, background: 'transparent', border: '2px solid #475569', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#94a3b8' }}
+                onClick={() => { save(tasks.map(tt => tt.id === t.id ? { ...tt, [isModeRow ? 'rowColor' : 'customColor']: undefined } : tt)); setPickerTaskId(null); }}
+                title="Tilbakestill til standard">✕</div>
+              <input type="color" defaultValue={isModeRow ? (t.rowColor || '#ffffff') : (t.customColor || fc(t.fag))}
+                style={{ width: 28, height: 20, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer' }}
+                onChange={e => save(tasks.map(tt => tt.id === t.id ? { ...tt, [isModeRow ? 'rowColor' : 'customColor']: e.target.value } : tt))}
+                title="Velg egendefinert farge" />
+              <button style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 14, padding: '0 4px' }}
+                onClick={() => setPickerTaskId(null)}>✕ Lukk</button>
+            </div>
+          </div>
+        )
+      })()}
 
       <div className="fd2-add-row">
         <input value={newTask} onChange={e => setNewTask(e.target.value)}
