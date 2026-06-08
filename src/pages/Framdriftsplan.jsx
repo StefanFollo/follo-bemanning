@@ -468,7 +468,9 @@ function GanttChart({ project, onUpdate }) {
   const [newTask, setNewTask] = useState('');
   const [newFag, setNewFag]   = useState('tomrer');
   const [dropIdx, setDropIdx] = useState(null);
-  const [dayView, setDayView] = useState(false);            // dag-visning vs uke
+  const [timeMode, setTimeMode] = useState('uke');           // 'dag' | 'uke'
+  const dayView = timeMode === 'dag';
+  const [editingTaskId, setEditingTaskId] = useState(null);  // redigerer fase-navn inline
   const [colColors, setColColors] = useState(project.fdColColors || {});  // { colIdx: '#rrggbb' }
   const [pickerTaskId, setPickerTaskId] = useState(null);   // id for fargevalgsdialog
   const [pickerMode, setPickerMode]     = useState('bar');  // 'bar' | 'row'
@@ -604,11 +606,10 @@ function GanttChart({ project, onUpdate }) {
         <span className="fd2-zoom-pct">{Math.round(zoom * 100)}%</span>
         <button className="fd2-zoom-btn" onClick={() => setZoom(z => Math.min(4, +(z + 0.2).toFixed(1)))}>+</button>
         <button className="fd2-zoom-btn" onClick={() => setZoom(1)} style={{ fontSize: 10, width: 'auto', padding: '0 8px' }}>Reset</button>
-        <button className="fd2-zoom-btn" onClick={() => setDayView(v => !v)}
-          style={{ fontSize: 10, width: 'auto', padding: '0 8px', background: dayView ? '#2563eb' : undefined, color: dayView ? '#fff' : undefined }}
-          title={dayView ? 'Bytt til uke-visning' : 'Bytt til dag-visning (viser helger)'}>
-          {dayView ? '📅 Dag' : '📅 Uke'}
-        </button>
+        <div className="ukemode-toggle" style={{ marginLeft: 4 }}>
+          <button className={`ukemode-btn ${timeMode === 'uke' ? 'active' : ''}`} onClick={() => setTimeMode('uke')}>Uker</button>
+          <button className={`ukemode-btn ${timeMode === 'dag' ? 'active' : ''}`} onClick={() => setTimeMode('dag')}>Dager</button>
+        </div>
         {tasks.length > 0 && (
           <button className="btn btn-sm" style={{ marginLeft: 8 }} onClick={addStandardFaser}>
             + Standardfaser
@@ -661,11 +662,25 @@ function GanttChart({ project, onUpdate }) {
                     onClick={e => { e.stopPropagation(); setPickerMode('row'); setPickerTaskId(pickerTaskId === t.id ? null : t.id); }}
                     title="Klikk for å sette radfarge" />
                   <clipPath id={`nc${t.id}`}><rect x={24} y={y} width={PAD - 76} height={ROW} /></clipPath>
-                  <text x={26} y={y + ROW / 2 + 5} fontSize={12} fill={done ? '#94a3b8' : '#1e293b'}
-                    style={{ userSelect: 'none', textDecoration: done ? 'line-through' : 'none' }}
-                    clipPath={`url(#nc${t.id})`}>
-                    {t.name.length > 20 ? t.name.slice(0, 19) + '…' : t.name}
-                  </text>
+                  {editingTaskId === t.id ? (
+                    <foreignObject x={22} y={y + 6} width={PAD - 78} height={ROW - 12}>
+                      <input
+                        autoFocus
+                        defaultValue={t.name}
+                        style={{ width: '100%', height: '100%', border: '1.5px solid #3b82f6', borderRadius: 5, padding: '2px 6px', fontSize: 12, outline: 'none', background: '#fff' }}
+                        onBlur={e => { save(tasks.map(tt => tt.id === t.id ? { ...tt, name: e.target.value.trim() || tt.name } : tt)); setEditingTaskId(null); }}
+                        onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') setEditingTaskId(null); }}
+                        onClick={e => e.stopPropagation()}
+                      />
+                    </foreignObject>
+                  ) : (
+                    <text x={26} y={y + ROW / 2 + 5} fontSize={12} fill={done ? '#94a3b8' : '#1e293b'}
+                      style={{ userSelect: 'none', textDecoration: done ? 'line-through' : 'none', cursor: 'text' }}
+                      clipPath={`url(#nc${t.id})`}
+                      onDoubleClick={e => { e.stopPropagation(); setEditingTaskId(t.id); }}>
+                      {t.name.length > 20 ? t.name.slice(0, 19) + '…' : t.name}
+                    </text>
+                  )}
                   {/* Merge/split rad-knapper */}
                   {i > 0 && <text x={PAD - 70} y={y + ROW / 2 + 4} fontSize={10} fill="#cbd5e1"
                     className="fd2-g-ctrl" style={{ cursor: 'pointer', userSelect: 'none' }}
