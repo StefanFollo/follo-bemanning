@@ -35,6 +35,18 @@ function projStartWY(proj) {
   return isoToWeekYear(proj.startDato || null);
 }
 
+// Mandag i en gitt ISO-uke/år
+function mondayOfWeek(week, year) {
+  const jan4 = new Date(year, 0, 4);
+  const dow = (jan4.getDay() + 6) % 7;            // 0=Man
+  const mondayWeek1 = new Date(jan4);
+  mondayWeek1.setDate(jan4.getDate() - dow);
+  const d = new Date(mondayWeek1);
+  d.setDate(mondayWeek1.getDate() + (week - 1) * 7);
+  return d;
+}
+const DAG_BOKSTAV = ['M', 'T', 'O', 'T', 'F', 'L', 'S'];
+
 function calcAutoProgress(tasks) {
   if (!tasks || tasks.length === 0) return 0;
   return Math.round(tasks.reduce((s, t) => s + (t.pct ?? 0), 0) / tasks.length);
@@ -470,6 +482,7 @@ function GanttChart({ project, onUpdate }) {
   const [dropIdx, setDropIdx] = useState(null);
   const [timeMode, setTimeMode] = useState('uke');           // 'dag' | 'uke'
   const dayView = timeMode === 'dag';
+  const [storskjerm, setStorskjerm] = useState(false);       // fullskjerm-visning for TV/projektor
   const [editingTaskId, setEditingTaskId] = useState(null);  // redigerer fase-navn inline
   const [colColors, setColColors] = useState(project.fdColColors || {});  // { colIdx: '#rrggbb' }
   const [pickerTaskId, setPickerTaskId] = useState(null);   // id for fargevalgsdialog
@@ -496,16 +509,22 @@ function GanttChart({ project, onUpdate }) {
   }, [project.id]);
 
   const { week: bw, year: by } = projStartWY(project);
+  const startMonday = mondayOfWeek(bw, by);   // faktisk dato for dag 0
+  const datoForDag = (d) => { const x = new Date(startMonday); x.setDate(startMonday.getDate() + d); return x; };
   const totalWeeks = project.fdTotalWeeks || 12;
   const totalDays  = Math.max(
     ...(tasks.length ? tasks.map(t => t.start + t.dur) : [0]),
     totalWeeks * 7
   );
 
-  const ROW = 38, PAD = 240;
-  const MILE_H = (project.fdMilepaler?.length > 0) ? 22 : 0;
+  const ROW = storskjerm ? 52 : 38, PAD = storskjerm ? 280 : 240;
+  const MILE_H = (project.fdMilepaler?.length > 0) ? (storskjerm ? 28 : 22) : 0;
   const TASK_TOP = 40 + MILE_H;
-  const chartW = Math.max(totalDays * 18, 580) * zoom;
+  // Dag-modus: bredere dager (som mannskapsplan). Storskjerm: enda bredere.
+  const dagBredde = storskjerm ? 38 : 28;       // px per dag i dag-visning
+  const ukeBredde = storskjerm ? 24 : 18;       // px per dag i uke-visning
+  const basisBredde = dayView ? dagBredde : ukeBredde;
+  const chartW = Math.max(totalDays * basisBredde, 580) * zoom;
   const dw     = chartW / totalDays;
   const svgH   = Math.max(rowCount * ROW + TASK_TOP + 16, 80);
 
@@ -590,7 +609,23 @@ function GanttChart({ project, onUpdate }) {
   };
 
   return (
-    <div>
+    <div style={storskjerm ? { position: 'fixed', inset: 0, zIndex: 300, background: '#fff', overflow: 'auto', padding: '8px 12px' } : undefined}>
+      {storskjerm && (
+        <div style={{ position: 'fixed', top: 8, right: 14, zIndex: 400, display: 'flex', gap: 4, alignItems: 'center', background: '#1e293b', color: '#fff', borderRadius: 10, padding: '5px 10px', opacity: 0.92 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, marginRight: 8 }}>📺 {project.navn || 'Framdriftsplan'}</span>
+          <button onClick={() => setZoom(z => Math.max(0.3, +(z - 0.2).toFixed(1)))}
+            style={{ background: 'none', border: '1px solid rgba(255,255,255,.3)', borderRadius: 6, color: '#fff', fontSize: 16, fontWeight: 700, cursor: 'pointer', padding: '1px 9px' }}>−</button>
+          <span style={{ fontSize: 12, fontWeight: 600, minWidth: 40, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
+          <button onClick={() => setZoom(z => Math.min(4, +(z + 0.2).toFixed(1)))}
+            style={{ background: 'none', border: '1px solid rgba(255,255,255,.3)', borderRadius: 6, color: '#fff', fontSize: 16, fontWeight: 700, cursor: 'pointer', padding: '1px 9px' }}>＋</button>
+          <div className="ukemode-toggle" style={{ marginLeft: 6 }}>
+            <button className={`ukemode-btn ${timeMode === 'uke' ? 'active' : ''}`} onClick={() => setTimeMode('uke')}>Uker</button>
+            <button className={`ukemode-btn ${timeMode === 'dag' ? 'active' : ''}`} onClick={() => setTimeMode('dag')}>Dager</button>
+          </div>
+          <button onClick={() => setStorskjerm(false)}
+            style={{ background: 'none', border: '1px solid rgba(255,255,255,.4)', borderRadius: 6, color: '#fff', fontSize: 13, cursor: 'pointer', padding: '3px 12px', marginLeft: 6 }}>✕ Lukk</button>
+        </div>
+      )}
       {tasks.length === 0 && (
         <div className="fd2-tom-gantt">
           <span>Ingen faser lagt til ennå.</span>
@@ -600,7 +635,7 @@ function GanttChart({ project, onUpdate }) {
         </div>
       )}
 
-      <div className="fd2-gantt-toolbar">
+      <div className="fd2-gantt-toolbar" style={storskjerm ? { display: 'none' } : undefined}>
         <span style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>Zoom:</span>
         <button className="fd2-zoom-btn" onClick={() => setZoom(z => Math.max(0.3, +(z - 0.2).toFixed(1)))}>−</button>
         <span className="fd2-zoom-pct">{Math.round(zoom * 100)}%</span>
@@ -610,6 +645,10 @@ function GanttChart({ project, onUpdate }) {
           <button className={`ukemode-btn ${timeMode === 'uke' ? 'active' : ''}`} onClick={() => setTimeMode('uke')}>Uker</button>
           <button className={`ukemode-btn ${timeMode === 'dag' ? 'active' : ''}`} onClick={() => setTimeMode('dag')}>Dager</button>
         </div>
+        <button className="btn btn-sm" style={{ marginLeft: 4 }} onClick={() => setStorskjerm(true)}
+          title="Storskjerm – stor visning for TV/projektor">
+          📺 Storskjerm
+        </button>
         {tasks.length > 0 && (
           <button className="btn btn-sm" style={{ marginLeft: 8 }} onClick={addStandardFaser}>
             + Standardfaser
@@ -725,22 +764,32 @@ function GanttChart({ project, onUpdate }) {
                 fill={t.rowColor} opacity={0.22} style={{ pointerEvents: 'none' }} />
             ) : null)}
 
-            {/* Dagvisning: individuelle dager med helge-markering */}
+            {/* Dagvisning: individuelle dager med dato + helge-markering (som mannskapsplan) */}
             {dayView ? allDays.map(d => {
-              const dow = d % 7; // 0=Man,1=Tir,...,5=Lør,6=Søn
-              const erHelg = dow === 5 || dow === 6;
-              const wkStart = Math.floor(d / 7);
-              const { w } = wkNum(bw, by, wkStart);
-              const showHeader = d % 7 === 0; // uke-label første dag i uka
+              const dato = datoForDag(d);
+              const realDow = (dato.getDay() + 6) % 7; // 0=Man … 6=Søn
+              const erHelg = realDow === 5 || realDow === 6;
+              const erManved = realDow === 0;          // mandag = uke-start
+              const { w } = wkNum(bw, by, Math.floor(d / 7));
+              const datoTxt = `${dato.getDate()}.${dato.getMonth() + 1}`;
               return (
                 <g key={'day' + d}>
                   <rect x={d * dw} y={TASK_TOP} width={dw} height={svgH - TASK_TOP}
-                    fill={erHelg ? 'rgba(148,163,184,.18)' : 'transparent'} />
-                  <line x1={d * dw} y1={20} x2={d * dw} y2={svgH} stroke={erHelg ? '#cbd5e1' : '#f1f5f9'} strokeWidth={0.5} />
-                  {showHeader && <text x={d * dw + 4} y={33} fontSize={9} fill="#94a3b8">U{w}</text>}
-                  {dw > 14 && <text x={d * dw + dw / 2} y={33} fontSize={8} fill={erHelg ? '#94a3b8' : '#cbd5e1'} textAnchor="middle">
-                    {['M','T','O','T','F','L','S'][dow]}
-                  </text>}
+                    fill={erHelg ? 'rgba(148,163,184,.22)' : 'transparent'} />
+                  <line x1={d * dw} y1={20} x2={d * dw} y2={svgH}
+                    stroke={erManved ? '#cbd5e1' : erHelg ? '#cbd5e1' : '#f1f5f9'}
+                    strokeWidth={erManved ? 1 : 0.5} />
+                  {erManved && (
+                    <text x={d * dw + 3} y={20 + 11} fontSize={storskjerm ? 11 : 9} fontWeight="700" fill="#2563eb">U{w}</text>
+                  )}
+                  <text x={d * dw + dw / 2} y={TASK_TOP - 12} fontSize={storskjerm ? 12 : 10}
+                    fontWeight={erHelg ? 400 : 600} fill={erHelg ? '#94a3b8' : '#475569'} textAnchor="middle">
+                    {DAG_BOKSTAV[realDow]}
+                  </text>
+                  <text x={d * dw + dw / 2} y={TASK_TOP - 2} fontSize={storskjerm ? 10 : 8}
+                    fill={erHelg ? '#cbd5e1' : '#94a3b8'} textAnchor="middle">
+                    {datoTxt}
+                  </text>
                 </g>
               );
             }) : weeks.map((d, i) => {
