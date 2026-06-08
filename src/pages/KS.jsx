@@ -1976,6 +1976,202 @@ function KSProsjektVelger({ prosjekter, sjekklister, onVelg }) {
   )
 }
 
+// ── Prosjekt-sjekkliste utfylling (PL på byggeplass) ─────────────────────────
+
+function ProsjektSjekklisteUtfylling({ sjekkliste, prosjekt, onTilbake, onOppdater }) {
+  const [punkter, setPunkter] = useState(sjekkliste.punkter || [])
+  const [lagrer, setLagrer] = useState(false)
+  const [avvikPunktId, setAvvikPunktId] = useState(null)
+  const [avvikKommentar, setAvvikKommentar] = useState('')
+  const [visSluttrapport, setVisSluttrapport] = useState(false)
+  const bruker = BRUKER()
+
+  const ferdig = punkter.filter(p => p.status !== 'ikke-utfort').length
+  const totalt = punkter.length
+  const pst = totalt > 0 ? Math.round((ferdig / totalt) * 100) : 0
+  const harAvvik = punkter.some(p => p.status === 'avvik')
+  const alleBehandlet = punkter.every(p => p.status !== 'ikke-utfort')
+
+  async function settPunktStatus(punktId, status, kommentar = '') {
+    const dato = new Date().toISOString()
+    const nyePunkter = punkter.map(p => p.id !== punktId ? p : { ...p, status, kommentar, utfortAv: bruker, utfortDato: dato })
+    setPunkter(nyePunkter)
+    setLagrer(true)
+    try {
+      const token = localStorage.getItem('fbs_token') || ''
+      await fetch('/api/sjekklister', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ prosjektId: prosjekt.id, sjekklisteId: sjekkliste.id, punktId, status, kommentar }),
+      })
+      // Oppdater lokalt
+      const slStatus = beregnStatus(nyePunkter)
+      onOppdater({ ...sjekkliste, punkter: nyePunkter, status: slStatus })
+    } catch (e) { console.error('Feil ved lagring:', e) }
+    setLagrer(false)
+  }
+
+  function beregnStatus(pts) {
+    if (pts.every(p => p.status !== 'ikke-utfort'))
+      return pts.some(p => p.status === 'avvik') ? 'avvik' : 'fullfort'
+    return pts.some(p => p.status !== 'ikke-utfort') ? 'i-arbeid' : 'ikke-startet'
+  }
+
+  function SluttRapportModal() {
+    const okPunkter = punkter.filter(p => p.status === 'ok')
+    const avvikPunkter = punkter.filter(p => p.status === 'avvik')
+    const kritiskePunkter = avvikPunkter.filter(p => p.kritisk)
+    return (
+      <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', zIndex: 600, overflow: 'auto', padding: 20 }}
+        onClick={() => setVisSluttrapport(false)}>
+        <div style={{ background: '#fff', borderRadius: 16, maxWidth: 640, margin: '0 auto', padding: '28px 24px' }}
+          onClick={e => e.stopPropagation()}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <div>
+              <div style={{ fontWeight: 800, fontSize: 18, color: '#1e293b' }}>📄 Sluttrapport</div>
+              <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>{sjekkliste.navn} — {prosjekt.navn}</div>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn" onClick={() => window.print()}>🖨 Skriv ut</button>
+              <button className="btn-icon" onClick={() => setVisSluttrapport(false)}>✕</button>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 20 }}>
+            {[
+              { v: okPunkter.length, label: 'OK', bg: '#f0fdf4', clr: '#16a34a' },
+              { v: avvikPunkter.length, label: 'Avvik', bg: '#fff5f5', clr: '#dc2626' },
+              { v: kritiskePunkter.length, label: 'Kritiske avvik', bg: kritiskePunkter.length > 0 ? '#fef2f2' : '#f8fafc', clr: kritiskePunkter.length > 0 ? '#dc2626' : '#94a3b8' },
+            ].map((s, i) => (
+              <div key={i} style={{ background: s.bg, borderRadius: 10, padding: '12px', textAlign: 'center' }}>
+                <div style={{ fontSize: 24, fontWeight: 800, color: s.clr }}>{s.v}</div>
+                <div style={{ fontSize: 11, color: s.clr, fontWeight: 600 }}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {avvikPunkter.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontWeight: 700, fontSize: 14, color: '#dc2626', marginBottom: 8 }}>⚠ Avvik</div>
+              {avvikPunkter.map(p => (
+                <div key={p.id} style={{ padding: '8px 12px', border: '1px solid #fca5a5', borderRadius: 8, marginBottom: 6, background: p.kritisk ? '#fef2f2' : '#fff' }}>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{p.kritisk ? '🔴' : '🟡'} {p.tekst}</div>
+                  {p.kommentar && <div style={{ fontSize: 12, color: '#475569', marginTop: 3 }}>💬 {p.kommentar}</div>}
+                  {p.regelverk && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>📄 {p.regelverk}</div>}
+                  <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Registrert av {p.utfortAv} · {p.utfortDato ? new Date(p.utfortDato).toLocaleDateString('nb-NO') : ''}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div style={{ marginBottom: 4 }}>
+            <div style={{ fontWeight: 700, fontSize: 14, color: '#16a34a', marginBottom: 8 }}>✅ Godkjente punkter ({okPunkter.length})</div>
+            {okPunkter.map(p => (
+              <div key={p.id} style={{ display: 'flex', gap: 8, padding: '5px 0', borderBottom: '1px solid #f8fafc', fontSize: 13 }}>
+                <span>✓</span>
+                <span style={{ flex: 1, color: '#374151' }}>{p.tekst}</span>
+                <span style={{ fontSize: 11, color: '#94a3b8' }}>{p.utfortAv}</span>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 16, padding: '10px 12px', background: '#f8fafc', borderRadius: 8, fontSize: 12, color: '#64748b', display: 'flex', justifyContent: 'space-between' }}>
+            <span>Generert: {new Date().toLocaleDateString('nb-NO')}</span>
+            <span>Utfylt av: {bruker}</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ padding: '12px 16px', borderBottom: '2px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 10, background: '#fff', flexShrink: 0 }}>
+        <button className="btn" onClick={onTilbake}>← Tilbake</button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 800, fontSize: 15 }}>{sjekkliste.ikon || '📋'} {sjekkliste.navn}</div>
+          <div style={{ fontSize: 11, color: '#64748b' }}>{prosjekt.navn}</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {lagrer && <span style={{ fontSize: 11, color: '#64748b' }}>💾 Lagrer...</span>}
+          {harAvvik && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 700 }}>⚠ {punkter.filter(p => p.status === 'avvik').length} avvik</span>}
+          <span style={{ fontSize: 13, fontWeight: 700, color: pst === 100 ? '#16a34a' : '#f59e0b' }}>{pst}%</span>
+          {alleBehandlet && (
+            <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => setVisSluttrapport(true)}>
+              📄 Sluttrapport
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Framdriftsbar */}
+      <div style={{ height: 6, background: '#e2e8f0', flexShrink: 0 }}>
+        <div style={{ width: pst + '%', height: '100%', background: harAvvik ? '#dc2626' : pst === 100 ? '#16a34a' : '#3b82f6', transition: 'width .3s' }} />
+      </div>
+
+      {/* Punktliste */}
+      <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
+        {punkter.map((p, i) => (
+          <div key={p.id} style={{ border: '1px solid ' + (p.status === 'avvik' ? '#fca5a5' : p.status === 'ok' ? '#bbf7d0' : '#e2e8f0'), borderRadius: 10, padding: '12px 14px', marginBottom: 10, background: p.status === 'avvik' ? '#fff5f5' : p.status === 'ok' ? '#f0fdf4' : '#fff' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <div style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>
+                {p.status === 'ok' ? '✅' : p.status === 'avvik' ? '⚠️' : '⬜'}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: p.kritisk ? 700 : 500, fontSize: 14, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {p.kritisk && <span style={{ fontSize: 10, background: '#dc2626', color: '#fff', borderRadius: 4, padding: '1px 5px' }}>Kritisk</span>}
+                  {p.tekst}
+                </div>
+                {p.regelverk && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>📄 {p.regelverk}</div>}
+                {p.status !== 'ikke-utfort' && (
+                  <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3 }}>
+                    {p.utfortAv} · {p.utfortDato ? new Date(p.utfortDato).toLocaleString('nb-NO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+                  </div>
+                )}
+                {p.kommentar && <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4, fontStyle: 'italic' }}>💬 {p.kommentar}</div>}
+
+                {/* Avvik-kommentar input */}
+                {avvikPunktId === p.id && (
+                  <div style={{ marginTop: 8 }}>
+                    <textarea className="input" rows={2} autoFocus
+                      placeholder="Beskriv avviket..." value={avvikKommentar}
+                      onChange={e => setAvvikKommentar(e.target.value)}
+                      style={{ fontSize: 13, marginBottom: 6 }} />
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn btn-primary" style={{ background: '#dc2626', borderColor: '#dc2626', fontSize: 12 }}
+                        onClick={() => { settPunktStatus(p.id, 'avvik', avvikKommentar); setAvvikPunktId(null); setAvvikKommentar(''); }}>
+                        ⚠ Lagre avvik
+                      </button>
+                      <button className="btn" style={{ fontSize: 12 }} onClick={() => setAvvikPunktId(null)}>Avbryt</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Statusknapper */}
+              {avvikPunktId !== p.id && (
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button style={{ padding: '6px 12px', borderRadius: 8, border: '1.5px solid ' + (p.status === 'ok' ? '#16a34a' : '#e2e8f0'), background: p.status === 'ok' ? '#16a34a' : '#fff', color: p.status === 'ok' ? '#fff' : '#374151', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                    onClick={() => settPunktStatus(p.id, p.status === 'ok' ? 'ikke-utfort' : 'ok')}>
+                    ✓ OK
+                  </button>
+                  <button style={{ padding: '6px 12px', borderRadius: 8, border: '1.5px solid ' + (p.status === 'avvik' ? '#dc2626' : '#e2e8f0'), background: p.status === 'avvik' ? '#dc2626' : '#fff', color: p.status === 'avvik' ? '#fff' : '#374151', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                    onClick={() => { if (p.status === 'avvik') { settPunktStatus(p.id, 'ikke-utfort', ''); } else { setAvvikPunktId(p.id); setAvvikKommentar(p.kommentar || ''); } }}>
+                    ⚠ Avvik
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {visSluttrapport && <SluttRapportModal />}
+    </div>
+  )
+}
+
 // ── KS Prosjekt-detalj (to-kolonner med drag-drop) ────────────────────────────
 
 // Fase-basert strukturering
@@ -2142,7 +2338,7 @@ function ForslagModal({ prosjekt, maler, tildelteMalIds, onBekreft, onLukk }) {
   )
 }
 
-function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, onOppdaterProsjekt }) {
+function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, onOppdaterProsjekt, onAapneProsjektSl }) {
   const [dragType, setDragType] = useState(null)   // 'mal' | 'fase' | 'subgruppe'
   const [dragData, setDragData] = useState(null)
   const [dragOver, setDragOver] = useState(false)
@@ -2309,7 +2505,44 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
 
         {/* VENSTRE: Tildelte — grupprt etter fase */}
         <div style={{ flex: 1, overflow: 'auto', padding: 16, borderRight: '2px solid #e2e8f0', minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: '#475569', marginBottom: 12 }}>📋 Tildelte ({ksSjekklister.length})</div>
+          <div style={{ fontWeight: 700, fontSize: 13, color: '#475569', marginBottom: 12 }}>
+            📋 Tildelte ({ksSjekklister.length + (prosjekt.sjekklister?.length || 0)})
+          </div>
+
+          {/* Prosjekt-sjekklister (via /api/sjekklister) */}
+          {(prosjekt.sjekklister || []).length > 0 && (
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#7c3aed', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ background: '#f5f3ff', borderRadius: 4, padding: '1px 6px' }}>📋 Prosjektsjekklister</span>
+              </div>
+              {(prosjekt.sjekklister || []).map(sl => {
+                const utfylt = (sl.punkter || []).filter(p => p.status !== 'ikke-utfort').length
+                const tot = (sl.punkter || []).length
+                const pst = tot > 0 ? Math.round(utfylt / tot * 100) : 0
+                const harAvvik = (sl.punkter || []).some(p => p.status === 'avvik')
+                return (
+                  <div key={sl.id} onClick={() => onAapneProsjektSl && onAapneProsjektSl(sl)}
+                    style={{ padding: '9px 12px', border: '1px solid ' + (harAvvik ? '#fca5a5' : pst === 100 ? '#bbf7d0' : '#e2e8f0'), borderRadius: 8, marginBottom: 5, cursor: 'pointer', background: harAvvik ? '#fff5f5' : pst === 100 ? '#f0fdf4' : '#fff', display: 'flex', alignItems: 'center', gap: 10 }}
+                    onMouseEnter={e => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,.08)'}
+                    onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{sl.ikon || '📋'} {sl.navn}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                        <div style={{ flex: 1, maxWidth: 80, height: 3, background: '#e2e8f0', borderRadius: 2 }}>
+                          <div style={{ width: pst + '%', height: '100%', background: pst === 100 ? '#16a34a' : harAvvik ? '#dc2626' : '#7c3aed', borderRadius: 2 }} />
+                        </div>
+                        <span style={{ fontSize: 10, color: '#94a3b8' }}>{utfylt}/{tot}</span>
+                      </div>
+                    </div>
+                    {harAvvik && <span style={{ fontSize: 11, color: '#dc2626' }}>⚠</span>}
+                    {pst === 100 && !harAvvik && <span style={{ fontSize: 11, color: '#16a34a' }}>✓</span>}
+                    <span style={{ color: '#cbd5e1', fontSize: 14 }}>›</span>
+                  </div>
+                )
+              })}
+              <div style={{ borderBottom: '1px solid #f1f5f9', margin: '10px 0' }} />
+            </div>
+          )}
 
           {ksSjekklister.length === 0 && (
             <div style={{ border: '2px dashed #e2e8f0', borderRadius: 12, padding: '28px 20px', textAlign: 'center', color: '#94a3b8', fontSize: 13, margin: '8px 0' }}>
@@ -2557,9 +2790,10 @@ export default function KS() {
   const [sjekklister, setSjekklister] = useState([])
   const [laster, setLaster] = useState(true)
   const [feil, setFeil] = useState(null)
-  const [view, setView] = useState('oversikt') // oversikt | prosjekt | sjekkliste | bibliotek | avvik
+  const [view, setView] = useState('oversikt') // oversikt | prosjekt | sjekkliste | bibliotek | avvik | prosjekt-sl
   const [valgtProsjekt, setValgtProsjekt] = useState(null)
   const [valgtSl, setValgtSl] = useState(null)
+  const [valgtProsjektSl, setValgtProsjektSl] = useState(null)
   const [aiFlyt, setAiFlyt] = useState(false)
   const [lasterProsjekt, setLasterProsjekt] = useState(false)
 
@@ -2675,6 +2909,28 @@ export default function KS() {
   }
 
   // ── KS Prosjekt-detalj (ny to-kolonne-visning) ───────────────────────────────
+  // ── Prosjekt-sjekkliste utfylling (via /api/sjekklister) ─────────────────────
+  if (view === 'prosjekt-sl' && valgtProsjektSl && valgtProsjekt) {
+    const oppdatertProsjekt = state.prosjekter?.find(p => p.id === valgtProsjekt.id) || valgtProsjekt
+    // Finn aktuell sjekkliste fra oppdatert state
+    const aktuellSl = (oppdatertProsjekt.sjekklister || []).find(sl => sl.id === valgtProsjektSl.id) || valgtProsjektSl
+    return (
+      <ProsjektSjekklisteUtfylling
+        sjekkliste={aktuellSl}
+        prosjekt={oppdatertProsjekt}
+        onTilbake={() => setView('ks-prosjekt-detalj')}
+        onOppdater={oppdatert => {
+          // Oppdater sjekkliste i prosjektets state
+          oppdaterProsjektKS({
+            ...oppdatertProsjekt,
+            sjekklister: (oppdatertProsjekt.sjekklister || []).map(sl => sl.id === oppdatert.id ? oppdatert : sl)
+          })
+          setValgtProsjektSl(oppdatert)
+        }}
+      />
+    )
+  }
+
   if (view === 'ks-prosjekt-detalj' && valgtProsjekt) {
     // Finn oppdatert prosjekt fra state (ksSjekklister kan ha endret seg)
     const oppdatertProsjekt = state.prosjekter?.find(p => p.id === valgtProsjekt.id) || valgtProsjekt
@@ -2690,6 +2946,7 @@ export default function KS() {
           setView('sjekkliste')
         }}
         onOppdaterProsjekt={oppdaterProsjektKS}
+        onAapneProsjektSl={sl => { setValgtProsjektSl(sl); setView('prosjekt-sl') }}
       />
     )
   }
