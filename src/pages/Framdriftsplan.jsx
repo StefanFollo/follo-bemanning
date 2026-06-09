@@ -587,6 +587,11 @@ function GanttChart({ project, onUpdate }) {
     save(tasks.map(t => t.id === tid ? { ...t, pct: (t.pct ?? 0) >= 100 ? 0 : 100 } : t));
   };
 
+  const setPct = (tid, pct) => {
+    const clamped = Math.max(0, Math.min(100, Math.round(pct)));
+    save(tasks.map(t => t.id === tid ? { ...t, pct: clamped } : t));
+  };
+
   const deleteTask = id => save(tasks.filter(t => t.id !== id));
 
   const addTask = () => {
@@ -668,6 +673,7 @@ function GanttChart({ project, onUpdate }) {
           <svg width={PAD} height={svgH} viewBox={`0 0 ${PAD} ${svgH}`} style={{ display: 'block' }}>
             <rect x={0} y={0} width={PAD} height={40} fill="#f8fafc" />
             <text x={10} y={26} fontSize={11} fontWeight="600" fill="#64748b">Fase</text>
+            <text x={PAD - 91} y={26} fontSize={10} fill="#94a3b8" textAnchor="middle">Ferdig</text>
             <text x={PAD - 34} y={26} fontSize={10} fill="#94a3b8" textAnchor="middle">✓</text>
             {MILE_H > 0 && (
               <rect x={0} y={40} width={PAD} height={MILE_H} fill="#faf5ff" />
@@ -700,9 +706,9 @@ function GanttChart({ project, onUpdate }) {
                     className="fd2-g-ctrl" style={{ cursor: 'pointer' }}
                     onClick={e => { e.stopPropagation(); setPickerMode('row'); setPickerTaskId(pickerTaskId === t.id ? null : t.id); }}
                     title="Klikk for å sette radfarge" />
-                  <clipPath id={`nc${t.id}`}><rect x={24} y={y} width={PAD - 76} height={ROW} /></clipPath>
+                  <clipPath id={`nc${t.id}`}><rect x={24} y={y} width={PAD - 116} height={ROW} /></clipPath>
                   {editingTaskId === t.id ? (
-                    <foreignObject x={22} y={y + 6} width={PAD - 78} height={ROW - 12}>
+                    <foreignObject x={22} y={y + 6} width={PAD - 118} height={ROW - 12}>
                       <input
                         autoFocus
                         defaultValue={t.name}
@@ -720,6 +726,17 @@ function GanttChart({ project, onUpdate }) {
                       {t.name.length > 20 ? t.name.slice(0, 19) + '…' : t.name}
                     </text>
                   )}
+                  {/* Fremdrift-prosent (klikkbar) */}
+                  <g className="fd2-g-ctrl" style={{ cursor: 'pointer' }}
+                    onClick={e => { e.stopPropagation(); setPickerMode('pct'); setPickerTaskId(pickerTaskId === t.id ? null : t.id); }}>
+                    <rect x={PAD - 110} y={y + ROW / 2 - 9} width={38} height={18} rx={9}
+                      fill={done ? '#16a34a' : (t.pct ?? 0) > 0 ? '#dbeafe' : '#f1f5f9'} />
+                    <text x={PAD - 91} y={y + ROW / 2 + 4} fontSize={10} fontWeight="700" textAnchor="middle"
+                      fill={done ? '#fff' : (t.pct ?? 0) > 0 ? '#1d4ed8' : '#94a3b8'}
+                      style={{ userSelect: 'none', pointerEvents: 'none' }}>
+                      {t.pct ?? 0}%
+                    </text>
+                  </g>
                   {/* Merge/split rad-knapper */}
                   {i > 0 && <text x={PAD - 70} y={y + ROW / 2 + 4} fontSize={10} fill="#cbd5e1"
                     className="fd2-g-ctrl" style={{ cursor: 'pointer', userSelect: 'none' }}
@@ -869,11 +886,41 @@ function GanttChart({ project, onUpdate }) {
         </div>
       </div>
 
-      {/* Farge-popup for bar-farge og rad-farge */}
+      {/* Popup for farge (bar/rad) og fremdrift-prosent */}
       {pickerTaskId && (() => {
         const t = tasks.find(x => x.id === pickerTaskId)
         if (!t) return null
         const isModeRow = pickerMode === 'row'
+        const isModePct = pickerMode === 'pct'
+
+        // ── Prosent-velger ──
+        if (isModePct) {
+          const curPct = t.pct ?? 0
+          return (
+            <div style={{ position: 'relative', zIndex: 50, margin: '4px 0' }} onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1e293b', borderRadius: 10, padding: '8px 12px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                  📊 Ferdig: <strong style={{ color: '#e2e8f0' }}>{t.name.slice(0, 20)}</strong>
+                </span>
+                {[0, 10, 25, 50, 75, 90, 100].map(p => (
+                  <button key={p}
+                    style={{ background: curPct === p ? '#16a34a' : 'rgba(255,255,255,.1)', border: '1px solid ' + (curPct === p ? '#16a34a' : 'rgba(255,255,255,.25)'), borderRadius: 6, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '4px 9px' }}
+                    onClick={() => setPct(t.id, p)}>{p}%</button>
+                ))}
+                <input type="number" min={0} max={100} defaultValue={curPct}
+                  style={{ width: 56, padding: '3px 6px', border: 'none', borderRadius: 6, fontSize: 13, textAlign: 'center' }}
+                  onClick={e => e.stopPropagation()}
+                  onChange={e => setPct(t.id, parseInt(e.target.value || '0', 10))}
+                  title="Skriv inn egen prosent" />
+                <span style={{ fontSize: 12, color: '#94a3b8' }}>%</span>
+                <button style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 14, padding: '0 4px' }}
+                  onClick={() => setPickerTaskId(null)}>✕ Lukk</button>
+              </div>
+            </div>
+          )
+        }
+
+        // ── Farge-velger ──
         return (
           <div style={{ position: 'relative', zIndex: 50, margin: '4px 0 4px 0' }}
             onClick={e => e.stopPropagation()}>
