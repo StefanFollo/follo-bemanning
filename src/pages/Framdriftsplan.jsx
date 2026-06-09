@@ -693,13 +693,16 @@ function GanttChart({ project, onUpdate }) {
                     }
                     rowDragRef.current = null; setDropIdx(null);
                   }}>
-                  <title>{t.name} — klikk sirkel for farge</title>
+                  <title>{t.name} — klikk fargesirkelen for å endre farge</title>
                   {dropIdx === i && <rect x={0} y={y} width={PAD} height={2} fill="#2563eb" />}
                   <rect x={0} y={y} width={PAD} height={ROW} fill={rowBg} />
-                  {/* Farge-dot: klikk for å velge fargea */}
-                  <circle cx={12} cy={y + ROW / 2} r={6} fill={barCol} opacity={done ? 0.4 : 1}
-                    className="fd2-g-ctrl" style={{ cursor: 'pointer' }}
-                    onClick={e => { e.stopPropagation(); setPickerMode('bar'); setPickerTaskId(pickerTaskId === t.id ? null : t.id); }} />
+                  {/* Farge-dot: klikk for å velge farge (tydelig klikkbar med ring) */}
+                  <g className="fd2-g-ctrl" style={{ cursor: 'pointer' }}
+                    onClick={e => { e.stopPropagation(); setPickerMode('bar'); setPickerTaskId(pickerTaskId === t.id ? null : t.id); }}>
+                    <circle cx={13} cy={y + ROW / 2} r={9} fill="#fff" stroke={pickerTaskId === t.id && pickerMode === 'bar' ? '#2563eb' : '#e2e8f0'} strokeWidth={1.5} />
+                    <circle cx={13} cy={y + ROW / 2} r={6} fill={barCol} opacity={done ? 0.5 : 1} />
+                    {t.customColor && <circle cx={19} cy={y + ROW / 2 - 6} r={2.5} fill="#2563eb" stroke="#fff" strokeWidth={1} />}
+                  </g>
                   {/* Rad-farge-dot (lang-klikk / shift+klikk) */}
                   <rect x={0} y={y} width={4} height={ROW}
                     fill={t.rowColor || 'transparent'} rx={0}
@@ -921,24 +924,40 @@ function GanttChart({ project, onUpdate }) {
         }
 
         // ── Farge-velger ──
+        const aktivFarge = isModeRow ? t.rowColor : t.customColor
+        const standardFarge = fc(t.fag)
         return (
           <div style={{ position: 'relative', zIndex: 50, margin: '4px 0 4px 0' }}
             onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1e293b', borderRadius: 10, padding: '8px 12px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap' }}>
-                {isModeRow ? '🎨 Radfarge:' : '🎨 Streke-farge:'} <strong style={{ color: '#e2e8f0' }}>{t.name.slice(0, 20)}</strong>
+                {isModeRow ? '🎨 Radfarge:' : '🎨 Velg farge:'} <strong style={{ color: '#e2e8f0' }}>{t.name.slice(0, 20)}</strong>
               </span>
+              {/* Standard (fag-farge) — kun for bar-modus */}
+              {!isModeRow && (
+                <div title="Standard (fagfarge)"
+                  style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', padding: '2px 6px', borderRadius: 6, background: !aktivFarge ? 'rgba(255,255,255,.12)' : 'transparent', border: '1px solid ' + (!aktivFarge ? '#fff' : 'transparent') }}
+                  onClick={() => { save(tasks.map(tt => tt.id === t.id ? { ...tt, customColor: undefined } : tt)); }}>
+                  <span style={{ width: 14, height: 14, borderRadius: '50%', background: standardFarge, display: 'inline-block' }} />
+                  <span style={{ fontSize: 10, color: '#cbd5e1' }}>Standard</span>
+                </div>
+              )}
+              <span style={{ width: 1, height: 18, background: 'rgba(255,255,255,.15)' }} />
               {SWATCH_COLORS.map(c => (
-                <div key={c} style={{ width: 20, height: 20, borderRadius: 4, background: c, cursor: 'pointer', border: ((isModeRow ? t.rowColor : t.customColor) === c) ? '2px solid #fff' : '2px solid transparent' }}
+                <div key={c} title={c} style={{ width: 22, height: 22, borderRadius: '50%', background: c, cursor: 'pointer', border: (aktivFarge === c) ? '2px solid #fff' : '2px solid transparent' }}
                   onClick={() => { save(tasks.map(tt => tt.id === t.id ? { ...tt, [isModeRow ? 'rowColor' : 'customColor']: c } : tt)); }} />
               ))}
-              <div style={{ width: 20, height: 20, borderRadius: 4, background: 'transparent', border: '2px solid #475569', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#94a3b8' }}
-                onClick={() => { save(tasks.map(tt => tt.id === t.id ? { ...tt, [isModeRow ? 'rowColor' : 'customColor']: undefined } : tt)); setPickerTaskId(null); }}
-                title="Tilbakestill til standard">✕</div>
-              <input type="color" defaultValue={isModeRow ? (t.rowColor || '#ffffff') : (t.customColor || fc(t.fag))}
-                style={{ width: 28, height: 20, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer' }}
-                onChange={e => save(tasks.map(tt => tt.id === t.id ? { ...tt, [isModeRow ? 'rowColor' : 'customColor']: e.target.value } : tt))}
-                title="Velg egendefinert farge" />
+              <label title="Egendefinert farge"
+                style={{ display: 'flex', alignItems: 'center', gap: 3, cursor: 'pointer', fontSize: 10, color: '#cbd5e1' }}>
+                🌈
+                <input type="color" value={aktivFarge || standardFarge}
+                  style={{ width: 26, height: 22, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer', background: 'none' }}
+                  onChange={e => save(tasks.map(tt => tt.id === t.id ? { ...tt, [isModeRow ? 'rowColor' : 'customColor']: e.target.value } : tt))} />
+              </label>
+              {isModeRow && aktivFarge && (
+                <button style={{ background: 'none', border: '1px solid #475569', borderRadius: 6, color: '#cbd5e1', cursor: 'pointer', fontSize: 11, padding: '2px 8px' }}
+                  onClick={() => { save(tasks.map(tt => tt.id === t.id ? { ...tt, rowColor: undefined } : tt)); setPickerTaskId(null); }}>Fjern</button>
+              )}
               <button style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 14, padding: '0 4px' }}
                 onClick={() => setPickerTaskId(null)}>✕ Lukk</button>
             </div>
