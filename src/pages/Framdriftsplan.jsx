@@ -517,7 +517,7 @@ function GanttChart({ project, onUpdate }) {
     totalWeeks * 7
   );
 
-  const ROW = storskjerm ? 52 : 38, PAD = storskjerm ? 280 : 240;
+  const ROW = storskjerm ? 52 : 38, PAD = storskjerm ? 320 : 280;
   const MILE_H = (project.fdMilepaler?.length > 0) ? (storskjerm ? 28 : 22) : 0;
   const TASK_TOP = 40 + MILE_H;
   // Dag-modus: bredere dager (som mannskapsplan). Storskjerm: enda bredere.
@@ -552,10 +552,14 @@ function GanttChart({ project, onUpdate }) {
   };
   const saveCols = nc => { setColColors(nc); onUpdate({ fdColColors: nc }); };
 
+  // Hent x-koordinat fra både mus og touch
+  const getClientX = e => (e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX ?? e.clientX);
+
   const onMouseMove = e => {
     if (!drag.current) return;
+    if (e.touches) e.preventDefault?.();  // hindre scroll under drag på iPad
     const { tid, type, sx, os, od } = drag.current;
-    const dx = Math.round((e.clientX - sx) / dw);
+    const dx = Math.round((getClientX(e) - sx) / dw);
     setTasks(prev => {
       const next = prev.map(t => {
         if (t.id !== tid) return t;
@@ -577,9 +581,10 @@ function GanttChart({ project, onUpdate }) {
   };
 
   const startDrag = (e, tid, type) => {
-    e.preventDefault(); e.stopPropagation();
+    e.stopPropagation();
+    if (!e.touches) e.preventDefault();
     const t = tasks.find(t => t.id === tid);
-    drag.current = { tid, type, sx: e.clientX, os: t.start, od: t.dur };
+    drag.current = { tid, type, sx: getClientX(e), os: t.start, od: t.dur };
   };
 
   const toggleDone = (e, tid) => {
@@ -673,6 +678,7 @@ function GanttChart({ project, onUpdate }) {
           <svg width={PAD} height={svgH} viewBox={`0 0 ${PAD} ${svgH}`} style={{ display: 'block' }}>
             <rect x={0} y={0} width={PAD} height={40} fill="#f8fafc" />
             <text x={10} y={26} fontSize={11} fontWeight="600" fill="#64748b">Fase</text>
+            <text x={PAD - 132} y={26} fontSize={10} fill="#94a3b8" textAnchor="middle">Lengde</text>
             <text x={PAD - 91} y={26} fontSize={10} fill="#94a3b8" textAnchor="middle">Ferdig</text>
             <text x={PAD - 34} y={26} fontSize={10} fill="#94a3b8" textAnchor="middle">✓</text>
             {MILE_H > 0 && (
@@ -709,9 +715,9 @@ function GanttChart({ project, onUpdate }) {
                     className="fd2-g-ctrl" style={{ cursor: 'pointer' }}
                     onClick={e => { e.stopPropagation(); setPickerMode('row'); setPickerTaskId(pickerTaskId === t.id ? null : t.id); }}
                     title="Klikk for å sette radfarge" />
-                  <clipPath id={`nc${t.id}`}><rect x={24} y={y} width={PAD - 116} height={ROW} /></clipPath>
+                  <clipPath id={`nc${t.id}`}><rect x={24} y={y} width={PAD - 158} height={ROW} /></clipPath>
                   {editingTaskId === t.id ? (
-                    <foreignObject x={22} y={y + 6} width={PAD - 118} height={ROW - 12}>
+                    <foreignObject x={22} y={y + 6} width={PAD - 160} height={ROW - 12}>
                       <input
                         autoFocus
                         defaultValue={t.name}
@@ -729,6 +735,16 @@ function GanttChart({ project, onUpdate }) {
                       {t.name.length > 20 ? t.name.slice(0, 19) + '…' : t.name}
                     </text>
                   )}
+                  {/* Lengde/varighet (klikkbar) */}
+                  <g className="fd2-g-ctrl" style={{ cursor: 'pointer' }}
+                    onClick={e => { e.stopPropagation(); setPickerMode('lengde'); setPickerTaskId(pickerTaskId === t.id ? null : t.id); }}>
+                    <rect x={PAD - 152} y={y + ROW / 2 - 9} width={40} height={18} rx={5}
+                      fill="#f1f5f9" stroke="#e2e8f0" strokeWidth={1} />
+                    <text x={PAD - 132} y={y + ROW / 2 + 4} fontSize={10} fontWeight="600" textAnchor="middle"
+                      fill="#475569" style={{ userSelect: 'none', pointerEvents: 'none' }}>
+                      {t.dur}d
+                    </text>
+                  </g>
                   {/* Fremdrift-prosent (klikkbar) */}
                   <g className="fd2-g-ctrl" style={{ cursor: 'pointer' }}
                     onClick={e => { e.stopPropagation(); setPickerMode('pct'); setPickerTaskId(pickerTaskId === t.id ? null : t.id); }}>
@@ -767,7 +783,8 @@ function GanttChart({ project, onUpdate }) {
           </svg>
         </div>
 
-        <div className="fd2-gantt-right" onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}>
+        <div className="fd2-gantt-right" onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
+          onTouchMove={onMouseMove} onTouchEnd={onMouseUp} style={{ touchAction: 'pan-y' }}>
           <svg width={chartW} height={svgH} viewBox={`0 0 ${chartW} ${svgH}`} style={{ display: 'block', userSelect: 'none' }}>
             {yearBands.map(b => (
               <g key={b.y}>
@@ -845,22 +862,30 @@ function GanttChart({ project, onUpdate }) {
               const col  = t.customColor || fc(t.fag);
               return (
                 <g key={t.id}>
-                  <title>{t.name} · {t.dur} dager</title>
-                  <rect x={x} y={y + 7} width={w} height={20} rx={5} fill={col} opacity={done ? 0.2 : 0.35}
-                    style={{ cursor: 'grab' }} onMouseDown={e => startDrag(e, t.id, 'move')} />
+                  <title>{t.name} · {t.dur} dager — dra for å flytte, eller dobbeltklikk for å skrive inn lengde</title>
+                  <rect x={x} y={y + 6} width={w} height={22} rx={5} fill={col} opacity={done ? 0.2 : 0.35}
+                    style={{ cursor: 'grab' }}
+                    onMouseDown={e => startDrag(e, t.id, 'move')}
+                    onTouchStart={e => startDrag(e, t.id, 'move')}
+                    onDoubleClick={e => { e.stopPropagation(); setPickerMode('lengde'); setPickerTaskId(t.id); }} />
                   {w * pct / 100 > 0 && (
-                    <rect x={x} y={y + 7} width={w * pct / 100} height={20} rx={5} fill={col} opacity={done ? 0.65 : 0.85}
+                    <rect x={x} y={y + 6} width={w * pct / 100} height={22} rx={5} fill={col} opacity={done ? 0.65 : 0.85}
                       style={{ pointerEvents: 'none' }} />
                   )}
-                  <clipPath id={`bc${t.id}`}><rect x={x + 4} y={y + 7} width={Math.max(w - 20, 0)} height={20} /></clipPath>
+                  <clipPath id={`bc${t.id}`}><rect x={x + 4} y={y + 6} width={Math.max(w - 22, 0)} height={22} /></clipPath>
                   <text x={x + 6} y={y + 21} fontSize={10} fill="white" fontWeight="600"
                     style={{ pointerEvents: 'none' }} clipPath={`url(#bc${t.id})`}>{FAG_IKON[t.fag] || '■'} {t.dur}d</text>
                   {done && w > 24 && (
                     <text x={x + w / 2} y={y + 21} fontSize={12} fill="white" textAnchor="middle"
                       style={{ pointerEvents: 'none' }}>✓</text>
                   )}
-                  <rect x={x + w - 6} y={y + 7} width={6} height={20} fill="rgba(0,0,0,0.15)" rx={2}
-                    style={{ cursor: 'ew-resize' }} onMouseDown={e => startDrag(e, t.id, 'resize')} />
+                  {/* Resize-håndtak — bredere tap-target for iPad */}
+                  <rect x={x + w - 12} y={y + 6} width={14} height={22} fill="rgba(0,0,0,0.15)" rx={3}
+                    style={{ cursor: 'ew-resize' }}
+                    onMouseDown={e => startDrag(e, t.id, 'resize')}
+                    onTouchStart={e => startDrag(e, t.id, 'resize')} />
+                  <text x={x + w - 5} y={y + 21} fontSize={11} fill="rgba(255,255,255,.85)" textAnchor="middle"
+                    style={{ pointerEvents: 'none', userSelect: 'none' }}>⟺</text>
                 </g>
               );
             })}
@@ -889,12 +914,60 @@ function GanttChart({ project, onUpdate }) {
         </div>
       </div>
 
-      {/* Popup for farge (bar/rad) og fremdrift-prosent */}
+      {/* Popup for farge (bar/rad), fremdrift-prosent og lengde */}
       {pickerTaskId && (() => {
         const t = tasks.find(x => x.id === pickerTaskId)
         if (!t) return null
         const isModeRow = pickerMode === 'row'
         const isModePct = pickerMode === 'pct'
+        const isModeLengde = pickerMode === 'lengde'
+
+        // ── Lengde-velger (varighet + startdag, iPad-vennlig) ──
+        if (isModeLengde) {
+          const start = t.start ?? 0
+          const dur = t.dur ?? 1
+          const setStart = v => save(tasks.map(tt => tt.id === t.id ? { ...tt, start: Math.max(0, Math.round(v)) } : tt))
+          const setDur   = v => save(tasks.map(tt => tt.id === t.id ? { ...tt, dur: Math.max(1, Math.round(v)) } : tt))
+          const Knapp = ({ onClick, children }) => (
+            <button onClick={onClick}
+              style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid rgba(255,255,255,.3)', background: 'rgba(255,255,255,.08)', color: '#fff', fontSize: 18, fontWeight: 700, cursor: 'pointer' }}>{children}</button>
+          )
+          return (
+            <div style={{ position: 'relative', zIndex: 50, margin: '4px 0' }} onClick={e => e.stopPropagation()}>
+              <div style={{ background: '#1e293b', borderRadius: 12, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                  📏 Lengde: <strong style={{ color: '#e2e8f0' }}>{t.name.slice(0, 28)}</strong>
+                </div>
+                {/* Varighet */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 12, color: '#cbd5e1', width: 70 }}>Varighet:</span>
+                  <Knapp onClick={() => setDur(dur - 1)}>−</Knapp>
+                  <input type="number" min={1} value={dur}
+                    onChange={e => setDur(parseInt(e.target.value || '1', 10))}
+                    style={{ width: 64, height: 34, textAlign: 'center', fontSize: 15, fontWeight: 700, border: 'none', borderRadius: 8 }} />
+                  <span style={{ fontSize: 13, color: '#94a3b8' }}>dager</span>
+                  <Knapp onClick={() => setDur(dur + 1)}>+</Knapp>
+                  <span style={{ fontSize: 11, color: '#64748b', marginLeft: 4 }}>({(dur / 7).toFixed(1)} uker)</span>
+                  <Knapp onClick={() => setDur(dur + 7)}>+uke</Knapp>
+                </div>
+                {/* Startdag */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 12, color: '#cbd5e1', width: 70 }}>Start dag:</span>
+                  <Knapp onClick={() => setStart(start - 1)}>−</Knapp>
+                  <input type="number" min={0} value={start}
+                    onChange={e => setStart(parseInt(e.target.value || '0', 10))}
+                    style={{ width: 64, height: 34, textAlign: 'center', fontSize: 15, fontWeight: 700, border: 'none', borderRadius: 8 }} />
+                  <Knapp onClick={() => setStart(start + 1)}>+</Knapp>
+                  <span style={{ fontSize: 11, color: '#64748b', marginLeft: 4 }}>{datoForDag(start).getDate()}.{datoForDag(start).getMonth() + 1}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button style={{ background: '#2563eb', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '7px 16px' }}
+                    onClick={() => setPickerTaskId(null)}>Ferdig</button>
+                </div>
+              </div>
+            </div>
+          )
+        }
 
         // ── Prosent-velger ──
         if (isModePct) {
