@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AppProvider } from './context/AppContext';
 import { useApp } from './context/AppContext';
 import { saveToCloud, forceTimestampAlleFields } from './store';
@@ -118,6 +118,27 @@ function App() {
   const [role, setRole] = useState(() => localStorage.getItem('fbs_role') || 'admin');
   const [userNavn, setUserNavn] = useState(() => localStorage.getItem('fbs_user_navn') || '');
   const [resetDone, setResetDone] = useState(false);
+
+  // Hent fersk rolle fra server ved oppstart — fanger opp rolle-endringer
+  // gjort av admin uten at brukeren må logge ut og inn igjen.
+  useEffect(() => {
+    const token = localStorage.getItem('fbs_token');
+    if (!token) return;
+    fetch('/api/me', { headers: { Authorization: `Bearer ${token}` } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data) return;
+        if (data.role && data.role !== localStorage.getItem('fbs_role')) {
+          localStorage.setItem('fbs_role', data.role);
+          setRole(data.role);
+        }
+        if (data.navn) {
+          localStorage.setItem('fbs_user_navn', data.navn);
+          setUserNavn(data.navn);
+        }
+      })
+      .catch(() => { /* ignorer — bruker cachet rolle */ });
+  }, []);
 
   async function handleLogout() {
     const token = localStorage.getItem('fbs_token');

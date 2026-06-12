@@ -138,7 +138,33 @@ export default async function handler(req, res) {
     if (active !== undefined) updated.active = active;
     await redis.set(`fbs_user:${emailKey}`, updated);
 
-    return res.status(200).json({ ok: true });
+    // Oppdater ALLE aktive sesjoner for denne brukeren slik at ny rolle gjelder
+    // umiddelbart — uten at brukeren må logge ut og inn igjen.
+    let sesjonerOppdatert = 0;
+    try {
+      const sessionKeys = await redis.keys('fbs_session:*');
+      for (const key of sessionKeys) {
+        const sess = await redis.get(key);
+        if (sess && sess.email === emailKey) {
+          if (active === false) {
+            // Deaktivert bruker → slett sesjonen (logger dem ut)
+            await redis.del(key);
+          } else {
+            await redis.set(key, {
+              ...sess,
+              role: updated.role,
+              navn: updated.navn,
+              ansattId: updated.ansattId || null,
+            }, { keepTtl: true });
+          }
+          sesjonerOppdatert++;
+        }
+      }
+    } catch (e) {
+      console.warn('[admin/users] kunne ikke oppdatere sesjoner:', e.message);
+    }
+
+    return res.status(200).json({ ok: true, sesjonerOppdatert });
   }
 
   // DELETE: remove user
