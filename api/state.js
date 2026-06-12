@@ -75,19 +75,43 @@ export default async function handler(req, res) {
             console.log(`[state] Beholder ${missingProsjekter.length} sky-prosjekter som mangler lokalt`);
             newState = { ...newState, prosjekter: [...newState.prosjekter, ...missingProsjekter] };
           }
-          // Bevar høyeste _fieldTs.prosjekter — aldri la nettleseren overskrive
-          // en nyere timestamp satt av tilbuds-appen (event.js / framdrift.js)
-          const cloudTs = currentState._fieldTs?.prosjekter || 0;
-          const incomingTs = newState._fieldTs?.prosjekter || 0;
-          if (cloudTs > incomingTs) {
-            newState = { ...newState, _fieldTs: { ...(newState._fieldTs || {}), prosjekter: cloudTs } };
+        }
+
+        // ── FELT-NIVÅ MERGE (hindrer at samtidige brukere overskriver hverandre) ──
+        // For hvert datafelt: hvis skyen har en nyere _fieldTs enn det som
+        // lagres nå, betyr det at en annen bruker har endret DET feltet i
+        // mellomtiden. Behold skyens versjon av feltet (og dens timestamp),
+        // slik at bruker B ikke sletter bruker A sine endringer på andre felt.
+        const DATA_FELT = [
+          'ansatte', 'prosjekter', 'tildelinger', 'oppgaver', 'fag', 'teams',
+          'rorTimer', 'rorPlaner', 'befaringer', 'reklamasjoner', 'serviceJobber', 'biler',
+        ];
+        const cloudFieldTs = currentState._fieldTs || {};
+        const incomingFieldTs = newState._fieldTs || {};
+        const mergedFieldTs = { ...incomingFieldTs };
+        let beholdtFelt = [];
+        for (const felt of DATA_FELT) {
+          const cloudTs = cloudFieldTs[felt] || 0;
+          const incomingTs = incomingFieldTs[felt] || 0;
+          // Skyen er nyere for dette feltet → behold skyens data + timestamp.
+          // (Strengt > slik at samme timestamp lar innkommende vinne — bevarer
+          //  prosjekt-union over som allerede er bakt inn i newState.)
+          if (cloudTs > incomingTs && currentState[felt] !== undefined) {
+            newState = { ...newState, [felt]: currentState[felt] };
+            mergedFieldTs[felt] = cloudTs;
+            beholdtFelt.push(felt);
           }
-          // Bevar høyeste _updatedAt så polling i klientene kan oppdage endringen
-          const cloudUpd = currentState._updatedAt || 0;
-          const incomingUpd = newState._updatedAt || 0;
-          if (cloudUpd > incomingUpd) {
-            newState = { ...newState, _updatedAt: cloudUpd };
-          }
+        }
+        newState = { ...newState, _fieldTs: mergedFieldTs };
+        if (beholdtFelt.length > 0) {
+          console.log(`[state] Felt-merge: beholdt skyversjon av ${beholdtFelt.join(', ')} (annen bruker endret disse)`);
+        }
+
+        // Bevar høyeste _updatedAt så polling i klientene oppdager endringen
+        const cloudUpd = currentState._updatedAt || 0;
+        const incomingUpd = newState._updatedAt || 0;
+        if (cloudUpd > incomingUpd) {
+          newState = { ...newState, _updatedAt: cloudUpd };
         }
       }
       // Rullerende backup: bevar siste 5 lagringer i 7 dager
