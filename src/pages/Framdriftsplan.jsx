@@ -474,7 +474,7 @@ function useFramdriftAI(project, onUpdate) {
 
 // ─── GanttChart ───────────────────────────────────────────────────────────────
 
-function GanttChart({ project, onUpdate }) {
+function GanttChart({ project, onUpdate, readOnly = false }) {
   const [tasks, setTasks]     = useState(project.fdTasks || []);
   const [zoom, setZoom]       = useState(1);
   const [newTask, setNewTask] = useState('');
@@ -546,11 +546,12 @@ function GanttChart({ project, onUpdate }) {
   const nowX = (noff >= 0 && noff * 7 <= totalDays) ? noff * 7 * dw : null;
 
   const save = (next, nextCols) => {
+    if (readOnly) return;
     tasksRef.current = next; setTasks(next);
     const autoPct = calcAutoProgress(next);
     onUpdate({ fdTasks: next, fdColColors: nextCols ?? colColors, ...(autoPct !== null ? { fdProgress: autoPct } : {}) });
   };
-  const saveCols = nc => { setColColors(nc); onUpdate({ fdColColors: nc }); };
+  const saveCols = nc => { if (readOnly) return; setColColors(nc); onUpdate({ fdColColors: nc }); };
 
   // Hent x-koordinat fra både mus og touch
   const getClientX = e => (e.touches?.[0]?.clientX ?? e.changedTouches?.[0]?.clientX ?? e.clientX);
@@ -581,6 +582,7 @@ function GanttChart({ project, onUpdate }) {
   };
 
   const startDrag = (e, tid, type) => {
+    if (readOnly) return;
     e.stopPropagation();
     if (!e.touches) e.preventDefault();
     const t = tasks.find(t => t.id === tid);
@@ -659,7 +661,7 @@ function GanttChart({ project, onUpdate }) {
           title="Storskjerm – stor visning for TV/projektor">
           📺 Storskjerm
         </button>
-        {tasks.length > 0 && (
+        {tasks.length > 0 && !readOnly && (
           <button className="btn btn-sm" style={{ marginLeft: 8 }} onClick={addStandardFaser}>
             + Standardfaser
           </button>
@@ -1038,17 +1040,19 @@ function GanttChart({ project, onUpdate }) {
         )
       })()}
 
-      <div className="fd2-add-row">
-        <input value={newTask} onChange={e => setNewTask(e.target.value)}
-          onKeyDown={e => e.key === 'Enter' && addTask()}
-          placeholder="+ Ny fase (Enter for å legge til)"
-          className="input" style={{ flex: 1, minWidth: 140, fontSize: 13 }} />
-        <select value={newFag} onChange={e => setNewFag(e.target.value)}
-          className="input" style={{ width: 130, fontSize: 13 }}>
-          {Object.entries(FAG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-        </select>
-        <button className="btn btn-primary btn-sm" onClick={addTask}>Legg til</button>
-      </div>
+      {!readOnly && (
+        <div className="fd2-add-row">
+          <input value={newTask} onChange={e => setNewTask(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addTask()}
+            placeholder="+ Ny fase (Enter for å legge til)"
+            className="input" style={{ flex: 1, minWidth: 140, fontSize: 13 }} />
+          <select value={newFag} onChange={e => setNewFag(e.target.value)}
+            className="input" style={{ width: 130, fontSize: 13 }}>
+            {Object.entries(FAG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+          </select>
+          <button className="btn btn-primary btn-sm" onClick={addTask}>Legg til</button>
+        </div>
+      )}
 
       {tasks.length > 0 && (
         <div className="fd2-progress-sum">
@@ -1063,7 +1067,7 @@ function GanttChart({ project, onUpdate }) {
 
 // ─── ProjectDetail ────────────────────────────────────────────────────────────
 
-function ProjectDetail({ project, onBack, onUpdate }) {
+function ProjectDetail({ project, onBack, onUpdate, readOnly = false }) {
   const [status,   setStatus]   = useState(project.fdStatus || 'Pågående');
   const [note,     setNote]     = useState(project.fdNote || '');
   const [startWk,  setStartWk]  = useState(() => projStartWY(project).week);
@@ -1142,6 +1146,12 @@ function ProjectDetail({ project, onBack, onUpdate }) {
           </div>
         )}
       </div>
+
+      {readOnly && (
+        <div className="no-print" style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '8px 14px', margin: '0 0 10px', fontSize: 13, color: '#1e40af', display: 'flex', alignItems: 'center', gap: 8 }}>
+          👁 Lesetilgang — du kan se framdriften men ikke endre den.
+        </div>
+      )}
 
       {/* Sticky header */}
       <div className="fd2-detail-header no-print">
@@ -1236,7 +1246,7 @@ function ProjectDetail({ project, onBack, onUpdate }) {
       {/* Gantt-tab */}
       {aktTab === 'gantt' && (
         <div className="fd2-tab-innhold">
-          <GanttChart project={project} onUpdate={onUpdate} />
+          <GanttChart project={project} onUpdate={onUpdate} readOnly={readOnly} />
 
           {/* Print-only faseoversikt-tabell */}
           {(project.fdTasks || []).length > 0 && (
@@ -1379,7 +1389,7 @@ function ProjectDetail({ project, onBack, onUpdate }) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export default function Framdriftsplan() {
+export default function Framdriftsplan({ readOnly = false, ansattId = null }) {
   const { state, dispatch } = useApp();
   const [selectedId, setSelectedId] = useState(null);
   const [filter,     setFilter]     = useState('Alle');
@@ -1412,7 +1422,14 @@ export default function Framdriftsplan() {
   const updateProject = (proj, extra) =>
     dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...proj, ...extra } });
 
-  const aktive = state.prosjekter.filter(p => p.status !== 'fullfort');
+  // Ansatt (lesetilgang): kun prosjekter de er tildelt via bemanningsplanen
+  const tildelteProsjektIds = ansattId
+    ? new Set((state.tildelinger || []).filter(t => t.ansattId === ansattId).map(t => t.prosjektId))
+    : null;
+
+  const aktive = state.prosjekter
+    .filter(p => p.status !== 'fullfort')
+    .filter(p => !tildelteProsjektIds || tildelteProsjektIds.has(p.id));
 
   const counts = {
     Alle:        aktive.length,
@@ -1463,7 +1480,8 @@ export default function Framdriftsplan() {
           <ProjectDetail
             project={live}
             onBack={() => setSelectedId(null)}
-            onUpdate={extra => updateProject(live, extra)}
+            onUpdate={readOnly ? () => {} : (extra => updateProject(live, extra))}
+            readOnly={readOnly}
           />
         </div>
       );

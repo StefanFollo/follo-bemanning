@@ -565,7 +565,7 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
   const [aiPunkt, setAiPunkt] = useState(null)
   const [visTildel, setVisTildel] = useState(false)
   const [opplaster, setOpplaster] = useState(null)
-  const kanSkrive = ROLLE() !== 'les'
+  const kanSkrive = ROLLE() !== 'les' && ROLLE() !== 'ansatt'
   const kanAdmin = ROLLE() === 'admin' || ROLLE() === 'kontor'
 
   useEffect(() => {
@@ -1985,6 +1985,7 @@ function ProsjektSjekklisteUtfylling({ sjekkliste, prosjekt, onTilbake, onOppdat
   const [avvikKommentar, setAvvikKommentar] = useState('')
   const [visSluttrapport, setVisSluttrapport] = useState(false)
   const bruker = BRUKER()
+  const kanSkrive = ROLLE() !== 'les' && ROLLE() !== 'ansatt'
 
   const ferdig = punkter.filter(p => p.status !== 'ikke-utfort').length
   const totalt = punkter.length
@@ -2149,8 +2150,8 @@ function ProsjektSjekklisteUtfylling({ sjekkliste, prosjekt, onTilbake, onOppdat
                 )}
               </div>
 
-              {/* Statusknapper */}
-              {avvikPunktId !== p.id && (
+              {/* Statusknapper (skjult ved lesetilgang) */}
+              {kanSkrive && avvikPunktId !== p.id && (
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                   <button style={{ padding: '6px 12px', borderRadius: 8, border: '1.5px solid ' + (p.status === 'ok' ? '#16a34a' : '#e2e8f0'), background: p.status === 'ok' ? '#16a34a' : '#fff', color: p.status === 'ok' ? '#fff' : '#374151', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
                     onClick={() => settPunktStatus(p.id, p.status === 'ok' ? 'ikke-utfort' : 'ok')}>
@@ -2161,6 +2162,12 @@ function ProsjektSjekklisteUtfylling({ sjekkliste, prosjekt, onTilbake, onOppdat
                     ⚠ Avvik
                   </button>
                 </div>
+              )}
+              {/* Status-indikator ved lesetilgang */}
+              {!kanSkrive && avvikPunktId !== p.id && (
+                <span style={{ flexShrink: 0, fontSize: 13, fontWeight: 600, color: p.status === 'ok' ? '#16a34a' : p.status === 'avvik' ? '#dc2626' : '#94a3b8' }}>
+                  {p.status === 'ok' ? '✓ OK' : p.status === 'avvik' ? '⚠ Avvik' : '⬜ Ikke utført'}
+                </span>
               )}
             </div>
           </div>
@@ -2784,7 +2791,7 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
 
 // ── Rot-komponent ─────────────────────────────────────────────────────────────
 
-export default function KS() {
+export default function KS({ readOnly = false, ansattId = null }) {
   const { state, dispatch } = useApp()
   const [maler, setMaler] = useState([])
   const [sjekklister, setSjekklister] = useState([])
@@ -2848,7 +2855,13 @@ export default function KS() {
   useEffect(() => { last() }, [last])
 
   // Kun aktive prosjekter med KS-relevans
-  const prosjekter = (state.prosjekter || []).filter(p => p.status === 'aktiv' || p.status === undefined)
+  // Ansatt (lesetilgang): kun prosjekter de er tildelt via bemanningsplanen
+  const tildelteProsjektIds = ansattId
+    ? new Set((state.tildelinger || []).filter(t => t.ansattId === ansattId).map(t => t.prosjektId))
+    : null
+  const prosjekter = (state.prosjekter || [])
+    .filter(p => p.status === 'aktiv' || p.status === undefined)
+    .filter(p => !tildelteProsjektIds || tildelteProsjektIds.has(p.id))
 
   const ansatte = state.ansatte || []
 

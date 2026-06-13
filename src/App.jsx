@@ -51,6 +51,8 @@ const RORLEGGER_TABS = [
 
 const ANSATT_TABS = [
   { id: 'bemanningsplan', label: 'Bemanningsplan', icon: '📅' },
+  { id: 'framdrift', label: 'Framdrift', icon: '📊' },
+  { id: 'ks', label: 'KS / HMS', icon: '✅' },
 ];
 
 const BEFARING_TABS = [
@@ -117,6 +119,7 @@ function App() {
   const [loggedIn, setLoggedIn] = useState(() => !!localStorage.getItem('fbs_token'));
   const [role, setRole] = useState(() => localStorage.getItem('fbs_role') || 'admin');
   const [userNavn, setUserNavn] = useState(() => localStorage.getItem('fbs_user_navn') || '');
+  const [ansattId, setAnsattId] = useState(() => localStorage.getItem('fbs_ansatt_id') || '');
   const [resetDone, setResetDone] = useState(false);
 
   // Hent fersk rolle fra server ved oppstart — fanger opp rolle-endringer
@@ -136,6 +139,10 @@ function App() {
           localStorage.setItem('fbs_user_navn', data.navn);
           setUserNavn(data.navn);
         }
+        if (data.ansattId !== undefined) {
+          localStorage.setItem('fbs_ansatt_id', data.ansattId || '');
+          setAnsattId(data.ansattId || '');
+        }
       })
       .catch(() => { /* ignorer — bruker cachet rolle */ });
   }, []);
@@ -145,6 +152,7 @@ function App() {
     localStorage.removeItem('fbs_token');
     localStorage.removeItem('fbs_role');
     localStorage.removeItem('fbs_user_navn');
+    localStorage.removeItem('fbs_ansatt_id');
     localStorage.removeItem('fbs_auth');
     setLoggedIn(false);
     setRole('admin');
@@ -237,8 +245,8 @@ function App() {
           {activeTab === 'ansatte' && (isAdmin || isKontor) && <Ansatte />}
           {activeTab === 'bemanningsplan' && (isAdmin || role === 'ansatt') && <Bemanningsplan readOnly={!isAdmin} />}
           {activeTab === 'rorlegger' && (isAdmin || isKontor || isRorlegger) && <RorleggerPlan />}
-          {activeTab === 'framdrift' && (isAdmin || isKontor) && <Framdriftsplan />}
-          {activeTab === 'ks' && (isAdmin || isKontor) && <KS />}
+          {activeTab === 'framdrift' && (isAdmin || isKontor || role === 'ansatt') && <Framdriftsplan readOnly={role === 'ansatt'} ansattId={role === 'ansatt' ? ansattId : null} />}
+          {activeTab === 'ks' && (isAdmin || isKontor || role === 'ansatt') && <KS readOnly={role === 'ansatt'} ansattId={role === 'ansatt' ? ansattId : null} />}
           {activeTab === 'biler' && (isAdmin || isKontor) && <Biler />}
           {activeTab === 'brukere' && isAdmin && <AdminUsers />}
         </main>
