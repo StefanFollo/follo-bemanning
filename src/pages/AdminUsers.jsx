@@ -28,6 +28,10 @@ export default function AdminUsers() {
   const [backups, setBackups] = useState([]);
   const [backupLoading, setBackupLoading] = useState(false);
   const [backupMsg, setBackupMsg] = useState('');
+  const [visAnsattInvite, setVisAnsattInvite] = useState(false);
+  const [ansattRoller, setAnsattRoller] = useState({});   // { ansattId: rolle }
+  const [inviterer, setInviterer] = useState(null);        // ansattId som sendes nå
+  const [invitertIds, setInvitertIds] = useState(new Set()); // sendt i denne økten
 
   async function loadUsers() {
     setLoading(true);
@@ -150,7 +154,42 @@ export default function AdminUsers() {
     }
   }
 
+  async function inviterAnsatt(ansatt) {
+    const epost = (ansatt.epost || '').trim();
+    if (!epost) return;
+    const rolle = ansattRoller[ansatt.id] || 'ansatt';
+    setInviterer(ansatt.id);
+    setSaveMsg('');
+    setInviteUrl('');
+    try {
+      const res = await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: authHeader(),
+        body: JSON.stringify({ email: epost, navn: ansatt.navn, role: rolle, ansattId: ansatt.id }),
+      });
+      const data = await res.json();
+      if (res.status === 409) {
+        setSaveMsg(`${ansatt.navn} er allerede registrert som bruker.`);
+      } else if (!res.ok) {
+        throw new Error(data.error);
+      } else {
+        setSaveMsg(data.emailSent ? `Invitasjon sendt til ${ansatt.navn} (${epost})!` : `Bruker opprettet for ${ansatt.navn}.`);
+        if (data.inviteUrl) setInviteUrl(data.inviteUrl);
+      }
+      setInvitertIds(prev => new Set(prev).add(ansatt.id));
+      await loadUsers();
+    } catch (e) {
+      setSaveMsg('Feil: ' + e.message);
+    }
+    setInviterer(null);
+  }
+
   const ansatte = [...(state.ansatte || [])].sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  const eksisterendeEmails = new Set(users.map(u => (u.email || '').toLowerCase()));
+  // Ansatte med e-post som ikke allerede har bruker
+  const inviterbareAnsatte = ansatte.filter(a =>
+    (a.epost || '').trim() && !eksisterendeEmails.has(a.epost.trim().toLowerCase())
+  );
 
   return (
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 16px' }}>
@@ -247,6 +286,64 @@ export default function AdminUsers() {
           </div>
         </div>
       )}
+
+      {/* Inviter fra ansattliste */}
+      <div style={{ marginBottom: 20, background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 10, overflow: 'hidden' }}>
+        <button
+          onClick={() => setVisAnsattInvite(v => !v)}
+          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, fontWeight: 600, color: '#0c4a6e' }}>
+          <span>📋 Inviter fra ansattliste {inviterbareAnsatte.length > 0 && <span style={{ fontSize: 13, fontWeight: 400, color: '#0369a1' }}>({inviterbareAnsatte.length} uten brukerkonto)</span>}</span>
+          <span style={{ fontSize: 13 }}>{visAnsattInvite ? '▲' : '▼'}</span>
+        </button>
+
+        {visAnsattInvite && (
+          <div style={{ padding: '0 18px 16px' }}>
+            {inviterbareAnsatte.length === 0 ? (
+              <div style={{ fontSize: 13, color: '#0369a1', padding: '8px 0' }}>
+                Alle ansatte med e-post har allerede brukerkonto. ✅
+              </div>
+            ) : (
+              <>
+                <div style={{ fontSize: 12, color: '#0369a1', marginBottom: 12 }}>
+                  Velg rolle og klikk «Inviter» — invitasjonen sendes til e-posten fra ansattlisten.
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {inviterbareAnsatte.map(a => {
+                    const sendt = invitertIds.has(a.id);
+                    const sender = inviterer === a.id;
+                    return (
+                      <div key={a.id} style={{ background: 'white', border: '1px solid #e0f2fe', borderRadius: 8, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                        <div style={{ flex: 1, minWidth: 160 }}>
+                          <div style={{ fontWeight: 600, fontSize: 14 }}>{a.navn}</div>
+                          <div style={{ fontSize: 12, color: '#6b7280' }}>{a.epost}{a.fag ? ` · ${a.fag}` : ''}</div>
+                        </div>
+                        <select
+                          value={ansattRoller[a.id] || 'ansatt'}
+                          onChange={e => setAnsattRoller(r => ({ ...r, [a.id]: e.target.value }))}
+                          disabled={sendt}
+                          style={{ fontSize: 13, padding: '5px 8px', borderRadius: 6, border: '1px solid #e5e7eb', flexShrink: 0 }}>
+                          <option value="ansatt">Ansatt</option>
+                          <option value="befaring">Befaring / Service</option>
+                          <option value="kontor">Kontor</option>
+                          <option value="rorlegger">Rørlegger</option>
+                          <option value="admin">Administrator</option>
+                        </select>
+                        <button
+                          className={sendt ? 'btn-secondary' : 'btn-primary'}
+                          style={{ fontSize: 13, padding: '6px 14px', flexShrink: 0, opacity: sendt ? 0.6 : 1 }}
+                          disabled={sender || sendt}
+                          onClick={() => inviterAnsatt(a)}>
+                          {sender ? 'Sender…' : sendt ? '✓ Sendt' : '✉ Inviter'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: 48, color: '#6b7280' }}>Laster brukere…</div>
