@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { dateToIso } from '../store';
+import ServiceReklKalender from '../components/ServiceReklKalender';
 
 const REKL_STATUS = {
   ny:           { label: 'Ny',             farge: '#3b82f6', bg: '#eff6ff', ikon: '🔵' },
@@ -45,6 +46,7 @@ function tomForm() {
     beskrivelse: '',
     dato: dateToIso(new Date()),
     frist: '',
+    planlagtDato: '',
     status: 'ny',
     ansvarligId: '',
     kommentar: '',
@@ -62,6 +64,7 @@ export default function Reklamasjon() {
   const [form, setForm] = useState(tomForm());
   const [statusFilter, setStatusFilter] = useState(null);
   const [sok, setSok] = useState('');
+  const [visning, setVisning] = useState('liste'); // 'liste' | 'kalender'
 
   function ansattFarge(id) {
     if (!id) return null;
@@ -321,7 +324,11 @@ export default function Reklamasjon() {
       {/* Header */}
       <div className="page-header">
         <h2>Reklamasjoner</h2>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div className="bef-view-tabs">
+            <button className={`bef-view-tab${visning === 'liste' ? ' aktiv' : ''}`} onClick={() => setVisning('liste')}>📋 Liste</button>
+            <button className={`bef-view-tab${visning === 'kalender' ? ' aktiv' : ''}`} onClick={() => setVisning('kalender')}>📅 Kalender</button>
+          </div>
           <input
             className="input"
             style={{ width: 200, height: 36 }}
@@ -333,6 +340,9 @@ export default function Reklamasjon() {
         </div>
       </div>
 
+      {visning === 'kalender' && <ServiceReklKalender />}
+
+      {visning === 'liste' && <>
       {/* Pipeline */}
       <div className="bef-pipeline">
         {Object.entries(REKL_STATUS).map(([key, s]) => {
@@ -402,6 +412,7 @@ export default function Reklamasjon() {
           {utbedredeRekl.map(r => <ReklKort key={r.id} r={r} />)}
         </div>
       </div>
+      </>}
 
       {/* Modal */}
       {visModal && (
@@ -456,6 +467,12 @@ export default function Reklamasjon() {
                   <div>
                     <label>Frist for utbedring</label>
                     <input type="date" className="input" value={form.frist} onChange={e => setForm(f => ({ ...f, frist: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label>📅 Planlagt utført (kalender)</label>
+                    <input type="date" className="input" value={form.planlagtDato || ''}
+                      onChange={e => setForm(f => ({ ...f, planlagtDato: e.target.value }))}
+                      title="Når skal reklamasjonen tas — vises i den delte kalenderen" />
                   </div>
                   <div>
                     <label>Ansvarlig for utbedring</label>
