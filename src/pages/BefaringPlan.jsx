@@ -126,6 +126,7 @@ export default function BefaringPlan() {
   const [sok, setSok] = useState('');
   const [pipelineFilter, setPipelineFilter] = useState(null);
   const [ansvarligFilter, setAnsvarligFilter] = useState('');
+  const [sortering, setSortering] = useState(() => localStorage.getItem('fbs_bef_sort') || 'adresse');
 
   function ansattFarge(ansattId) {
     if (!ansattId) return null;
@@ -353,33 +354,34 @@ export default function BefaringPlan() {
       : null;
   }
 
-  const planlagte = [...aktive]
-    .filter(b => b.status === 'planlagt')
-    .filter(sokFilter)
-    .filter(statusFilter)
-    .filter(ansvarligFilterFn)
-    .sort((a, b) => a.dato.localeCompare(b.dato));
+  // Stabil sortering — kort hopper ikke når man redigerer felter som dato/frist.
+  // Adresse/navn endres nesten aldri, så de gir mest forutsigbar rekkefølge.
+  function idTs(b) {
+    const m = String(b.id || '').match(/-(\d{10,})-/);
+    return m ? parseInt(m[1], 10) : 0;
+  }
+  function sorterBef(a, b) {
+    if (sortering === 'adresse')
+      return (a.adresse || 'ÅÅÅ').localeCompare(b.adresse || 'ÅÅÅ', 'nb');
+    if (sortering === 'navn')
+      return (a.kontaktNavn || 'ÅÅÅ').localeCompare(b.kontaktNavn || 'ÅÅÅ', 'nb');
+    if (sortering === 'nyeste')
+      return idTs(b) - idTs(a) || (b.dato || '').localeCompare(a.dato || '');
+    // 'frist' — eldste frist/dato først (som før)
+    return (a.tilbudFrist || a.dato || '9999').localeCompare(b.tilbudFrist || b.dato || '9999');
+  }
 
-  const tilbudArbeid = [...aktive]
-    .filter(b => b.status === 'tilbud_arbeid')
+  const filtrerOgSorter = (status) => [...aktive]
+    .filter(b => b.status === status)
     .filter(sokFilter)
     .filter(statusFilter)
     .filter(ansvarligFilterFn)
-    .sort((a, b) => (a.tilbudFrist || '9999').localeCompare(b.tilbudFrist || '9999'));
+    .sort(sorterBef);
 
-  const tilbudSendt = [...aktive]
-    .filter(b => b.status === 'tilbud_sendt')
-    .filter(sokFilter)
-    .filter(statusFilter)
-    .filter(ansvarligFilterFn)
-    .sort((a, b) => (a.tilbudFrist || '9999').localeCompare(b.tilbudFrist || '9999'));
-
-  const godkjente = [...aktive]
-    .filter(b => b.status === 'godkjent')
-    .filter(sokFilter)
-    .filter(statusFilter)
-    .filter(ansvarligFilterFn)
-    .sort((a, b) => b.dato.localeCompare(a.dato));
+  const planlagte    = filtrerOgSorter('planlagt');
+  const tilbudArbeid = filtrerOgSorter('tilbud_arbeid');
+  const tilbudSendt  = filtrerOgSorter('tilbud_sendt');
+  const godkjente    = filtrerOgSorter('godkjent');
 
   const uker = kapasitetPerUke();
 
@@ -665,6 +667,18 @@ export default function BefaringPlan() {
             value={sok}
             onChange={e => setSok(e.target.value)}
           />
+          <select
+            className="input"
+            style={{ height: 36, fontSize: 13, minWidth: 150 }}
+            value={sortering}
+            onChange={e => { setSortering(e.target.value); localStorage.setItem('fbs_bef_sort', e.target.value); }}
+            title="Sortering — påvirker rekkefølgen i alle kolonner"
+          >
+            <option value="adresse">↕ Adresse (A–Å)</option>
+            <option value="navn">↕ Navn (A–Å)</option>
+            <option value="nyeste">🆕 Nyeste først</option>
+            <option value="frist">📅 Frist / dato</option>
+          </select>
           {(() => {
             // Ansatte som har minst én aktiv befaring
             const ansatteIds = [...new Set(aktive.flatMap(b => [b.prosjektlederId, b.ansvarligBefaringId].filter(Boolean)))];
