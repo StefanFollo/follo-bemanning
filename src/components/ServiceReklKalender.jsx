@@ -34,7 +34,7 @@ export default function ServiceReklKalender() {
   const today = dateToIso(new Date());
 
   const serviceJobber = (state.serviceJobber || [])
-    .filter(j => j.status !== 'ferdig')
+    .filter(j => j.status !== 'ferdig' && j.status !== 'fakturert')
     .map(j => ({ type: 'service', item: j, ansvarligId: j.ansvarligId, planlagtDato: j.planlagtDato || '', planlagtSluttDato: j.planlagtSluttDato || '', tittel: j.adresse || j.kontaktNavn || 'Service', undertittel: j.type || '' }));
   const reklamasjoner = (state.reklamasjoner || [])
     .filter(r => !['utbedret', 'avvist', 'lukket'].includes(r.status))

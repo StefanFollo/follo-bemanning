@@ -7,7 +7,8 @@ const SERV_STATUS = {
   ny:           { label: 'Ny',           farge: '#3b82f6', bg: '#eff6ff', ikon: '🔵' },
   planlagt:     { label: 'Planlagt',     farge: '#f59e0b', bg: '#fffbeb', ikon: '📅' },
   under_arbeid: { label: 'Under arbeid', farge: '#8b5cf6', bg: '#f5f3ff', ikon: '🔨' },
-  ferdig:       { label: 'Ferdig',       farge: '#16a34a', bg: '#f0fdf4', ikon: '✅' },
+  ferdig:       { label: 'Ferdig – ikke fakturert', farge: '#16a34a', bg: '#f0fdf4', ikon: '✅' },
+  fakturert:    { label: 'Fakturert',    farge: '#0891b2', bg: '#ecfeff', ikon: '🧾' },
 };
 
 const SERV_TYPER = [
@@ -226,6 +227,7 @@ export default function Service() {
   const planlagteJobber = filtrert.filter(j => j.status === 'planlagt');
   const underArbeid    = filtrert.filter(j => j.status === 'under_arbeid');
   const ferdige        = filtrert.filter(j => j.status === 'ferdig');
+  const fakturerte     = filtrert.filter(j => j.status === 'fakturert');
 
   function sumKr(arr) {
     const total = arr.reduce((s, j) => s + (Number(j.belop) || 0), 0);
@@ -282,7 +284,7 @@ export default function Service() {
           {j.oensketDato && (
             <span style={{ color: fristFarge || '#0891b2', fontSize: 12, fontWeight: 500 }}>
               🚀 Ønsket dato: {datoKort(j.oensketDato)}
-              {fristDager !== null && j.status !== 'ferdig' && (
+              {fristDager !== null && j.status !== 'ferdig' && j.status !== 'fakturert' && (
                 <em> ({fristDager < 0 ? `${Math.abs(fristDager)}d over` : fristDager === 0 ? 'i dag' : `${fristDager}d`})</em>
               )}
             </span>
@@ -363,8 +365,8 @@ export default function Service() {
         </div>
       )}
 
-      {/* Kanban: 4 kolonner */}
-      <div className="bef-kanban bef-kanban--4col">
+      {/* Kanban: 5 kolonner */}
+      <div className="bef-kanban bef-kanban--5col">
         {/* Ny */}
         <div className="bef-kolonne">
           <div className="bef-kolonne-header" style={{ borderColor: SERV_STATUS.ny.farge, color: SERV_STATUS.ny.farge }}>
@@ -396,7 +398,7 @@ export default function Service() {
           {underArbeid.map(j => <ServKort key={j.id} j={j} />)}
         </div>
 
-        {/* Ferdig */}
+        {/* Ferdig – ikke fakturert */}
         <div className="bef-kolonne">
           <div className="bef-kolonne-header" style={{ borderColor: SERV_STATUS.ferdig.farge, color: SERV_STATUS.ferdig.farge }}>
             <span>✅ Ferdig <span className="bef-kolonne-teller">{ferdige.length}</span></span>
@@ -404,6 +406,16 @@ export default function Service() {
           </div>
           {ferdige.length === 0 && <div className="bef-tom-melding">Ingen ferdige jobber.</div>}
           {ferdige.map(j => <ServKort key={j.id} j={j} />)}
+        </div>
+
+        {/* Fakturert */}
+        <div className="bef-kolonne">
+          <div className="bef-kolonne-header" style={{ borderColor: SERV_STATUS.fakturert.farge, color: SERV_STATUS.fakturert.farge }}>
+            <span>🧾 Fakturert <span className="bef-kolonne-teller">{fakturerte.length}</span></span>
+            {sumKr(fakturerte) && <span className="bef-kolonne-kr">{sumKr(fakturerte)}</span>}
+          </div>
+          {fakturerte.length === 0 && <div className="bef-tom-melding">Ingen fakturerte jobber.</div>}
+          {fakturerte.map(j => <ServKort key={j.id} j={j} />)}
         </div>
       </div>
       </>}
