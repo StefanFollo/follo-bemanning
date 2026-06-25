@@ -1980,6 +1980,19 @@ export default function Bemanningsplan({ readOnly = false }) {
     // Show 8 weeks from current week
     const weeks = Array.from({ length: 8 }, (_, i) => addDays(currentWeek, i * 7));
 
+    // Ledig kapasitet per uke: ansatte uten prosjekt-tildeling og uten ferie
+    const ukeStats = weeks.map(weekStr => {
+      const weekEnd = addDays(weekStr, 6);
+      const opptattIds = new Set(state.tildelinger
+        .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, weekStr, weekEnd))
+        .map(t => t.ansattId));
+      const ferieIds = new Set(state.tildelinger
+        .filter(t => t.prosjektId === FERIE_ID && overlaps(t.startDato, t.sluttDato, weekStr, weekEnd))
+        .map(t => t.ansattId));
+      const ledige = planAnsatte.filter(a => !opptattIds.has(a.id) && !ferieIds.has(a.id)).length;
+      return { weekStr, weekEnd, ledige, ferie: ferieIds.size, total: planAnsatte.length };
+    });
+
     return (
       <div>
         <div className="uke-nav">
@@ -1987,6 +2000,33 @@ export default function Bemanningsplan({ readOnly = false }) {
           <div className="uke-label">8-ukers oversikt fra uke {getWeekNumber(currentWeek)}</div>
           <button className="btn" onClick={thisWeek}>I dag</button>
           <button className="btn" onClick={nextWeek}>Neste →</button>
+        </div>
+
+        {/* Ledig kapasitet per uke — rask oversikt øverst */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 8, marginBottom: 18 }}>
+          {ukeStats.map(s => {
+            const ingen = s.ledige === 0;
+            const faa = s.ledige > 0 && s.ledige <= 2;
+            const farge = ingen ? '#dc2626' : faa ? '#d97706' : '#16a34a';
+            const bg = ingen ? '#fef2f2' : faa ? '#fffbeb' : '#f0fdf4';
+            return (
+              <div key={s.weekStr}
+                style={{ background: bg, border: `1px solid ${farge}33`, borderTop: `3px solid ${farge}`, borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}
+                title={`Uke ${getWeekNumber(s.weekStr)}: ${s.ledige} ledige av ${s.total}${s.ferie ? ` · ${s.ferie} på ferie` : ''}`}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>
+                  Uke {getWeekNumber(s.weekStr)}
+                </div>
+                <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 4 }}>
+                  {s.weekStr.slice(8)}.{s.weekStr.slice(5, 7)} – {s.weekEnd.slice(8)}.{s.weekEnd.slice(5, 7)}
+                </div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: farge, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
+                  👷 {s.ledige}
+                </div>
+                <div style={{ fontSize: 10, color: farge, fontWeight: 600 }}>ledig{s.ledige !== 1 ? 'e' : ''}</div>
+                {s.ferie > 0 && <div style={{ fontSize: 10, color: '#0891b2', marginTop: 2 }}>🏖 {s.ferie} ferie</div>}
+              </div>
+            );
+          })}
         </div>
 
         {state.prosjekter.length === 0 && (
