@@ -59,6 +59,15 @@ export default function Bemanningsplan({ readOnly = false }) {
   const { state, dispatch } = useApp();
   // Ansatte som er med i bemanningsplan-kapasitetsberegningen
   const planAnsatte = state.ansatte.filter(a => !a.utenforBemanningsplan && a.fag !== 'Rørlegger');
+
+  // Er ansatt sykmeldt i en gitt periode? Sykmeldt uten datoer = sykmeldt nå.
+  function erSykmeldtIPeriode(a, start, end) {
+    if (!a.sykmeldt) return false;
+    if (!a.sykmeldtFra && !a.sykmeldtTil) return true; // på ubestemt tid
+    const fra = a.sykmeldtFra || '0000-01-01';
+    const til = a.sykmeldtTil || '9999-12-31';
+    return overlaps(fra, til, start, end);
+  }
   const [tab, setTab] = useState('uke');
   const [fullscreen, setFullscreen] = useState(false);
   const [storskjerm, setStorskjerm] = useState(false);
@@ -361,7 +370,7 @@ export default function Bemanningsplan({ readOnly = false }) {
     const dagTildeltIds = new Set(
       state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd)).map(t => t.ansattId)
     );
-    const dagLedige = planAnsatte.filter(a => !dagTildeltIds.has(a.id));
+    const dagLedige = planAnsatte.filter(a => !dagTildeltIds.has(a.id) && !erSykmeldtIPeriode(a, currentWeek, weekEnd));
 
     // Shared Gantt row container — renders continuous bars with drag handles
     // prosjektId: vis kun dette prosjektets bars normalt; andre prosjekter vises som opptatt-bar
@@ -576,7 +585,7 @@ export default function Bemanningsplan({ readOnly = false }) {
     const ukeTildeltIds = new Set(
       state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd)).map(t => t.ansattId)
     );
-    const ukeLedige = planAnsatte.filter(a => !ukeTildeltIds.has(a.id));
+    const ukeLedige = planAnsatte.filter(a => !ukeTildeltIds.has(a.id) && !erSykmeldtIPeriode(a, periodeStart, periodeEnd));
 
     // Needle helpers
     function getNeedleLeft(day) {
@@ -665,7 +674,7 @@ export default function Bemanningsplan({ readOnly = false }) {
     const maanedTildeltIds = new Set(
       state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentMonth, maanedPeriodeEnd)).map(t => t.ansattId)
     );
-    const maanedLedige = planAnsatte.filter(a => !maanedTildeltIds.has(a.id));
+    const maanedLedige = planAnsatte.filter(a => !maanedTildeltIds.has(a.id) && !erSykmeldtIPeriode(a, currentMonth, maanedPeriodeEnd));
 
     function MaanedAnsattRad({ ansatt, prosjektId }) {
       return (
@@ -790,7 +799,8 @@ export default function Bemanningsplan({ readOnly = false }) {
     const kapTotal   = planAnsatte.length;
     const kapOpptatt = planAnsatte.filter(a => kapOpptattIds.has(a.id)).length;
     const kapFerie   = planAnsatte.filter(a => kapFerieIds.has(a.id) && !kapOpptattIds.has(a.id)).length;
-    const kapLedig   = kapTotal - kapOpptatt - kapFerie;
+    const kapSyk     = planAnsatte.filter(a => erSykmeldtIPeriode(a, currentWeek, kapWEnd) && !kapOpptattIds.has(a.id) && !kapFerieIds.has(a.id)).length;
+    const kapLedig   = kapTotal - kapOpptatt - kapFerie - kapSyk;
     const kapPst     = kapTotal > 0 ? Math.round((kapOpptatt / kapTotal) * 100) : 0;
 
     const fagOptions = state.fag.filter(f => planAnsatte.some(a => a.fag === f));
@@ -1980,7 +1990,7 @@ export default function Bemanningsplan({ readOnly = false }) {
     // Show 8 weeks from current week
     const weeks = Array.from({ length: 8 }, (_, i) => addDays(currentWeek, i * 7));
 
-    // Ledig kapasitet per uke: ansatte uten prosjekt-tildeling og uten ferie
+    // Ledig kapasitet per uke: ansatte uten prosjekt-tildeling, uten ferie og ikke sykmeldt
     const ukeStats = weeks.map(weekStr => {
       const weekEnd = addDays(weekStr, 6);
       const opptattIds = new Set(state.tildelinger
@@ -1989,8 +1999,11 @@ export default function Bemanningsplan({ readOnly = false }) {
       const ferieIds = new Set(state.tildelinger
         .filter(t => t.prosjektId === FERIE_ID && overlaps(t.startDato, t.sluttDato, weekStr, weekEnd))
         .map(t => t.ansattId));
-      const ledige = planAnsatte.filter(a => !opptattIds.has(a.id) && !ferieIds.has(a.id)).length;
-      return { weekStr, weekEnd, ledige, ferie: ferieIds.size, total: planAnsatte.length };
+      const sykmeldte = planAnsatte.filter(a => erSykmeldtIPeriode(a, weekStr, weekEnd)).length;
+      const ledige = planAnsatte.filter(a =>
+        !opptattIds.has(a.id) && !ferieIds.has(a.id) && !erSykmeldtIPeriode(a, weekStr, weekEnd)
+      ).length;
+      return { weekStr, weekEnd, ledige, ferie: ferieIds.size, sykmeldte, total: planAnsatte.length };
     });
 
     return (
@@ -2012,7 +2025,7 @@ export default function Bemanningsplan({ readOnly = false }) {
             return (
               <div key={s.weekStr}
                 style={{ background: bg, border: `1px solid ${farge}33`, borderTop: `3px solid ${farge}`, borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}
-                title={`Uke ${getWeekNumber(s.weekStr)}: ${s.ledige} ledige av ${s.total}${s.ferie ? ` · ${s.ferie} på ferie` : ''}`}>
+                title={`Uke ${getWeekNumber(s.weekStr)}: ${s.ledige} ledige av ${s.total}${s.ferie ? ` · ${s.ferie} på ferie` : ''}${s.sykmeldte ? ` · ${s.sykmeldte} sykmeldt` : ''}`}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>
                   Uke {getWeekNumber(s.weekStr)}
                 </div>
@@ -2023,7 +2036,12 @@ export default function Bemanningsplan({ readOnly = false }) {
                   👷 {s.ledige}
                 </div>
                 <div style={{ fontSize: 10, color: farge, fontWeight: 600 }}>ledig{s.ledige !== 1 ? 'e' : ''}</div>
-                {s.ferie > 0 && <div style={{ fontSize: 10, color: '#0891b2', marginTop: 2 }}>🏖 {s.ferie} ferie</div>}
+                {(s.ferie > 0 || s.sykmeldte > 0) && (
+                  <div style={{ fontSize: 10, marginTop: 2, display: 'flex', gap: 6, justifyContent: 'center' }}>
+                    {s.ferie > 0 && <span style={{ color: '#0891b2' }}>🏖 {s.ferie}</span>}
+                    {s.sykmeldte > 0 && <span style={{ color: '#94a3b8' }}>🤒 {s.sykmeldte}</span>}
+                  </div>
+                )}
               </div>
             );
           })}
