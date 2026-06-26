@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatDate, PROSJEKT_PALETTE, isoToDate, dateToIso, daysBetween } from '../store';
 
@@ -579,6 +579,8 @@ export default function Prosjekter() {
   const [tlMode, setTlMode] = useState('maaned');
   const [statusFilter, setStatusFilter] = useState(null);
   const [plFilter, setPlFilter] = useState('');
+  const [dedupPanel, setDedupPanel] = useState(null); // null | {loading} | {dry, plan, ...}
+  const isAdmin = localStorage.getItem('fbs_role') === 'admin';
   const [expandedId, setExpandedId] = useState(null);
   const [sortKey, setSortKey] = useState('navn');
   const [sortDir, setSortDir] = useState('asc');
@@ -708,10 +710,27 @@ export default function Prosjekter() {
     }
   }
 
-  const alleProsjekter = state.prosjekter.filter(p => {
+  // Oppslags-indekser (unngå O(n) skann per prosjekt i render-loopen)
+  const ansatteById = useMemo(() => {
+    const m = {};
+    for (const a of state.ansatte) m[a.id] = a;
+    return m;
+  }, [state.ansatte]);
+  const oppgaverByProsjekt = useMemo(() => {
+    const m = {};
+    for (const o of state.oppgaver) (m[o.prosjektId] ||= []).push(o);
+    return m;
+  }, [state.oppgaver]);
+  const tildelingerByProsjekt = useMemo(() => {
+    const m = {};
+    for (const t of state.tildelinger) (m[t.prosjektId] ||= []).push(t);
+    return m;
+  }, [state.tildelinger]);
+
+  const alleProsjekter = useMemo(() => state.prosjekter.filter(p => {
     if (search) {
       const q = search.toLowerCase();
-      const pl = p.prosjektlederId ? state.ansatte.find(a => a.id === p.prosjektlederId) : null;
+      const pl = p.prosjektlederId ? ansatteById[p.prosjektlederId] : null;
       const match =
         p.navn.toLowerCase().includes(q) ||
         (p.adresse || '').toLowerCase().includes(q) ||
@@ -725,11 +744,14 @@ export default function Prosjekter() {
     }
     if (plFilter && p.prosjektlederId !== plFilter) return false;
     return true;
-  });
+  }), [state.prosjekter, ansatteById, search, plFilter]);
 
   // Summary counts (normalized)
-  const counts = { jobber_med: 0, godkjent: 0, aktiv: 0, fullfort: 0 };
-  for (const p of state.prosjekter) counts[normStatus(p.status)] = (counts[normStatus(p.status)] || 0) + 1;
+  const counts = useMemo(() => {
+    const c = { jobber_med: 0, godkjent: 0, aktiv: 0, fullfort: 0 };
+    for (const p of state.prosjekter) c[normStatus(p.status)] = (c[normStatus(p.status)] || 0) + 1;
+    return c;
+  }, [state.prosjekter]);
 
   // Group projects
   const groups = [
@@ -746,6 +768,25 @@ export default function Prosjekter() {
     { key: 'fullfort',   label: 'Fullført',       icon: '🏁', count: counts.fullfort   || 0, color: STATUS_COLORS.fullfort,   bg: STATUS_BG.fullfort },
   ];
 
+  // ---- Admin: dedup prosjekter ----
+  async function kjorDedup(dry) {
+    setDedupPanel({ loading: true });
+    try {
+      const token = localStorage.getItem('fbs_token') || '';
+      const r = await fetch('/api/admin/dedup-prosjekter', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ dry }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || `HTTP ${r.status}`);
+      setDedupPanel({ ...data, loading: false });
+      // Etter sletting plukker bakgrunns-sync (poller hvert 5s) opp endringen automatisk.
+    } catch (e) {
+      setDedupPanel({ error: e.message, loading: false });
+    }
+  }
+
   return (
     <div className={`page${fullscreen ? ' proj-fullscreen' : ''}`}>
       <div className="page-header">
@@ -754,9 +795,75 @@ export default function Prosjekter() {
           <button className="btn" onClick={() => setFullscreen(f => !f)} title={fullscreen ? 'Avslutt fullskjerm' : 'Fullskjerm'}>
             {fullscreen ? '✕ Lukk' : '⛶ Fullskjerm'}
           </button>
+          {isAdmin && (
+            <button
+              className="btn"
+              onClick={() => dedupPanel ? setDedupPanel(null) : kjorDedup(true)}
+              title="Finn og rydd opp duplikate prosjekter"
+            >
+              🔧 Dedup
+            </button>
+          )}
           <button className="btn btn-primary" onClick={openNew}>+ Nytt prosjekt</button>
         </div>
       </div>
+
+      {/* Admin: dedup-panel */}
+      {isAdmin && dedupPanel && (
+        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px', margin: '0 0 12px 0', fontSize: 13 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <strong style={{ color: '#1e293b' }}>🔧 Dedup prosjekter</strong>
+            <button onClick={() => setDedupPanel(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#94a3b8' }}>✕</button>
+          </div>
+
+          {dedupPanel.loading && <div style={{ color: '#64748b' }}>⏳ Henter duplikater...</div>}
+          {dedupPanel.error && <div style={{ color: '#dc2626' }}>⚠️ Feil: {dedupPanel.error}</div>}
+          {!dedupPanel.loading && !dedupPanel.error && dedupPanel.funnetDuplikater === 0 && (
+            <div style={{ color: '#16a34a' }}>✅ Ingen duplikater funnet</div>
+          )}
+
+          {!dedupPanel.loading && !dedupPanel.error && dedupPanel.duplikatGrupper > 0 && (
+            <>
+              <div style={{ color: '#1e293b', marginBottom: 8 }}>
+                Funnet <strong>{dedupPanel.duplikatGrupper}</strong> duplikatgrupper
+                → vil slette <strong>{dedupPanel.skalSlettes}</strong> prosjekter
+                (beholder {dedupPanel.gjenværendeEtter})
+                {dedupPanel.refsSomFlyttes > 0 && <> · flytter {dedupPanel.refsSomFlyttes} tildelinger/oppgaver til keeper</>}
+              </div>
+              <div style={{ maxHeight: 220, overflowY: 'auto', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 10px', marginBottom: 10 }}>
+                {(dedupPanel.plan || []).map((g, i) => (
+                  <div key={i} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: i < dedupPanel.plan.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
+                    <div style={{ fontWeight: 600 }}>Beholder: {g.behold.navn}</div>
+                    <div style={{ color: '#64748b', fontSize: 12 }}>
+                      id: {g.behold.id} · {g.behold.status} · {g.behold.refs} ref
+                      {g.behold.harFramdrift ? ' · framdrift' : ''}{g.behold.harTilbud ? ' · tilbud' : ''}
+                    </div>
+                    {g.slett.map(s => (
+                      <div key={s.id} style={{ color: '#dc2626', fontSize: 12, paddingLeft: 10 }}>
+                        🗑 {s.navn} ({s.id}) · {s.status} · {s.refs} ref{s.harFramdrift ? ' · framdrift' : ''}
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+              {dedupPanel.dry !== false && (
+                <button
+                  onClick={() => {
+                    if (!window.confirm(`Slette ${dedupPanel.skalSlettes} duplikate prosjekter?\nReferanser (tildelinger/oppgaver) flyttes til keeper.\nDette kan ikke angres (men snapshots tas).`)) return;
+                    kjorDedup(false);
+                  }}
+                  style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontWeight: 600 }}
+                >
+                  🗑 Slett {dedupPanel.skalSlettes} duplikater
+                </button>
+              )}
+              {dedupPanel.dry === false && (
+                <div style={{ color: '#16a34a', fontWeight: 600 }}>✅ Slettet {dedupPanel.slettet} duplikater · {dedupPanel.gjenværende} prosjekter igjen</div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {/* Summary cards */}
       <div className="proj-summary-cards">
@@ -885,19 +992,19 @@ export default function Prosjekter() {
                     </div>
                   </div>
                   {sortProsjekter(prosjekter).map(p => {
-                    const opp = state.oppgaver.filter(o => o.prosjektId === p.id);
+                    const opp = oppgaverByProsjekt[p.id] || [];
                     const fremgang = opp.length
                       ? Math.round(opp.reduce((s, o) => s + (o.fremgang || 0), 0) / opp.length)
                       : null;
-                    const tildelinger = state.tildelinger.filter(t => t.prosjektId === p.id);
+                    const tildelinger = tildelingerByProsjekt[p.id] || [];
                     const ansatteIds = [...new Set(tildelinger.map(t => t.ansattId))];
                     const ansatteCount = ansatteIds.length;
-                    const ansatteNavn = ansatteIds.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
+                    const ansatteNavn = ansatteIds.map(id => ansatteById[id]).filter(Boolean);
                     const barColor = p.farge || color;
                     const belopVis = formaterBelop(p.belop);
                     const varighetVis = varighetUker(p.startDato, p.sluttDato);
                     const prosjektleder = p.prosjektlederId
-                      ? state.ansatte.find(a => a.id === p.prosjektlederId)
+                      ? ansatteById[p.prosjektlederId]
                       : null;
                     const varsel = sluttDatoInfo(p.sluttDato, p.status);
                     const isExpanded = expandedId === p.id;

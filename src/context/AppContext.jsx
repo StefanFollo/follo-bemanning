@@ -54,6 +54,17 @@ function reducer(state, action) {
 
     // --- Prosjekter ---
     case 'ADD_PROSJEKT': {
+      // Duplikat-vern: hopp over hvis prosjekt med samme navn+adresse finnes
+      const nName = (action.payload.navn || '').toLowerCase().trim();
+      const nAddr = (action.payload.adresse || '').toLowerCase().trim();
+      const finnesAllerede = state.prosjekter.some(p =>
+        (p.navn || '').toLowerCase().trim() === nName &&
+        (p.adresse || '').toLowerCase().trim() === nAddr
+      );
+      if (nName && finnesAllerede) {
+        console.warn('[ADD_PROSJEKT] Duplikat forhindret:', action.payload.navn);
+        return state;
+      }
       const next = [...state.prosjekter, { ...action.payload, id: action.payload.id || uid() }];
       saveProsjekter(next);
       return { ...state, prosjekter: next };
