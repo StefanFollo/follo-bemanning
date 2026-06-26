@@ -20,6 +20,7 @@ function byggTimer(poster) {
 }
 
 const STATUS = {
+  lead:          { label: 'Lead',                farge: '#0d9488', bg: '#f0fdfa', ikon: '🌱' },
   planlagt:      { label: 'Planlagt befaring',   farge: '#3b82f6', bg: '#eff6ff', ikon: '📋' },
   tilbud_arbeid: { label: 'Tilbud under arbeid', farge: '#f59e0b', bg: '#fffbeb', ikon: '✏️' },
   tilbud_sendt:  { label: 'Tilbud sendt',        farge: '#8b5cf6', bg: '#f5f3ff', ikon: '📤' },
@@ -205,7 +206,12 @@ export default function BefaringPlan() {
       .finally(() => setAktivitetLaster(false));
   }
   function lagre() {
-    if (!form.kontaktNavn.trim() || !form.adresse.trim() || !form.ansvarligBefaringId || !form.prosjektlederId) return;
+    // Leads krever bare navn — ansvarlig/PL settes når man avtaler befaring
+    if (form.status === 'lead') {
+      if (!form.kontaktNavn.trim()) return;
+    } else if (!form.kontaktNavn.trim() || !form.adresse.trim() || !form.ansvarligBefaringId || !form.prosjektlederId) {
+      return;
+    }
     if (redigerer) {
       // Manuell lagring i edit-modus: avbryt eventuell auto-save og lagre nå
       if (autoSaveRef.current) clearTimeout(autoSaveRef.current);
@@ -378,6 +384,7 @@ export default function BefaringPlan() {
     .filter(ansvarligFilterFn)
     .sort(sorterBef);
 
+  const leads        = filtrerOgSorter('lead');
   const planlagte    = filtrerOgSorter('planlagt');
   const tilbudArbeid = filtrerOgSorter('tilbud_arbeid');
   const tilbudSendt  = filtrerOgSorter('tilbud_sendt');
@@ -799,9 +806,19 @@ export default function BefaringPlan() {
         </div>
       )}
 
-      {/* Oversikt-visning: fire kolonner */}
+      {/* Oversikt-visning: fem kolonner */}
       {viewTab === 'oversikt' && (
-        <div className="bef-kanban bef-kanban--4col">
+        <div className="bef-kanban bef-kanban--5col">
+          {/* Leads (før befaring) */}
+          <div className="bef-kolonne">
+            <div className="bef-kolonne-header" style={{ borderColor: STATUS.lead.farge, color: STATUS.lead.farge }}>
+              <span>🌱 Leads <span className="bef-kolonne-teller">{leads.length}</span></span>
+            </div>
+            {leads.length === 0 && <div className="bef-tom-melding">Ingen leads.</div>}
+            {leads.map(b => <BefKort key={b.id} b={b} />)}
+            <button className="bef-legg-til-btn" onClick={() => apneNy('lead')}>+ Ny lead</button>
+          </div>
+
           {/* Planlagt befaring */}
           <div className="bef-kolonne">
             <div className="bef-kolonne-header" style={{ borderColor: STATUS.planlagt.farge, color: STATUS.planlagt.farge }}>
