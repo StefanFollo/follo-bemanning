@@ -30,6 +30,7 @@ export default function AdminUsers() {
   const [backupMsg, setBackupMsg] = useState('');
   const [diagnose, setDiagnose] = useState(null);
   const [diagnoseLaster, setDiagnoseLaster] = useState(false);
+  const [gjenoppretter, setGjenoppretter] = useState(false);
   const [visAnsattInvite, setVisAnsattInvite] = useState(false);
   const [ansattRoller, setAnsattRoller] = useState({});   // { ansattId: rolle }
   const [inviterer, setInviterer] = useState(null);        // ansattId som sendes nå
@@ -59,6 +60,26 @@ export default function AdminUsers() {
       }
     } catch { /* silent */ }
     setBackupLoading(false);
+  }
+
+  async function gjenopprettManglende(feltNavn) {
+    const antall = Object.values(diagnose?.rapport?.manglerSidenNatt || {}).reduce((s, arr) => s + arr.length, 0);
+    if (!confirm(`Gjenopprette ${antall} manglende elementer fra nattens backup?\n\nDette LEGGER KUN TIL det som mangler — ingenting eksisterende endres eller slettes.`)) return;
+    setGjenoppretter(true);
+    try {
+      const res = await fetch('/api/admin/gjenopprett-fra-backup', {
+        method: 'POST',
+        headers: authHeader(),
+        body: JSON.stringify({ dry: false, felt: feltNavn }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setBackupMsg(`✅ Gjenopprettet ${data.gjenopprettet} elementer fra backup ${formatTs(data.backupTidspunkt)}. Last inn siden på nytt (Ctrl+Shift+R) for å se dataene.`);
+      await kjorDiagnose(); // vis oppdatert status
+    } catch (e) {
+      setBackupMsg('Feil ved gjenoppretting: ' + e.message);
+    }
+    setGjenoppretter(false);
   }
 
   async function kjorDiagnose() {
@@ -564,7 +585,14 @@ export default function AdminUsers() {
                       ))}
                     </div>
                   ))}
-                  <div style={{ color: '#6b7280', fontSize: 12, marginTop: 4 }}>Disse kan gjenopprettes fra nattens backup — kontakt utvikler/Claude før noe gjøres.</div>
+                  <button
+                    onClick={() => gjenopprettManglende(Object.keys(mangler))}
+                    disabled={gjenoppretter}
+                    style={{ marginTop: 8, background: '#16a34a', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
+                  >
+                    {gjenoppretter ? '⏳ Gjenoppretter…' : '↩️ Gjenopprett manglende fra nattens backup'}
+                  </button>
+                  <div style={{ color: '#6b7280', fontSize: 12, marginTop: 6 }}>Legger kun tilbake det som mangler — ingenting eksisterende endres eller slettes.</div>
                 </div>
               )}
 

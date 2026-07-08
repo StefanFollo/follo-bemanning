@@ -26,7 +26,18 @@ function tellArrays(state) {
   return c
 }
 
-function beskrivItem(k, item) {
+function beskrivItem(k, item, oppslagState) {
+  // Tildelinger/oppgaver har ikke navn — slå opp ansatt og prosjekt
+  if (k === 'tildelinger' || k === 'oppgaver') {
+    const ansatt = (oppslagState?.ansatte || []).find(a => a.id === item.ansattId)
+    const prosjekt = (oppslagState?.prosjekter || []).find(p => p.id === item.prosjektId)
+    return {
+      id: item.id,
+      navn: [ansatt?.navn, prosjekt?.navn || item.tittel].filter(Boolean).join(' → '),
+      adresse: [item.startDato, item.sluttDato].filter(Boolean).join(' – '),
+      status: item.status || '',
+    }
+  }
   return {
     id: item.id,
     navn: item.navn || item.kontaktNavn || item.tittel || item.modell || '',
@@ -136,7 +147,7 @@ export default async function handler(req, res) {
           const manglende = {}
           for (const k of ARRAYS) {
             const tapte = finnManglende(foer[k], state?.[k])
-            if (tapte.length > 0) manglende[k] = tapte.slice(0, 50).map(x => beskrivItem(k, x))
+            if (tapte.length > 0) manglende[k] = tapte.slice(0, 50).map(x => beskrivItem(k, x, foer))
           }
           rapport.manglerSidenNatt = Object.keys(manglende).length ? manglende : 'Ingen elementer mangler siden nattens backup'
 
@@ -158,7 +169,7 @@ export default async function handler(req, res) {
       const manglende = {}
       for (const k of ARRAYS) {
         const tapte = finnManglende(eldste[k], state?.[k])
-        if (tapte.length > 0) manglende[k] = tapte.slice(0, 50).map(x => beskrivItem(k, x))
+        if (tapte.length > 0) manglende[k] = tapte.slice(0, 50).map(x => beskrivItem(k, x, eldste))
       }
       rapport.manglerSidenEldsteRullerende = Object.keys(manglende).length ? manglende : 'Ingen'
     }
