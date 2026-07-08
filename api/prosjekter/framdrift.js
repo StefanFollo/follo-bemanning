@@ -262,11 +262,14 @@ export default async function handler(req, res) {
     // Behold versjonsnummer ved regenerering
     framdriftsplan.versjon = (prosjekt.framdriftsplan?.versjon || 0) + 1
 
+    const nowTs = Date.now()
     const oppdatertState = {
       ...state,
       prosjekter: prosjekter.map(p =>
-        p.id === prosjektId ? { ...p, framdriftsplan } : p
+        p.id === prosjektId ? { ...p, framdriftsplan, _endret: nowTs } : p
       ),
+      _fieldTs: { ...(state._fieldTs || {}), prosjekter: nowTs },
+      _updatedAt: nowTs,
     }
     await redis.set('fbs_state', oppdatertState)
 

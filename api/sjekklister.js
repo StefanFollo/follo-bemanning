@@ -101,7 +101,7 @@ export default async function handler(req, res) {
     await redis.set('fbs_state', {
       ...state,
       prosjekter: prosjekter.map((p, idx) =>
-        idx === prosjektIdx ? { ...p, sjekklister: merged } : p
+        idx === prosjektIdx ? { ...p, sjekklister: merged, _endret: nowTs } : p
       ),
       _fieldTs: { ...(state._fieldTs || {}), prosjekter: nowTs },
       _updatedAt: nowTs,
@@ -141,7 +141,7 @@ export default async function handler(req, res) {
         // Oppdater sjekkliste-status direkte (f.eks. lukk/åpne)
         return { ...sl, status: status || sl.status }
       })
-      return { ...p, sjekklister }
+      return { ...p, sjekklister, _endret: Date.now() }
     })
 
     const nowTs = Date.now()
@@ -165,7 +165,7 @@ export default async function handler(req, res) {
       ...state,
       prosjekter: prosjekter.map(p =>
         p.id !== prosjektId ? p
-          : { ...p, sjekklister: (p.sjekklister || []).filter(sl => sl.id !== sjekklisteId) }
+          : { ...p, sjekklister: (p.sjekklister || []).filter(sl => sl.id !== sjekklisteId), _endret: nowTs }
       ),
       _fieldTs: { ...(state._fieldTs || {}), prosjekter: nowTs },
       _updatedAt: nowTs,

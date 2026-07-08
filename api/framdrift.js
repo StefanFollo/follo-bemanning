@@ -171,7 +171,7 @@ export default async function handler(req, res) {
       const oppdatertState = {
         ...state,
         prosjekter: prosjekter.map(p => p.id === body.prosjektId
-          ? { ...p, ...generated, fdGenDato: new Date().toISOString(), fdGenAv: 'AI' }
+          ? { ...p, ...generated, fdGenDato: new Date().toISOString(), fdGenAv: 'AI', _endret: nowTs1 }
           : p
         ),
         _fieldTs: { ...(state._fieldTs || {}), prosjekter: nowTs1 },
@@ -217,6 +217,7 @@ export default async function handler(req, res) {
             fdGenDato: new Date().toISOString(),
             fdGenAv: 'AI',
             ...(kildeTilbudData ? { kildeTilbudData } : {}),
+            _endret: nowTs2,
           }
         : p
       ),

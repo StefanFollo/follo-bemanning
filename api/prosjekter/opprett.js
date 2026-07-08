@@ -160,6 +160,7 @@ export default async function handler(req, res) {
       tilbudLink: body.tilbudLink || '',
       opprettet: new Date().toISOString(),
       opprettetFra: 'tilbud-app',
+      _endret: Date.now(),
     }
 
     // Marker kilde-befaring som "godkjent" (tilsvarer 'vunnet' i bemanning-status-systemet)
@@ -183,6 +184,7 @@ export default async function handler(req, res) {
           importertTilTilbudId: body.tilbudId || true,
           prosjektId: nyttProsjekt.id,
           resultat: 'vunnet',
+          _endret: Date.now(),
         }
       })
     }
@@ -193,10 +195,13 @@ export default async function handler(req, res) {
       if (pl) { plEpost = pl.epost || pl.email || null; plNavn = pl.navn || null }
     }
 
+    const opprettTs = Date.now()
     const oppdatertState = {
       ...state,
       prosjekter: [...prosjekter, nyttProsjekt],
       befaringer: oppdatertBefaringer,
+      _fieldTs: { ...(state._fieldTs || {}), prosjekter: opprettTs, befaringer: opprettTs },
+      _updatedAt: opprettTs,
     }
 
     await redis.set('fbs_state', oppdatertState)

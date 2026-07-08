@@ -206,6 +206,7 @@ export default async function handler(req, res) {
           sistKundeAktivitet: tidspunkt,
           kundeHarSettTilbud: b.kundeHarSettTilbud || handling === 'aapnet',
           antallKundeAapninger: handling === 'aapnet' ? (b.antallKundeAapninger || 0) + 1 : (b.antallKundeAapninger || 0),
+          _endret: Date.now(),
         }
       })
 
@@ -242,7 +243,7 @@ export default async function handler(req, res) {
         if (tilbudId && !eksisterende.tilbudId) {
           const nyeBefaringer = befaringer.map(b =>
             b.id === eksisterende.id
-              ? { ...b, tilbudId, tilbudLink: tilbudLink || b.tilbudLink, sistEvent: type, sistEventDato: naa }
+              ? { ...b, tilbudId, tilbudLink: tilbudLink || b.tilbudLink, sistEvent: type, sistEventDato: naa, _endret: Date.now() }
               : b
           )
           const dupTs = Date.now()
@@ -305,6 +306,7 @@ export default async function handler(req, res) {
         tilbudLink: tilbudLink || '',
         sistEvent: type,
         sistEventDato: naa,
+        _endret: Date.now(),
       }
 
       // Snapshot av starttilstand (dokumenterer opprettelsen)
@@ -447,6 +449,7 @@ export default async function handler(req, res) {
             varighetUker: data.varighetUker ?? null,
             oppstartTekst: data.oppstart || '',
             ...(data ? { tilbudPayload: { ...data, _mottattType: type, _mottattDato: naa } } : {}),
+            _endret: Date.now(),
           }
           await appendSnapshot(redis, { objekt: 'befaring', objektId: nyBefaringId, dataFør: nyBefaring, utløstAv: `ghost-fallback-${type}` })
           const nowTs = Date.now()
@@ -556,7 +559,7 @@ export default async function handler(req, res) {
           const pl = ansatte.find(a => a.id === b.prosjektlederId)
           if (pl) plKontakt = { navn: pl.navn || pl.fornavn || null, epost: pl.epost || pl.email || null }
         }
-        const oppdatert = { ...b, status: nyStatus, sistEvent: type, sistEventDato: naa }
+        const oppdatert = { ...b, status: nyStatus, sistEvent: type, sistEventDato: naa, _endret: Date.now() }
         // Lagre alle tilbuds-data-felter på befaringen — kjente felt flatt + FULL payload
         if (data) {
           if (data.telefon != null && data.telefon !== '') oppdatert.telefon = data.telefon

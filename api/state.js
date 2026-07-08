@@ -33,86 +33,150 @@ export default async function handler(req, res) {
       let newState = req.body;
       const currentState = await redis.get('fbs_state');
       if (currentState) {
-        // Befaringer: blokker hvis mer enn 5 færre
-        if (Array.isArray(currentState.befaringer) && Array.isArray(newState.befaringer)) {
-          const cur = currentState.befaringer.length;
-          const nxt = newState.befaringer.length;
-          if (nxt < cur - 5) {
-            return res.status(409).json({
-              error: `Konflikt: forsøker å lagre ${nxt} befaringer, men det finnes ${cur} i skyen. Last inn siden på nytt.`,
-              field: 'befaringer', currentCount: cur, newCount: nxt,
-            });
-          }
+        // ── Tombstones: bevisste slettinger (bygges FØR guards, så guards kan
+        // se bort fra elementer som er slettet med vilje — ellers oppstår en
+        // evig 409-løkke når f.eks. et prosjekt med mange tildelinger slettes) ──
+        const innSlettinger = Array.isArray(newState._slettinger) ? newState._slettinger : [];
+        const skyTombstones = Array.isArray(currentState._tombstones) ? currentState._tombstones : [];
+        const tombMap = new Map(); // id → nyeste slette-ts
+        for (const t of [...skyTombstones, ...innSlettinger]) {
+          if (!t || t.id == null) continue;
+          const eks = tombMap.get(t.id);
+          if (!eks || t.ts > eks) tombMap.set(t.id, t.ts);
         }
-        // Tildelinger: blokker hvis mer enn 10 færre (1 merge = -1, så 10 gir god margin)
-        if (Array.isArray(currentState.tildelinger) && Array.isArray(newState.tildelinger)) {
-          const cur = currentState.tildelinger.length;
-          const nxt = newState.tildelinger.length;
-          if (nxt < cur - 10) {
-            return res.status(409).json({
-              error: `Konflikt: forsøker å lagre ${nxt} tildelinger, men det finnes ${cur} i skyen. Last inn siden på nytt.`,
-              field: 'tildelinger', currentCount: cur, newCount: nxt,
-            });
-          }
-        }
-        // Ansatte: blokker hvis mer enn 3 færre
-        if (Array.isArray(currentState.ansatte) && Array.isArray(newState.ansatte)) {
-          const cur = currentState.ansatte.length;
-          const nxt = newState.ansatte.length;
-          if (nxt < cur - 3) {
-            return res.status(409).json({
-              error: `Konflikt: forsøker å lagre ${nxt} ansatte, men det finnes ${cur} i skyen. Last inn siden på nytt.`,
-              field: 'ansatte', currentCount: cur, newCount: nxt,
-            });
-          }
-        }
-        // Prosjekter: MERGE (union by ID) — bevar prosjekter lagt til av tilbuds-appen
-        // som ikke har rukket å synke til nettleseren ennå
-        if (Array.isArray(currentState.prosjekter) && Array.isArray(newState.prosjekter)) {
-          const incomingIds = new Set(newState.prosjekter.map(p => p.id));
-          const missingProsjekter = currentState.prosjekter.filter(p => !incomingIds.has(p.id));
-          if (missingProsjekter.length > 0) {
-            console.log(`[state] Beholder ${missingProsjekter.length} sky-prosjekter som mangler lokalt`);
-            newState = { ...newState, prosjekter: [...newState.prosjekter, ...missingProsjekter] };
-          }
-        }
+        const erSlettet = x => x && x.id != null && (tombMap.get(x.id) || 0) > (x._endret || 0);
 
-        // ── FELT-NIVÅ MERGE (hindrer at samtidige brukere overskriver hverandre) ──
-        // For hvert datafelt: hvis skyen har en nyere _fieldTs enn det som
-        // lagres nå, betyr det at en annen bruker har endret DET feltet i
-        // mellomtiden. Behold skyens versjon av feltet (og dens timestamp),
-        // slik at bruker B ikke sletter bruker A sine endringer på andre felt.
-        const DATA_FELT = [
-          'ansatte', 'prosjekter', 'tildelinger', 'oppgaver', 'fag', 'teams',
+        // Sikkerhetssperrer: blokker lagring som reduserer antall drastisk
+        // (utover det som er bevisst slettet via tombstones)
+        const GUARDS = [
+          { felt: 'befaringer', margin: 5 },
+          { felt: 'tildelinger', margin: 10 },
+          { felt: 'ansatte', margin: 3 },
+        ];
+        for (const { felt, margin } of GUARDS) {
+          if (!Array.isArray(currentState[felt]) || !Array.isArray(newState[felt])) continue;
+          const cur = currentState[felt].filter(x => !erSlettet(x)).length;
+          const nxt = newState[felt].length;
+          if (nxt < cur - margin) {
+            return res.status(409).json({
+              error: `Konflikt: forsøker å lagre ${nxt} ${felt}, men det finnes ${cur} i skyen. Last inn siden på nytt.`,
+              field: felt, currentCount: cur, newCount: nxt,
+            });
+          }
+        }
+        // ── PER-ELEMENT MERGE (hindrer at samtidige/utdaterte klienter overskriver hverandre) ──
+        // Tidligere tapte vi data fordi hele arrayet ble overskrevet av sistemann
+        // som lagret — selv om de to brukerne redigerte FORSKJELLIGE elementer,
+        // eller en iPad våknet fra dvale med gårsdagens kopi.
+        // Nå flettes hvert element for seg: nyeste _endret-stempel vinner.
+        const ITEM_FELT = [
+          'ansatte', 'prosjekter', 'tildelinger', 'oppgaver', 'teams',
           'rorTimer', 'rorPlaner', 'befaringer', 'reklamasjoner', 'serviceJobber', 'biler',
         ];
         const cloudFieldTs = currentState._fieldTs || {};
         const incomingFieldTs = newState._fieldTs || {};
         const mergedFieldTs = { ...incomingFieldTs };
-        let beholdtFelt = [];
-        for (const felt of DATA_FELT) {
-          const cloudTs = cloudFieldTs[felt] || 0;
-          const incomingTs = incomingFieldTs[felt] || 0;
-          // Skyen er nyere for dette feltet → behold skyens data + timestamp.
-          // (Strengt > slik at samme timestamp lar innkommende vinne — bevarer
-          //  prosjekt-union over som allerede er bakt inn i newState.)
-          if (cloudTs > incomingTs && currentState[felt] !== undefined) {
-            newState = { ...newState, [felt]: currentState[felt] };
-            mergedFieldTs[felt] = cloudTs;
-            beholdtFelt.push(felt);
+        const nu = Date.now();
+        let serverEndret = false;
+        const beholdtOversikt = [];
+
+        for (const felt of ITEM_FELT) {
+          const cloudArr = currentState[felt];
+          const inArr = newState[felt];
+          if (!Array.isArray(cloudArr) || !Array.isArray(inArr)) continue;
+          const cloudById = new Map(cloudArr.filter(x => x && x.id != null).map(x => [x.id, x]));
+          const inIds = new Set(inArr.filter(x => x && x.id != null).map(x => x.id));
+          let beholdt = 0;
+          const cloudTsFelt = cloudFieldTs[felt] || 0;
+          const inTsFelt = incomingFieldTs[felt] || 0;
+
+          const resultat = inArr.map(item => {
+            if (!item || item.id == null) return item;
+            const c = cloudById.get(item.id);
+            if (!c) {
+              // Ikke i skyen: sjekk tombstone mot ORIGINALT stempel FØR vi
+              // stempler nytt — ellers gjenoppstår slettede elementer fra
+              // utdaterte klienter (stemplet ville alltid vunnet over tombstonen).
+              if (erSlettet(item)) return null;
+              // Nytt element fra klienten — stemple hvis mangler
+              return item._endret ? item : { ...item, _endret: nu };
+            }
+            const ct = c._endret || 0;
+            const it = item._endret || 0;
+            if (ct > it) { beholdt++; return c; }        // skyen er nyere for DETTE elementet
+            if (it > ct) return item;                     // klienten er nyere
+            // Uten stempler (gamle data): felt-tidsstempel avgjør; hvis klienten
+            // vinner og innholdet faktisk er endret, stemple det nå slik at
+            // fremtidig fletting har noe å sammenligne med.
+            const ulikt = JSON.stringify(c) !== JSON.stringify(item);
+            if (cloudTsFelt > inTsFelt) { if (ulikt) beholdt++; return c; }
+            if (ulikt) return { ...item, _endret: nu };
+            return item;
+          });
+
+          // Elementer som finnes i sky men ikke hos klienten: BEHOLD alltid —
+          // de er enten lagt til av andre, eller klienten er utdatert.
+          // (Bevisste slettinger fjernes av tombstone-filteret under.)
+          for (const c of cloudArr) {
+            if (!c || c.id == null || inIds.has(c.id)) continue;
+            resultat.push(c);
+            if (!erSlettet(c)) beholdt++;
           }
-        }
-        newState = { ...newState, _fieldTs: mergedFieldTs };
-        if (beholdtFelt.length > 0) {
-          console.log(`[state] Felt-merge: beholdt skyversjon av ${beholdtFelt.join(', ')} (annen bruker endret disse)`);
+
+          // Tombstone-filter: fjern alt som er slettet med vilje (og null fra over)
+          const filtrert = resultat.filter(x => x && !erSlettet(x));
+
+          // Rekkefølge: hvis skyen har nyere felt-tidsstempel, bruk skyens
+          // rekkefølge som fasit (bevarer f.eks. drag-sortering av team).
+          if (cloudTsFelt > inTsFelt) {
+            const pos = new Map(cloudArr.filter(x => x && x.id != null).map((x, i) => [x.id, i]));
+            filtrert.sort((a, b) =>
+              (pos.has(a?.id) ? pos.get(a.id) : Infinity) - (pos.has(b?.id) ? pos.get(b.id) : Infinity)
+            );
+          }
+
+          if (beholdt > 0) {
+            serverEndret = true;
+            beholdtOversikt.push(`${felt}:${beholdt}`);
+          }
+          newState = { ...newState, [felt]: filtrert };
+          mergedFieldTs[felt] = Math.max(cloudTsFelt, inTsFelt);
         }
 
-        // Bevar høyeste _updatedAt så polling i klientene oppdager endringen
+        // Lagre tombstones i sky-state (trim: 30 dager / maks 1000) og fjern
+        // klient-feltet _slettinger fra det som lagres.
+        const grense = nu - 30 * 24 * 3600 * 1000;
+        const nyeTombstones = [...tombMap.entries()]
+          .map(([id, ts]) => ({ id, ts }))
+          .filter(t => t.ts > grense)
+          .slice(-1000);
+        const { _slettinger, ...utenSlettinger } = newState;
+        newState = { ...utenSlettinger, _tombstones: nyeTombstones };
+
+        // 'fag' (strenger, ingen id): felt-nivå som før
+        if ((cloudFieldTs.fag || 0) > (incomingFieldTs.fag || 0) && currentState.fag !== undefined) {
+          newState = { ...newState, fag: currentState.fag };
+          mergedFieldTs.fag = cloudFieldTs.fag;
+        }
+
+        newState = { ...newState, _fieldTs: mergedFieldTs };
         const cloudUpd = currentState._updatedAt || 0;
-        const incomingUpd = newState._updatedAt || 0;
-        if (cloudUpd > incomingUpd) {
+        if (serverEndret) {
+          // Serveren beholdt sky-elementer klienten ikke hadde → bump _updatedAt
+          // GARANTERT forbi skyens verdi (klient-klokker kan ligge foran server),
+          // slik at klienten som nettopp lagret (og alle andre) poller inn resultatet.
+          newState = { ...newState, _updatedAt: Math.max(nu, cloudUpd + 1) };
+          console.log(`[state] Per-element-merge beholdt: ${beholdtOversikt.join(', ')}`);
+        } else if (cloudUpd > (newState._updatedAt || 0)) {
+          // Bevar høyeste _updatedAt så polling i klientene oppdager endringen
           newState = { ...newState, _updatedAt: cloudUpd };
         }
+      }
+      // Klient-feltet _slettinger skal aldri lagres (dekker også første lagring
+      // mot tom sky, der merge-blokken over ikke kjører)
+      if (newState._slettinger !== undefined) {
+        const { _slettinger, ...utenSlettingerYtre } = newState;
+        newState = utenSlettingerYtre;
       }
       // Rullerende backup: bevar siste 5 lagringer i 7 dager
       try {

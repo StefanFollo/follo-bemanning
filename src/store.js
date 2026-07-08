@@ -366,16 +366,91 @@ export function getAllFieldTs() {
   return ts;
 }
 
-// Merge local state with cloud state field by field — never lose data.
+// Arrays der elementene har id og kan flettes per element.
+// 'fag' er strenger og flettes fortsatt på felt-nivå.
+const ITEM_ARRAYS = new Set([
+  'ansatte', 'prosjekter', 'tildelinger', 'oppgaver', 'teams',
+  'rorTimer', 'rorPlaner', 'befaringer', 'reklamasjoner', 'serviceJobber', 'biler',
+]);
+
+// ── Slette-markører (tombstones) ──
+// Når noe slettes med vilje, registreres det her. Fletting (klient + server)
+// kan da skille «slettet med vilje» fra «mangler fordi klienten er utdatert».
+// Uten dette mistet vi data: en iPad som våknet med gårsdagens kopi lagret
+// over alt de andre hadde lagt inn.
+export function registrerSletting(felt, id) {
+  if (id == null) return;
+  try {
+    const raw = JSON.parse(localStorage.getItem('fbs_tombstones') || '[]');
+    raw.push({ felt, id, ts: Date.now() });
+    const grense = Date.now() - 30 * 24 * 3600 * 1000;
+    localStorage.setItem('fbs_tombstones', JSON.stringify(raw.filter(t => t.ts > grense).slice(-500)));
+  } catch { /* noop */ }
+}
+
+export function hentSlettinger() {
+  try { return JSON.parse(localStorage.getItem('fbs_tombstones') || '[]'); } catch { return []; }
+}
+
+// Per-element-fletting: nyeste versjon av hvert element (etter _endret) vinner.
+// Elementer som bare finnes i skyen beholdes ALLTID her — bevisste slettinger
+// håndteres av tombstone-filteret i mergeWithCloud/serveren.
+export function mergeArrayPerItem(localArr, cloudArr, { cloudNyereFelt }) {
+  if (!Array.isArray(localArr)) return cloudArr;
+  if (!Array.isArray(cloudArr)) return localArr;
+  const cloudById = new Map(cloudArr.filter(x => x && x.id != null).map(x => [x.id, x]));
+  const localIds = new Set(localArr.filter(x => x && x.id != null).map(x => x.id));
+  const result = localArr.map(item => {
+    if (!item || item.id == null) return item;
+    const c = cloudById.get(item.id);
+    if (!c) return item; // nytt lokalt (ulagret) — behold
+    const ct = c._endret || 0;
+    const lt = item._endret || 0;
+    if (ct > lt) return c;
+    if (lt > ct) return item;
+    // Uten stempler: fall tilbake på felt-tidsstempel
+    return cloudNyereFelt ? c : item;
+  });
+  for (const c of cloudArr) {
+    if (!c || c.id == null || localIds.has(c.id)) continue;
+    result.push(c); // finnes i sky, ikke lokalt → behold (tombstones filtrerer etterpå)
+  }
+  // Rekkefølge: hvis skyen er nyere for feltet, bruk skyens rekkefølge som
+  // fasit (bevarer f.eks. drag-sortering av team gjort av en annen bruker).
+  if (cloudNyereFelt) {
+    const pos = new Map(cloudArr.filter(x => x && x.id != null).map((x, i) => [x.id, i]));
+    result.sort((a, b) =>
+      (pos.has(a?.id) ? pos.get(a.id) : Infinity) - (pos.has(b?.id) ? pos.get(b.id) : Infinity)
+    );
+  }
+  return result;
+}
+
+// Merge local state with cloud state — per element der det er mulig, aldri mist data.
 // Returns merged state with _effectiveFieldTs so LOAD_STATE can persist correct timestamps.
 export function mergeWithCloud(localState, cloudState) {
   const cloudFieldTs = cloudState._fieldTs || {};
   const merged = { ...localState };
   const effectiveFieldTs = {};
+
+  // Kombiner lokale + sky-tombstones: id → nyeste slette-tidspunkt
+  const tomb = new Map();
+  for (const t of [...hentSlettinger(), ...(Array.isArray(cloudState._tombstones) ? cloudState._tombstones : [])]) {
+    if (!t || t.id == null) continue;
+    const eks = tomb.get(t.id);
+    if (!eks || t.ts > eks) tomb.set(t.id, t.ts);
+  }
+  const ikkeSlettet = x => !(x && x.id != null && (tomb.get(x.id) || 0) > (x._endret || 0));
+
   for (const field of Object.keys(FIELD_MAP)) {
     const localTs = getFieldTs(field);
     const cloudTs = cloudFieldTs[field] || cloudState._updatedAt || 0;
-    if (cloudTs > localTs && cloudState[field] !== undefined) {
+    if (ITEM_ARRAYS.has(field) && Array.isArray(localState[field]) && Array.isArray(cloudState[field])) {
+      merged[field] = mergeArrayPerItem(localState[field], cloudState[field], {
+        cloudNyereFelt: cloudTs > localTs,
+      }).filter(ikkeSlettet);
+      effectiveFieldTs[field] = Math.max(cloudTs, localTs);
+    } else if (cloudTs > localTs && cloudState[field] !== undefined) {
       merged[field] = cloudState[field];
       effectiveFieldTs[field] = cloudTs;
     } else {
@@ -603,6 +678,9 @@ export function overlaps(aStart, aEnd, bStart, bEnd) {
 // Cloud sync via Vercel KV
 function getToken() { return localStorage.getItem('fbs_token') || ''; }
 
+// Returnerer: state-objekt ({} hvis skyen er tom men nåbar), null KUN ved feil
+// (nett/HTTP). Skillet er viktig: tom sky skal IKKE blokkere cloudReady —
+// ellers kan første lagring som skulle så skyen aldri skje.
 export async function loadFromCloud() {
   const token = getToken();
   if (!token) return null;
@@ -611,14 +689,15 @@ export async function loadFromCloud() {
       headers: { 'Authorization': `Bearer ${token}` },
     });
     if (!res.ok) return null;
-    const data = await res.json();
-    return Object.keys(data).length > 0 ? data : null;
+    return await res.json();
   } catch {
     return null;
   }
 }
 
 // Returns 'conflict' if server blocked save (caller should reload from cloud)
+// _slettinger: klientens tombstones — lar serveren skille «slettet med vilje»
+// fra «mangler fordi klienten er utdatert».
 export async function saveToCloud(state) {
   const token = getToken();
   if (!token) return 'ok';
@@ -629,7 +708,7 @@ export async function saveToCloud(state) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
-      body: JSON.stringify({ ...state, _updatedAt: getLocalUpdatedAt(), _fieldTs: getAllFieldTs() }),
+      body: JSON.stringify({ ...state, _updatedAt: getLocalUpdatedAt(), _fieldTs: getAllFieldTs(), _slettinger: hentSlettinger() }),
     });
     if (res.status === 409) {
       const data = await res.json().catch(() => ({}));

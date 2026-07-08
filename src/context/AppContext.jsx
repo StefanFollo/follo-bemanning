@@ -3,12 +3,66 @@ import {
   loadState, FIELD_MAP,
   saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag, saveTeams, saveRorTimer, saveRorPlaner, saveBefaringer, saveReklamasjoner, saveServiceJobber, saveBiler,
   loadFromCloud, saveToCloud, getLocalUpdatedAt, getFieldTs, mergeWithCloud,
+  registrerSletting,
   uid,
 } from '../store';
 
 const AppContext = createContext(null);
 
+// Handlinger der payload er selve elementet — stemples med _endret slik at
+// per-element-fletting (klient + server) vet hvilken versjon som er nyest.
+const STEMPLE_ENDRET = new Set([
+  'ADD_ANSATT', 'UPDATE_ANSATT',
+  'ADD_PROSJEKT', 'UPDATE_PROSJEKT',
+  'ADD_TILDELING', 'UPDATE_TILDELING',
+  'ADD_OPPGAVE', 'UPDATE_OPPGAVE',
+  'ADD_ROR_TIMER', 'UPDATE_ROR_TIMER',
+  'ADD_ROR_PLAN', 'UPDATE_ROR_PLAN',
+  'ADD_BEFARING', 'UPDATE_BEFARING',
+  'ADD_REKLAMASJON', 'UPDATE_REKLAMASJON',
+  'ADD_SERVICE_JOBB', 'UPDATE_SERVICE_JOBB',
+  'ADD_BIL', 'UPDATE_BIL',
+  'ADD_TEAM', 'UPDATE_TEAM',
+]);
+
+// Slette-handlinger → felt, slik at tombstones registreres sentralt.
+const SLETT_FELT = {
+  DELETE_ANSATT: 'ansatte', DELETE_PROSJEKT: 'prosjekter', DELETE_TILDELING: 'tildelinger',
+  DELETE_OPPGAVE: 'oppgaver', DELETE_ROR_TIMER: 'rorTimer', DELETE_ROR_PLAN: 'rorPlaner',
+  DELETE_BEFARING: 'befaringer', DELETE_REKLAMASJON: 'reklamasjoner',
+  DELETE_SERVICE_JOBB: 'serviceJobber', DELETE_BIL: 'biler', DELETE_TEAM: 'teams',
+};
+
+// Skitten-flagg: true når BRUKEREN har endret noe som ikke er lagret til sky ennå.
+// LOAD_STATE (data hentet FRA sky) setter det ikke — ellers ville hver poll
+// utløst en meningsløs re-lagring som roterer backupene i stykker.
+let harLokaleEndringer = false;
+
 function reducer(state, action) {
+  if (action.type !== 'LOAD_STATE') harLokaleEndringer = true;
+  if (STEMPLE_ENDRET.has(action.type) && action.payload && typeof action.payload === 'object') {
+    action = { ...action, payload: { ...action.payload, _endret: Date.now() } };
+  }
+  // Registrer bevisste slettinger som tombstones — slik at sky-fletting vet at
+  // elementet er slettet med vilje (og ikke bare mangler hos en utdatert klient).
+  if (SLETT_FELT[action.type] && action.id != null) {
+    registrerSletting(SLETT_FELT[action.type], action.id);
+    // Kaskade-slettinger:
+    if (action.type === 'DELETE_PROSJEKT') {
+      for (const t of state.tildelinger || []) if (t.prosjektId === action.id) registrerSletting('tildelinger', t.id);
+      for (const o of state.oppgaver || []) if (o.prosjektId === action.id) registrerSletting('oppgaver', o.id);
+    }
+    if (action.type === 'DELETE_ANSATT') {
+      for (const t of state.tildelinger || []) if (t.ansattId === action.id) registrerSletting('tildelinger', t.id);
+    }
+  }
+  if (action.type === 'SPLIT_TILDELING') registrerSletting('tildelinger', action.id);
+  if (action.type === 'MERGE_TILDELINGER') { registrerSletting('tildelinger', action.id1); registrerSletting('tildelinger', action.id2); }
+  if (action.type === 'SPLIT_ROR_PLAN') registrerSletting('rorPlaner', action.id);
+  if (action.type === 'SET_TEAMS') {
+    const nyeIds = new Set((action.teams || []).map(t => t.id));
+    for (const t of state.teams || []) if (!nyeIds.has(t.id)) registrerSletting('teams', t.id);
+  }
   switch (action.type) {
     // --- Last inn fra sky ---
     // Use _effectiveFieldTs (from mergeWithCloud) to preserve original timestamps.
@@ -296,23 +350,41 @@ export function AppProvider({ children }) {
 
   useEffect(() => { stateRef.current = state; }, [state]);
 
-  // Last inn fra sky ved oppstart – flet inn felt-for-felt basert på tidsstempel
+  // Last inn fra sky ved oppstart – flet inn per element basert på tidsstempel.
+  // VIKTIG: cloudReady settes KUN etter vellykket lasting — ellers kan en enhet
+  // med gamle data lagre over det andre har lagt inn. Feiler lastingen (nett/
+  // token), prøver vi igjen hvert 3. sekund til vi får kontakt.
   useEffect(() => {
-    loadFromCloud().then(cloudState => {
+    let stoppet = false;
+    async function initLast() {
+      const cloudState = await loadFromCloud();
+      if (stoppet) return;
       if (cloudState) {
         lastCloudTsRef.current = cloudState._updatedAt || 0;
-        const merged = mergeWithCloud(state, cloudState);
+        const merged = mergeWithCloud(stateRef.current, cloudState);
         dispatch({ type: 'LOAD_STATE', payload: merged });
+        setCloudReady(true);
+      } else if (!localStorage.getItem('fbs_token')) {
+        // Ikke innlogget — ingen sky å vente på
+        setCloudReady(true);
+      } else {
+        setTimeout(initLast, 3000);
       }
-      setCloudReady(true);
-    });
+    }
+    initLast();
+    return () => { stoppet = true; };
   }, []);
 
-  // Auto-lagre til sky 1 sekund etter siste endring.
+  // Auto-lagre til sky 1 sekund etter siste endring — men KUN når brukeren
+  // faktisk har endret noe (ikke når vi bare har hentet andres endringer).
   // Ved 409-konflikt: flet inn kun feltene sky har nyere data for.
   useEffect(() => {
     if (!cloudReady) return;
+    if (!harLokaleEndringer) return;
     const timer = setTimeout(async () => {
+      // Nullstill FØR lagring: endringer som kommer inn mens vi lagrer setter
+      // flagget på nytt og får sin egen lagring.
+      harLokaleEndringer = false;
       const result = await saveToCloud(state);
       if (result === 'ok') {
         // Track what we just sent so polling doesn't re-trigger on our own save
@@ -320,10 +392,15 @@ export function AppProvider({ children }) {
       } else if (result === 'conflict') {
         const cloudState = await loadFromCloud();
         if (cloudState) {
+          // stateRef (ikke state fra closure): brukeren kan ha endret ting
+          // mens de to nettverkskallene pågikk — de må ikke gå tapt.
+          const merged = mergeWithCloud(stateRef.current, cloudState);
           lastCloudTsRef.current = cloudState._updatedAt || 0;
-          const merged = mergeWithCloud(state, cloudState);
           dispatch({ type: 'LOAD_STATE', payload: merged });
         }
+        harLokaleEndringer = true; // lokale endringer er ennå ikke lagret
+      } else {
+        harLokaleEndringer = true; // nettfeil — prøv igjen ved neste anledning
       }
     }, 1000);
     return () => clearTimeout(timer);
@@ -333,17 +410,29 @@ export function AppProvider({ children }) {
   // Hvis en annen bruker har lagret, henter vi ny data og fletter inn.
   useEffect(() => {
     if (!cloudReady) return;
-    const interval = setInterval(async () => {
+    async function friskOpp() {
       const cloudState = await loadFromCloud();
       if (!cloudState) return;
       const cloudTs = cloudState._updatedAt || 0;
       if (cloudTs > lastCloudTsRef.current) {
-        lastCloudTsRef.current = cloudTs;
         const merged = mergeWithCloud(stateRef.current, cloudState);
+        lastCloudTsRef.current = cloudTs;
         dispatch({ type: 'LOAD_STATE', payload: merged });
       }
-    }, 5000);
-    return () => clearInterval(interval);
+    }
+    const interval = setInterval(friskOpp, 5000);
+    // Enheter som våkner fra dvale (iPad!) eller får nett igjen: synk STRAKS,
+    // før brukeren rekker å redigere på gamle data.
+    const onVis = () => { if (document.visibilityState === 'visible') friskOpp(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('focus', friskOpp);
+    window.addEventListener('online', friskOpp);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('focus', friskOpp);
+      window.removeEventListener('online', friskOpp);
+    };
   }, [cloudReady]);
 
   return (
