@@ -28,6 +28,8 @@ export default function AdminUsers() {
   const [backups, setBackups] = useState([]);
   const [backupLoading, setBackupLoading] = useState(false);
   const [backupMsg, setBackupMsg] = useState('');
+  const [diagnose, setDiagnose] = useState(null);
+  const [diagnoseLaster, setDiagnoseLaster] = useState(false);
   const [visAnsattInvite, setVisAnsattInvite] = useState(false);
   const [ansattRoller, setAnsattRoller] = useState({});   // { ansattId: rolle }
   const [inviterer, setInviterer] = useState(null);        // ansattId som sendes nå
@@ -57,6 +59,20 @@ export default function AdminUsers() {
       }
     } catch { /* silent */ }
     setBackupLoading(false);
+  }
+
+  async function kjorDiagnose() {
+    setDiagnoseLaster(true);
+    setDiagnose(null);
+    try {
+      const res = await fetch('/api/admin/diagnose-lagring', { headers: authHeader() });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setDiagnose(data);
+    } catch (e) {
+      setDiagnose({ error: e.message });
+    }
+    setDiagnoseLaster(false);
   }
 
   async function handleRestore(slot) {
@@ -483,6 +499,90 @@ export default function AdminUsers() {
         <div style={{ marginTop: 12, fontSize: 12, color: '#9ca3af' }}>
           Systemet lagrer automatisk de 5 siste versjonene av alle data (slettes etter 7 dager). Kun administratorer kan gjenopprette.
         </div>
+      </div>
+
+      {/* Diagnose lagring: sammenlign dagens data mot nattens backup */}
+      <div style={{ marginTop: 32 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+          <h3 style={{ margin: 0, fontSize: 17, color: '#1e3a5f' }}>🩺 Diagnose lagring</h3>
+          <button
+            className="btn-secondary"
+            style={{ fontSize: 13 }}
+            onClick={kjorDiagnose}
+            disabled={diagnoseLaster}
+          >
+            {diagnoseLaster ? 'Analyserer…' : 'Sammenlign mot nattens backup'}
+          </button>
+        </div>
+        <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 12 }}>
+          Kun lesing — viser hva som eventuelt mangler i dag sammenlignet med nattens automatiske backup. Ingenting endres eller slettes.
+        </div>
+
+        {diagnose?.error && (
+          <div style={{ background: '#fee2e2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 16px', fontSize: 14, color: '#991b1b' }}>
+            Feil: {diagnose.error}
+          </div>
+        )}
+
+        {diagnose?.rapport && (() => {
+          const r = diagnose.rapport;
+          const mangler = r.manglerSidenNatt;
+          const harMangler = mangler && typeof mangler === 'object';
+          const innholdstap = r.prosjektInnholdstap;
+          const harInnholdstap = Array.isArray(innholdstap) && innholdstap.length > 0;
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 8, padding: '12px 16px', fontSize: 13 }}>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>Nå (sist lagret {r.naa._updatedAtLesbar || '–'})</div>
+                <div style={{ color: '#6b7280' }}>
+                  {Object.entries(r.naa.antall || {}).map(([k, v]) => `${v} ${k}`).join(' · ')}
+                </div>
+                {r.nattbackup?.tidspunkt && (
+                  <div style={{ color: '#6b7280', marginTop: 6 }}>
+                    Nattbackup {formatTs(r.nattbackup.tidspunkt)}: {Object.entries(r.nattbackup.antall || r.nattbackup.statistikk || {}).map(([k, v]) => `${v} ${k}`).join(' · ')}
+                  </div>
+                )}
+                {r.nattbackup?.feil && <div style={{ color: '#dc2626', marginTop: 6 }}>⚠️ {r.nattbackup.feil}</div>}
+              </div>
+
+              {!harMangler && !harInnholdstap && (
+                <div style={{ background: '#dcfce7', border: '1px solid #86efac', borderRadius: 8, padding: '10px 16px', fontSize: 14, color: '#166534' }}>
+                  ✅ Ingen data mangler sammenlignet med nattens backup
+                </div>
+              )}
+
+              {harMangler && (
+                <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '12px 16px', fontSize: 13 }}>
+                  <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 8 }}>⚠️ Elementer som fantes i natt men mangler nå:</div>
+                  {Object.entries(mangler).map(([k, items]) => (
+                    <div key={k} style={{ marginBottom: 8 }}>
+                      <div style={{ fontWeight: 600 }}>{k} ({items.length}):</div>
+                      {items.map(it => (
+                        <div key={it.id} style={{ color: '#7f1d1d', paddingLeft: 12, fontSize: 12 }}>
+                          • {it.navn || it.id}{it.adresse ? ` — ${it.adresse}` : ''}{it.status ? ` (${it.status})` : ''}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                  <div style={{ color: '#6b7280', fontSize: 12, marginTop: 4 }}>Disse kan gjenopprettes fra nattens backup — kontakt utvikler/Claude før noe gjøres.</div>
+                </div>
+              )}
+
+              {harInnholdstap && (
+                <div style={{ background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 8, padding: '12px 16px', fontSize: 13 }}>
+                  <div style={{ fontWeight: 700, color: '#9a3412', marginBottom: 8 }}>⚠️ Prosjekter som har mistet framdrift/sjekklister siden natten:</div>
+                  {innholdstap.map(p => (
+                    <div key={p.id} style={{ color: '#7c2d12', paddingLeft: 12, fontSize: 12 }}>
+                      • {p.navn}: framdrift-faser {p.framdriftFaser}, sjekklister {p.sjekklister}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div style={{ fontSize: 12, color: '#9ca3af' }}>{r.bevart}</div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
