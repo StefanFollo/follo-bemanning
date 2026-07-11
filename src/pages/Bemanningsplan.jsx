@@ -1,4 +1,4 @@
-import React, { useState, useRef, useLayoutEffect, useEffect } from 'react';
+import React, { useState, useRef, useLayoutEffect, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { weekStart, addDays, isoToDate, dateToIso, formatDate, overlaps } from '../store';
 import { getHolidayMap } from '../holidays';
@@ -55,19 +55,24 @@ function Modal({ title, onClose, children }) {
   );
 }
 
+// Er ansatt sykmeldt i en gitt periode? Sykmeldt uten datoer = sykmeldt nå.
+function erSykmeldtIPeriode(a, start, end) {
+  if (!a.sykmeldt) return false;
+  if (!a.sykmeldtFra && !a.sykmeldtTil) return true; // på ubestemt tid
+  const fra = a.sykmeldtFra || '0000-01-01';
+  const til = a.sykmeldtTil || '9999-12-31';
+  return overlaps(fra, til, start, end);
+}
+
+function daysDiff(a, b) {
+  return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
+}
+
 export default function Bemanningsplan({ readOnly = false }) {
   const { state, dispatch } = useApp();
   // Ansatte som er med i bemanningsplan-kapasitetsberegningen
   const planAnsatte = state.ansatte.filter(a => !a.utenforBemanningsplan && a.fag !== 'Rørlegger');
 
-  // Er ansatt sykmeldt i en gitt periode? Sykmeldt uten datoer = sykmeldt nå.
-  function erSykmeldtIPeriode(a, start, end) {
-    if (!a.sykmeldt) return false;
-    if (!a.sykmeldtFra && !a.sykmeldtTil) return true; // på ubestemt tid
-    const fra = a.sykmeldtFra || '0000-01-01';
-    const til = a.sykmeldtTil || '9999-12-31';
-    return overlaps(fra, til, start, end);
-  }
   const [tab, setTab] = useState('uke');
   const [fullscreen, setFullscreen] = useState(false);
   const [storskjerm, setStorskjerm] = useState(false);
@@ -157,6 +162,11 @@ export default function Bemanningsplan({ readOnly = false }) {
   // Kun hverdager (Man–Fre) over 52 uker = ~260 kolonner
   const weekDays = Array.from({ length: 52 * 7 }, (_, i) => addDays(currentWeek, i))
     .filter(d => { const dow = new Date(d + 'T00:00:00').getDay(); return dow >= 1 && dow <= 5; });
+
+  // Helligdagskart – memoisert slik at det ikke bygges på nytt hver render
+  const thisYear = new Date().getFullYear();
+  const holidaysUke = useMemo(() => getHolidayMap(thisYear - 1, thisYear + 2), [thisYear]);
+  const holidaysOversikt = useMemo(() => getHolidayMap(thisYear - 1, thisYear + 3), [thisYear]);
 
   function prevWeek() { setCurrentWeek(w => addDays(w, -7)); }
   function nextWeek() { setCurrentWeek(w => addDays(w, 7)); }
@@ -261,10 +271,6 @@ export default function Bemanningsplan({ readOnly = false }) {
     });
   }
 
-  function daysDiff(a, b) {
-    return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
-  }
-
   // Lagre og gjenopprette scroll-posisjon rundt dispatch
   // Scroll-gjenopprettelsen skjer i useLayoutEffect over, etter at DOM er oppdatert
   function dispatchKeepScroll(action) {
@@ -349,1771 +355,6 @@ export default function Bemanningsplan({ readOnly = false }) {
     }
   }
 
-  // --- UKE-VISNING ---
-  function UkeVisning() {
-    const today = dateToIso(new Date());
-    const thisYear = new Date().getFullYear();
-    const HOLIDAYS = getHolidayMap(thisYear - 1, thisYear + 2);
-    const isHoliday = (iso) => !!HOLIDAYS[iso];
-    const holidayName = (iso) => HOLIDAYS[iso] || '';
-    const prosjektColor = (pid) => state.prosjekter.find(p => p.id === pid)?.farge || '#6b8fc4';
-
-    // ---- DAG-MODUS ----
-    const weekEnd = addDays(currentWeek, 52 * 7 - 1);
-
-    const dagProsjektIds = [...new Set(
-      state.tildelinger
-        .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd))
-        .map(t => t.prosjektId)
-    )];
-    const dagProsjekter = dagProsjektIds.map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
-    const dagTildeltIds = new Set(
-      state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd)).map(t => t.ansattId)
-    );
-    const dagLedige = planAnsatte.filter(a => !dagTildeltIds.has(a.id) && !erSykmeldtIPeriode(a, currentWeek, weekEnd));
-
-    // Shared Gantt row container — renders continuous bars with drag handles
-    // prosjektId: vis kun dette prosjektets bars normalt; andre prosjekter vises som opptatt-bar
-    function GanttRowContainer({ ansatt, days, unit, prosjektId }) {
-      const [dragOverIdx, setDragOverIdx] = useState(null);
-      const n = days.length;
-      const viewEnd = unit === 'month' ? monthEnd(days[n - 1]) : days[n - 1];
-
-      const myTil = state.tildelinger.filter(t =>
-        t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, days[0], viewEnd)
-      );
-
-      // Splitt i primær (dette prosjektet + ferie) og opptatt (andre prosjekter)
-      const primaryTil = prosjektId
-        ? myTil.filter(t => t.prosjektId === prosjektId || t.prosjektId === FERIE_ID)
-        : myTil;
-      const busyTil = prosjektId
-        ? myTil.filter(t => t.prosjektId !== prosjektId && t.prosjektId !== FERIE_ID)
-        : [];
-
-      function getIdxFromEvent(e) {
-        const rect = e.currentTarget.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        return Math.min(n - 1, Math.max(0, Math.floor(x / (rect.width / n))));
-      }
-
-      function getBarPos(t) {
-        let si = -1, ei = -1;
-        for (let i = 0; i < n; i++) {
-          const hit = unit === 'month'
-            ? overlaps(t.startDato, t.sluttDato, days[i], monthEnd(days[i]))
-            : (days[i] >= t.startDato && days[i] <= t.sluttDato);
-          if (hit) { if (si === -1) si = i; ei = i; }
-        }
-        if (si === -1) return null;
-        return {
-          left: `${(si / n) * 100}%`,
-          width: `${((ei - si + 1) / n) * 100}%`,
-          isFirst: t.startDato >= days[0],
-          isLast: t.sluttDato <= viewEnd,
-        };
-      }
-
-      return (
-        <div
-          className="gantt-row"
-          style={{ gridColumn: '2 / -1' }}
-          onDragOver={e => { e.preventDefault(); setDragOverIdx(getIdxFromEvent(e)); }}
-          onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverIdx(null); }}
-          onDrop={e => {
-            e.preventDefault();
-            const idx = getIdxFromEvent(e);
-            setDragOverIdx(null);
-            handleDrop(days[idx], unit === 'month' ? 'month' : 'day');
-          }}
-          onClick={e => {
-            if (!readOnly && (e.target === e.currentTarget || e.target.classList.contains('gantt-bg-cell'))) {
-              openAddTildeling(ansatt.id, days[getIdxFromEvent(e)]);
-            }
-          }}
-        >
-          {days.map((d, i) => {
-            const isMonday = unit === 'day_50' && i % 5 === 0;
-            const isTod = unit === 'month' ? d.slice(0, 7) === today.slice(0, 7) : d === today;
-            const isHol = unit !== 'month' && isHoliday(d);
-            return (
-              <div key={d}
-                className={`gantt-bg-cell${isTod ? ' today-col' : ''}${isMonday ? ' week-start-col' : ''}${isHol ? ' holiday-col' : ''}${dragOverIdx === i ? ' drag-over' : ''}`}
-                style={{ left: `${(i / n) * 100}%`, width: `${100 / n}%` }}
-                title={isHol ? holidayName(d) : undefined}
-              />
-            );
-          })}
-          {/* Opptatt-bars: andre prosjekter — gjennomsiktig, ikke klikkbar */}
-          {busyTil.map(t => {
-            const pos = getBarPos(t);
-            if (!pos) return null;
-            const pNavn = state.prosjekter.find(pr => pr.id === t.prosjektId)?.navn || '–';
-            return (
-              <div key={t.id + '-busy'}
-                className="gantt-bar gantt-bar-busy"
-                style={{ left: pos.left, width: pos.width, background: prosjektColor(t.prosjektId) }}
-                title={`Opptatt: ${pNavn} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
-              >
-                <span className="gantt-busy-label">{pNavn}</span>
-              </div>
-            );
-          })}
-          {/* Primær-bars: dette prosjektets tildelinger + ferie */}
-          {primaryTil.map(t => {
-            const pos = getBarPos(t);
-            if (!pos) return null;
-            const isFerie = t.prosjektId === FERIE_ID;
-            const p = isFerie ? null : state.prosjekter.find(pr => pr.id === t.prosjektId);
-            const barLabel = isFerie ? 'Ferie / Fri' : (p?.navn || '–');
-            return (
-              <div key={t.id}
-                className={`gantt-bar${isFerie ? ' gantt-bar-ferie' : ''}`}
-                style={{ left: pos.left, width: pos.width, ...(isFerie ? {} : { background: prosjektColor(t.prosjektId) }) }}
-                onClick={e => {
-                  e.stopPropagation();
-                  const mid = addDays(t.startDato, Math.max(1, Math.floor(daysDiff(t.startDato, t.sluttDato) / 2)));
-                  openBarMenu(t, mid, e.clientX, e.clientY);
-                }}
-                title={`${barLabel} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)} — klikk for valg`}
-              >
-                {pos.isFirst
-                  ? <div className="gantt-handle gantt-handle-l" draggable onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'start' }; }}>◂</div>
-                  : <div className="gantt-handle-spacer" />}
-                <span className="gantt-label">{barLabel}</span>
-                <div className="gantt-actions">
-                  <button onClick={e => { e.stopPropagation(); deleteTildeling(t.id); }} title="Slett">✕</button>
-                </div>
-                {pos.isLast
-                  ? <div className="gantt-handle gantt-handle-r" draggable onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'end' }; }}>▸</div>
-                  : <div className="gantt-handle-spacer" />}
-              </div>
-            );
-          })}
-        </div>
-      );
-    }
-
-    function DagAnsattRad({ ansatt, prosjektId }) {
-      return (
-        <React.Fragment>
-          <div className="uke-row-label">
-            <div className="mini-avatar" style={{ background: fagColor(ansatt.fag) }}>
-              {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-            </div>
-            <div>
-              <div className="row-navn">{ansatt.navn}</div>
-              <div className="row-fag" style={{ color: fagColor(ansatt.fag) }}>
-                {ansatt.innleie && <span style={{ color: '#f97316', fontWeight: 600, marginRight: 3 }}>🔧</span>}
-                {ansatt.fag}
-              </div>
-            </div>
-          </div>
-          <GanttRowContainer ansatt={ansatt} days={weekDays} unit="day" prosjektId={prosjektId} />
-        </React.Fragment>
-      );
-    }
-
-    function DagGridHeader() {
-      return (
-        <>
-          <div className="uke-header-cell"></div>
-          {weekDays.map((dag) => {
-            const hol = HOLIDAYS[dag];
-            const dow = new Date(dag + 'T00:00:00').getDay(); // 1=Man … 5=Fre
-            const isMonday = dow === 1;
-            const weekNum = getWeekNumber(dag);
-            const isCurrentWeek = weekStart(dag) === weekStart(today);
-            return (
-              <div key={dag} className={`uke-header-cell ${dag === today ? 'today' : ''} ${isMonday ? 'week-start-col' : ''} ${hol ? 'holiday-header' : ''}`}
-                style={{ fontSize: 11, padding: '4px 2px', textAlign: 'center' }}
-                title={hol || undefined}>
-                {isMonday && (
-                  <div style={{ fontSize: 10, fontWeight: 700, color: isCurrentWeek ? '#2563eb' : '#94a3b8', lineHeight: 1.2 }}>
-                    U{weekNum}
-                  </div>
-                )}
-                <div style={{ fontWeight: isMonday ? 700 : 400 }}>{DAG_NAVN[dow - 1]}</div>
-                <div className="dag-dato" style={{ fontSize: 10 }}>{dag.slice(8)}.{dag.slice(5, 7)}</div>
-                {hol && <div className="holiday-label">{hol.split(' ')[0]}</div>}
-              </div>
-            );
-          })}
-        </>
-      );
-    }
-
-    function ProsjektGruppe({ prosjekt, ansatte, cols, GridHeader, AnsattRad }) {
-      const color = prosjektColor(prosjekt.id);
-      return (
-        <div className="uke-prosjekt-gruppe">
-          <div className="uke-prosjekt-header" style={{ borderLeft: `4px solid ${color}` }}>
-            <span className="uke-prosjekt-farge" style={{ background: color }} />
-            <span className="uke-prosjekt-navn">{prosjekt.navn}</span>
-            <span className="uke-prosjekt-antall">{ansatte.length} ansatt{ansatte.length !== 1 ? 'e' : ''}</span>
-          </div>
-          <div className="uke-grid-wrap">
-            <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(${cols}, 1fr)` }}>
-              <GridHeader />
-              {ansatte.map(a => <AnsattRad key={a.id} ansatt={a} />)}
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // ---- UKE-MODUS: Man–Fre × 52 uker (260 kolonner) ----
-    const TEN_WEEKS = Array.from({ length: 52 }, (_, i) => addDays(currentWeek, i * 7));
-
-    // Alle arbeidsdager (Man–Fre) for 52 uker = 260 dager
-    const WORK_DAYS_UKE = [];
-    for (let w = 0; w < 52; w++) {
-      for (let d = 0; d < 5; d++) {
-        WORK_DAYS_UKE.push(addDays(currentWeek, w * 7 + d));
-      }
-    }
-
-    const periodeStart = currentWeek;
-    const periodeEnd = addDays(currentWeek, 52 * 7 - 1);
-
-    const ukeProsjektIds = [...new Set(
-      state.tildelinger
-        .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd))
-        .map(t => t.prosjektId)
-    )];
-    const ukeProsjekter = ukeProsjektIds.map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
-    const ukeTildeltIds = new Set(
-      state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd)).map(t => t.ansattId)
-    );
-    const ukeLedige = planAnsatte.filter(a => !ukeTildeltIds.has(a.id) && !erSykmeldtIPeriode(a, periodeStart, periodeEnd));
-
-    // Needle helpers
-    function getNeedleLeft(day) {
-      const idx = WORK_DAYS_UKE.indexOf(day);
-      if (idx < 0) return null;
-      const pct = (idx / WORK_DAYS_UKE.length) * 100;
-      const pxOffset = (idx / WORK_DAYS_UKE.length) * 180;
-      return `calc(${(150 - pxOffset).toFixed(1)}px + ${pct.toFixed(2)}%)`;
-    }
-    function handleNeedlePointerDown(e) {
-      e.preventDefault();
-      draggingNeedle.current = true;
-      e.currentTarget.setPointerCapture(e.pointerId);
-    }
-    function handleNeedlePointerMove(e) {
-      if (!draggingNeedle.current) return;
-      const wrap = gridWrapRef.current;
-      if (!wrap) return;
-      const rect = wrap.getBoundingClientRect();
-      const x = e.clientX - rect.left + wrap.scrollLeft - 150;
-      const colWidth = (wrap.scrollWidth - 150) / WORK_DAYS_UKE.length;
-      const idx = Math.max(0, Math.min(WORK_DAYS_UKE.length - 1, Math.floor(x / colWidth)));
-      setNeedleDay(WORK_DAYS_UKE[idx]);
-    }
-    function handleNeedlePointerUp() { draggingNeedle.current = false; }
-
-    function UkeAnsattRad({ ansatt, prosjektId }) {
-      return (
-        <React.Fragment>
-          <div className="uke-row-label" style={ansatt.sykmeldt ? { opacity: 0.45, filter: 'grayscale(1)' } : {}}>
-            <div className="mini-avatar" style={{ background: ansatt.sykmeldt ? '#94a3b8' : fagColor(ansatt.fag) }}>
-              {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-            </div>
-            <div>
-              <div className="row-navn">{ansatt.navn}</div>
-              <div className="row-fag" style={{ color: ansatt.sykmeldt ? '#94a3b8' : fagColor(ansatt.fag) }}>
-                {ansatt.sykmeldt ? '🤒 Sykmeldt' : ansatt.innleie ? <><span style={{ color: '#f97316', fontWeight: 600, marginRight: 3 }}>🔧</span>{ansatt.fag}</> : ansatt.fag}
-              </div>
-            </div>
-          </div>
-          <GanttRowContainer ansatt={ansatt} days={WORK_DAYS_UKE} unit="day_50" prosjektId={prosjektId} />
-        </React.Fragment>
-      );
-    }
-
-
-    function UkeGridHeader() {
-      return (
-        <>
-          <div className="uke-header-cell"></div>
-          {WORK_DAYS_UKE.map((dag, i) => {
-            const isMonday = i % 5 === 0;
-            const weekIdx = Math.floor(i / 5);
-            const isToday = dag === today;
-            const isCurrentWeek = weekStart(dag) === weekStart(today);
-            const hol = HOLIDAYS[dag];
-            return (
-              <div key={dag}
-                className={`uke-header-cell ${isToday ? 'today' : ''} ${isMonday ? 'week-start-col' : ''} ${hol ? 'holiday-header' : ''}`}
-                style={{ fontSize: 11, padding: '4px 2px', textAlign: 'center' }}
-                title={hol || undefined}>
-                {isMonday && (
-                  <div style={{ fontSize: 10, fontWeight: 700, color: isCurrentWeek ? '#2563eb' : '#94a3b8', lineHeight: 1.2 }}>
-                    U{getWeekNumber(TEN_WEEKS[weekIdx])}
-                  </div>
-                )}
-                <div style={{ fontWeight: isMonday ? 700 : 400 }}>{DAG_NAVN[i % 5]}</div>
-                <div className="dag-dato" style={{ fontSize: 10 }}>{dag.slice(8)}.{dag.slice(5, 7)}</div>
-                {hol && <div className="holiday-label">{hol.split(' ')[0]}</div>}
-              </div>
-            );
-          })}
-        </>
-      );
-    }
-
-    const SIX_MONTHS = Array.from({ length: 18 }, (_, i) => addMonths(currentMonth, i));
-    const maanedPeriodeEnd = monthEnd(SIX_MONTHS[17]);
-
-    const maanedProsjektIds = [...new Set(
-      state.tildelinger
-        .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentMonth, maanedPeriodeEnd))
-        .map(t => t.prosjektId)
-    )];
-    const maanedProsjekter = maanedProsjektIds.map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
-    const maanedTildeltIds = new Set(
-      state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentMonth, maanedPeriodeEnd)).map(t => t.ansattId)
-    );
-    const maanedLedige = planAnsatte.filter(a => !maanedTildeltIds.has(a.id) && !erSykmeldtIPeriode(a, currentMonth, maanedPeriodeEnd));
-
-    function MaanedAnsattRad({ ansatt, prosjektId }) {
-      return (
-        <React.Fragment>
-          <div className="uke-row-label" style={ansatt.sykmeldt ? { opacity: 0.45, filter: 'grayscale(1)' } : {}}>
-            <div className="mini-avatar" style={{ background: ansatt.sykmeldt ? '#94a3b8' : fagColor(ansatt.fag) }}>
-              {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-            </div>
-            <div>
-              <div className="row-navn">{ansatt.navn}</div>
-              <div className="row-fag" style={{ color: ansatt.sykmeldt ? '#94a3b8' : fagColor(ansatt.fag) }}>
-                {ansatt.sykmeldt ? '🤒 Sykmeldt' : ansatt.innleie ? <><span style={{ color: '#f97316', fontWeight: 600, marginRight: 3 }}>🔧</span>{ansatt.fag}</> : ansatt.fag}
-              </div>
-            </div>
-          </div>
-          <GanttRowContainer ansatt={ansatt} days={SIX_MONTHS} unit="month" prosjektId={prosjektId} />
-        </React.Fragment>
-      );
-    }
-
-
-    function MaanedGridHeader() {
-      return (
-        <>
-          <div className="uke-header-cell"></div>
-          {SIX_MONTHS.map(m => {
-            const isCurrentMonth = m.slice(0, 7) === today.slice(0, 7);
-            return (
-              <div key={m} className={`uke-header-cell ${isCurrentMonth ? 'today' : ''}`} style={{ fontSize: 12 }}>
-                <div style={{ fontWeight: 700 }}>{monthLabel(m)}</div>
-              </div>
-            );
-          })}
-        </>
-      );
-    }
-
-    const navLabel = ukeMode === 'dag'
-      ? `${formatDate(currentWeek)} – ${formatDate(weekDays[weekDays.length - 1])}`
-      : ukeMode === 'uke'
-      ? `${formatDate(currentWeek)} – ${formatDate(addDays(currentWeek, 51 * 7 + 4))}`
-      : `${monthLabel(SIX_MONTHS[0])} – ${monthLabel(SIX_MONTHS[17])}`;
-
-    function handlePrev() {
-      if (ukeMode === 'maaned') setCurrentMonth(m => addMonths(m, -1));
-      else prevWeek();
-    }
-    function handleNext() {
-      if (ukeMode === 'maaned') setCurrentMonth(m => addMonths(m, 1));
-      else nextWeek();
-    }
-    function handleToday() {
-      if (ukeMode === 'maaned') setCurrentMonth(monthStart(dateToIso(new Date())));
-      else thisWeek();
-    }
-
-    function renderProsjektRader(prosjekter, ledige, cols, AnsattRad, periodeS, periodeE) {
-      // Ansatte med ferie i perioden (brukes til å splitte "ledige"-seksjonen)
-      const ferieIds = new Set(
-        state.tildelinger
-          .filter(t => t.prosjektId === FERIE_ID && overlaps(t.startDato, t.sluttDato, periodeS, periodeE))
-          .map(t => t.ansattId)
-      );
-      // Ledige uten ferie → "Ikke tildelt", ledige med ferie → eget "Ferie"-avsnitt nederst
-      const ikkeTildelt = ledige.filter(a => !ferieIds.has(a.id)).filter(a => !fagFilter || a.fag === fagFilter);
-      const ferieKun    = ledige.filter(a =>  ferieIds.has(a.id)).filter(a => !fagFilter || a.fag === fagFilter);
-
-      return (
-        <>
-          {prosjekter.map(prosjekt => {
-            const color = prosjektColor(prosjekt.id);
-            const ids = [...new Set(state.tildelinger.filter(t => t.prosjektId === prosjekt.id && overlaps(t.startDato, t.sluttDato, periodeS, periodeE)).map(t => t.ansattId))];
-            const ansatte = ids.map(id => planAnsatte.find(a => a.id === id)).filter(Boolean)
-              .filter(a => !fagFilter || a.fag === fagFilter);
-            if (ansatte.length === 0) return null;
-            return (
-              <React.Fragment key={prosjekt.id}>
-                <div className="uke-prosjekt-header" style={{ gridColumn: '1 / -1', borderLeft: `4px solid ${color}` }}>
-                  <span className="uke-prosjekt-farge" style={{ background: color }} />
-                  <span className="uke-prosjekt-navn">{prosjekt.navn}</span>
-                  <span className="uke-prosjekt-antall">{ansatte.length} ansatt{ansatte.length !== 1 ? 'e' : ''}</span>
-                </div>
-                {ansatte.map(a => <AnsattRad key={a.id} ansatt={a} prosjektId={prosjekt.id} />)}
-              </React.Fragment>
-            );
-          })}
-          {ikkeTildelt.length > 0 && (
-            <React.Fragment>
-              <div className="uke-prosjekt-header" style={{ gridColumn: '1 / -1', borderLeft: '4px solid #9ca3af' }}>
-                <span className="uke-prosjekt-navn" style={{ color: '#6b7280' }}>Ikke tildelt i perioden</span>
-                <span className="uke-prosjekt-antall">{ikkeTildelt.length} ansatt{ikkeTildelt.length !== 1 ? 'e' : ''}</span>
-              </div>
-              {ikkeTildelt.map(a => <AnsattRad key={a.id} ansatt={a} prosjektId={null} />)}
-            </React.Fragment>
-          )}
-          {ferieKun.length > 0 && (
-            <React.Fragment>
-              <div className="uke-prosjekt-header" style={{ gridColumn: '1 / -1', borderLeft: '4px solid #f59e0b' }}>
-                <span className="uke-prosjekt-farge" style={{ background: '#f59e0b' }} />
-                <span className="uke-prosjekt-navn">🏖 Ferie / Fri</span>
-                <span className="uke-prosjekt-antall">{ferieKun.length} ansatt{ferieKun.length !== 1 ? 'e' : ''}</span>
-              </div>
-              {ferieKun.map(a => <AnsattRad key={a.id} ansatt={a} prosjektId={null} />)}
-            </React.Fragment>
-          )}
-        </>
-      );
-    }
-
-    // Kapasitet denne uken
-    const kapWEnd = addDays(currentWeek, 4);
-    const kapOpptattIds = new Set(
-      state.tildelinger
-        .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, kapWEnd))
-        .map(t => t.ansattId)
-    );
-    const kapFerieIds = new Set(
-      state.tildelinger
-        .filter(t => t.prosjektId === FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, kapWEnd))
-        .map(t => t.ansattId)
-    );
-    const kapTotal   = planAnsatte.length;
-    const kapOpptatt = planAnsatte.filter(a => kapOpptattIds.has(a.id)).length;
-    const kapFerie   = planAnsatte.filter(a => kapFerieIds.has(a.id) && !kapOpptattIds.has(a.id)).length;
-    const kapSyk     = planAnsatte.filter(a => erSykmeldtIPeriode(a, currentWeek, kapWEnd) && !kapOpptattIds.has(a.id) && !kapFerieIds.has(a.id)).length;
-    const kapLedig   = kapTotal - kapOpptatt - kapFerie - kapSyk;
-    const kapPst     = kapTotal > 0 ? Math.round((kapOpptatt / kapTotal) * 100) : 0;
-
-    const fagOptions = state.fag.filter(f => planAnsatte.some(a => a.fag === f));
-
-    return (
-      <div>
-        <div className="uke-nav">
-          <button className="btn" onClick={handlePrev}>← Forrige</button>
-          <div className="uke-label">{navLabel}</div>
-          <button className="btn" onClick={handleToday}>I dag</button>
-          <button className="btn" onClick={handleNext}>Neste →</button>
-          <div className="ukemode-toggle">
-            <button className={`ukemode-btn ${ukeMode === 'dag' ? 'active' : ''}`} onClick={() => setUkeMode('dag')}>Dager</button>
-            <button className={`ukemode-btn ${ukeMode === 'uke' ? 'active' : ''}`} onClick={() => setUkeMode('uke')}>Uker</button>
-            <button className={`ukemode-btn ${ukeMode === 'maaned' ? 'active' : ''}`} onClick={() => setUkeMode('maaned')}>Måneder</button>
-          </div>
-        </div>
-
-        {/* Kapasitetsmåler – kun i dagmodus */}
-        {ukeMode === 'dag' && kapTotal > 0 && (
-          <div className="bplan-kap-banner">
-            <span className="bplan-kap-tittel">Uke {getWeekNumber(currentWeek)}</span>
-            <span className="bplan-kap-chip bplan-kap-chip--opptatt">🔨 {kapOpptatt} opptatt</span>
-            {kapFerie > 0 && <span className="bplan-kap-chip bplan-kap-chip--ferie">🏖 {kapFerie} ferie</span>}
-            <span className="bplan-kap-chip" style={{ background: kapLedig > 0 ? '#f0fdf4' : '#fef2f2', color: kapLedig > 0 ? '#16a34a' : '#dc2626' }}>
-              {kapLedig > 0 ? '✅' : '🔴'} {kapLedig} ledig
-            </span>
-            <div className="bplan-kap-bar-outer">
-              <div className="bplan-kap-bar-seg bplan-kap-bar-opptatt" style={{ width: kapPst + '%' }} />
-              <div className="bplan-kap-bar-seg bplan-kap-bar-ferie" style={{ width: (kapTotal > 0 ? kapFerie / kapTotal * 100 : 0) + '%' }} />
-            </div>
-            <span className="bplan-kap-pst">{kapPst}% utnyttet</span>
-          </div>
-        )}
-
-        {/* Fag-filter */}
-        {fagOptions.length > 1 && (
-          <div className="bplan-fag-filter">
-            <button className={`bplan-fag-pill${!fagFilter ? ' aktiv' : ''}`} onClick={() => setFagFilter(null)}>Alle</button>
-            {fagOptions.map(f => (
-              <button key={f}
-                className={`bplan-fag-pill${fagFilter === f ? ' aktiv' : ''}`}
-                style={fagFilter === f
-                  ? { background: fagColor(f), color: '#fff', borderColor: fagColor(f) }
-                  : { borderColor: fagColor(f), color: fagColor(f) }}
-                onClick={() => setFagFilter(ff => ff === f ? null : f)}>
-                {f}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {state.ansatte.length === 0 && <div className="empty">Ingen ansatte registrert enda.</div>}
-
-        {ukeMode === 'dag' ? (
-          <div className="uke-grid-wrap">
-            <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(${weekDays.length}, minmax(36px, 1fr))` }}>
-              <DagGridHeader />
-              {renderProsjektRader(dagProsjekter, dagLedige, weekDays.length, DagAnsattRad, currentWeek, weekEnd)}
-            </div>
-          </div>
-        ) : ukeMode === 'uke' ? (
-          <div className="uke-grid-wrap"
-            ref={gridWrapRef}
-            onPointerMove={handleNeedlePointerMove}
-            onPointerUp={handleNeedlePointerUp}
-          >
-            {/* Drabar dato-nål */}
-            {getNeedleLeft(needleDay) && (
-              <div className="timeline-needle"
-                style={{ left: getNeedleLeft(needleDay) }}
-                onPointerDown={handleNeedlePointerDown}
-                title={`Nål: ${formatDate(needleDay)} — dra for å flytte`}
-              >
-                <div className="needle-label">{formatDate(needleDay)}</div>
-              </div>
-            )}
-            <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(260, minmax(28px, 1fr))` }}>
-              <UkeGridHeader />
-              {renderProsjektRader(ukeProsjekter, ukeLedige, 260, UkeAnsattRad, periodeStart, periodeEnd)}
-            </div>
-          </div>
-        ) : (
-          <div className="uke-grid-wrap">
-            <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(18, minmax(80px, 1fr))` }}>
-              <MaanedGridHeader />
-              {renderProsjektRader(maanedProsjekter, maanedLedige, 18, MaanedAnsattRad, currentMonth, maanedPeriodeEnd)}
-            </div>
-          </div>
-        )}
-
-        <div style={{ marginTop: 12, color: '#6b7280', fontSize: 13 }}>
-          Klikk på en celle for å legge til en tildeling.
-        </div>
-      </div>
-    );
-  }
-
-  // --- MULTI-UKE GANTT OVERSIKT ---
-  function OversiktVisning() {
-    const today = dateToIso(new Date());
-    const PAST_WEEKS  = 4;   // uker før i dag som vises
-    const GANTT_WEEKS = 60;  // total antall uker (4 bak + 56 frem ≈ 14 måneder)
-    const DAY_W = 36;   // px per weekday
-    const ROW_H = 34;   // px per employee row
-    const LABEL_W = 162;
-
-    const thisYear = new Date().getFullYear();
-    const HOLIDAYS = getHolidayMap(thisYear - 1, thisYear + 3);
-
-    // Fast startpunkt – alltid 4 uker før i dag, uavhengig av navigasjon
-    const baseWeek = weekStart(addDays(today, -PAST_WEEKS * 7));
-
-    const weeks = [];
-    for (let w = 0; w < GANTT_WEEKS; w++) {
-      const wStart = addDays(baseWeek, w * 7);
-      const wDays = [0, 1, 2, 3, 4].map(d => addDays(wStart, d));
-      weeks.push({ start: wStart, end: wDays[4], days: wDays });
-    }
-
-    const allDays = weeks.flatMap(w => w.days);
-    const viewStart = allDays[0];
-    const viewEnd   = allDays[allDays.length - 1];
-    const totalW    = allDays.length * DAY_W;
-
-    function wkNr(isoDate) {
-      const d = new Date(isoDate + 'T00:00:00');
-      d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
-      const w = new Date(d.getFullYear(), 0, 4);
-      return 1 + Math.round(((d - w) / 86400000 - 3 + ((w.getDay() + 6) % 7)) / 7);
-    }
-
-    function weekLabel(wk) {
-      const sD = parseInt(wk.start.slice(8), 10);
-      const sM = parseInt(wk.start.slice(5, 7), 10) - 1;
-      const eD = parseInt(wk.end.slice(8), 10);
-      const eM = parseInt(wk.end.slice(5, 7), 10) - 1;
-      const range = sM === eM
-        ? `${sD}.–${eD}. ${MAANED_NAVN[sM].slice(0, 3).toLowerCase()}`
-        : `${sD}. ${MAANED_NAVN[sM].slice(0, 3).toLowerCase()} – ${eD}. ${MAANED_NAVN[eM].slice(0, 3).toLowerCase()}`;
-      return `${wkNr(wk.start)} · ${range}`;
-    }
-
-    // Pixel position of a tildeling bar within the allDays array
-    function barProps(t) {
-      if (!overlaps(t.startDato, t.sluttDato, viewStart, viewEnd)) return null;
-      const si = allDays.findIndex(d => d >= t.startDato);
-      let ei = -1;
-      for (let i = allDays.length - 1; i >= 0; i--) {
-        if (allDays[i] <= t.sluttDato) { ei = i; break; }
-      }
-      if (si === -1 || ei === -1 || si > ei) return null;
-      return { left: si * DAY_W + 2, width: (ei - si + 1) * DAY_W - 4 };
-    }
-
-    const DAY_NAMES = ['Ma', 'Ti', 'On', 'To', 'Fr'];
-    const todayIdx = allDays.indexOf(today);
-
-    // Fast ansatte (A–Å) alltid før innleie (A–Å).
-    // Innenfor hver gruppe respekteres evt. drag-rekkefølge; nye ansatte
-    // som ikke er i den lagrede rekkefølgen havner alphabetisk i sin gruppe.
-    const orderedAnsatte = (() => {
-      const fast    = [...planAnsatte].filter(a => !a.innleie).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
-      const innleie = [...planAnsatte].filter(a =>  a.innleie).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
-      if (!ansatteOrder || ansatteOrder.length === 0) return [...fast, ...innleie];
-      const inOrder = new Set(ansatteOrder);
-      const ordFast = [
-        ...ansatteOrder.map(id => fast.find(a => a.id === id)).filter(Boolean),
-        ...fast.filter(a => !inOrder.has(a.id)),
-      ];
-      const ordInnleie = [
-        ...ansatteOrder.map(id => innleie.find(a => a.id === id)).filter(Boolean),
-        ...innleie.filter(a => !inOrder.has(a.id)),
-      ];
-      return [...ordFast, ...ordInnleie];
-    })();
-
-    // Drag-and-drop helpers (manipulate DOM directly — no state re-renders during drag)
-    function clearDragOver() {
-      document.querySelectorAll('.oversikt-row[data-dragover]').forEach(el => {
-        delete el.dataset.dragover;
-      });
-    }
-
-    function saveOrder(newOrder) {
-      setAnsatteOrder(newOrder);
-      localStorage.setItem('fbs_ansatte_order_v2', JSON.stringify(newOrder));
-    }
-
-    const ovFagOptions = state.fag.filter(f => planAnsatte.some(a => a.fag === f));
-    const filteredAnsatte = fagFilter ? orderedAnsatte.filter(a => a.fag === fagFilter) : orderedAnsatte;
-
-    return (
-      <div>
-        {/* Navigation */}
-        <div className="uke-nav">
-          <button className="btn" title="Gå til i dag"
-            onClick={() => {
-              if (!oversiktScrollRef.current) return;
-              const todayIdx = allDays.indexOf(today);
-              if (todayIdx >= 0) oversiktScrollRef.current.scrollLeft = LABEL_W + todayIdx * DAY_W - 120;
-            }}>⊙ I dag</button>
-          <span style={{ fontSize: 12, color: '#94a3b8' }}>Dra tidslinjen for å navigere</span>
-          {ansatteOrder.length > 0 && (state.teams || []).length === 0 && (
-            <button className="btn" title="Tilbakestill til alfabetisk rekkefølge"
-              onClick={() => saveOrder([])}>↺ Alfabetisk</button>
-          )}
-          {!readOnly && <button className="btn btn-primary no-print" onClick={() => openAddTildeling()}>+ Ny tildeling</button>}
-        </div>
-
-        {/* Fag-filter */}
-        {ovFagOptions.length > 1 && (
-          <div className="bplan-fag-filter">
-            <button className={`bplan-fag-pill${!fagFilter ? ' aktiv' : ''}`} onClick={() => setFagFilter(null)}>Alle</button>
-            {ovFagOptions.map(f => (
-              <button key={f}
-                className={`bplan-fag-pill${fagFilter === f ? ' aktiv' : ''}`}
-                style={fagFilter === f
-                  ? { background: fagColor(f), color: '#fff', borderColor: fagColor(f) }
-                  : { borderColor: fagColor(f), color: fagColor(f) }}
-                onClick={() => setFagFilter(ff => ff === f ? null : f)}>
-                {f}
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div className="oversikt-scroll-wrap" ref={oversiktScrollRef}
-          onPointerDown={e => {
-            if (e.target.closest('.oversikt-bar,.oversikt-handle,.oversikt-drag-handle,button')) return;
-            if (dragRef.current) return;
-            oversiktPanRef.current = { startX: e.clientX, startScrollLeft: oversiktScrollRef.current.scrollLeft, pointerId: e.pointerId, panning: false };
-          }}
-          onPointerMove={e => {
-            if (!oversiktPanRef.current) return;
-            const dx = e.clientX - oversiktPanRef.current.startX;
-            if (!oversiktPanRef.current.panning && Math.abs(dx) > 5) {
-              oversiktPanRef.current.panning = true;
-              e.currentTarget.setPointerCapture(oversiktPanRef.current.pointerId);
-              e.currentTarget.style.cursor = 'grabbing';
-            }
-            if (oversiktPanRef.current.panning) {
-              oversiktScrollRef.current.scrollLeft = oversiktPanRef.current.startScrollLeft - dx;
-            }
-          }}
-          onPointerUp={e => {
-            if (!oversiktPanRef.current) return;
-            if (oversiktPanRef.current.panning) e.currentTarget.style.cursor = '';
-            oversiktPanRef.current = null;
-          }}
-          onPointerCancel={e => {
-            oversiktPanRef.current = null;
-            e.currentTarget.style.cursor = '';
-          }}
-        >
-          <div style={{ display: 'inline-block', verticalAlign: 'top', width: LABEL_W + totalW, minWidth: '100%' }}>
-
-            {/* ── Uke-header ─────────────────────────────────── */}
-            <div className="oversikt-wk-header-row">
-              <div className="oversikt-corner" style={{ width: LABEL_W }} />
-              {weeks.map((wk, wi) => {
-                const isCurrent = wk.days.includes(today);
-                return (
-                  <div key={wi}
-                    className={`oversikt-wk-cell${isCurrent ? ' current' : ''}`}
-                    style={{ width: wk.days.length * DAY_W }}>
-                    {weekLabel(wk)}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* ── Dag-header ─────────────────────────────────── */}
-            <div className="oversikt-day-header-row">
-              <div className="oversikt-day-corner" style={{ width: LABEL_W }}>Ansatt</div>
-              {allDays.map((d, i) => {
-                const dow = (new Date(d + 'T00:00:00').getDay() + 6) % 7;
-                const isToday    = d === today;
-                const isHoliday  = !!HOLIDAYS[d];
-                const isWeekLast = dow === 4;
-                return (
-                  <div key={d}
-                    className={`oversikt-day-cell${isToday ? ' today' : ''}${isHoliday ? ' holiday' : ''}${isWeekLast ? ' week-last' : ''}`}
-                    style={{ width: DAY_W }}>
-                    <span>{DAY_NAMES[dow]}</span>
-                    <span>{parseInt(d.slice(8), 10)}</span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* ── Kapasitetsrad ──────────────────────────────── */}
-            <div className="oversikt-kap-row" style={{ display: 'flex', minWidth: LABEL_W + totalW }}>
-              <div className="oversikt-kap-corner" style={{ width: LABEL_W }}>Ledig</div>
-              {weeks.map((wk, wi) => {
-                const wOpptattIds = new Set(
-                  state.tildelinger
-                    .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, wk.start, wk.end))
-                    .map(t => t.ansattId)
-                );
-                const tot = planAnsatte.length;
-                const opp = planAnsatte.filter(a => wOpptattIds.has(a.id)).length;
-                const led = tot - opp;
-                const pst = tot > 0 ? Math.round((led / tot) * 100) : 0;
-                const farge = led === 0 ? '#dc2626' : led <= 2 ? '#f59e0b' : '#16a34a';
-                const isCurrent = wk.days.includes(today);
-                return (
-                  <div key={wi} className={`oversikt-kap-cell${isCurrent ? ' current' : ''}`} style={{ width: wk.days.length * DAY_W }}>
-                    <div className="oversikt-kap-bar-wrap">
-                      <div className="oversikt-kap-bar-fill" style={{ width: (100 - pst) + '%', background: '#e2e8f0' }} />
-                    </div>
-                    <span className="oversikt-kap-lbl" style={{ color: farge }}>{led}/{tot}</span>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* ── Ansatte-rader (gruppert etter team) ───────── */}
-            {(() => {
-              const teams = state.teams || [];
-              let rowIdx = 0;
-
-              function renderAnsattRad(ansatt) {
-                const myTils = state.tildelinger
-                  .filter(t => t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, viewStart, viewEnd))
-                  .sort((a, b) => (a.prosjektId === FERIE_ID ? 1 : 0) - (b.prosjektId === FERIE_ID ? 1 : 0));
-                const ri = rowIdx++;
-                return (
-                <div key={ansatt.id}
-                  className={`oversikt-row${ri % 2 === 0 ? '' : ' alt'}`}
-                  style={{ height: ROW_H }}
-                  onDragOver={e => {
-                    if (!oversiktDragId.current) return;
-                    e.preventDefault();
-                    e.dataTransfer.dropEffect = 'move';
-                    clearDragOver();
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    e.currentTarget.dataset.dragover = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
-                  }}
-                  onDragLeave={e => {
-                    if (!e.currentTarget.contains(e.relatedTarget)) delete e.currentTarget.dataset.dragover;
-                  }}
-                  onDrop={e => {
-                    e.preventDefault();
-                    delete e.currentTarget.dataset.dragover;
-                    const fromId = oversiktDragId.current;
-                    const toId   = ansatt.id;
-                    if (!fromId || fromId === toId) return;
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    const pos  = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
-                    const ids  = orderedAnsatte.map(a => a.id).filter(id => id !== fromId);
-                    const at   = ids.indexOf(toId) + (pos === 'after' ? 1 : 0);
-                    ids.splice(at, 0, fromId);
-                    saveOrder(ids);
-                  }}
-                >
-
-                  {/* Sticky name label */}
-                  <div className="oversikt-row-label" style={{ width: LABEL_W, height: ROW_H }}>
-                    <span
-                      className="oversikt-drag-handle"
-                      title="Dra for å flytte"
-                      draggable
-                      onDragStart={e => {
-                        e.stopPropagation();
-                        oversiktDragId.current = ansatt.id;
-                        e.dataTransfer.effectAllowed = 'move';
-                        e.currentTarget.closest('.oversikt-row').classList.add('dragging');
-                      }}
-                      onDragEnd={e => {
-                        oversiktDragId.current = null;
-                        e.currentTarget.closest('.oversikt-row').classList.remove('dragging');
-                        clearDragOver();
-                      }}
-                    >⠿</span>
-                    <div className="mini-avatar" style={{
-                      background: ansatt.sykmeldt ? '#94a3b8' : ansatt.innleie ? '#f97316' : fagColor(ansatt.fag),
-                      width: 22, height: 22, fontSize: 9, flexShrink: 0,
-                      filter: ansatt.sykmeldt ? 'grayscale(1)' : 'none',
-                    }}>
-                      {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                    </div>
-                    <span className="oversikt-row-navn" style={ansatt.sykmeldt ? { color: '#94a3b8' } : {}}>
-                      {ansatt.navn}
-                    </span>
-                    {ansatt.sykmeldt
-                      ? <span style={{ fontSize: 9, color: '#94a3b8', flexShrink: 0 }}>🤒</span>
-                      : ansatt.innleie && <span style={{ fontSize: 9, color: '#f97316', flexShrink: 0 }}>🔧</span>
-                    }
-                  </div>
-
-                  {/* Bar area */}
-                  <div className="oversikt-bars-area" style={{ width: totalW, height: ROW_H }}
-                    onPointerUp={e => {
-                      if (!dragRef.current) return;
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      const dayIdx = Math.max(0, Math.min(allDays.length - 1, Math.floor((e.clientX - rect.left) / DAY_W)));
-                      handleDrop(allDays[dayIdx], 'day');
-                    }}
-                  >
-                    {/* Background grid cells */}
-                    {allDays.map((d, i) => {
-                      const dow = (new Date(d + 'T00:00:00').getDay() + 6) % 7;
-                      return (
-                        <div key={d}
-                          className={`oversikt-bg-cell${d === today ? ' today-col' : ''}${HOLIDAYS[d] ? ' holiday-col' : ''}${dow === 4 ? ' week-last' : ''}`}
-                          style={{ left: i * DAY_W, width: DAY_W }}
-                          onClick={() => { if (!readOnly && !dragRef.current) openAddTildeling(ansatt.id, d); }}
-                        />
-                      );
-                    })}
-
-                    {/* Today needle */}
-                    {todayIdx >= 0 && (
-                      <div className="oversikt-needle" style={{ left: todayIdx * DAY_W + DAY_W / 2 }} />
-                    )}
-
-                    {/* Sykmeldt-bar */}
-                    {ansatt.sykmeldt && (() => {
-                      const fra = ansatt.sykmeldtFra || viewStart;
-                      const til = ansatt.sykmeldtTil || viewEnd;
-                      const bp = barProps({ startDato: fra, sluttDato: til });
-                      if (!bp) return null;
-                      return (
-                        <div key="syk" style={{
-                          position: 'absolute', top: 4, height: ROW_H - 8,
-                          left: bp.left, width: bp.width,
-                          background: 'repeating-linear-gradient(45deg,#e2e8f0,#e2e8f0 4px,#f1f5f9 4px,#f1f5f9 8px)',
-                          borderRadius: 4, border: '1px solid #cbd5e1',
-                          display: 'flex', alignItems: 'center', paddingLeft: 6,
-                          fontSize: 10, color: '#94a3b8', fontWeight: 600, gap: 4,
-                          pointerEvents: 'none',
-                        }}>
-                          🤒 Sykmeldt{ansatt.sykmeldtTil ? ` t.o.m. ${new Date(ansatt.sykmeldtTil + 'T00:00:00').toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })}` : ''}
-                        </div>
-                      );
-                    })()}
-
-                    {/* Project / ferie bars */}
-                    {myTils.map(t => {
-                      const bp = barProps(t);
-                      if (!bp) return null;
-                      const isFerie = t.prosjektId === FERIE_ID;
-                      const proj  = isFerie ? null : state.prosjekter.find(p => p.id === t.prosjektId);
-                      const color = proj?.farge || '#6b7280';
-                      const label = isFerie ? '🏖 Ferie' : (proj?.navn || '?');
-
-                      return (
-                        <div key={t.id}
-                          className={`oversikt-bar${isFerie ? ' oversikt-bar-ferie' : ''}`}
-                          style={{ left: bp.left, width: bp.width, ...(isFerie ? {} : { background: color }) }}
-                          title={`${label} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)} — klikk for valg`}
-                          onClick={e => {
-                            e.stopPropagation();
-                            if (dragRef.current) return;
-                            const area = e.currentTarget.closest('.oversikt-bars-area');
-                            const rect = area ? area.getBoundingClientRect() : e.currentTarget.getBoundingClientRect();
-                            const dayIdx = Math.max(0, Math.min(allDays.length - 1, Math.floor((e.clientX - rect.left) / DAY_W)));
-                            const clickedDay = allDays[dayIdx];
-                            const splitDay = clickedDay > t.startDato ? clickedDay : addDays(t.startDato, 1);
-                            openBarMenu(t, splitDay, e.clientX, e.clientY);
-                          }}
-                        >
-                          <div className="oversikt-handle oversikt-handle-l"
-                            title="Dra for å endre startdato"
-                            onPointerDown={e => {
-                              e.stopPropagation();
-                              e.preventDefault();
-                              e.currentTarget.setPointerCapture(e.pointerId);
-                              dragRef.current = { tildelingId: t.id, type: 'start' };
-                            }}
-                            onClick={e => e.stopPropagation()}
-                          />
-                          <span className="oversikt-bar-label">{label}</span>
-                          <div className="oversikt-handle oversikt-handle-r"
-                            title="Dra for å endre sluttdato"
-                            onPointerDown={e => {
-                              e.stopPropagation();
-                              e.preventDefault();
-                              e.currentTarget.setPointerCapture(e.pointerId);
-                              dragRef.current = { tildelingId: t.id, type: 'end' };
-                            }}
-                            onClick={e => e.stopPropagation()}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-                );
-              }
-
-              function renderTeamHeader(team, count) {
-                return (
-                  <div key={`th-${team.id}`} style={{ display: 'flex', height: 30, alignItems: 'stretch', background: team.farge + '18', borderTop: `2px solid ${team.farge}`, borderBottom: `1px solid ${team.farge}33`, minWidth: LABEL_W + totalW }}>
-                    <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '0 12px', position: 'sticky', left: 0, zIndex: 3, background: '#fff', borderRight: `2px solid ${team.farge}33` }}>
-                      <div style={{ width: 10, height: 10, borderRadius: '50%', background: team.farge, flexShrink: 0 }} />
-                      <span style={{ fontWeight: 700, fontSize: 12, color: team.farge, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{team.navn}</span>
-                      <span style={{ fontSize: 11, color: '#94a3b8', flexShrink: 0 }}>{count}</span>
-                    </div>
-                    <div style={{ flex: 1 }} />
-                  </div>
-                );
-              }
-
-              if (teams.length === 0) {
-                return filteredAnsatte.map(a => renderAnsattRad(a));
-              }
-
-              const assignedIds = new Set(teams.flatMap(t => t.ansatteIds || []));
-              const rows = [];
-
-              for (const team of teams) {
-                const members = filteredAnsatte.filter(a => (team.ansatteIds || []).includes(a.id));
-                if (members.length === 0 && !filteredAnsatte.some(a => (team.ansatteIds || []).includes(a.id))) continue;
-                rows.push(renderTeamHeader(team, members.length + ' medl.'));
-                members.forEach(a => rows.push(renderAnsattRad(a)));
-              }
-
-              const unassigned = filteredAnsatte.filter(a => !assignedIds.has(a.id));
-              if (unassigned.length > 0) {
-                rows.push(
-                  <div key="th-uten" style={{ display: 'flex', height: 30, alignItems: 'stretch', background: '#f1f5f9', borderTop: '2px solid #94a3b8', borderBottom: '1px solid #e2e8f0', minWidth: LABEL_W + totalW }}>
-                    <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '0 12px', position: 'sticky', left: 0, zIndex: 3, background: '#fff', borderRight: '2px solid #e2e8f0' }}>
-                      <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#94a3b8', flexShrink: 0 }} />
-                      <span style={{ fontWeight: 700, fontSize: 12, color: '#64748b' }}>Uten team</span>
-                      <span style={{ fontSize: 11, color: '#94a3b8' }}>{unassigned.length}</span>
-                    </div>
-                    <div style={{ flex: 1 }} />
-                  </div>
-                );
-                unassigned.forEach(a => rows.push(renderAnsattRad(a)));
-              }
-
-              return rows;
-            })()}
-
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // --- FERIEOVERSIKT ---
-  function FerieVisning() {
-    const today = dateToIso(new Date());
-    const FERIE_MND = 12;
-    // Use a dedicated ferie year offset (separate from currentMonth navigation)
-    const ferieBase  = addMonths(monthStart(today), (ferieYearOffset || 0) * 12);
-    const ferieMonths = Array.from({ length: FERIE_MND }, (_, i) => addMonths(ferieBase, i));
-    const ferieEnd   = monthEnd(ferieMonths[FERIE_MND - 1]);
-    const ferieYear  = ferieBase.slice(0, 4);
-
-    const sortedAnsatte = [...state.ansatte].sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
-
-    // For each employee, compute ferie periods and total days in view
-    function ferieDager(t) {
-      // Count calendar days in the tildeling
-      const ms = Math.max(0, (new Date(t.sluttDato + 'T00:00:00') - new Date(t.startDato + 'T00:00:00')) / 86400000) + 1;
-      return ms;
-    }
-
-    // Bar position in the 12-month grid
-    function getBarPos(t) {
-      let si = -1, ei = -1;
-      for (let i = 0; i < FERIE_MND; i++) {
-        const mEnd = monthEnd(ferieMonths[i]);
-        if (overlaps(t.startDato, t.sluttDato, ferieMonths[i], mEnd)) {
-          if (si === -1) si = i;
-          ei = i;
-        }
-      }
-      if (si === -1) return null;
-      return {
-        left: `${(si / FERIE_MND) * 100}%`,
-        width: `${((ei - si + 1) / FERIE_MND) * 100}%`,
-      };
-    }
-
-    // Month totals (how many employees have ferie in each month)
-    const mndTotals = ferieMonths.map(m => {
-      const mEnd = monthEnd(m);
-      return state.tildelinger.filter(t =>
-        t.prosjektId === FERIE_ID && overlaps(t.startDato, t.sluttDato, m, mEnd)
-      ).length;
-    });
-
-    return (
-      <div>
-        {/* Ferie nav */}
-        <div className="uke-nav">
-          <button className="btn" onClick={() => setFerieYearOffset(o => (o || 0) - 1)}>← Forrige år</button>
-          <span className="uke-label">🏖 Ferieplan {ferieYear}</span>
-          <button className="btn" onClick={() => setFerieYearOffset(o => (o || 0) + 1)}>Neste år →</button>
-          <button className="btn" onClick={() => setFerieYearOffset(0)}>I år</button>
-          {!readOnly && <button className="btn btn-primary no-print" onClick={() => openAddFerie()}>+ Legg til ferie</button>}
-        </div>
-
-        <div className="uke-grid-wrap">
-          {/* Month header */}
-          <div className="ferie-grid">
-            <div className="uke-header-cell ferie-label-col" style={{ fontWeight: 600, fontSize: 11, color: '#94a3b8' }}>Ansatt</div>
-            {ferieMonths.map((m, i) => {
-              const isThisMonth = m.slice(0, 7) === today.slice(0, 7);
-              return (
-                <div key={m} className={`uke-header-cell ferie-month-col ${isThisMonth ? 'today' : ''}`}
-                  style={{ textAlign: 'center', fontSize: 11, fontWeight: isThisMonth ? 700 : 500 }}>
-                  {MAANED_NAVN[parseInt(m.slice(5, 7), 10) - 1]}
-                  {mndTotals[i] > 0 && (
-                    <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>{mndTotals[i]} stk</div>
-                  )}
-                </div>
-              );
-            })}
-
-            {/* Employee rows */}
-            {sortedAnsatte.map((ansatt, rowIdx) => {
-              const ferieList = state.tildelinger.filter(t =>
-                t.ansattId === ansatt.id && t.prosjektId === FERIE_ID &&
-                overlaps(t.startDato, t.sluttDato, ferieMonths[0], ferieEnd)
-              );
-              const totalDager = ferieList.reduce((s, t) => s + ferieDager(t), 0);
-
-              return (
-                <React.Fragment key={ansatt.id}>
-                  {/* Label */}
-                  <div className="uke-row-label ferie-label-col" style={{ background: rowIdx % 2 === 0 ? '#fff' : '#f8fafc' }}>
-                    <div className="mini-avatar" style={{ background: ansatt.innleie ? '#f97316' : fagColor(ansatt.fag), flexShrink: 0 }}>
-                      {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <div className="row-navn" style={{ fontSize: 12 }}>{ansatt.navn}</div>
-                      <div className="row-fag" style={{ color: fagColor(ansatt.fag), fontSize: 10 }}>
-                        {ansatt.innleie && <span style={{ color: '#f97316', marginRight: 2 }}>🔧</span>}
-                        {totalDager > 0
-                          ? <span style={{ color: '#16a34a', fontWeight: 600 }}>🏖 {totalDager} dager</span>
-                          : ansatt.fag}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Ferie bar row */}
-                  <div className="gantt-row ferie-bar-row"
-                    style={{
-                      gridColumn: '2 / -1',
-                      background: rowIdx % 2 === 0 ? '#fff' : '#f8fafc',
-                      cursor: 'pointer',
-                    }}
-                    onClick={e => {
-                      if (!readOnly && (e.target === e.currentTarget || e.target.classList.contains('gantt-bg-cell'))) {
-                        openAddFerie(ansatt.id);
-                      }
-                    }}
-                  >
-                    {/* Month background cells */}
-                    {ferieMonths.map((m, i) => {
-                      const isThisMonth = m.slice(0, 7) === today.slice(0, 7);
-                      return (
-                        <div key={m}
-                          className={`gantt-bg-cell${isThisMonth ? ' today-col' : ''}`}
-                          style={{ left: `${(i / FERIE_MND) * 100}%`, width: `${100 / FERIE_MND}%` }}
-                          onClick={() => { if (!readOnly) openAddFerie(ansatt.id); }}
-                        />
-                      );
-                    })}
-
-                    {/* Ferie bars */}
-                    {ferieList.map(t => {
-                      const pos = getBarPos(t);
-                      if (!pos) return null;
-                      const label = `${formatDate(t.startDato)} – ${formatDate(t.sluttDato)} (${ferieDager(t)} dg)`;
-                      return (
-                        <div key={t.id}
-                          className="gantt-bar gantt-bar-ferie"
-                          style={{ left: pos.left, width: pos.width }}
-                          title={label}
-                          onClick={e => {
-                            e.stopPropagation();
-                            deleteTildeling(t.id);
-                          }}
-                        >
-                          <span className="gantt-label" style={{ fontSize: 10 }}>{label}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </React.Fragment>
-              );
-            })}
-          </div>
-        </div>
-
-        {sortedAnsatte.length === 0 && (
-          <div className="empty">Ingen ansatte registrert.</div>
-        )}
-      </div>
-    );
-  }
-
-  // --- BURSDAGSKALENDER ---
-  // --- TEAM-VISNING ---
-  function TeamsVisning() {
-    const teams = state.teams || [];
-    const aktiveProsjekter = state.prosjekter.filter(p => p.status === 'aktiv' || !p.status).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
-    const fastAnsatte = state.ansatte.filter(a => !a.innleie).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
-    const innleieAnsatte = state.ansatte.filter(a => a.innleie).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
-    const planAnsatteAlle = [...fastAnsatte, ...innleieAnsatte];
-    const TEAM_FARGER = ['#3b82f6','#16a34a','#dc2626','#9333ea','#ea580c','#0891b2','#be185d','#854d0e'];
-
-    function startNyttTeam() {
-      setRedigererTeam(null);
-      setTeamForm({ navn: '', farge: TEAM_FARGER[teams.length % TEAM_FARGER.length], ansatteIds: [] });
-      setShowTeamModal(true);
-    }
-    function startRedigerTeam(t) {
-      setRedigererTeam(t);
-      setTeamForm({ navn: t.navn, farge: t.farge || '#3b82f6', ansatteIds: [...(t.ansatteIds || [])] });
-      setShowTeamModal(true);
-    }
-    function lagreTeam() {
-      if (!teamForm.navn.trim()) return;
-      if (redigererTeam) {
-        dispatch({ type: 'UPDATE_TEAM', payload: { ...redigererTeam, ...teamForm } });
-      } else {
-        dispatch({ type: 'ADD_TEAM', payload: teamForm });
-      }
-      setShowTeamModal(false);
-    }
-    function slettTeam(id) {
-      if (confirm('Slett teamet?')) dispatch({ type: 'DELETE_TEAM', id });
-    }
-    // IDs som allerede tilhører et annet team (ikke det vi redigerer nå)
-    const opptattIAnnetTeam = new Set(
-      teams
-        .filter(t => !redigererTeam || t.id !== redigererTeam.id)
-        .flatMap(t => t.ansatteIds || [])
-    );
-
-    function toggleMedlem(ansattId) {
-      if (opptattIAnnetTeam.has(ansattId)) return;
-      setTeamForm(f => ({
-        ...f,
-        ansatteIds: f.ansatteIds.includes(ansattId)
-          ? f.ansatteIds.filter(id => id !== ansattId)
-          : [...f.ansatteIds, ansattId]
-      }));
-    }
-
-    return (
-      <div style={{ padding: '20px 0' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Team</h3>
-            <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>Grupper ansatte i team og tildel hele teamet til et prosjekt på én gang</div>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            {teams.length > 0 && (
-              <button className="btn" onClick={() => { setTeamTildelForm({ teamId: teams[0].id, prosjektId: '', startDato: currentWeek, sluttDato: addDays(currentWeek, 4) }); setVisTeamTildel(true); }}>
-                📅 Tildel team til prosjekt
-              </button>
-            )}
-            <button className="btn btn-primary" onClick={startNyttTeam}>+ Nytt team</button>
-          </div>
-        </div>
-
-        {teams.length === 0 ? (
-          <div className="empty">Ingen team opprettet ennå. Klikk «+ Nytt team» for å lage ditt første team.</div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
-            {teams.map((team, idx) => {
-              const medlemmer = (team.ansatteIds || []).map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
-              const isCardDragOver = teamDragOver === idx && teamDragIdx.current !== null && teamDragIdx.current !== idx;
-              const isMemberDragOver = memberDragOverTeam === team.id && memberDragInfo.current?.fromTeamId !== team.id;
-              return (
-                <div
-                  key={team.id}
-                  draggable
-                  onDragStart={e => {
-                    if (memberDragInfo.current) { e.preventDefault(); return; }
-                    teamDragIdx.current = idx;
-                  }}
-                  onDragOver={e => {
-                    e.preventDefault();
-                    if (memberDragInfo.current) setMemberDragOverTeam(team.id);
-                    else setTeamDragOver(idx);
-                  }}
-                  onDragLeave={e => {
-                    if (e.currentTarget.contains(e.relatedTarget)) return;
-                    if (memberDragInfo.current) setMemberDragOverTeam(null);
-                    else setTeamDragOver(null);
-                  }}
-                  onDrop={e => {
-                    e.preventDefault();
-                    // --- Member move ---
-                    if (memberDragInfo.current) {
-                      const { ansattId, fromTeamId } = memberDragInfo.current;
-                      if (fromTeamId !== team.id) {
-                        const updated = teams.map(t => {
-                          if (t.id === fromTeamId) return { ...t, ansatteIds: (t.ansatteIds || []).filter(id => id !== ansattId) };
-                          if (t.id === team.id) return { ...t, ansatteIds: [...(t.ansatteIds || []), ansattId] };
-                          return t;
-                        });
-                        dispatch({ type: 'SET_TEAMS', teams: updated });
-                      }
-                      memberDragInfo.current = null;
-                      setMemberDragOverTeam(null);
-                      return;
-                    }
-                    // --- Card reorder ---
-                    const from = teamDragIdx.current;
-                    if (from === null || from === idx) { setTeamDragOver(null); return; }
-                    const reordered = [...teams];
-                    const [moved] = reordered.splice(from, 1);
-                    reordered.splice(idx, 0, moved);
-                    dispatch({ type: 'SET_TEAMS', teams: reordered });
-                    teamDragIdx.current = null;
-                    setTeamDragOver(null);
-                  }}
-                  onDragEnd={() => {
-                    teamDragIdx.current = null;
-                    memberDragInfo.current = null;
-                    setTeamDragOver(null);
-                    setMemberDragOverTeam(null);
-                  }}
-                  style={{
-                    background: isMemberDragOver ? '#f0fdf4' : '#fff',
-                    border: isMemberDragOver
-                      ? '2px dashed #16a34a'
-                      : isCardDragOver
-                        ? `2px dashed ${team.farge || '#3b82f6'}`
-                        : '1px solid #e2e8f0',
-                    borderRadius: 14,
-                    padding: (isMemberDragOver || isCardDragOver) ? 17 : 18,
-                    boxShadow: isMemberDragOver
-                      ? '0 4px 16px #16a34a33'
-                      : isCardDragOver
-                        ? `0 4px 16px ${team.farge || '#3b82f6'}33`
-                        : '0 1px 4px rgba(0,0,0,.04)',
-                    borderTop: `4px solid ${team.farge || '#3b82f6'}`,
-                    cursor: 'grab',
-                    transition: 'box-shadow .15s, border .1s, background .15s',
-                    opacity: teamDragIdx.current === idx ? 0.45 : 1,
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ color: '#cbd5e1', fontSize: 16, lineHeight: 1, cursor: 'grab', userSelect: 'none' }}>⠿</span>
-                      <div style={{ fontWeight: 800, fontSize: 16, color: '#1e293b' }}>{team.navn}</div>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button className="btn btn-sm" onMouseDown={e => e.stopPropagation()} onClick={() => startRedigerTeam(team)}>Rediger</button>
-                      <button className="btn btn-sm btn-danger" onMouseDown={e => e.stopPropagation()} onClick={() => slettTeam(team.id)}>Slett</button>
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
-                    {medlemmer.length} medlemmer
-                    {isMemberDragOver && <span style={{ color: '#16a34a', marginLeft: 6, fontWeight: 600 }}>↓ Slipp for å flytte hit</span>}
-                  </div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {medlemmer.map(a => (
-                      <div
-                        key={a.id}
-                        draggable
-                        onDragStart={e => {
-                          e.stopPropagation();
-                          memberDragInfo.current = { ansattId: a.id, fromTeamId: team.id };
-                        }}
-                        onDragEnd={e => {
-                          e.stopPropagation();
-                          memberDragInfo.current = null;
-                          setMemberDragOverTeam(null);
-                        }}
-                        title={a.sykmeldt ? '🤒 Sykmeldt – ikke i bemanningsplan' : undefined}
-                        style={{
-                          display: 'flex', alignItems: 'center', gap: 5,
-                          background: a.sykmeldt ? '#f1f5f9' : a.innleie ? '#fff7ed' : '#f8fafc',
-                          border: `1px solid ${a.sykmeldt ? '#cbd5e1' : a.innleie ? '#fed7aa' : '#e2e8f0'}`,
-                          borderRadius: 8, padding: '3px 8px 3px 4px', fontSize: 12,
-                          cursor: 'grab', opacity: a.sykmeldt ? 0.6 : 1,
-                        }}
-                      >
-                        <div style={{ width: 20, height: 20, borderRadius: '50%', background: a.sykmeldt ? '#94a3b8' : a.innleie ? '#f97316' : fagColor(a.fag), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 700, flexShrink: 0 }}>
-                          {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                        </div>
-                        <span style={{ color: a.sykmeldt ? '#64748b' : 'inherit' }}>{a.navn}</span>
-                        <span style={{ color: a.sykmeldt ? '#94a3b8' : a.innleie ? '#f97316' : '#94a3b8', fontSize: 10 }}>
-                          {a.sykmeldt ? '🤒' : a.innleie ? '🔧' : a.fag}
-                        </span>
-                      </div>
-                    ))}
-                    {medlemmer.length === 0 && (
-                      <span style={{ color: isMemberDragOver ? '#16a34a' : '#94a3b8', fontSize: 12, fontStyle: 'italic' }}>
-                        {isMemberDragOver ? '↓ Slipp her' : 'Ingen medlemmer ennå'}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Modal: Rediger/lag team */}
-        {showTeamModal && (
-          <Modal title={redigererTeam ? `Rediger team: ${redigererTeam.navn}` : 'Nytt team'} onClose={() => setShowTeamModal(false)}>
-            <div className="form">
-              <label>Teamnavn *</label>
-              <input value={teamForm.navn} onChange={e => setTeamForm(f => ({ ...f, navn: e.target.value }))} placeholder="f.eks. Team 1 – Tømrer" />
-              <label>Farge</label>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
-                {TEAM_FARGER.map(farge => (
-                  <button key={farge} type="button" onClick={() => setTeamForm(f => ({ ...f, farge }))}
-                    style={{ width: 28, height: 28, borderRadius: '50%', background: farge, border: teamForm.farge === farge ? '3px solid #1e293b' : '2px solid transparent', cursor: 'pointer' }} />
-                ))}
-              </div>
-              <label>Medlemmer ({teamForm.ansatteIds.length} valgt)</label>
-              <div style={{ maxHeight: 280, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, padding: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                {fastAnsatte.length > 0 && (
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.06em', padding: '2px 6px 4px', textTransform: 'uppercase' }}>Fast ansatte</div>
-                )}
-                {fastAnsatte.map(a => {
-                  const tatt = opptattIAnnetTeam.has(a.id);
-                  const valgt = teamForm.ansatteIds.includes(a.id);
-                  const annetTeam = tatt ? teams.find(t => (!redigererTeam || t.id !== redigererTeam.id) && (t.ansatteIds || []).includes(a.id)) : null;
-                  return (
-                    <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: tatt ? 'not-allowed' : 'pointer', padding: '4px 6px', borderRadius: 6, opacity: tatt ? 0.45 : 1, background: valgt ? '#eff6ff' : 'transparent' }}>
-                      <input type="checkbox" checked={valgt} disabled={tatt} onChange={() => toggleMedlem(a.id)} />
-                      <div style={{ width: 20, height: 20, borderRadius: '50%', background: fagColor(a.fag), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 700, flexShrink: 0 }}>
-                        {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                      </div>
-                      <span style={{ fontSize: 13, fontWeight: 500 }}>{a.navn}</span>
-                      {tatt
-                        ? <span style={{ fontSize: 11, color: '#f97316', marginLeft: 'auto' }}>i {annetTeam?.navn || 'annet team'}</span>
-                        : <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{a.fag}</span>
-                      }
-                    </label>
-                  );
-                })}
-                {innleieAnsatte.length > 0 && (
-                  <div style={{ fontSize: 10, fontWeight: 700, color: '#f97316', letterSpacing: '0.06em', padding: '6px 6px 4px', textTransform: 'uppercase', borderTop: fastAnsatte.length > 0 ? '1px solid #f1f5f9' : 'none', marginTop: fastAnsatte.length > 0 ? 4 : 0 }}>🔧 Innleie</div>
-                )}
-                {innleieAnsatte.map(a => {
-                  const tatt = opptattIAnnetTeam.has(a.id);
-                  const valgt = teamForm.ansatteIds.includes(a.id);
-                  const annetTeam = tatt ? teams.find(t => (!redigererTeam || t.id !== redigererTeam.id) && (t.ansatteIds || []).includes(a.id)) : null;
-                  return (
-                    <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: tatt ? 'not-allowed' : 'pointer', padding: '4px 6px', borderRadius: 6, opacity: tatt ? 0.45 : 1, background: valgt ? '#fff7ed' : 'transparent' }}>
-                      <input type="checkbox" checked={valgt} disabled={tatt} onChange={() => toggleMedlem(a.id)} />
-                      <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#f97316', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 700, flexShrink: 0 }}>
-                        {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                      </div>
-                      <span style={{ fontSize: 13, fontWeight: 500 }}>{a.navn}</span>
-                      {tatt
-                        ? <span style={{ fontSize: 11, color: '#f97316', marginLeft: 'auto' }}>i {annetTeam?.navn || 'annet team'}</span>
-                        : <span style={{ fontSize: 11, color: '#f97316', marginLeft: 'auto' }}>🔧 {a.fag}</span>
-                      }
-                    </label>
-                  );
-                })}
-              </div>
-              <div className="modal-actions">
-                <button className="btn" onClick={() => setShowTeamModal(false)}>Avbryt</button>
-                <button className="btn btn-primary" onClick={lagreTeam} disabled={!teamForm.navn.trim() || teamForm.ansatteIds.length === 0}>
-                  {redigererTeam ? 'Lagre endringer' : `Opprett team (${teamForm.ansatteIds.length} medl.)`}
-                </button>
-              </div>
-            </div>
-          </Modal>
-        )}
-
-        {/* Modal: Tildel team til prosjekt */}
-        {visTeamTildel && (
-          <Modal title="Tildel team til prosjekt" onClose={() => setVisTeamTildel(false)}>
-            <div className="form">
-              <label>Team</label>
-              <select value={teamTildelForm.teamId} onChange={e => setTeamTildelForm(f => ({ ...f, teamId: e.target.value }))}>
-                {teams.map(t => <option key={t.id} value={t.id}>{t.navn} ({(t.ansatteIds || []).length} medl.)</option>)}
-              </select>
-              <label>Prosjekt</label>
-              <select value={teamTildelForm.prosjektId} onChange={e => setTeamTildelForm(f => ({ ...f, prosjektId: e.target.value }))}>
-                <option value="">– Velg prosjekt –</option>
-                {aktiveProsjekter.map(p => <option key={p.id} value={p.id}>{p.navn}</option>)}
-              </select>
-              <label>Fra dato</label>
-              <input type="date" value={teamTildelForm.startDato} onChange={e => setTeamTildelForm(f => ({ ...f, startDato: e.target.value }))} />
-              <label>Til dato</label>
-              <input type="date" value={teamTildelForm.sluttDato} onChange={e => setTeamTildelForm(f => ({ ...f, sluttDato: e.target.value }))} />
-              {teamTildelForm.teamId && (
-                <div style={{ fontSize: 12, color: '#64748b', background: '#f8fafc', borderRadius: 8, padding: '8px 12px', marginTop: 4 }}>
-                  Tildeler {(teams.find(t => t.id === teamTildelForm.teamId)?.ansatteIds || []).length} teammedlemmer til prosjektet
-                </div>
-              )}
-              <div className="modal-actions">
-                <button className="btn" onClick={() => setVisTeamTildel(false)}>Avbryt</button>
-                <button className="btn btn-primary"
-                  disabled={!teamTildelForm.teamId || !teamTildelForm.prosjektId || !teamTildelForm.startDato || !teamTildelForm.sluttDato}
-                  onClick={() => handleTildelTeam(teamTildelForm.teamId, teamTildelForm.prosjektId, teamTildelForm.startDato, teamTildelForm.sluttDato)}>
-                  📅 Tildel team
-                </button>
-              </div>
-            </div>
-          </Modal>
-        )}
-      </div>
-    );
-  }
-
-  function BursdagVisning() {
-    const today = dateToIso(new Date());
-    const todayMM = today.slice(5, 7);
-    const todayDD = today.slice(8, 10);
-
-    // Group ansatte by birth month (bursdag format "MM-DD")
-    const byMonth = Array.from({ length: 12 }, () => []);
-    for (const a of state.ansatte) {
-      if (!a.bursdag) continue;
-      const mi = parseInt(a.bursdag.slice(0, 2), 10) - 1;
-      if (mi >= 0 && mi < 12) byMonth[mi].push(a);
-    }
-    // Sort each month by day
-    for (const arr of byMonth) arr.sort((a, b) => a.bursdag.slice(3).localeCompare(b.bursdag.slice(3)));
-
-    // Upcoming birthdays in the next 30 days
-    const upcoming = [];
-    for (let offset = 0; offset <= 30; offset++) {
-      const d = new Date(today + 'T00:00:00');
-      d.setDate(d.getDate() + offset);
-      const mm = String(d.getMonth() + 1).padStart(2, '0');
-      const dd = String(d.getDate()).padStart(2, '0');
-      const md = `${mm}-${dd}`;
-      for (const a of state.ansatte) {
-        if (a.bursdag === md) upcoming.push({ ansatt: a, offset, md });
-      }
-    }
-
-    const totalMedBursdag = state.ansatte.filter(a => a.bursdag).length;
-
-    return (
-      <div>
-        <div className="uke-nav">
-          <span className="uke-label">🎂 Bursdagskalender</span>
-          <span style={{ fontSize: 13, color: '#94a3b8' }}>
-            {totalMedBursdag} av {state.ansatte.length} ansatte har registrert bursdag
-          </span>
-        </div>
-
-        {/* Upcoming birthdays */}
-        {upcoming.length > 0 && (
-          <div className="bursdag-upcoming">
-            {upcoming.map(({ ansatt, offset, md }) => {
-              const isToday = offset === 0;
-              const dayLabel = isToday ? 'I dag!' : offset === 1 ? 'I morgen' : `Om ${offset} dager`;
-              return (
-                <div key={ansatt.id + md} className={`bursdag-upcoming-item${isToday ? ' bursdag-today-item' : ''}`}>
-                  <span className="bursdag-upcoming-emoji">{isToday ? '🎉' : '🎂'}</span>
-                  <div className="mini-avatar" style={{ background: ansatt.innleie ? '#f97316' : fagColor(ansatt.fag), width: 28, height: 28, fontSize: 10, flexShrink: 0 }}>
-                    {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>{ansatt.navn}</div>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>{ansatt.fag}</div>
-                  </div>
-                  <span className={`bursdag-upcoming-label${isToday ? ' today' : ''}`}>{dayLabel}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* 12-month grid */}
-        <div className="bursdag-grid">
-          {MAANED_NAVN.map((mnd, mi) => {
-            const isThisMonth = String(mi + 1).padStart(2, '0') === todayMM;
-            const employees = byMonth[mi];
-            return (
-              <div key={mi} className={`bursdag-month-card${isThisMonth ? ' current-month' : ''}`}>
-                <div className="bursdag-month-header">{mnd}</div>
-                {employees.length === 0 ? (
-                  <div className="bursdag-empty">Ingen</div>
-                ) : (
-                  employees.map(a => {
-                    const dd = a.bursdag.slice(3);
-                    const isToday = isThisMonth && dd === todayDD;
-                    return (
-                      <div key={a.id} className={`bursdag-item${isToday ? ' bursdag-today' : ''}`}>
-                        <span className="bursdag-day">{parseInt(dd, 10)}.</span>
-                        <div className="mini-avatar" style={{ background: a.innleie ? '#f97316' : fagColor(a.fag), width: 20, height: 20, fontSize: 9, flexShrink: 0 }}>
-                          {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                        </div>
-                        <span className="bursdag-navn">{a.navn}</span>
-                        {isToday && <span>🎉</span>}
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {totalMedBursdag === 0 && (
-          <div className="empty">Ingen bursdager registrert ennå. Gå til Ansatte og legg inn bursdag (dag og måned).</div>
-        )}
-      </div>
-    );
-  }
-
-  // --- PROSJEKTOVERSIKT ---
-  function ProsjektOversiktVisning() {
-    const today = dateToIso(new Date());
-    const aktive = state.prosjekter.filter(p => p.status === 'aktiv' || !p.status).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
-
-    return (
-      <div className="proj-oversikt-wrap">
-        {aktive.length === 0 && <div className="empty">Ingen aktive prosjekter.</div>}
-        <div className="proj-oversikt-grid">
-          {aktive.map(prosjekt => {
-            const tildelinger = state.tildelinger.filter(t => t.prosjektId === prosjekt.id);
-            const aktiveTildelinger = tildelinger.filter(t => overlaps(t.startDato, t.sluttDato, today, addDays(today, 30)));
-            const ansatteIds = [...new Set(aktiveTildelinger.map(t => t.ansattId))];
-            const ansatte = ansatteIds.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
-
-            const alleIds = [...new Set(tildelinger.map(t => t.ansattId))];
-            const alleAnsatte = alleIds.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
-
-            const byFag = {};
-            for (const a of ansatte) {
-              if (!byFag[a.fag]) byFag[a.fag] = [];
-              byFag[a.fag].push(a);
-            }
-
-            return (
-              <div key={prosjekt.id} className="proj-oversikt-card">
-                <div className="proj-oversikt-header">
-                  <div className="proj-oversikt-tittel">
-                    <div className="proj-oversikt-navn">{prosjekt.navn}</div>
-                    {prosjekt.adresse && <div className="proj-oversikt-meta">{prosjekt.adresse}</div>}
-                  </div>
-                  <div className="proj-oversikt-count">
-                    <span className="proj-count-num">{ansatte.length}</span>
-                    <span className="proj-count-lbl">nå</span>
-                    {alleAnsatte.length !== ansatte.length && (
-                      <span className="proj-count-total">/ {alleAnsatte.length} tot.</span>
-                    )}
-                  </div>
-                </div>
-
-                {ansatte.length === 0 ? (
-                  <div className="proj-oversikt-tom">
-                    {alleAnsatte.length > 0
-                      ? `${alleAnsatte.length} tildelt – ingen aktive neste 30 dager`
-                      : 'Ingen ansatte tildelt'}
-                  </div>
-                ) : (
-                  <div className="proj-fag-grupper">
-                    {Object.entries(byFag).map(([fag, fagAnsatte]) => (
-                      <div key={fag} className="proj-fag-rad">
-                        <div className="proj-fag-label">
-                          <span className="fag-dot" style={{ background: fagColor(fag) }} />
-                          <span style={{ color: fagColor(fag), fontWeight: 600, fontSize: 12 }}>{fag}</span>
-                          <span className="proj-fag-antall">{fagAnsatte.length}</span>
-                        </div>
-                        <div className="proj-avatar-rad">
-                          {fagAnsatte.map(a => (
-                            <div key={a.id} className="proj-avatar-wrap" title={a.navn}>
-                              <div className="mini-avatar" style={{ background: fagColor(a.fag), width: 34, height: 34, fontSize: 12 }}>
-                                {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                              </div>
-                              <div className="proj-avatar-navn">{a.navn.split(' ')[0]}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  // --- RESSURSALLOKERING ---
-  function RessursVisning() {
-    // Show 8 weeks from current week
-    const weeks = Array.from({ length: 8 }, (_, i) => addDays(currentWeek, i * 7));
-
-    // Ledig kapasitet per uke: ansatte uten prosjekt-tildeling, uten ferie og ikke sykmeldt
-    const ukeStats = weeks.map(weekStr => {
-      const weekEnd = addDays(weekStr, 6);
-      const opptattIds = new Set(state.tildelinger
-        .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, weekStr, weekEnd))
-        .map(t => t.ansattId));
-      const ferieIds = new Set(state.tildelinger
-        .filter(t => t.prosjektId === FERIE_ID && overlaps(t.startDato, t.sluttDato, weekStr, weekEnd))
-        .map(t => t.ansattId));
-      const sykmeldte = planAnsatte.filter(a => erSykmeldtIPeriode(a, weekStr, weekEnd)).length;
-      const ledige = planAnsatte.filter(a =>
-        !opptattIds.has(a.id) && !ferieIds.has(a.id) && !erSykmeldtIPeriode(a, weekStr, weekEnd)
-      ).length;
-      return { weekStr, weekEnd, ledige, ferie: ferieIds.size, sykmeldte, total: planAnsatte.length };
-    });
-
-    return (
-      <div>
-        <div className="uke-nav">
-          <button className="btn" onClick={prevWeek}>← Forrige</button>
-          <div className="uke-label">8-ukers oversikt fra uke {getWeekNumber(currentWeek)}</div>
-          <button className="btn" onClick={thisWeek}>I dag</button>
-          <button className="btn" onClick={nextWeek}>Neste →</button>
-        </div>
-
-        {/* Ledig kapasitet per uke — rask oversikt øverst */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 8, marginBottom: 18 }}>
-          {ukeStats.map(s => {
-            const ingen = s.ledige === 0;
-            const faa = s.ledige > 0 && s.ledige <= 2;
-            const farge = ingen ? '#dc2626' : faa ? '#d97706' : '#16a34a';
-            const bg = ingen ? '#fef2f2' : faa ? '#fffbeb' : '#f0fdf4';
-            return (
-              <div key={s.weekStr}
-                style={{ background: bg, border: `1px solid ${farge}33`, borderTop: `3px solid ${farge}`, borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}
-                title={`Uke ${getWeekNumber(s.weekStr)}: ${s.ledige} ledige av ${s.total}${s.ferie ? ` · ${s.ferie} på ferie` : ''}${s.sykmeldte ? ` · ${s.sykmeldte} sykmeldt` : ''}`}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>
-                  Uke {getWeekNumber(s.weekStr)}
-                </div>
-                <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 4 }}>
-                  {s.weekStr.slice(8)}.{s.weekStr.slice(5, 7)} – {s.weekEnd.slice(8)}.{s.weekEnd.slice(5, 7)}
-                </div>
-                <div style={{ fontSize: 20, fontWeight: 800, color: farge, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
-                  👷 {s.ledige}
-                </div>
-                <div style={{ fontSize: 10, color: farge, fontWeight: 600 }}>ledig{s.ledige !== 1 ? 'e' : ''}</div>
-                {(s.ferie > 0 || s.sykmeldte > 0) && (
-                  <div style={{ fontSize: 10, marginTop: 2, display: 'flex', gap: 6, justifyContent: 'center' }}>
-                    {s.ferie > 0 && <span style={{ color: '#0891b2' }}>🏖 {s.ferie}</span>}
-                    {s.sykmeldte > 0 && <span style={{ color: '#94a3b8' }}>🤒 {s.sykmeldte}</span>}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {state.prosjekter.length === 0 && (
-          <div className="empty">Ingen prosjekter registrert.</div>
-        )}
-
-        {state.fag.map(fag => {
-          const fagAnsatte = planAnsatte.filter(a => a.fag === fag);
-          if (fagAnsatte.length === 0) return null;
-          return (
-            <div key={fag} className="ressurs-gruppe">
-              <div className="ressurs-fag-header" style={{ borderLeft: `4px solid ${fagColor(fag)}` }}>
-                {fag} ({fagAnsatte.length} ansatt{fagAnsatte.length !== 1 ? 'e' : ''})
-              </div>
-              <div className="ressurs-grid-wrap">
-              <div className="ressurs-grid" style={{ gridTemplateColumns: `150px repeat(8, 1fr)` }}>
-                <div className="uke-header-cell" style={{ fontSize: 12 }}>Ansatt</div>
-                {weeks.map(w => (
-                  <div key={w} className="uke-header-cell" style={{ fontSize: 11 }}>
-                    Uke {getWeekNumber(w)}<br />{w.slice(5).replace('-', '.')}
-                  </div>
-                ))}
-                {fagAnsatte.map(ansatt => (
-                  <React.Fragment key={ansatt.id}>
-                    <div className="uke-row-label" style={{ minHeight: 40 }}>
-                      <div className="mini-avatar" style={{ background: fagColor(ansatt.fag), width: 28, height: 28, fontSize: 11 }}>
-                        {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                      </div>
-                      <div className="row-navn" style={{ fontSize: 13 }}>{ansatt.navn}</div>
-                    </div>
-                    {weeks.map(weekStr => {
-                      const weekEnd = addDays(weekStr, 6);
-                      const tilInUke = state.tildelinger.filter(t =>
-                        t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, weekStr, weekEnd)
-                      );
-                      const prosjekterIUke = tilInUke.map(t =>
-                        state.prosjekter.find(p => p.id === t.prosjektId)
-                      ).filter(Boolean);
-                      const belastning = Math.min(tilInUke.length, 3);
-                      const colors = ['#dcfce7', '#fef9c3', '#fee2e2'];
-                      const bgColor = belastning === 0 ? '#f9fafb' : colors[belastning - 1];
-                      return (
-                        <div
-                          key={`${ansatt.id}-${weekStr}`}
-                          className="ressurs-cell"
-                          style={{ background: bgColor }}
-                          title={prosjekterIUke.map(p => p.navn).join('\n') || 'Ledig'}
-                        >
-                          {prosjekterIUke.slice(0, 2).map((p, i) => (
-                            <div key={i} className="ressurs-chip">{p.navn.slice(0, 10)}</div>
-                          ))}
-                          {prosjekterIUke.length > 2 && (
-                            <div className="ressurs-chip">+{prosjekterIUke.length - 2}</div>
-                          )}
-                          {belastning === 0 && <span className="ledig">Ledig</span>}
-                        </div>
-                      );
-                    })}
-                  </React.Fragment>
-                ))}
-              </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    );
-  }
-
   return (
     <div className={`page${fullscreen ? ' bplan-fullscreen' : ''}${storskjerm ? ' bplan-storskjerm' : ''}`}>
       {/* Storskjerm: flytende lukk-knapp */}
@@ -2174,13 +415,99 @@ export default function Bemanningsplan({ readOnly = false }) {
       </div>
 
       <div ref={storskjermContentRef}>
-        {tab === 'uke' && UkeVisning()}
-        {tab === 'oversikt' && OversiktVisning()}
-        {tab === 'ressurs' && RessursVisning()}
-        {tab === 'prosjekt' && ProsjektOversiktVisning()}
-        {tab === 'ferie' && FerieVisning()}
-        {tab === 'bursdag' && BursdagVisning()}
-        {tab === 'teams' && TeamsVisning()}
+        {tab === 'uke' && (
+          <UkeVisning
+            state={state}
+            readOnly={readOnly}
+            planAnsatte={planAnsatte}
+            currentWeek={currentWeek}
+            currentMonth={currentMonth}
+            setCurrentMonth={setCurrentMonth}
+            ukeMode={ukeMode}
+            setUkeMode={setUkeMode}
+            fagFilter={fagFilter}
+            setFagFilter={setFagFilter}
+            weekDays={weekDays}
+            prevWeek={prevWeek}
+            nextWeek={nextWeek}
+            thisWeek={thisWeek}
+            needleDay={needleDay}
+            setNeedleDay={setNeedleDay}
+            draggingNeedle={draggingNeedle}
+            gridWrapRef={gridWrapRef}
+            dragRef={dragRef}
+            HOLIDAYS={holidaysUke}
+            handleDrop={handleDrop}
+            openAddTildeling={openAddTildeling}
+            openBarMenu={openBarMenu}
+            deleteTildeling={deleteTildeling}
+          />
+        )}
+        {tab === 'oversikt' && (
+          <OversiktVisning
+            state={state}
+            readOnly={readOnly}
+            planAnsatte={planAnsatte}
+            fagFilter={fagFilter}
+            setFagFilter={setFagFilter}
+            ansatteOrder={ansatteOrder}
+            setAnsatteOrder={setAnsatteOrder}
+            oversiktScrollRef={oversiktScrollRef}
+            oversiktPanRef={oversiktPanRef}
+            oversiktDragId={oversiktDragId}
+            dragRef={dragRef}
+            HOLIDAYS={holidaysOversikt}
+            handleDrop={handleDrop}
+            openAddTildeling={openAddTildeling}
+            openBarMenu={openBarMenu}
+          />
+        )}
+        {tab === 'ressurs' && (
+          <RessursVisning
+            state={state}
+            planAnsatte={planAnsatte}
+            currentWeek={currentWeek}
+            prevWeek={prevWeek}
+            nextWeek={nextWeek}
+            thisWeek={thisWeek}
+          />
+        )}
+        {tab === 'prosjekt' && <ProsjektOversiktVisning state={state} />}
+        {tab === 'ferie' && (
+          <FerieVisning
+            state={state}
+            readOnly={readOnly}
+            ferieYearOffset={ferieYearOffset}
+            setFerieYearOffset={setFerieYearOffset}
+            openAddFerie={openAddFerie}
+            deleteTildeling={deleteTildeling}
+          />
+        )}
+        {tab === 'bursdag' && <BursdagVisning state={state} />}
+        {tab === 'teams' && (
+          <TeamsVisning
+            state={state}
+            dispatch={dispatch}
+            currentWeek={currentWeek}
+            redigererTeam={redigererTeam}
+            setRedigererTeam={setRedigererTeam}
+            teamForm={teamForm}
+            setTeamForm={setTeamForm}
+            showTeamModal={showTeamModal}
+            setShowTeamModal={setShowTeamModal}
+            teamTildelForm={teamTildelForm}
+            setTeamTildelForm={setTeamTildelForm}
+            visTeamTildel={visTeamTildel}
+            setVisTeamTildel={setVisTeamTildel}
+            teamDragIdx={teamDragIdx}
+            teamDragOver={teamDragOver}
+            setTeamDragOver={setTeamDragOver}
+            memberDragInfo={memberDragInfo}
+            memberDragOverTeam={memberDragOverTeam}
+            setMemberDragOverTeam={setMemberDragOverTeam}
+            handleTildelTeam={handleTildelTeam}
+          />
+        )}
       </div>
 
       {barMenu && (
@@ -2321,6 +648,1799 @@ export default function Bemanningsplan({ readOnly = false }) {
     </div>
   );
 }
+
+// --- UKE-VISNING ---
+function UkeVisning({
+  state, readOnly, planAnsatte, currentWeek, currentMonth, setCurrentMonth,
+  ukeMode, setUkeMode, fagFilter, setFagFilter, weekDays,
+  prevWeek, nextWeek, thisWeek,
+  needleDay, setNeedleDay, draggingNeedle, gridWrapRef,
+  dragRef, HOLIDAYS, handleDrop, openAddTildeling, openBarMenu, deleteTildeling,
+}) {
+  const today = dateToIso(new Date());
+  const isHoliday = (iso) => !!HOLIDAYS[iso];
+  const holidayName = (iso) => HOLIDAYS[iso] || '';
+  const prosjektColor = (pid) => state.prosjekter.find(p => p.id === pid)?.farge || '#6b8fc4';
+  // Felles props som trés ned til GanttRowContainer via rad-komponentene
+  const gantt = { state, readOnly, dragRef, today, isHoliday, holidayName, prosjektColor, handleDrop, openAddTildeling, openBarMenu, deleteTildeling };
+
+  // ---- DAG-MODUS ----
+  const weekEnd = addDays(currentWeek, 52 * 7 - 1);
+
+  const dagProsjektIds = [...new Set(
+    state.tildelinger
+      .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd))
+      .map(t => t.prosjektId)
+  )];
+  const dagProsjekter = dagProsjektIds.map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  const dagTildeltIds = new Set(
+    state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd)).map(t => t.ansattId)
+  );
+  const dagLedige = planAnsatte.filter(a => !dagTildeltIds.has(a.id) && !erSykmeldtIPeriode(a, currentWeek, weekEnd));
+
+
+
+
+
+  // ---- UKE-MODUS: Man–Fre × 52 uker (260 kolonner) ----
+  const TEN_WEEKS = Array.from({ length: 52 }, (_, i) => addDays(currentWeek, i * 7));
+
+  // Alle arbeidsdager (Man–Fre) for 52 uker = 260 dager
+  const WORK_DAYS_UKE = [];
+  for (let w = 0; w < 52; w++) {
+    for (let d = 0; d < 5; d++) {
+      WORK_DAYS_UKE.push(addDays(currentWeek, w * 7 + d));
+    }
+  }
+
+  const periodeStart = currentWeek;
+  const periodeEnd = addDays(currentWeek, 52 * 7 - 1);
+
+  const ukeProsjektIds = [...new Set(
+    state.tildelinger
+      .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd))
+      .map(t => t.prosjektId)
+  )];
+  const ukeProsjekter = ukeProsjektIds.map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  const ukeTildeltIds = new Set(
+    state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd)).map(t => t.ansattId)
+  );
+  const ukeLedige = planAnsatte.filter(a => !ukeTildeltIds.has(a.id) && !erSykmeldtIPeriode(a, periodeStart, periodeEnd));
+
+  // Needle helpers
+  function getNeedleLeft(day) {
+    const idx = WORK_DAYS_UKE.indexOf(day);
+    if (idx < 0) return null;
+    const pct = (idx / WORK_DAYS_UKE.length) * 100;
+    const pxOffset = (idx / WORK_DAYS_UKE.length) * 180;
+    return `calc(${(150 - pxOffset).toFixed(1)}px + ${pct.toFixed(2)}%)`;
+  }
+  function handleNeedlePointerDown(e) {
+    e.preventDefault();
+    draggingNeedle.current = true;
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function handleNeedlePointerMove(e) {
+    if (!draggingNeedle.current) return;
+    const wrap = gridWrapRef.current;
+    if (!wrap) return;
+    const rect = wrap.getBoundingClientRect();
+    const x = e.clientX - rect.left + wrap.scrollLeft - 150;
+    const colWidth = (wrap.scrollWidth - 150) / WORK_DAYS_UKE.length;
+    const idx = Math.max(0, Math.min(WORK_DAYS_UKE.length - 1, Math.floor(x / colWidth)));
+    setNeedleDay(WORK_DAYS_UKE[idx]);
+  }
+  function handleNeedlePointerUp() { draggingNeedle.current = false; }
+
+
+
+
+  const SIX_MONTHS = Array.from({ length: 18 }, (_, i) => addMonths(currentMonth, i));
+  const maanedPeriodeEnd = monthEnd(SIX_MONTHS[17]);
+
+  const maanedProsjektIds = [...new Set(
+    state.tildelinger
+      .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentMonth, maanedPeriodeEnd))
+      .map(t => t.prosjektId)
+  )];
+  const maanedProsjekter = maanedProsjektIds.map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  const maanedTildeltIds = new Set(
+    state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentMonth, maanedPeriodeEnd)).map(t => t.ansattId)
+  );
+  const maanedLedige = planAnsatte.filter(a => !maanedTildeltIds.has(a.id) && !erSykmeldtIPeriode(a, currentMonth, maanedPeriodeEnd));
+
+
+
+
+  const navLabel = ukeMode === 'dag'
+    ? `${formatDate(currentWeek)} – ${formatDate(weekDays[weekDays.length - 1])}`
+    : ukeMode === 'uke'
+    ? `${formatDate(currentWeek)} – ${formatDate(addDays(currentWeek, 51 * 7 + 4))}`
+    : `${monthLabel(SIX_MONTHS[0])} – ${monthLabel(SIX_MONTHS[17])}`;
+
+  function handlePrev() {
+    if (ukeMode === 'maaned') setCurrentMonth(m => addMonths(m, -1));
+    else prevWeek();
+  }
+  function handleNext() {
+    if (ukeMode === 'maaned') setCurrentMonth(m => addMonths(m, 1));
+    else nextWeek();
+  }
+  function handleToday() {
+    if (ukeMode === 'maaned') setCurrentMonth(monthStart(dateToIso(new Date())));
+    else thisWeek();
+  }
+
+  function renderProsjektRader(prosjekter, ledige, cols, AnsattRad, periodeS, periodeE, radExtra) {
+    // Ansatte med ferie i perioden (brukes til å splitte "ledige"-seksjonen)
+    const ferieIds = new Set(
+      state.tildelinger
+        .filter(t => t.prosjektId === FERIE_ID && overlaps(t.startDato, t.sluttDato, periodeS, periodeE))
+        .map(t => t.ansattId)
+    );
+    // Ledige uten ferie → "Ikke tildelt", ledige med ferie → eget "Ferie"-avsnitt nederst
+    const ikkeTildelt = ledige.filter(a => !ferieIds.has(a.id)).filter(a => !fagFilter || a.fag === fagFilter);
+    const ferieKun    = ledige.filter(a =>  ferieIds.has(a.id)).filter(a => !fagFilter || a.fag === fagFilter);
+
+    return (
+      <>
+        {prosjekter.map(prosjekt => {
+          const color = prosjektColor(prosjekt.id);
+          const ids = [...new Set(state.tildelinger.filter(t => t.prosjektId === prosjekt.id && overlaps(t.startDato, t.sluttDato, periodeS, periodeE)).map(t => t.ansattId))];
+          const ansatte = ids.map(id => planAnsatte.find(a => a.id === id)).filter(Boolean)
+            .filter(a => !fagFilter || a.fag === fagFilter);
+          if (ansatte.length === 0) return null;
+          return (
+            <React.Fragment key={prosjekt.id}>
+              <div className="uke-prosjekt-header" style={{ gridColumn: '1 / -1', borderLeft: `4px solid ${color}` }}>
+                <span className="uke-prosjekt-farge" style={{ background: color }} />
+                <span className="uke-prosjekt-navn">{prosjekt.navn}</span>
+                <span className="uke-prosjekt-antall">{ansatte.length} ansatt{ansatte.length !== 1 ? 'e' : ''}</span>
+              </div>
+              {ansatte.map(a => <AnsattRad key={a.id} ansatt={a} prosjektId={prosjekt.id} {...radExtra} />)}
+            </React.Fragment>
+          );
+        })}
+        {ikkeTildelt.length > 0 && (
+          <React.Fragment>
+            <div className="uke-prosjekt-header" style={{ gridColumn: '1 / -1', borderLeft: '4px solid #9ca3af' }}>
+              <span className="uke-prosjekt-navn" style={{ color: '#6b7280' }}>Ikke tildelt i perioden</span>
+              <span className="uke-prosjekt-antall">{ikkeTildelt.length} ansatt{ikkeTildelt.length !== 1 ? 'e' : ''}</span>
+            </div>
+            {ikkeTildelt.map(a => <AnsattRad key={a.id} ansatt={a} prosjektId={null} {...radExtra} />)}
+          </React.Fragment>
+        )}
+        {ferieKun.length > 0 && (
+          <React.Fragment>
+            <div className="uke-prosjekt-header" style={{ gridColumn: '1 / -1', borderLeft: '4px solid #f59e0b' }}>
+              <span className="uke-prosjekt-farge" style={{ background: '#f59e0b' }} />
+              <span className="uke-prosjekt-navn">🏖 Ferie / Fri</span>
+              <span className="uke-prosjekt-antall">{ferieKun.length} ansatt{ferieKun.length !== 1 ? 'e' : ''}</span>
+            </div>
+            {ferieKun.map(a => <AnsattRad key={a.id} ansatt={a} prosjektId={null} {...radExtra} />)}
+          </React.Fragment>
+        )}
+      </>
+    );
+  }
+
+  // Kapasitet denne uken
+  const kapWEnd = addDays(currentWeek, 4);
+  const kapOpptattIds = new Set(
+    state.tildelinger
+      .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, kapWEnd))
+      .map(t => t.ansattId)
+  );
+  const kapFerieIds = new Set(
+    state.tildelinger
+      .filter(t => t.prosjektId === FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, kapWEnd))
+      .map(t => t.ansattId)
+  );
+  const kapTotal   = planAnsatte.length;
+  const kapOpptatt = planAnsatte.filter(a => kapOpptattIds.has(a.id)).length;
+  const kapFerie   = planAnsatte.filter(a => kapFerieIds.has(a.id) && !kapOpptattIds.has(a.id)).length;
+  const kapSyk     = planAnsatte.filter(a => erSykmeldtIPeriode(a, currentWeek, kapWEnd) && !kapOpptattIds.has(a.id) && !kapFerieIds.has(a.id)).length;
+  const kapLedig   = kapTotal - kapOpptatt - kapFerie - kapSyk;
+  const kapPst     = kapTotal > 0 ? Math.round((kapOpptatt / kapTotal) * 100) : 0;
+
+  const fagOptions = state.fag.filter(f => planAnsatte.some(a => a.fag === f));
+
+  return (
+    <div>
+      <div className="uke-nav">
+        <button className="btn" onClick={handlePrev}>← Forrige</button>
+        <div className="uke-label">{navLabel}</div>
+        <button className="btn" onClick={handleToday}>I dag</button>
+        <button className="btn" onClick={handleNext}>Neste →</button>
+        <div className="ukemode-toggle">
+          <button className={`ukemode-btn ${ukeMode === 'dag' ? 'active' : ''}`} onClick={() => setUkeMode('dag')}>Dager</button>
+          <button className={`ukemode-btn ${ukeMode === 'uke' ? 'active' : ''}`} onClick={() => setUkeMode('uke')}>Uker</button>
+          <button className={`ukemode-btn ${ukeMode === 'maaned' ? 'active' : ''}`} onClick={() => setUkeMode('maaned')}>Måneder</button>
+        </div>
+      </div>
+
+      {/* Kapasitetsmåler – kun i dagmodus */}
+      {ukeMode === 'dag' && kapTotal > 0 && (
+        <div className="bplan-kap-banner">
+          <span className="bplan-kap-tittel">Uke {getWeekNumber(currentWeek)}</span>
+          <span className="bplan-kap-chip bplan-kap-chip--opptatt">🔨 {kapOpptatt} opptatt</span>
+          {kapFerie > 0 && <span className="bplan-kap-chip bplan-kap-chip--ferie">🏖 {kapFerie} ferie</span>}
+          <span className="bplan-kap-chip" style={{ background: kapLedig > 0 ? '#f0fdf4' : '#fef2f2', color: kapLedig > 0 ? '#16a34a' : '#dc2626' }}>
+            {kapLedig > 0 ? '✅' : '🔴'} {kapLedig} ledig
+          </span>
+          <div className="bplan-kap-bar-outer">
+            <div className="bplan-kap-bar-seg bplan-kap-bar-opptatt" style={{ width: kapPst + '%' }} />
+            <div className="bplan-kap-bar-seg bplan-kap-bar-ferie" style={{ width: (kapTotal > 0 ? kapFerie / kapTotal * 100 : 0) + '%' }} />
+          </div>
+          <span className="bplan-kap-pst">{kapPst}% utnyttet</span>
+        </div>
+      )}
+
+      {/* Fag-filter */}
+      {fagOptions.length > 1 && (
+        <div className="bplan-fag-filter">
+          <button className={`bplan-fag-pill${!fagFilter ? ' aktiv' : ''}`} onClick={() => setFagFilter(null)}>Alle</button>
+          {fagOptions.map(f => (
+            <button key={f}
+              className={`bplan-fag-pill${fagFilter === f ? ' aktiv' : ''}`}
+              style={fagFilter === f
+                ? { background: fagColor(f), color: '#fff', borderColor: fagColor(f) }
+                : { borderColor: fagColor(f), color: fagColor(f) }}
+              onClick={() => setFagFilter(ff => ff === f ? null : f)}>
+              {f}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {state.ansatte.length === 0 && <div className="empty">Ingen ansatte registrert enda.</div>}
+
+      {ukeMode === 'dag' ? (
+        <div className="uke-grid-wrap">
+          <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(${weekDays.length}, minmax(36px, 1fr))` }}>
+            <DagGridHeader weekDays={weekDays} HOLIDAYS={HOLIDAYS} today={today} />
+            {renderProsjektRader(dagProsjekter, dagLedige, weekDays.length, DagAnsattRad, currentWeek, weekEnd, { days: weekDays, gantt })}
+          </div>
+        </div>
+      ) : ukeMode === 'uke' ? (
+        <div className="uke-grid-wrap"
+          ref={gridWrapRef}
+          onPointerMove={handleNeedlePointerMove}
+          onPointerUp={handleNeedlePointerUp}
+        >
+          {/* Drabar dato-nål */}
+          {getNeedleLeft(needleDay) && (
+            <div className="timeline-needle"
+              style={{ left: getNeedleLeft(needleDay) }}
+              onPointerDown={handleNeedlePointerDown}
+              title={`Nål: ${formatDate(needleDay)} — dra for å flytte`}
+            >
+              <div className="needle-label">{formatDate(needleDay)}</div>
+            </div>
+          )}
+          <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(260, minmax(28px, 1fr))` }}>
+            <UkeGridHeader WORK_DAYS_UKE={WORK_DAYS_UKE} TEN_WEEKS={TEN_WEEKS} today={today} HOLIDAYS={HOLIDAYS} />
+            {renderProsjektRader(ukeProsjekter, ukeLedige, 260, UkeAnsattRad, periodeStart, periodeEnd, { days: WORK_DAYS_UKE, gantt })}
+          </div>
+        </div>
+      ) : (
+        <div className="uke-grid-wrap">
+          <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(18, minmax(80px, 1fr))` }}>
+            <MaanedGridHeader SIX_MONTHS={SIX_MONTHS} today={today} />
+            {renderProsjektRader(maanedProsjekter, maanedLedige, 18, MaanedAnsattRad, currentMonth, maanedPeriodeEnd, { days: SIX_MONTHS, gantt })}
+          </div>
+        </div>
+      )}
+
+      <div style={{ marginTop: 12, color: '#6b7280', fontSize: 13 }}>
+        Klikk på en celle for å legge til en tildeling.
+      </div>
+    </div>
+  );
+}
+
+// Shared Gantt row container — renders continuous bars with drag handles
+// prosjektId: vis kun dette prosjektets bars normalt; andre prosjekter vises som opptatt-bar
+function GanttRowContainer({
+  ansatt, days, unit, prosjektId,
+  state, readOnly, dragRef, today, isHoliday, holidayName, prosjektColor,
+  handleDrop, openAddTildeling, openBarMenu, deleteTildeling,
+}) {
+  const [dragOverIdx, setDragOverIdx] = useState(null);
+  const n = days.length;
+  const viewEnd = unit === 'month' ? monthEnd(days[n - 1]) : days[n - 1];
+
+  const myTil = state.tildelinger.filter(t =>
+    t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, days[0], viewEnd)
+  );
+
+  // Splitt i primær (dette prosjektet + ferie) og opptatt (andre prosjekter)
+  const primaryTil = prosjektId
+    ? myTil.filter(t => t.prosjektId === prosjektId || t.prosjektId === FERIE_ID)
+    : myTil;
+  const busyTil = prosjektId
+    ? myTil.filter(t => t.prosjektId !== prosjektId && t.prosjektId !== FERIE_ID)
+    : [];
+
+  function getIdxFromEvent(e) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    return Math.min(n - 1, Math.max(0, Math.floor(x / (rect.width / n))));
+  }
+
+  function getBarPos(t) {
+    let si = -1, ei = -1;
+    for (let i = 0; i < n; i++) {
+      const hit = unit === 'month'
+        ? overlaps(t.startDato, t.sluttDato, days[i], monthEnd(days[i]))
+        : (days[i] >= t.startDato && days[i] <= t.sluttDato);
+      if (hit) { if (si === -1) si = i; ei = i; }
+    }
+    if (si === -1) return null;
+    return {
+      left: `${(si / n) * 100}%`,
+      width: `${((ei - si + 1) / n) * 100}%`,
+      isFirst: t.startDato >= days[0],
+      isLast: t.sluttDato <= viewEnd,
+    };
+  }
+
+  return (
+    <div
+      className="gantt-row"
+      style={{ gridColumn: '2 / -1' }}
+      onDragOver={e => { e.preventDefault(); setDragOverIdx(getIdxFromEvent(e)); }}
+      onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverIdx(null); }}
+      onDrop={e => {
+        e.preventDefault();
+        const idx = getIdxFromEvent(e);
+        setDragOverIdx(null);
+        handleDrop(days[idx], unit === 'month' ? 'month' : 'day');
+      }}
+      onClick={e => {
+        if (!readOnly && (e.target === e.currentTarget || e.target.classList.contains('gantt-bg-cell'))) {
+          openAddTildeling(ansatt.id, days[getIdxFromEvent(e)]);
+        }
+      }}
+    >
+      {days.map((d, i) => {
+        const isMonday = unit === 'day_50' && i % 5 === 0;
+        const isTod = unit === 'month' ? d.slice(0, 7) === today.slice(0, 7) : d === today;
+        const isHol = unit !== 'month' && isHoliday(d);
+        return (
+          <div key={d}
+            className={`gantt-bg-cell${isTod ? ' today-col' : ''}${isMonday ? ' week-start-col' : ''}${isHol ? ' holiday-col' : ''}${dragOverIdx === i ? ' drag-over' : ''}`}
+            style={{ left: `${(i / n) * 100}%`, width: `${100 / n}%` }}
+            title={isHol ? holidayName(d) : undefined}
+          />
+        );
+      })}
+      {/* Opptatt-bars: andre prosjekter — gjennomsiktig, ikke klikkbar */}
+      {busyTil.map(t => {
+        const pos = getBarPos(t);
+        if (!pos) return null;
+        const pNavn = state.prosjekter.find(pr => pr.id === t.prosjektId)?.navn || '–';
+        return (
+          <div key={t.id + '-busy'}
+            className="gantt-bar gantt-bar-busy"
+            style={{ left: pos.left, width: pos.width, background: prosjektColor(t.prosjektId) }}
+            title={`Opptatt: ${pNavn} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}`}
+          >
+            <span className="gantt-busy-label">{pNavn}</span>
+          </div>
+        );
+      })}
+      {/* Primær-bars: dette prosjektets tildelinger + ferie */}
+      {primaryTil.map(t => {
+        const pos = getBarPos(t);
+        if (!pos) return null;
+        const isFerie = t.prosjektId === FERIE_ID;
+        const p = isFerie ? null : state.prosjekter.find(pr => pr.id === t.prosjektId);
+        const barLabel = isFerie ? 'Ferie / Fri' : (p?.navn || '–');
+        return (
+          <div key={t.id}
+            className={`gantt-bar${isFerie ? ' gantt-bar-ferie' : ''}`}
+            style={{ left: pos.left, width: pos.width, ...(isFerie ? {} : { background: prosjektColor(t.prosjektId) }) }}
+            onClick={e => {
+              e.stopPropagation();
+              const mid = addDays(t.startDato, Math.max(1, Math.floor(daysDiff(t.startDato, t.sluttDato) / 2)));
+              openBarMenu(t, mid, e.clientX, e.clientY);
+            }}
+            title={`${barLabel} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)} — klikk for valg`}
+          >
+            {pos.isFirst
+              ? <div className="gantt-handle gantt-handle-l" draggable onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'start' }; }}>◂</div>
+              : <div className="gantt-handle-spacer" />}
+            <span className="gantt-label">{barLabel}</span>
+            <div className="gantt-actions">
+              <button onClick={e => { e.stopPropagation(); deleteTildeling(t.id); }} title="Slett">✕</button>
+            </div>
+            {pos.isLast
+              ? <div className="gantt-handle gantt-handle-r" draggable onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'end' }; }}>▸</div>
+              : <div className="gantt-handle-spacer" />}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function DagAnsattRad({ ansatt, prosjektId, days, gantt }) {
+  return (
+    <React.Fragment>
+      <div className="uke-row-label">
+        <div className="mini-avatar" style={{ background: fagColor(ansatt.fag) }}>
+          {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+        </div>
+        <div>
+          <div className="row-navn">{ansatt.navn}</div>
+          <div className="row-fag" style={{ color: fagColor(ansatt.fag) }}>
+            {ansatt.innleie && <span style={{ color: '#f97316', fontWeight: 600, marginRight: 3 }}>🔧</span>}
+            {ansatt.fag}
+          </div>
+        </div>
+      </div>
+      <GanttRowContainer ansatt={ansatt} days={days} unit="day" prosjektId={prosjektId} {...gantt} />
+    </React.Fragment>
+  );
+}
+
+function DagGridHeader({ weekDays, HOLIDAYS, today }) {
+  return (
+    <>
+      <div className="uke-header-cell"></div>
+      {weekDays.map((dag) => {
+        const hol = HOLIDAYS[dag];
+        const dow = new Date(dag + 'T00:00:00').getDay(); // 1=Man … 5=Fre
+        const isMonday = dow === 1;
+        const weekNum = getWeekNumber(dag);
+        const isCurrentWeek = weekStart(dag) === weekStart(today);
+        return (
+          <div key={dag} className={`uke-header-cell ${dag === today ? 'today' : ''} ${isMonday ? 'week-start-col' : ''} ${hol ? 'holiday-header' : ''}`}
+            style={{ fontSize: 11, padding: '4px 2px', textAlign: 'center' }}
+            title={hol || undefined}>
+            {isMonday && (
+              <div style={{ fontSize: 10, fontWeight: 700, color: isCurrentWeek ? '#2563eb' : '#94a3b8', lineHeight: 1.2 }}>
+                U{weekNum}
+              </div>
+            )}
+            <div style={{ fontWeight: isMonday ? 700 : 400 }}>{DAG_NAVN[dow - 1]}</div>
+            <div className="dag-dato" style={{ fontSize: 10 }}>{dag.slice(8)}.{dag.slice(5, 7)}</div>
+            {hol && <div className="holiday-label">{hol.split(' ')[0]}</div>}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+function ProsjektGruppe({ prosjekt, ansatte, cols, GridHeader, AnsattRad, prosjektColor }) {
+  const color = prosjektColor(prosjekt.id);
+  return (
+    <div className="uke-prosjekt-gruppe">
+      <div className="uke-prosjekt-header" style={{ borderLeft: `4px solid ${color}` }}>
+        <span className="uke-prosjekt-farge" style={{ background: color }} />
+        <span className="uke-prosjekt-navn">{prosjekt.navn}</span>
+        <span className="uke-prosjekt-antall">{ansatte.length} ansatt{ansatte.length !== 1 ? 'e' : ''}</span>
+      </div>
+      <div className="uke-grid-wrap">
+        <div className="uke-grid" style={{ gridTemplateColumns: `180px repeat(${cols}, 1fr)` }}>
+          <GridHeader />
+          {ansatte.map(a => <AnsattRad key={a.id} ansatt={a} />)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UkeAnsattRad({ ansatt, prosjektId, days, gantt }) {
+  return (
+    <React.Fragment>
+      <div className="uke-row-label" style={ansatt.sykmeldt ? { opacity: 0.45, filter: 'grayscale(1)' } : {}}>
+        <div className="mini-avatar" style={{ background: ansatt.sykmeldt ? '#94a3b8' : fagColor(ansatt.fag) }}>
+          {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+        </div>
+        <div>
+          <div className="row-navn">{ansatt.navn}</div>
+          <div className="row-fag" style={{ color: ansatt.sykmeldt ? '#94a3b8' : fagColor(ansatt.fag) }}>
+            {ansatt.sykmeldt ? '🤒 Sykmeldt' : ansatt.innleie ? <><span style={{ color: '#f97316', fontWeight: 600, marginRight: 3 }}>🔧</span>{ansatt.fag}</> : ansatt.fag}
+          </div>
+        </div>
+      </div>
+      <GanttRowContainer ansatt={ansatt} days={days} unit="day_50" prosjektId={prosjektId} {...gantt} />
+    </React.Fragment>
+  );
+}
+
+function UkeGridHeader({ WORK_DAYS_UKE, TEN_WEEKS, today, HOLIDAYS }) {
+  return (
+    <>
+      <div className="uke-header-cell"></div>
+      {WORK_DAYS_UKE.map((dag, i) => {
+        const isMonday = i % 5 === 0;
+        const weekIdx = Math.floor(i / 5);
+        const isToday = dag === today;
+        const isCurrentWeek = weekStart(dag) === weekStart(today);
+        const hol = HOLIDAYS[dag];
+        return (
+          <div key={dag}
+            className={`uke-header-cell ${isToday ? 'today' : ''} ${isMonday ? 'week-start-col' : ''} ${hol ? 'holiday-header' : ''}`}
+            style={{ fontSize: 11, padding: '4px 2px', textAlign: 'center' }}
+            title={hol || undefined}>
+            {isMonday && (
+              <div style={{ fontSize: 10, fontWeight: 700, color: isCurrentWeek ? '#2563eb' : '#94a3b8', lineHeight: 1.2 }}>
+                U{getWeekNumber(TEN_WEEKS[weekIdx])}
+              </div>
+            )}
+            <div style={{ fontWeight: isMonday ? 700 : 400 }}>{DAG_NAVN[i % 5]}</div>
+            <div className="dag-dato" style={{ fontSize: 10 }}>{dag.slice(8)}.{dag.slice(5, 7)}</div>
+            {hol && <div className="holiday-label">{hol.split(' ')[0]}</div>}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+function MaanedAnsattRad({ ansatt, prosjektId, days, gantt }) {
+  return (
+    <React.Fragment>
+      <div className="uke-row-label" style={ansatt.sykmeldt ? { opacity: 0.45, filter: 'grayscale(1)' } : {}}>
+        <div className="mini-avatar" style={{ background: ansatt.sykmeldt ? '#94a3b8' : fagColor(ansatt.fag) }}>
+          {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+        </div>
+        <div>
+          <div className="row-navn">{ansatt.navn}</div>
+          <div className="row-fag" style={{ color: ansatt.sykmeldt ? '#94a3b8' : fagColor(ansatt.fag) }}>
+            {ansatt.sykmeldt ? '🤒 Sykmeldt' : ansatt.innleie ? <><span style={{ color: '#f97316', fontWeight: 600, marginRight: 3 }}>🔧</span>{ansatt.fag}</> : ansatt.fag}
+          </div>
+        </div>
+      </div>
+      <GanttRowContainer ansatt={ansatt} days={days} unit="month" prosjektId={prosjektId} {...gantt} />
+    </React.Fragment>
+  );
+}
+
+function MaanedGridHeader({ SIX_MONTHS, today }) {
+  return (
+    <>
+      <div className="uke-header-cell"></div>
+      {SIX_MONTHS.map(m => {
+        const isCurrentMonth = m.slice(0, 7) === today.slice(0, 7);
+        return (
+          <div key={m} className={`uke-header-cell ${isCurrentMonth ? 'today' : ''}`} style={{ fontSize: 12 }}>
+            <div style={{ fontWeight: 700 }}>{monthLabel(m)}</div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+
+// --- MULTI-UKE GANTT OVERSIKT ---
+function OversiktVisning({
+  state, readOnly, planAnsatte, fagFilter, setFagFilter,
+  ansatteOrder, setAnsatteOrder, oversiktScrollRef, oversiktPanRef, oversiktDragId,
+  dragRef, HOLIDAYS, handleDrop, openAddTildeling, openBarMenu,
+}) {
+  const today = dateToIso(new Date());
+  const PAST_WEEKS  = 4;   // uker før i dag som vises
+  const GANTT_WEEKS = 60;  // total antall uker (4 bak + 56 frem ≈ 14 måneder)
+  const DAY_W = 36;   // px per weekday
+  const ROW_H = 34;   // px per employee row
+  const LABEL_W = 162;
+
+  // Fast startpunkt – alltid 4 uker før i dag, uavhengig av navigasjon
+  const baseWeek = weekStart(addDays(today, -PAST_WEEKS * 7));
+
+  const weeks = [];
+  for (let w = 0; w < GANTT_WEEKS; w++) {
+    const wStart = addDays(baseWeek, w * 7);
+    const wDays = [0, 1, 2, 3, 4].map(d => addDays(wStart, d));
+    weeks.push({ start: wStart, end: wDays[4], days: wDays });
+  }
+
+  const allDays = weeks.flatMap(w => w.days);
+  const viewStart = allDays[0];
+  const viewEnd   = allDays[allDays.length - 1];
+  const totalW    = allDays.length * DAY_W;
+
+  function wkNr(isoDate) {
+    const d = new Date(isoDate + 'T00:00:00');
+    d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+    const w = new Date(d.getFullYear(), 0, 4);
+    return 1 + Math.round(((d - w) / 86400000 - 3 + ((w.getDay() + 6) % 7)) / 7);
+  }
+
+  function weekLabel(wk) {
+    const sD = parseInt(wk.start.slice(8), 10);
+    const sM = parseInt(wk.start.slice(5, 7), 10) - 1;
+    const eD = parseInt(wk.end.slice(8), 10);
+    const eM = parseInt(wk.end.slice(5, 7), 10) - 1;
+    const range = sM === eM
+      ? `${sD}.–${eD}. ${MAANED_NAVN[sM].slice(0, 3).toLowerCase()}`
+      : `${sD}. ${MAANED_NAVN[sM].slice(0, 3).toLowerCase()} – ${eD}. ${MAANED_NAVN[eM].slice(0, 3).toLowerCase()}`;
+    return `${wkNr(wk.start)} · ${range}`;
+  }
+
+  // Pixel position of a tildeling bar within the allDays array
+  function barProps(t) {
+    if (!overlaps(t.startDato, t.sluttDato, viewStart, viewEnd)) return null;
+    const si = allDays.findIndex(d => d >= t.startDato);
+    let ei = -1;
+    for (let i = allDays.length - 1; i >= 0; i--) {
+      if (allDays[i] <= t.sluttDato) { ei = i; break; }
+    }
+    if (si === -1 || ei === -1 || si > ei) return null;
+    return { left: si * DAY_W + 2, width: (ei - si + 1) * DAY_W - 4 };
+  }
+
+  const DAY_NAMES = ['Ma', 'Ti', 'On', 'To', 'Fr'];
+  const todayIdx = allDays.indexOf(today);
+
+  // Fast ansatte (A–Å) alltid før innleie (A–Å).
+  // Innenfor hver gruppe respekteres evt. drag-rekkefølge; nye ansatte
+  // som ikke er i den lagrede rekkefølgen havner alphabetisk i sin gruppe.
+  const orderedAnsatte = (() => {
+    const fast    = [...planAnsatte].filter(a => !a.innleie).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+    const innleie = [...planAnsatte].filter(a =>  a.innleie).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+    if (!ansatteOrder || ansatteOrder.length === 0) return [...fast, ...innleie];
+    const inOrder = new Set(ansatteOrder);
+    const ordFast = [
+      ...ansatteOrder.map(id => fast.find(a => a.id === id)).filter(Boolean),
+      ...fast.filter(a => !inOrder.has(a.id)),
+    ];
+    const ordInnleie = [
+      ...ansatteOrder.map(id => innleie.find(a => a.id === id)).filter(Boolean),
+      ...innleie.filter(a => !inOrder.has(a.id)),
+    ];
+    return [...ordFast, ...ordInnleie];
+  })();
+
+  // Drag-and-drop helpers (manipulate DOM directly — no state re-renders during drag)
+  function clearDragOver() {
+    document.querySelectorAll('.oversikt-row[data-dragover]').forEach(el => {
+      delete el.dataset.dragover;
+    });
+  }
+
+  function saveOrder(newOrder) {
+    setAnsatteOrder(newOrder);
+    localStorage.setItem('fbs_ansatte_order_v2', JSON.stringify(newOrder));
+  }
+
+  const ovFagOptions = state.fag.filter(f => planAnsatte.some(a => a.fag === f));
+  const filteredAnsatte = fagFilter ? orderedAnsatte.filter(a => a.fag === fagFilter) : orderedAnsatte;
+
+  return (
+    <div>
+      {/* Navigation */}
+      <div className="uke-nav">
+        <button className="btn" title="Gå til i dag"
+          onClick={() => {
+            if (!oversiktScrollRef.current) return;
+            const todayIdx = allDays.indexOf(today);
+            if (todayIdx >= 0) oversiktScrollRef.current.scrollLeft = LABEL_W + todayIdx * DAY_W - 120;
+          }}>⊙ I dag</button>
+        <span style={{ fontSize: 12, color: '#94a3b8' }}>Dra tidslinjen for å navigere</span>
+        {ansatteOrder.length > 0 && (state.teams || []).length === 0 && (
+          <button className="btn" title="Tilbakestill til alfabetisk rekkefølge"
+            onClick={() => saveOrder([])}>↺ Alfabetisk</button>
+        )}
+        {!readOnly && <button className="btn btn-primary no-print" onClick={() => openAddTildeling()}>+ Ny tildeling</button>}
+      </div>
+
+      {/* Fag-filter */}
+      {ovFagOptions.length > 1 && (
+        <div className="bplan-fag-filter">
+          <button className={`bplan-fag-pill${!fagFilter ? ' aktiv' : ''}`} onClick={() => setFagFilter(null)}>Alle</button>
+          {ovFagOptions.map(f => (
+            <button key={f}
+              className={`bplan-fag-pill${fagFilter === f ? ' aktiv' : ''}`}
+              style={fagFilter === f
+                ? { background: fagColor(f), color: '#fff', borderColor: fagColor(f) }
+                : { borderColor: fagColor(f), color: fagColor(f) }}
+              onClick={() => setFagFilter(ff => ff === f ? null : f)}>
+              {f}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="oversikt-scroll-wrap" ref={oversiktScrollRef}
+        onPointerDown={e => {
+          if (e.target.closest('.oversikt-bar,.oversikt-handle,.oversikt-drag-handle,button')) return;
+          if (dragRef.current) return;
+          oversiktPanRef.current = { startX: e.clientX, startScrollLeft: oversiktScrollRef.current.scrollLeft, pointerId: e.pointerId, panning: false };
+        }}
+        onPointerMove={e => {
+          if (!oversiktPanRef.current) return;
+          const dx = e.clientX - oversiktPanRef.current.startX;
+          if (!oversiktPanRef.current.panning && Math.abs(dx) > 5) {
+            oversiktPanRef.current.panning = true;
+            e.currentTarget.setPointerCapture(oversiktPanRef.current.pointerId);
+            e.currentTarget.style.cursor = 'grabbing';
+          }
+          if (oversiktPanRef.current.panning) {
+            oversiktScrollRef.current.scrollLeft = oversiktPanRef.current.startScrollLeft - dx;
+          }
+        }}
+        onPointerUp={e => {
+          if (!oversiktPanRef.current) return;
+          if (oversiktPanRef.current.panning) e.currentTarget.style.cursor = '';
+          oversiktPanRef.current = null;
+        }}
+        onPointerCancel={e => {
+          oversiktPanRef.current = null;
+          e.currentTarget.style.cursor = '';
+        }}
+      >
+        <div style={{ display: 'inline-block', verticalAlign: 'top', width: LABEL_W + totalW, minWidth: '100%' }}>
+
+          {/* ── Uke-header ─────────────────────────────────── */}
+          <div className="oversikt-wk-header-row">
+            <div className="oversikt-corner" style={{ width: LABEL_W }} />
+            {weeks.map((wk, wi) => {
+              const isCurrent = wk.days.includes(today);
+              return (
+                <div key={wi}
+                  className={`oversikt-wk-cell${isCurrent ? ' current' : ''}`}
+                  style={{ width: wk.days.length * DAY_W }}>
+                  {weekLabel(wk)}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ── Dag-header ─────────────────────────────────── */}
+          <div className="oversikt-day-header-row">
+            <div className="oversikt-day-corner" style={{ width: LABEL_W }}>Ansatt</div>
+            {allDays.map((d, i) => {
+              const dow = (new Date(d + 'T00:00:00').getDay() + 6) % 7;
+              const isToday    = d === today;
+              const isHoliday  = !!HOLIDAYS[d];
+              const isWeekLast = dow === 4;
+              return (
+                <div key={d}
+                  className={`oversikt-day-cell${isToday ? ' today' : ''}${isHoliday ? ' holiday' : ''}${isWeekLast ? ' week-last' : ''}`}
+                  style={{ width: DAY_W }}>
+                  <span>{DAY_NAMES[dow]}</span>
+                  <span>{parseInt(d.slice(8), 10)}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ── Kapasitetsrad ──────────────────────────────── */}
+          <div className="oversikt-kap-row" style={{ display: 'flex', minWidth: LABEL_W + totalW }}>
+            <div className="oversikt-kap-corner" style={{ width: LABEL_W }}>Ledig</div>
+            {weeks.map((wk, wi) => {
+              const wOpptattIds = new Set(
+                state.tildelinger
+                  .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, wk.start, wk.end))
+                  .map(t => t.ansattId)
+              );
+              const tot = planAnsatte.length;
+              const opp = planAnsatte.filter(a => wOpptattIds.has(a.id)).length;
+              const led = tot - opp;
+              const pst = tot > 0 ? Math.round((led / tot) * 100) : 0;
+              const farge = led === 0 ? '#dc2626' : led <= 2 ? '#f59e0b' : '#16a34a';
+              const isCurrent = wk.days.includes(today);
+              return (
+                <div key={wi} className={`oversikt-kap-cell${isCurrent ? ' current' : ''}`} style={{ width: wk.days.length * DAY_W }}>
+                  <div className="oversikt-kap-bar-wrap">
+                    <div className="oversikt-kap-bar-fill" style={{ width: (100 - pst) + '%', background: '#e2e8f0' }} />
+                  </div>
+                  <span className="oversikt-kap-lbl" style={{ color: farge }}>{led}/{tot}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ── Ansatte-rader (gruppert etter team) ───────── */}
+          {(() => {
+            const teams = state.teams || [];
+            let rowIdx = 0;
+
+            function renderAnsattRad(ansatt) {
+              const myTils = state.tildelinger
+                .filter(t => t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, viewStart, viewEnd))
+                .sort((a, b) => (a.prosjektId === FERIE_ID ? 1 : 0) - (b.prosjektId === FERIE_ID ? 1 : 0));
+              const ri = rowIdx++;
+              return (
+              <div key={ansatt.id}
+                className={`oversikt-row${ri % 2 === 0 ? '' : ' alt'}`}
+                style={{ height: ROW_H }}
+                onDragOver={e => {
+                  if (!oversiktDragId.current) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  clearDragOver();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  e.currentTarget.dataset.dragover = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+                }}
+                onDragLeave={e => {
+                  if (!e.currentTarget.contains(e.relatedTarget)) delete e.currentTarget.dataset.dragover;
+                }}
+                onDrop={e => {
+                  e.preventDefault();
+                  delete e.currentTarget.dataset.dragover;
+                  const fromId = oversiktDragId.current;
+                  const toId   = ansatt.id;
+                  if (!fromId || fromId === toId) return;
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const pos  = e.clientY < rect.top + rect.height / 2 ? 'before' : 'after';
+                  const ids  = orderedAnsatte.map(a => a.id).filter(id => id !== fromId);
+                  const at   = ids.indexOf(toId) + (pos === 'after' ? 1 : 0);
+                  ids.splice(at, 0, fromId);
+                  saveOrder(ids);
+                }}
+              >
+
+                {/* Sticky name label */}
+                <div className="oversikt-row-label" style={{ width: LABEL_W, height: ROW_H }}>
+                  <span
+                    className="oversikt-drag-handle"
+                    title="Dra for å flytte"
+                    draggable
+                    onDragStart={e => {
+                      e.stopPropagation();
+                      oversiktDragId.current = ansatt.id;
+                      e.dataTransfer.effectAllowed = 'move';
+                      e.currentTarget.closest('.oversikt-row').classList.add('dragging');
+                    }}
+                    onDragEnd={e => {
+                      oversiktDragId.current = null;
+                      e.currentTarget.closest('.oversikt-row').classList.remove('dragging');
+                      clearDragOver();
+                    }}
+                  >⠿</span>
+                  <div className="mini-avatar" style={{
+                    background: ansatt.sykmeldt ? '#94a3b8' : ansatt.innleie ? '#f97316' : fagColor(ansatt.fag),
+                    width: 22, height: 22, fontSize: 9, flexShrink: 0,
+                    filter: ansatt.sykmeldt ? 'grayscale(1)' : 'none',
+                  }}>
+                    {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                  </div>
+                  <span className="oversikt-row-navn" style={ansatt.sykmeldt ? { color: '#94a3b8' } : {}}>
+                    {ansatt.navn}
+                  </span>
+                  {ansatt.sykmeldt
+                    ? <span style={{ fontSize: 9, color: '#94a3b8', flexShrink: 0 }}>🤒</span>
+                    : ansatt.innleie && <span style={{ fontSize: 9, color: '#f97316', flexShrink: 0 }}>🔧</span>
+                  }
+                </div>
+
+                {/* Bar area */}
+                <div className="oversikt-bars-area" style={{ width: totalW, height: ROW_H }}
+                  onPointerUp={e => {
+                    if (!dragRef.current) return;
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    const dayIdx = Math.max(0, Math.min(allDays.length - 1, Math.floor((e.clientX - rect.left) / DAY_W)));
+                    handleDrop(allDays[dayIdx], 'day');
+                  }}
+                >
+                  {/* Background grid cells */}
+                  {allDays.map((d, i) => {
+                    const dow = (new Date(d + 'T00:00:00').getDay() + 6) % 7;
+                    return (
+                      <div key={d}
+                        className={`oversikt-bg-cell${d === today ? ' today-col' : ''}${HOLIDAYS[d] ? ' holiday-col' : ''}${dow === 4 ? ' week-last' : ''}`}
+                        style={{ left: i * DAY_W, width: DAY_W }}
+                        onClick={() => { if (!readOnly && !dragRef.current) openAddTildeling(ansatt.id, d); }}
+                      />
+                    );
+                  })}
+
+                  {/* Today needle */}
+                  {todayIdx >= 0 && (
+                    <div className="oversikt-needle" style={{ left: todayIdx * DAY_W + DAY_W / 2 }} />
+                  )}
+
+                  {/* Sykmeldt-bar */}
+                  {ansatt.sykmeldt && (() => {
+                    const fra = ansatt.sykmeldtFra || viewStart;
+                    const til = ansatt.sykmeldtTil || viewEnd;
+                    const bp = barProps({ startDato: fra, sluttDato: til });
+                    if (!bp) return null;
+                    return (
+                      <div key="syk" style={{
+                        position: 'absolute', top: 4, height: ROW_H - 8,
+                        left: bp.left, width: bp.width,
+                        background: 'repeating-linear-gradient(45deg,#e2e8f0,#e2e8f0 4px,#f1f5f9 4px,#f1f5f9 8px)',
+                        borderRadius: 4, border: '1px solid #cbd5e1',
+                        display: 'flex', alignItems: 'center', paddingLeft: 6,
+                        fontSize: 10, color: '#94a3b8', fontWeight: 600, gap: 4,
+                        pointerEvents: 'none',
+                      }}>
+                        🤒 Sykmeldt{ansatt.sykmeldtTil ? ` t.o.m. ${new Date(ansatt.sykmeldtTil + 'T00:00:00').toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })}` : ''}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Project / ferie bars */}
+                  {myTils.map(t => {
+                    const bp = barProps(t);
+                    if (!bp) return null;
+                    const isFerie = t.prosjektId === FERIE_ID;
+                    const proj  = isFerie ? null : state.prosjekter.find(p => p.id === t.prosjektId);
+                    const color = proj?.farge || '#6b7280';
+                    const label = isFerie ? '🏖 Ferie' : (proj?.navn || '?');
+
+                    return (
+                      <div key={t.id}
+                        className={`oversikt-bar${isFerie ? ' oversikt-bar-ferie' : ''}`}
+                        style={{ left: bp.left, width: bp.width, ...(isFerie ? {} : { background: color }) }}
+                        title={`${label} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)} — klikk for valg`}
+                        onClick={e => {
+                          e.stopPropagation();
+                          if (dragRef.current) return;
+                          const area = e.currentTarget.closest('.oversikt-bars-area');
+                          const rect = area ? area.getBoundingClientRect() : e.currentTarget.getBoundingClientRect();
+                          const dayIdx = Math.max(0, Math.min(allDays.length - 1, Math.floor((e.clientX - rect.left) / DAY_W)));
+                          const clickedDay = allDays[dayIdx];
+                          const splitDay = clickedDay > t.startDato ? clickedDay : addDays(t.startDato, 1);
+                          openBarMenu(t, splitDay, e.clientX, e.clientY);
+                        }}
+                      >
+                        <div className="oversikt-handle oversikt-handle-l"
+                          title="Dra for å endre startdato"
+                          onPointerDown={e => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            e.currentTarget.setPointerCapture(e.pointerId);
+                            dragRef.current = { tildelingId: t.id, type: 'start' };
+                          }}
+                          onClick={e => e.stopPropagation()}
+                        />
+                        <span className="oversikt-bar-label">{label}</span>
+                        <div className="oversikt-handle oversikt-handle-r"
+                          title="Dra for å endre sluttdato"
+                          onPointerDown={e => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            e.currentTarget.setPointerCapture(e.pointerId);
+                            dragRef.current = { tildelingId: t.id, type: 'end' };
+                          }}
+                          onClick={e => e.stopPropagation()}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              );
+            }
+
+            function renderTeamHeader(team, count) {
+              return (
+                <div key={`th-${team.id}`} style={{ display: 'flex', height: 30, alignItems: 'stretch', background: team.farge + '18', borderTop: `2px solid ${team.farge}`, borderBottom: `1px solid ${team.farge}33`, minWidth: LABEL_W + totalW }}>
+                  <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '0 12px', position: 'sticky', left: 0, zIndex: 3, background: '#fff', borderRight: `2px solid ${team.farge}33` }}>
+                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: team.farge, flexShrink: 0 }} />
+                    <span style={{ fontWeight: 700, fontSize: 12, color: team.farge, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{team.navn}</span>
+                    <span style={{ fontSize: 11, color: '#94a3b8', flexShrink: 0 }}>{count}</span>
+                  </div>
+                  <div style={{ flex: 1 }} />
+                </div>
+              );
+            }
+
+            if (teams.length === 0) {
+              return filteredAnsatte.map(a => renderAnsattRad(a));
+            }
+
+            const assignedIds = new Set(teams.flatMap(t => t.ansatteIds || []));
+            const rows = [];
+
+            for (const team of teams) {
+              const members = filteredAnsatte.filter(a => (team.ansatteIds || []).includes(a.id));
+              if (members.length === 0 && !filteredAnsatte.some(a => (team.ansatteIds || []).includes(a.id))) continue;
+              rows.push(renderTeamHeader(team, members.length + ' medl.'));
+              members.forEach(a => rows.push(renderAnsattRad(a)));
+            }
+
+            const unassigned = filteredAnsatte.filter(a => !assignedIds.has(a.id));
+            if (unassigned.length > 0) {
+              rows.push(
+                <div key="th-uten" style={{ display: 'flex', height: 30, alignItems: 'stretch', background: '#f1f5f9', borderTop: '2px solid #94a3b8', borderBottom: '1px solid #e2e8f0', minWidth: LABEL_W + totalW }}>
+                  <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '0 12px', position: 'sticky', left: 0, zIndex: 3, background: '#fff', borderRight: '2px solid #e2e8f0' }}>
+                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#94a3b8', flexShrink: 0 }} />
+                    <span style={{ fontWeight: 700, fontSize: 12, color: '#64748b' }}>Uten team</span>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>{unassigned.length}</span>
+                  </div>
+                  <div style={{ flex: 1 }} />
+                </div>
+              );
+              unassigned.forEach(a => rows.push(renderAnsattRad(a)));
+            }
+
+            return rows;
+          })()}
+
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// --- FERIEOVERSIKT ---
+function FerieVisning({ state, readOnly, ferieYearOffset, setFerieYearOffset, openAddFerie, deleteTildeling }) {
+  const today = dateToIso(new Date());
+  const FERIE_MND = 12;
+  // Use a dedicated ferie year offset (separate from currentMonth navigation)
+  const ferieBase  = addMonths(monthStart(today), (ferieYearOffset || 0) * 12);
+  const ferieMonths = Array.from({ length: FERIE_MND }, (_, i) => addMonths(ferieBase, i));
+  const ferieEnd   = monthEnd(ferieMonths[FERIE_MND - 1]);
+  const ferieYear  = ferieBase.slice(0, 4);
+
+  const sortedAnsatte = [...state.ansatte].sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+
+  // For each employee, compute ferie periods and total days in view
+  function ferieDager(t) {
+    // Count calendar days in the tildeling
+    const ms = Math.max(0, (new Date(t.sluttDato + 'T00:00:00') - new Date(t.startDato + 'T00:00:00')) / 86400000) + 1;
+    return ms;
+  }
+
+  // Bar position in the 12-month grid
+  function getBarPos(t) {
+    let si = -1, ei = -1;
+    for (let i = 0; i < FERIE_MND; i++) {
+      const mEnd = monthEnd(ferieMonths[i]);
+      if (overlaps(t.startDato, t.sluttDato, ferieMonths[i], mEnd)) {
+        if (si === -1) si = i;
+        ei = i;
+      }
+    }
+    if (si === -1) return null;
+    return {
+      left: `${(si / FERIE_MND) * 100}%`,
+      width: `${((ei - si + 1) / FERIE_MND) * 100}%`,
+    };
+  }
+
+  // Month totals (how many employees have ferie in each month)
+  const mndTotals = ferieMonths.map(m => {
+    const mEnd = monthEnd(m);
+    return state.tildelinger.filter(t =>
+      t.prosjektId === FERIE_ID && overlaps(t.startDato, t.sluttDato, m, mEnd)
+    ).length;
+  });
+
+  return (
+    <div>
+      {/* Ferie nav */}
+      <div className="uke-nav">
+        <button className="btn" onClick={() => setFerieYearOffset(o => (o || 0) - 1)}>← Forrige år</button>
+        <span className="uke-label">🏖 Ferieplan {ferieYear}</span>
+        <button className="btn" onClick={() => setFerieYearOffset(o => (o || 0) + 1)}>Neste år →</button>
+        <button className="btn" onClick={() => setFerieYearOffset(0)}>I år</button>
+        {!readOnly && <button className="btn btn-primary no-print" onClick={() => openAddFerie()}>+ Legg til ferie</button>}
+      </div>
+
+      <div className="uke-grid-wrap">
+        {/* Month header */}
+        <div className="ferie-grid">
+          <div className="uke-header-cell ferie-label-col" style={{ fontWeight: 600, fontSize: 11, color: '#94a3b8' }}>Ansatt</div>
+          {ferieMonths.map((m, i) => {
+            const isThisMonth = m.slice(0, 7) === today.slice(0, 7);
+            return (
+              <div key={m} className={`uke-header-cell ferie-month-col ${isThisMonth ? 'today' : ''}`}
+                style={{ textAlign: 'center', fontSize: 11, fontWeight: isThisMonth ? 700 : 500 }}>
+                {MAANED_NAVN[parseInt(m.slice(5, 7), 10) - 1]}
+                {mndTotals[i] > 0 && (
+                  <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>{mndTotals[i]} stk</div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Employee rows */}
+          {sortedAnsatte.map((ansatt, rowIdx) => {
+            const ferieList = state.tildelinger.filter(t =>
+              t.ansattId === ansatt.id && t.prosjektId === FERIE_ID &&
+              overlaps(t.startDato, t.sluttDato, ferieMonths[0], ferieEnd)
+            );
+            const totalDager = ferieList.reduce((s, t) => s + ferieDager(t), 0);
+
+            return (
+              <React.Fragment key={ansatt.id}>
+                {/* Label */}
+                <div className="uke-row-label ferie-label-col" style={{ background: rowIdx % 2 === 0 ? '#fff' : '#f8fafc' }}>
+                  <div className="mini-avatar" style={{ background: ansatt.innleie ? '#f97316' : fagColor(ansatt.fag), flexShrink: 0 }}>
+                    {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="row-navn" style={{ fontSize: 12 }}>{ansatt.navn}</div>
+                    <div className="row-fag" style={{ color: fagColor(ansatt.fag), fontSize: 10 }}>
+                      {ansatt.innleie && <span style={{ color: '#f97316', marginRight: 2 }}>🔧</span>}
+                      {totalDager > 0
+                        ? <span style={{ color: '#16a34a', fontWeight: 600 }}>🏖 {totalDager} dager</span>
+                        : ansatt.fag}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Ferie bar row */}
+                <div className="gantt-row ferie-bar-row"
+                  style={{
+                    gridColumn: '2 / -1',
+                    background: rowIdx % 2 === 0 ? '#fff' : '#f8fafc',
+                    cursor: 'pointer',
+                  }}
+                  onClick={e => {
+                    if (!readOnly && (e.target === e.currentTarget || e.target.classList.contains('gantt-bg-cell'))) {
+                      openAddFerie(ansatt.id);
+                    }
+                  }}
+                >
+                  {/* Month background cells */}
+                  {ferieMonths.map((m, i) => {
+                    const isThisMonth = m.slice(0, 7) === today.slice(0, 7);
+                    return (
+                      <div key={m}
+                        className={`gantt-bg-cell${isThisMonth ? ' today-col' : ''}`}
+                        style={{ left: `${(i / FERIE_MND) * 100}%`, width: `${100 / FERIE_MND}%` }}
+                        onClick={() => { if (!readOnly) openAddFerie(ansatt.id); }}
+                      />
+                    );
+                  })}
+
+                  {/* Ferie bars */}
+                  {ferieList.map(t => {
+                    const pos = getBarPos(t);
+                    if (!pos) return null;
+                    const label = `${formatDate(t.startDato)} – ${formatDate(t.sluttDato)} (${ferieDager(t)} dg)`;
+                    return (
+                      <div key={t.id}
+                        className="gantt-bar gantt-bar-ferie"
+                        style={{ left: pos.left, width: pos.width }}
+                        title={label}
+                        onClick={e => {
+                          e.stopPropagation();
+                          deleteTildeling(t.id);
+                        }}
+                      >
+                        <span className="gantt-label" style={{ fontSize: 10 }}>{label}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </React.Fragment>
+            );
+          })}
+        </div>
+      </div>
+
+      {sortedAnsatte.length === 0 && (
+        <div className="empty">Ingen ansatte registrert.</div>
+      )}
+    </div>
+  );
+}
+
+// --- BURSDAGSKALENDER ---
+// --- TEAM-VISNING ---
+function TeamsVisning({
+  state, dispatch, currentWeek,
+  redigererTeam, setRedigererTeam, teamForm, setTeamForm, showTeamModal, setShowTeamModal,
+  teamTildelForm, setTeamTildelForm, visTeamTildel, setVisTeamTildel,
+  teamDragIdx, teamDragOver, setTeamDragOver,
+  memberDragInfo, memberDragOverTeam, setMemberDragOverTeam,
+  handleTildelTeam,
+}) {
+  const teams = state.teams || [];
+  const aktiveProsjekter = state.prosjekter.filter(p => p.status === 'aktiv' || !p.status).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  const fastAnsatte = state.ansatte.filter(a => !a.innleie).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  const innleieAnsatte = state.ansatte.filter(a => a.innleie).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  const planAnsatteAlle = [...fastAnsatte, ...innleieAnsatte];
+  const TEAM_FARGER = ['#3b82f6','#16a34a','#dc2626','#9333ea','#ea580c','#0891b2','#be185d','#854d0e'];
+
+  function startNyttTeam() {
+    setRedigererTeam(null);
+    setTeamForm({ navn: '', farge: TEAM_FARGER[teams.length % TEAM_FARGER.length], ansatteIds: [] });
+    setShowTeamModal(true);
+  }
+  function startRedigerTeam(t) {
+    setRedigererTeam(t);
+    setTeamForm({ navn: t.navn, farge: t.farge || '#3b82f6', ansatteIds: [...(t.ansatteIds || [])] });
+    setShowTeamModal(true);
+  }
+  function lagreTeam() {
+    if (!teamForm.navn.trim()) return;
+    if (redigererTeam) {
+      dispatch({ type: 'UPDATE_TEAM', payload: { ...redigererTeam, ...teamForm } });
+    } else {
+      dispatch({ type: 'ADD_TEAM', payload: teamForm });
+    }
+    setShowTeamModal(false);
+  }
+  function slettTeam(id) {
+    if (confirm('Slett teamet?')) dispatch({ type: 'DELETE_TEAM', id });
+  }
+  // IDs som allerede tilhører et annet team (ikke det vi redigerer nå)
+  const opptattIAnnetTeam = new Set(
+    teams
+      .filter(t => !redigererTeam || t.id !== redigererTeam.id)
+      .flatMap(t => t.ansatteIds || [])
+  );
+
+  function toggleMedlem(ansattId) {
+    if (opptattIAnnetTeam.has(ansattId)) return;
+    setTeamForm(f => ({
+      ...f,
+      ansatteIds: f.ansatteIds.includes(ansattId)
+        ? f.ansatteIds.filter(id => id !== ansattId)
+        : [...f.ansatteIds, ansattId]
+    }));
+  }
+
+  return (
+    <div style={{ padding: '20px 0' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Team</h3>
+          <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>Grupper ansatte i team og tildel hele teamet til et prosjekt på én gang</div>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {teams.length > 0 && (
+            <button className="btn" onClick={() => { setTeamTildelForm({ teamId: teams[0].id, prosjektId: '', startDato: currentWeek, sluttDato: addDays(currentWeek, 4) }); setVisTeamTildel(true); }}>
+              📅 Tildel team til prosjekt
+            </button>
+          )}
+          <button className="btn btn-primary" onClick={startNyttTeam}>+ Nytt team</button>
+        </div>
+      </div>
+
+      {teams.length === 0 ? (
+        <div className="empty">Ingen team opprettet ennå. Klikk «+ Nytt team» for å lage ditt første team.</div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+          {teams.map((team, idx) => {
+            const medlemmer = (team.ansatteIds || []).map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
+            const isCardDragOver = teamDragOver === idx && teamDragIdx.current !== null && teamDragIdx.current !== idx;
+            const isMemberDragOver = memberDragOverTeam === team.id && memberDragInfo.current?.fromTeamId !== team.id;
+            return (
+              <div
+                key={team.id}
+                draggable
+                onDragStart={e => {
+                  if (memberDragInfo.current) { e.preventDefault(); return; }
+                  teamDragIdx.current = idx;
+                }}
+                onDragOver={e => {
+                  e.preventDefault();
+                  if (memberDragInfo.current) setMemberDragOverTeam(team.id);
+                  else setTeamDragOver(idx);
+                }}
+                onDragLeave={e => {
+                  if (e.currentTarget.contains(e.relatedTarget)) return;
+                  if (memberDragInfo.current) setMemberDragOverTeam(null);
+                  else setTeamDragOver(null);
+                }}
+                onDrop={e => {
+                  e.preventDefault();
+                  // --- Member move ---
+                  if (memberDragInfo.current) {
+                    const { ansattId, fromTeamId } = memberDragInfo.current;
+                    if (fromTeamId !== team.id) {
+                      const updated = teams.map(t => {
+                        if (t.id === fromTeamId) return { ...t, ansatteIds: (t.ansatteIds || []).filter(id => id !== ansattId) };
+                        if (t.id === team.id) return { ...t, ansatteIds: [...(t.ansatteIds || []), ansattId] };
+                        return t;
+                      });
+                      dispatch({ type: 'SET_TEAMS', teams: updated });
+                    }
+                    memberDragInfo.current = null;
+                    setMemberDragOverTeam(null);
+                    return;
+                  }
+                  // --- Card reorder ---
+                  const from = teamDragIdx.current;
+                  if (from === null || from === idx) { setTeamDragOver(null); return; }
+                  const reordered = [...teams];
+                  const [moved] = reordered.splice(from, 1);
+                  reordered.splice(idx, 0, moved);
+                  dispatch({ type: 'SET_TEAMS', teams: reordered });
+                  teamDragIdx.current = null;
+                  setTeamDragOver(null);
+                }}
+                onDragEnd={() => {
+                  teamDragIdx.current = null;
+                  memberDragInfo.current = null;
+                  setTeamDragOver(null);
+                  setMemberDragOverTeam(null);
+                }}
+                style={{
+                  background: isMemberDragOver ? '#f0fdf4' : '#fff',
+                  border: isMemberDragOver
+                    ? '2px dashed #16a34a'
+                    : isCardDragOver
+                      ? `2px dashed ${team.farge || '#3b82f6'}`
+                      : '1px solid #e2e8f0',
+                  borderRadius: 14,
+                  padding: (isMemberDragOver || isCardDragOver) ? 17 : 18,
+                  boxShadow: isMemberDragOver
+                    ? '0 4px 16px #16a34a33'
+                    : isCardDragOver
+                      ? `0 4px 16px ${team.farge || '#3b82f6'}33`
+                      : '0 1px 4px rgba(0,0,0,.04)',
+                  borderTop: `4px solid ${team.farge || '#3b82f6'}`,
+                  cursor: 'grab',
+                  transition: 'box-shadow .15s, border .1s, background .15s',
+                  opacity: teamDragIdx.current === idx ? 0.45 : 1,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: '#cbd5e1', fontSize: 16, lineHeight: 1, cursor: 'grab', userSelect: 'none' }}>⠿</span>
+                    <div style={{ fontWeight: 800, fontSize: 16, color: '#1e293b' }}>{team.navn}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button className="btn btn-sm" onMouseDown={e => e.stopPropagation()} onClick={() => startRedigerTeam(team)}>Rediger</button>
+                    <button className="btn btn-sm btn-danger" onMouseDown={e => e.stopPropagation()} onClick={() => slettTeam(team.id)}>Slett</button>
+                  </div>
+                </div>
+                <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
+                  {medlemmer.length} medlemmer
+                  {isMemberDragOver && <span style={{ color: '#16a34a', marginLeft: 6, fontWeight: 600 }}>↓ Slipp for å flytte hit</span>}
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {medlemmer.map(a => (
+                    <div
+                      key={a.id}
+                      draggable
+                      onDragStart={e => {
+                        e.stopPropagation();
+                        memberDragInfo.current = { ansattId: a.id, fromTeamId: team.id };
+                      }}
+                      onDragEnd={e => {
+                        e.stopPropagation();
+                        memberDragInfo.current = null;
+                        setMemberDragOverTeam(null);
+                      }}
+                      title={a.sykmeldt ? '🤒 Sykmeldt – ikke i bemanningsplan' : undefined}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 5,
+                        background: a.sykmeldt ? '#f1f5f9' : a.innleie ? '#fff7ed' : '#f8fafc',
+                        border: `1px solid ${a.sykmeldt ? '#cbd5e1' : a.innleie ? '#fed7aa' : '#e2e8f0'}`,
+                        borderRadius: 8, padding: '3px 8px 3px 4px', fontSize: 12,
+                        cursor: 'grab', opacity: a.sykmeldt ? 0.6 : 1,
+                      }}
+                    >
+                      <div style={{ width: 20, height: 20, borderRadius: '50%', background: a.sykmeldt ? '#94a3b8' : a.innleie ? '#f97316' : fagColor(a.fag), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 700, flexShrink: 0 }}>
+                        {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </div>
+                      <span style={{ color: a.sykmeldt ? '#64748b' : 'inherit' }}>{a.navn}</span>
+                      <span style={{ color: a.sykmeldt ? '#94a3b8' : a.innleie ? '#f97316' : '#94a3b8', fontSize: 10 }}>
+                        {a.sykmeldt ? '🤒' : a.innleie ? '🔧' : a.fag}
+                      </span>
+                    </div>
+                  ))}
+                  {medlemmer.length === 0 && (
+                    <span style={{ color: isMemberDragOver ? '#16a34a' : '#94a3b8', fontSize: 12, fontStyle: 'italic' }}>
+                      {isMemberDragOver ? '↓ Slipp her' : 'Ingen medlemmer ennå'}
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Modal: Rediger/lag team */}
+      {showTeamModal && (
+        <Modal title={redigererTeam ? `Rediger team: ${redigererTeam.navn}` : 'Nytt team'} onClose={() => setShowTeamModal(false)}>
+          <div className="form">
+            <label>Teamnavn *</label>
+            <input value={teamForm.navn} onChange={e => setTeamForm(f => ({ ...f, navn: e.target.value }))} placeholder="f.eks. Team 1 – Tømrer" />
+            <label>Farge</label>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
+              {TEAM_FARGER.map(farge => (
+                <button key={farge} type="button" onClick={() => setTeamForm(f => ({ ...f, farge }))}
+                  style={{ width: 28, height: 28, borderRadius: '50%', background: farge, border: teamForm.farge === farge ? '3px solid #1e293b' : '2px solid transparent', cursor: 'pointer' }} />
+              ))}
+            </div>
+            <label>Medlemmer ({teamForm.ansatteIds.length} valgt)</label>
+            <div style={{ maxHeight: 280, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, padding: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {fastAnsatte.length > 0 && (
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.06em', padding: '2px 6px 4px', textTransform: 'uppercase' }}>Fast ansatte</div>
+              )}
+              {fastAnsatte.map(a => {
+                const tatt = opptattIAnnetTeam.has(a.id);
+                const valgt = teamForm.ansatteIds.includes(a.id);
+                const annetTeam = tatt ? teams.find(t => (!redigererTeam || t.id !== redigererTeam.id) && (t.ansatteIds || []).includes(a.id)) : null;
+                return (
+                  <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: tatt ? 'not-allowed' : 'pointer', padding: '4px 6px', borderRadius: 6, opacity: tatt ? 0.45 : 1, background: valgt ? '#eff6ff' : 'transparent' }}>
+                    <input type="checkbox" checked={valgt} disabled={tatt} onChange={() => toggleMedlem(a.id)} />
+                    <div style={{ width: 20, height: 20, borderRadius: '50%', background: fagColor(a.fag), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 700, flexShrink: 0 }}>
+                      {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>{a.navn}</span>
+                    {tatt
+                      ? <span style={{ fontSize: 11, color: '#f97316', marginLeft: 'auto' }}>i {annetTeam?.navn || 'annet team'}</span>
+                      : <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{a.fag}</span>
+                    }
+                  </label>
+                );
+              })}
+              {innleieAnsatte.length > 0 && (
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#f97316', letterSpacing: '0.06em', padding: '6px 6px 4px', textTransform: 'uppercase', borderTop: fastAnsatte.length > 0 ? '1px solid #f1f5f9' : 'none', marginTop: fastAnsatte.length > 0 ? 4 : 0 }}>🔧 Innleie</div>
+              )}
+              {innleieAnsatte.map(a => {
+                const tatt = opptattIAnnetTeam.has(a.id);
+                const valgt = teamForm.ansatteIds.includes(a.id);
+                const annetTeam = tatt ? teams.find(t => (!redigererTeam || t.id !== redigererTeam.id) && (t.ansatteIds || []).includes(a.id)) : null;
+                return (
+                  <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: tatt ? 'not-allowed' : 'pointer', padding: '4px 6px', borderRadius: 6, opacity: tatt ? 0.45 : 1, background: valgt ? '#fff7ed' : 'transparent' }}>
+                    <input type="checkbox" checked={valgt} disabled={tatt} onChange={() => toggleMedlem(a.id)} />
+                    <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#f97316', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 700, flexShrink: 0 }}>
+                      {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: 500 }}>{a.navn}</span>
+                    {tatt
+                      ? <span style={{ fontSize: 11, color: '#f97316', marginLeft: 'auto' }}>i {annetTeam?.navn || 'annet team'}</span>
+                      : <span style={{ fontSize: 11, color: '#f97316', marginLeft: 'auto' }}>🔧 {a.fag}</span>
+                    }
+                  </label>
+                );
+              })}
+            </div>
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setShowTeamModal(false)}>Avbryt</button>
+              <button className="btn btn-primary" onClick={lagreTeam} disabled={!teamForm.navn.trim() || teamForm.ansatteIds.length === 0}>
+                {redigererTeam ? 'Lagre endringer' : `Opprett team (${teamForm.ansatteIds.length} medl.)`}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Modal: Tildel team til prosjekt */}
+      {visTeamTildel && (
+        <Modal title="Tildel team til prosjekt" onClose={() => setVisTeamTildel(false)}>
+          <div className="form">
+            <label>Team</label>
+            <select value={teamTildelForm.teamId} onChange={e => setTeamTildelForm(f => ({ ...f, teamId: e.target.value }))}>
+              {teams.map(t => <option key={t.id} value={t.id}>{t.navn} ({(t.ansatteIds || []).length} medl.)</option>)}
+            </select>
+            <label>Prosjekt</label>
+            <select value={teamTildelForm.prosjektId} onChange={e => setTeamTildelForm(f => ({ ...f, prosjektId: e.target.value }))}>
+              <option value="">– Velg prosjekt –</option>
+              {aktiveProsjekter.map(p => <option key={p.id} value={p.id}>{p.navn}</option>)}
+            </select>
+            <label>Fra dato</label>
+            <input type="date" value={teamTildelForm.startDato} onChange={e => setTeamTildelForm(f => ({ ...f, startDato: e.target.value }))} />
+            <label>Til dato</label>
+            <input type="date" value={teamTildelForm.sluttDato} onChange={e => setTeamTildelForm(f => ({ ...f, sluttDato: e.target.value }))} />
+            {teamTildelForm.teamId && (
+              <div style={{ fontSize: 12, color: '#64748b', background: '#f8fafc', borderRadius: 8, padding: '8px 12px', marginTop: 4 }}>
+                Tildeler {(teams.find(t => t.id === teamTildelForm.teamId)?.ansatteIds || []).length} teammedlemmer til prosjektet
+              </div>
+            )}
+            <div className="modal-actions">
+              <button className="btn" onClick={() => setVisTeamTildel(false)}>Avbryt</button>
+              <button className="btn btn-primary"
+                disabled={!teamTildelForm.teamId || !teamTildelForm.prosjektId || !teamTildelForm.startDato || !teamTildelForm.sluttDato}
+                onClick={() => handleTildelTeam(teamTildelForm.teamId, teamTildelForm.prosjektId, teamTildelForm.startDato, teamTildelForm.sluttDato)}>
+                📅 Tildel team
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function BursdagVisning({ state }) {
+  const today = dateToIso(new Date());
+  const todayMM = today.slice(5, 7);
+  const todayDD = today.slice(8, 10);
+
+  // Group ansatte by birth month (bursdag format "MM-DD")
+  const byMonth = Array.from({ length: 12 }, () => []);
+  for (const a of state.ansatte) {
+    if (!a.bursdag) continue;
+    const mi = parseInt(a.bursdag.slice(0, 2), 10) - 1;
+    if (mi >= 0 && mi < 12) byMonth[mi].push(a);
+  }
+  // Sort each month by day
+  for (const arr of byMonth) arr.sort((a, b) => a.bursdag.slice(3).localeCompare(b.bursdag.slice(3)));
+
+  // Upcoming birthdays in the next 30 days
+  const upcoming = [];
+  for (let offset = 0; offset <= 30; offset++) {
+    const d = new Date(today + 'T00:00:00');
+    d.setDate(d.getDate() + offset);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    const md = `${mm}-${dd}`;
+    for (const a of state.ansatte) {
+      if (a.bursdag === md) upcoming.push({ ansatt: a, offset, md });
+    }
+  }
+
+  const totalMedBursdag = state.ansatte.filter(a => a.bursdag).length;
+
+  return (
+    <div>
+      <div className="uke-nav">
+        <span className="uke-label">🎂 Bursdagskalender</span>
+        <span style={{ fontSize: 13, color: '#94a3b8' }}>
+          {totalMedBursdag} av {state.ansatte.length} ansatte har registrert bursdag
+        </span>
+      </div>
+
+      {/* Upcoming birthdays */}
+      {upcoming.length > 0 && (
+        <div className="bursdag-upcoming">
+          {upcoming.map(({ ansatt, offset, md }) => {
+            const isToday = offset === 0;
+            const dayLabel = isToday ? 'I dag!' : offset === 1 ? 'I morgen' : `Om ${offset} dager`;
+            return (
+              <div key={ansatt.id + md} className={`bursdag-upcoming-item${isToday ? ' bursdag-today-item' : ''}`}>
+                <span className="bursdag-upcoming-emoji">{isToday ? '🎉' : '🎂'}</span>
+                <div className="mini-avatar" style={{ background: ansatt.innleie ? '#f97316' : fagColor(ansatt.fag), width: 28, height: 28, fontSize: 10, flexShrink: 0 }}>
+                  {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                </div>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>{ansatt.navn}</div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>{ansatt.fag}</div>
+                </div>
+                <span className={`bursdag-upcoming-label${isToday ? ' today' : ''}`}>{dayLabel}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* 12-month grid */}
+      <div className="bursdag-grid">
+        {MAANED_NAVN.map((mnd, mi) => {
+          const isThisMonth = String(mi + 1).padStart(2, '0') === todayMM;
+          const employees = byMonth[mi];
+          return (
+            <div key={mi} className={`bursdag-month-card${isThisMonth ? ' current-month' : ''}`}>
+              <div className="bursdag-month-header">{mnd}</div>
+              {employees.length === 0 ? (
+                <div className="bursdag-empty">Ingen</div>
+              ) : (
+                employees.map(a => {
+                  const dd = a.bursdag.slice(3);
+                  const isToday = isThisMonth && dd === todayDD;
+                  return (
+                    <div key={a.id} className={`bursdag-item${isToday ? ' bursdag-today' : ''}`}>
+                      <span className="bursdag-day">{parseInt(dd, 10)}.</span>
+                      <div className="mini-avatar" style={{ background: a.innleie ? '#f97316' : fagColor(a.fag), width: 20, height: 20, fontSize: 9, flexShrink: 0 }}>
+                        {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                      </div>
+                      <span className="bursdag-navn">{a.navn}</span>
+                      {isToday && <span>🎉</span>}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {totalMedBursdag === 0 && (
+        <div className="empty">Ingen bursdager registrert ennå. Gå til Ansatte og legg inn bursdag (dag og måned).</div>
+      )}
+    </div>
+  );
+}
+
+// --- PROSJEKTOVERSIKT ---
+function ProsjektOversiktVisning({ state }) {
+  const today = dateToIso(new Date());
+  const aktive = state.prosjekter.filter(p => p.status === 'aktiv' || !p.status).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+
+  return (
+    <div className="proj-oversikt-wrap">
+      {aktive.length === 0 && <div className="empty">Ingen aktive prosjekter.</div>}
+      <div className="proj-oversikt-grid">
+        {aktive.map(prosjekt => {
+          const tildelinger = state.tildelinger.filter(t => t.prosjektId === prosjekt.id);
+          const aktiveTildelinger = tildelinger.filter(t => overlaps(t.startDato, t.sluttDato, today, addDays(today, 30)));
+          const ansatteIds = [...new Set(aktiveTildelinger.map(t => t.ansattId))];
+          const ansatte = ansatteIds.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
+
+          const alleIds = [...new Set(tildelinger.map(t => t.ansattId))];
+          const alleAnsatte = alleIds.map(id => state.ansatte.find(a => a.id === id)).filter(Boolean);
+
+          const byFag = {};
+          for (const a of ansatte) {
+            if (!byFag[a.fag]) byFag[a.fag] = [];
+            byFag[a.fag].push(a);
+          }
+
+          return (
+            <div key={prosjekt.id} className="proj-oversikt-card">
+              <div className="proj-oversikt-header">
+                <div className="proj-oversikt-tittel">
+                  <div className="proj-oversikt-navn">{prosjekt.navn}</div>
+                  {prosjekt.adresse && <div className="proj-oversikt-meta">{prosjekt.adresse}</div>}
+                </div>
+                <div className="proj-oversikt-count">
+                  <span className="proj-count-num">{ansatte.length}</span>
+                  <span className="proj-count-lbl">nå</span>
+                  {alleAnsatte.length !== ansatte.length && (
+                    <span className="proj-count-total">/ {alleAnsatte.length} tot.</span>
+                  )}
+                </div>
+              </div>
+
+              {ansatte.length === 0 ? (
+                <div className="proj-oversikt-tom">
+                  {alleAnsatte.length > 0
+                    ? `${alleAnsatte.length} tildelt – ingen aktive neste 30 dager`
+                    : 'Ingen ansatte tildelt'}
+                </div>
+              ) : (
+                <div className="proj-fag-grupper">
+                  {Object.entries(byFag).map(([fag, fagAnsatte]) => (
+                    <div key={fag} className="proj-fag-rad">
+                      <div className="proj-fag-label">
+                        <span className="fag-dot" style={{ background: fagColor(fag) }} />
+                        <span style={{ color: fagColor(fag), fontWeight: 600, fontSize: 12 }}>{fag}</span>
+                        <span className="proj-fag-antall">{fagAnsatte.length}</span>
+                      </div>
+                      <div className="proj-avatar-rad">
+                        {fagAnsatte.map(a => (
+                          <div key={a.id} className="proj-avatar-wrap" title={a.navn}>
+                            <div className="mini-avatar" style={{ background: fagColor(a.fag), width: 34, height: 34, fontSize: 12 }}>
+                              {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                            </div>
+                            <div className="proj-avatar-navn">{a.navn.split(' ')[0]}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// --- RESSURSALLOKERING ---
+function RessursVisning({ state, planAnsatte, currentWeek, prevWeek, nextWeek, thisWeek }) {
+  // Show 8 weeks from current week
+  const weeks = Array.from({ length: 8 }, (_, i) => addDays(currentWeek, i * 7));
+
+  // Ledig kapasitet per uke: ansatte uten prosjekt-tildeling, uten ferie og ikke sykmeldt
+  const ukeStats = weeks.map(weekStr => {
+    const weekEnd = addDays(weekStr, 6);
+    const opptattIds = new Set(state.tildelinger
+      .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, weekStr, weekEnd))
+      .map(t => t.ansattId));
+    const ferieIds = new Set(state.tildelinger
+      .filter(t => t.prosjektId === FERIE_ID && overlaps(t.startDato, t.sluttDato, weekStr, weekEnd))
+      .map(t => t.ansattId));
+    const sykmeldte = planAnsatte.filter(a => erSykmeldtIPeriode(a, weekStr, weekEnd)).length;
+    const ledige = planAnsatte.filter(a =>
+      !opptattIds.has(a.id) && !ferieIds.has(a.id) && !erSykmeldtIPeriode(a, weekStr, weekEnd)
+    ).length;
+    return { weekStr, weekEnd, ledige, ferie: ferieIds.size, sykmeldte, total: planAnsatte.length };
+  });
+
+  return (
+    <div>
+      <div className="uke-nav">
+        <button className="btn" onClick={prevWeek}>← Forrige</button>
+        <div className="uke-label">8-ukers oversikt fra uke {getWeekNumber(currentWeek)}</div>
+        <button className="btn" onClick={thisWeek}>I dag</button>
+        <button className="btn" onClick={nextWeek}>Neste →</button>
+      </div>
+
+      {/* Ledig kapasitet per uke — rask oversikt øverst */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 8, marginBottom: 18 }}>
+        {ukeStats.map(s => {
+          const ingen = s.ledige === 0;
+          const faa = s.ledige > 0 && s.ledige <= 2;
+          const farge = ingen ? '#dc2626' : faa ? '#d97706' : '#16a34a';
+          const bg = ingen ? '#fef2f2' : faa ? '#fffbeb' : '#f0fdf4';
+          return (
+            <div key={s.weekStr}
+              style={{ background: bg, border: `1px solid ${farge}33`, borderTop: `3px solid ${farge}`, borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}
+              title={`Uke ${getWeekNumber(s.weekStr)}: ${s.ledige} ledige av ${s.total}${s.ferie ? ` · ${s.ferie} på ferie` : ''}${s.sykmeldte ? ` · ${s.sykmeldte} sykmeldt` : ''}`}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>
+                Uke {getWeekNumber(s.weekStr)}
+              </div>
+              <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 4 }}>
+                {s.weekStr.slice(8)}.{s.weekStr.slice(5, 7)} – {s.weekEnd.slice(8)}.{s.weekEnd.slice(5, 7)}
+              </div>
+              <div style={{ fontSize: 20, fontWeight: 800, color: farge, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
+                👷 {s.ledige}
+              </div>
+              <div style={{ fontSize: 10, color: farge, fontWeight: 600 }}>ledig{s.ledige !== 1 ? 'e' : ''}</div>
+              {(s.ferie > 0 || s.sykmeldte > 0) && (
+                <div style={{ fontSize: 10, marginTop: 2, display: 'flex', gap: 6, justifyContent: 'center' }}>
+                  {s.ferie > 0 && <span style={{ color: '#0891b2' }}>🏖 {s.ferie}</span>}
+                  {s.sykmeldte > 0 && <span style={{ color: '#94a3b8' }}>🤒 {s.sykmeldte}</span>}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {state.prosjekter.length === 0 && (
+        <div className="empty">Ingen prosjekter registrert.</div>
+      )}
+
+      {state.fag.map(fag => {
+        const fagAnsatte = planAnsatte.filter(a => a.fag === fag);
+        if (fagAnsatte.length === 0) return null;
+        return (
+          <div key={fag} className="ressurs-gruppe">
+            <div className="ressurs-fag-header" style={{ borderLeft: `4px solid ${fagColor(fag)}` }}>
+              {fag} ({fagAnsatte.length} ansatt{fagAnsatte.length !== 1 ? 'e' : ''})
+            </div>
+            <div className="ressurs-grid-wrap">
+            <div className="ressurs-grid" style={{ gridTemplateColumns: `150px repeat(8, 1fr)` }}>
+              <div className="uke-header-cell" style={{ fontSize: 12 }}>Ansatt</div>
+              {weeks.map(w => (
+                <div key={w} className="uke-header-cell" style={{ fontSize: 11 }}>
+                  Uke {getWeekNumber(w)}<br />{w.slice(5).replace('-', '.')}
+                </div>
+              ))}
+              {fagAnsatte.map(ansatt => (
+                <React.Fragment key={ansatt.id}>
+                  <div className="uke-row-label" style={{ minHeight: 40 }}>
+                    <div className="mini-avatar" style={{ background: fagColor(ansatt.fag), width: 28, height: 28, fontSize: 11 }}>
+                      {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="row-navn" style={{ fontSize: 13 }}>{ansatt.navn}</div>
+                  </div>
+                  {weeks.map(weekStr => {
+                    const weekEnd = addDays(weekStr, 6);
+                    const tilInUke = state.tildelinger.filter(t =>
+                      t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, weekStr, weekEnd)
+                    );
+                    const prosjekterIUke = tilInUke.map(t =>
+                      state.prosjekter.find(p => p.id === t.prosjektId)
+                    ).filter(Boolean);
+                    const belastning = Math.min(tilInUke.length, 3);
+                    const colors = ['#dcfce7', '#fef9c3', '#fee2e2'];
+                    const bgColor = belastning === 0 ? '#f9fafb' : colors[belastning - 1];
+                    return (
+                      <div
+                        key={`${ansatt.id}-${weekStr}`}
+                        className="ressurs-cell"
+                        style={{ background: bgColor }}
+                        title={prosjekterIUke.map(p => p.navn).join('\n') || 'Ledig'}
+                      >
+                        {prosjekterIUke.slice(0, 2).map((p, i) => (
+                          <div key={i} className="ressurs-chip">{p.navn.slice(0, 10)}</div>
+                        ))}
+                        {prosjekterIUke.length > 2 && (
+                          <div className="ressurs-chip">+{prosjekterIUke.length - 2}</div>
+                        )}
+                        {belastning === 0 && <span className="ledig">Ledig</span>}
+                      </div>
+                    );
+                  })}
+                </React.Fragment>
+              ))}
+            </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 
 function getWeekNumber(dateStr) {
   const d = isoToDate(dateStr);
