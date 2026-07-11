@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { dateToIso } from '../store';
 import ServiceReklKalender from '../components/ServiceReklKalender';
@@ -56,7 +56,7 @@ function tomForm() {
 
 export default function Reklamasjon() {
   const { state, dispatch } = useApp();
-  const reklamasjoner = state.reklamasjoner || [];
+  const reklamasjoner = useMemo(() => state.reklamasjoner || [], [state.reklamasjoner]);
   const today = dateToIso(new Date());
 
   const [visModal, setVisModal] = useState(false);
@@ -210,12 +210,12 @@ export default function Reklamasjon() {
   }
 
   // Teller per status
-  const teller = Object.fromEntries(
+  const teller = useMemo(() => Object.fromEntries(
     Object.keys(REKL_STATUS).map(s => [s, reklamasjoner.filter(r => r.status === s).length])
-  );
+  ), [reklamasjoner]);
 
   // Filtrert og søkt liste
-  const filtrert = reklamasjoner
+  const filtrert = useMemo(() => reklamasjoner
     .filter(r => !statusFilter || r.status === statusFilter)
     .filter(r => {
       if (!sok.trim()) return true;
@@ -232,12 +232,14 @@ export default function Reklamasjon() {
       if (a.frist) return -1;
       if (b.frist) return 1;
       return b.dato.localeCompare(a.dato);
-    });
+    }), [reklamasjoner, statusFilter, sok]);
 
-  const nyeRekl      = filtrert.filter(r => r.status === 'ny');
-  const planlagteRekl = filtrert.filter(r => r.status === 'planlagt');
-  const underArbeid  = filtrert.filter(r => r.status === 'under_arbeid');
-  const utbedredeRekl = filtrert.filter(r => r.status === 'utbedret' || r.status === 'avvist' || r.status === 'lukket');
+  const { nyeRekl, planlagteRekl, underArbeid, utbedredeRekl } = useMemo(() => ({
+    nyeRekl:        filtrert.filter(r => r.status === 'ny'),
+    planlagteRekl:  filtrert.filter(r => r.status === 'planlagt'),
+    underArbeid:    filtrert.filter(r => r.status === 'under_arbeid'),
+    utbedredeRekl:  filtrert.filter(r => r.status === 'utbedret' || r.status === 'avvist' || r.status === 'lukket'),
+  }), [filtrert]);
 
   function sumKr(arr) {
     const total = arr.reduce((s, r) => s + (Number(r.kostnad) || 0), 0);

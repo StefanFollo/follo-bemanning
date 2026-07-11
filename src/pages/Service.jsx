@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { dateToIso } from '../store';
 import ServiceReklKalender from '../components/ServiceReklKalender';
@@ -48,7 +48,7 @@ function tomForm() {
 
 export default function Service() {
   const { state, dispatch } = useApp();
-  const serviceJobber = state.serviceJobber || [];
+  const serviceJobber = useMemo(() => state.serviceJobber || [], [state.serviceJobber]);
   const today = dateToIso(new Date());
 
   const [visModal, setVisModal] = useState(false);
@@ -200,11 +200,11 @@ export default function Service() {
     setTimeout(() => w.print(), 400);
   }
 
-  const teller = Object.fromEntries(
+  const teller = useMemo(() => Object.fromEntries(
     Object.keys(SERV_STATUS).map(s => [s, serviceJobber.filter(j => j.status === s).length])
-  );
+  ), [serviceJobber]);
 
-  const filtrert = serviceJobber
+  const filtrert = useMemo(() => serviceJobber
     .filter(j => !statusFilter || j.status === statusFilter)
     .filter(j => {
       if (!sok.trim()) return true;
@@ -221,13 +221,15 @@ export default function Service() {
       if (a.oensketDato) return -1;
       if (b.oensketDato) return 1;
       return b.dato.localeCompare(a.dato);
-    });
+    }), [serviceJobber, statusFilter, sok]);
 
-  const nyeJobber      = filtrert.filter(j => j.status === 'ny');
-  const planlagteJobber = filtrert.filter(j => j.status === 'planlagt');
-  const underArbeid    = filtrert.filter(j => j.status === 'under_arbeid');
-  const ferdige        = filtrert.filter(j => j.status === 'ferdig');
-  const fakturerte     = filtrert.filter(j => j.status === 'fakturert');
+  const { nyeJobber, planlagteJobber, underArbeid, ferdige, fakturerte } = useMemo(() => ({
+    nyeJobber:       filtrert.filter(j => j.status === 'ny'),
+    planlagteJobber: filtrert.filter(j => j.status === 'planlagt'),
+    underArbeid:     filtrert.filter(j => j.status === 'under_arbeid'),
+    ferdige:         filtrert.filter(j => j.status === 'ferdig'),
+    fakturerte:      filtrert.filter(j => j.status === 'fakturert'),
+  }), [filtrert]);
 
   function sumKr(arr) {
     const total = arr.reduce((s, j) => s + (Number(j.belop) || 0), 0);

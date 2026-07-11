@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { dateToIso, addDays, weekStart, overlaps, PROSJEKT_PALETTE, uid } from '../store';
 
@@ -87,7 +87,7 @@ function tomModal() {
 
 export default function BefaringPlan() {
   const { state, dispatch } = useApp();
-  const befaringer = state.befaringer || [];
+  const befaringer = useMemo(() => state.befaringer || [], [state.befaringer]);
   const today = dateToIso(new Date());
 
   const isAdmin = localStorage.getItem('fbs_role') === 'admin';
@@ -329,9 +329,9 @@ export default function BefaringPlan() {
     setVisProsjektModal(true);
   }
 
-  const aktive = befaringer.filter(b => !b.arkivert);
-  const arkiverte = [...befaringer.filter(b => b.arkivert)].sort((a, b) => b.dato?.localeCompare(a.dato || '') || 0);
-  const teller = Object.fromEntries(Object.keys(STATUS).map(s => [s, aktive.filter(b => b.status === s).length]));
+  const aktive = useMemo(() => befaringer.filter(b => !b.arkivert), [befaringer]);
+  const arkiverte = useMemo(() => [...befaringer.filter(b => b.arkivert)].sort((a, b) => b.dato?.localeCompare(a.dato || '') || 0), [befaringer]);
+  const teller = useMemo(() => Object.fromEntries(Object.keys(STATUS).map(s => [s, aktive.filter(b => b.status === s).length])), [aktive]);
 
   function sokFilter(b) {
     if (!sok.trim()) return true;
@@ -379,20 +379,29 @@ export default function BefaringPlan() {
     return (a.tilbudFrist || a.dato || '9999').localeCompare(b.tilbudFrist || b.dato || '9999');
   }
 
-  const filtrerOgSorter = (status) => [...aktive]
-    .filter(b => b.status === status)
-    .filter(sokFilter)
-    .filter(statusFilter)
-    .filter(ansvarligFilterFn)
-    .sort(sorterBef);
+  const { leads, planlagte, tilbudArbeid, tilbudSendt, godkjente } = useMemo(() => {
+    const filtrerOgSorter = (status) => [...aktive]
+      .filter(b => b.status === status)
+      .filter(sokFilter)
+      .filter(statusFilter)
+      .filter(ansvarligFilterFn)
+      .sort(sorterBef);
 
-  const leads        = filtrerOgSorter('lead');
-  const planlagte    = filtrerOgSorter('planlagt');
-  const tilbudArbeid = filtrerOgSorter('tilbud_arbeid');
-  const tilbudSendt  = filtrerOgSorter('tilbud_sendt');
-  const godkjente    = filtrerOgSorter('godkjent');
+    return {
+      leads:        filtrerOgSorter('lead'),
+      planlagte:    filtrerOgSorter('planlagt'),
+      tilbudArbeid: filtrerOgSorter('tilbud_arbeid'),
+      tilbudSendt:  filtrerOgSorter('tilbud_sendt'),
+      godkjente:    filtrerOgSorter('godkjent'),
+    };
+    // sokFilter/statusFilter/ansvarligFilterFn/sorterBef er rene funksjoner av disse verdiene:
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aktive, sok, pipelineFilter, ansvarligFilter, sortering]);
 
-  const uker = kapasitetPerUke();
+  const uker = useMemo(() => kapasitetPerUke(),
+    // kapasitetPerUke leser kun state.ansatte, state.tildelinger og today:
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [state.ansatte, state.tildelinger, today]);
 
   // ---- Kort-komponent ----
   function BefKort({ b }) {

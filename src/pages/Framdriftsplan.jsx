@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { uid, mergeWithCloud } from '../store';
 
@@ -493,12 +493,15 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
 
   // ── Lane/rad-beregning (aktiviteter på samme linje) ───────────────────────
   // lane = t.lane ?? index — tasks med samme lane-verdi deler visuell rad
-  const laneOf      = tasks.map((t, i) => t.lane ?? i);
-  const uniqueLanes = [];
-  const seenL       = new Set();
-  laneOf.forEach(l => { if (!seenL.has(l)) { uniqueLanes.push(l); seenL.add(l); } });
-  const rowCount    = uniqueLanes.length;
-  const rowOfTask   = laneOf.map(l => uniqueLanes.indexOf(l)); // visual row index per task
+  const { laneOf, rowCount, rowOfTask } = useMemo(() => {
+    const laneOf      = tasks.map((t, i) => t.lane ?? i);
+    const uniqueLanes = [];
+    const seenL       = new Set();
+    laneOf.forEach(l => { if (!seenL.has(l)) { uniqueLanes.push(l); seenL.add(l); } });
+    const rowCount    = uniqueLanes.length;
+    const rowOfTask   = laneOf.map(l => uniqueLanes.indexOf(l)); // visual row index per task
+    return { laneOf, rowCount, rowOfTask };
+  }, [tasks]);
 
   const COL_CYCLE = ['rgba(250,204,21,.28)', 'rgba(134,239,172,.28)', 'rgba(147,197,253,.28)', 'rgba(249,168,212,.28)'];
   const SWATCH_COLORS = ['#185FA5','#E24B4A','#0F6E56','#D4537E','#7F77DD','#BA7517','#16a34a','#64748b','#ea580c','#0891b2'];
@@ -1423,21 +1426,21 @@ export default function Framdriftsplan({ readOnly = false, ansattId = null }) {
     dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...proj, ...extra } });
 
   // Ansatt (lesetilgang): kun prosjekter de er tildelt via bemanningsplanen
-  const tildelteProsjektIds = ansattId
+  const tildelteProsjektIds = useMemo(() => ansattId
     ? new Set((state.tildelinger || []).filter(t => t.ansattId === ansattId).map(t => t.prosjektId))
-    : null;
+    : null, [ansattId, state.tildelinger]);
 
-  const aktive = state.prosjekter
+  const aktive = useMemo(() => state.prosjekter
     .filter(p => p.status !== 'fullfort')
-    .filter(p => !tildelteProsjektIds || tildelteProsjektIds.has(p.id));
+    .filter(p => !tildelteProsjektIds || tildelteProsjektIds.has(p.id)), [state.prosjekter, tildelteProsjektIds]);
 
-  const counts = {
+  const counts = useMemo(() => ({
     Alle:        aktive.length,
     'AI-plan':   aktive.filter(p => p.fdGenAv === 'AI' && p.kildeTilbudData).length,
     Pågående:    aktive.filter(p => !p.fdStatus || p.fdStatus === 'Pågående' || p.fdStatus === 'Ikke startet').length,
     Forsinket:   aktive.filter(p => p.fdStatus === 'Forsinket').length,
     Ferdig:      aktive.filter(p => p.fdStatus === 'Ferdig').length,
-  };
+  }), [aktive]);
 
   const filtered = aktive.filter(p => {
     if (filter === 'Alle')      return true;
@@ -1456,21 +1459,24 @@ export default function Framdriftsplan({ readOnly = false, ansattId = null }) {
     return (b.fdProgress ?? 0) - (a.fdProgress ?? 0);
   });
 
-  const medAIPlan  = aktive.filter(p => p.fdGenAv === 'AI' && p.kildeTilbudData).length;
-  const utenPlan   = aktive.filter(p => !(p.fdTasks || []).length).length;
-  const antForsinket = aktive.filter(p => p.fdStatus === 'Forsinket').length;
   const { week: nw, year: ny } = nowWeekYear();
-  const krevOppmerksomhet = [
-    ...aktive.filter(p => p.fdStatus === 'Forsinket').map(p => ({ p, ikon: '🔴', info: 'Forsinket' })),
-    ...aktive.filter(p => {
-      if ((p.fdTasks || []).length > 0 || !p.fdStartWeek) return false;
-      const diff = (p.fdStartYear || ny) * 52 + p.fdStartWeek - ny * 52 - nw;
-      return diff >= 0 && diff <= 8;
-    }).map(p => {
-      const diff = (p.fdStartYear || ny) * 52 + p.fdStartWeek - ny * 52 - nw;
-      return { p, ikon: '🚀', info: `Starter om ${diff} uker — mangler plan` };
-    }),
-  ];
+  const { medAIPlan, utenPlan, antForsinket, krevOppmerksomhet } = useMemo(() => {
+    const medAIPlan  = aktive.filter(p => p.fdGenAv === 'AI' && p.kildeTilbudData).length;
+    const utenPlan   = aktive.filter(p => !(p.fdTasks || []).length).length;
+    const antForsinket = aktive.filter(p => p.fdStatus === 'Forsinket').length;
+    const krevOppmerksomhet = [
+      ...aktive.filter(p => p.fdStatus === 'Forsinket').map(p => ({ p, ikon: '🔴', info: 'Forsinket' })),
+      ...aktive.filter(p => {
+        if ((p.fdTasks || []).length > 0 || !p.fdStartWeek) return false;
+        const diff = (p.fdStartYear || ny) * 52 + p.fdStartWeek - ny * 52 - nw;
+        return diff >= 0 && diff <= 8;
+      }).map(p => {
+        const diff = (p.fdStartYear || ny) * 52 + p.fdStartWeek - ny * 52 - nw;
+        return { p, ikon: '🚀', info: `Starter om ${diff} uker — mangler plan` };
+      }),
+    ];
+    return { medAIPlan, utenPlan, antForsinket, krevOppmerksomhet };
+  }, [aktive, nw, ny]);
 
   if (selectedId) {
     const live = state.prosjekter.find(p => p.id === selectedId);

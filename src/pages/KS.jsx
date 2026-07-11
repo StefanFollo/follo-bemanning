@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, startTransition } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react'
 import { useApp } from '../context/AppContext'
 
 // ── Konstanter ────────────────────────────────────────────────────────────────
@@ -896,37 +896,40 @@ function ProsjektVisning({ prosjekt, sjekklister, maler, ansatte, alleProsjekter
   }, [visBytt])
 
   // Mannskap på dette prosjektet fra bemanningsplanleggeren
-  const ansatteIProsj = [...new Set(
+  const ansatteIProsj = useMemo(() => [...new Set(
     (ansatte || [])
       .filter(a => {
         // ansatt er på prosjektet hvis de har en uke koblet til prosjektet
         return a.prosjekt === prosjekt.id || a.prosjekter?.includes(prosjekt.id)
       })
       .map(a => a.navn)
-  )]
+  )], [ansatte, prosjekt])
 
-  const mine = sjekklister.filter(s => s.prosjektId === prosjekt.id)
-  const eksisterendeMalIds = new Set(mine.map(s => s.malId))
+  const mine = useMemo(() => sjekklister.filter(s => s.prosjektId === prosjekt.id), [sjekklister, prosjekt])
+  const eksisterendeMalIds = useMemo(() => new Set(mine.map(s => s.malId)), [mine])
 
   // Obligatoriske maler som mangler
-  const obligManger = maler.filter(m => m.obligatorisk && !mine.some(s => s.malId === m.id))
+  const obligManger = useMemo(() => maler.filter(m => m.obligatorisk && !mine.some(s => s.malId === m.id)), [maler, mine])
 
   // Grupper sjekklistene — bruk gruppe, deretter kategori-mapping, deretter 'Annet'
-  const KAT_TIL_GRUPPE = {
-    hms: 'HMS', bad: 'Utførelse bad', fasade: 'Utførelse fasade', tak: 'Utførelse tak',
-    tomrer: 'Utførelse innvendig', maler: 'Maling', ror: 'Rørlegger', el: 'Elektrisk',
-    sluttkontroll: 'Sluttkontroll',
-  }
-  const gruppert = {}
-  for (const sl of mine) {
-    const g = sl.gruppe || KAT_TIL_GRUPPE[sl.kategori] || 'Annet'
-    if (!gruppert[g]) gruppert[g] = []
-    gruppert[g].push(sl)
-  }
-  const grupper = [...GRUPPE_REKKEFØLGE.filter(g => gruppert[g]), ...Object.keys(gruppert).filter(g => !GRUPPE_REKKEFØLGE.includes(g))]
+  const { gruppert, grupper } = useMemo(() => {
+    const KAT_TIL_GRUPPE = {
+      hms: 'HMS', bad: 'Utførelse bad', fasade: 'Utførelse fasade', tak: 'Utførelse tak',
+      tomrer: 'Utførelse innvendig', maler: 'Maling', ror: 'Rørlegger', el: 'Elektrisk',
+      sluttkontroll: 'Sluttkontroll',
+    }
+    const gruppert = {}
+    for (const sl of mine) {
+      const g = sl.gruppe || KAT_TIL_GRUPPE[sl.kategori] || 'Annet'
+      if (!gruppert[g]) gruppert[g] = []
+      gruppert[g].push(sl)
+    }
+    const grupper = [...GRUPPE_REKKEFØLGE.filter(g => gruppert[g]), ...Object.keys(gruppert).filter(g => !GRUPPE_REKKEFØLGE.includes(g))]
+    return { gruppert, grupper }
+  }, [mine])
 
-  const totalPst = mine.length ? Math.round(mine.reduce((sum, s) => sum + prosent(s.punkter), 0) / mine.length) : 0
-  const avvikTotalt = mine.filter(s => (s.punkter || []).some(p => p.status === 'avvik')).length
+  const totalPst = useMemo(() => mine.length ? Math.round(mine.reduce((sum, s) => sum + prosent(s.punkter), 0) / mine.length) : 0, [mine])
+  const avvikTotalt = useMemo(() => mine.filter(s => (s.punkter || []).some(p => p.status === 'avvik')).length, [mine])
 
   async function lastSjekklisterPaNytt() {
     setLasterSl(true)
@@ -1185,15 +1188,18 @@ function Bibliotek({ maler, onTilbake, onOppdaterMaler }) {
   const [fyllerProgress, setFyllerProgress] = useState({ gjort: 0, total: 0 })
   const kanAdmin = ROLLE() === 'admin' || ROLLE() === 'kontor'
 
-  const malerUtenBeskrivelse = maler.filter(m => !m.punkter?.some(p => p.beskrivelse))
+  const malerUtenBeskrivelse = useMemo(() => maler.filter(m => !m.punkter?.some(p => p.beskrivelse)), [maler])
 
-  const gruppert = {}
-  for (const m of maler) {
-    const g = m.gruppe || 'Annet'
-    if (!gruppert[g]) gruppert[g] = []
-    gruppert[g].push(m)
-  }
-  const grupper = [...GRUPPE_REKKEFØLGE.filter(g => gruppert[g]), ...Object.keys(gruppert).filter(g => !GRUPPE_REKKEFØLGE.includes(g))]
+  const { gruppert, grupper } = useMemo(() => {
+    const gruppert = {}
+    for (const m of maler) {
+      const g = m.gruppe || 'Annet'
+      if (!gruppert[g]) gruppert[g] = []
+      gruppert[g].push(m)
+    }
+    const grupper = [...GRUPPE_REKKEFØLGE.filter(g => gruppert[g]), ...Object.keys(gruppert).filter(g => !GRUPPE_REKKEFØLGE.includes(g))]
+    return { gruppert, grupper }
+  }, [maler])
 
   async function fyllAIBeskrivelse(mal) {
     setFyller(mal.id)
@@ -1842,14 +1848,14 @@ function ProsjektVelger({ prosjekter, sjekklister, onVelg, valgt, autoOpen = fal
     return () => document.removeEventListener('mousedown', lukk)
   }, [])
 
-  const filtrert = prosjekter
+  const filtrert = useMemo(() => prosjekter
     .filter(p => !sok || p.navn.toLowerCase().includes(sok.toLowerCase()) || (p.adresse || '').toLowerCase().includes(sok.toLowerCase()))
     .map(p => ({ ...p, _antallSl: sjekklister.filter(s => s.prosjektId === p.id).length }))
     .sort((a, b) => {
       // Mest aktive (har sjekklister) først, deretter alfabetisk
       if (b._antallSl !== a._antallSl) return b._antallSl - a._antallSl
       return a.navn.localeCompare(b.navn, 'nb')
-    })
+    }), [prosjekter, sjekklister, sok])
 
   return (
     <div ref={dropdownRef} style={{ position: 'relative' }}>
@@ -1917,11 +1923,11 @@ function KSProsjektVelger({ prosjekter, sjekklister, onVelg }) {
     return () => document.removeEventListener('mousedown', lukk)
   }, [aapen])
 
-  const filtrert = prosjekter.filter(p =>
+  const filtrert = useMemo(() => prosjekter.filter(p =>
     !sok || p.navn.toLowerCase().includes(sok.toLowerCase()) ||
     (p.kunde?.navn || '').toLowerCase().includes(sok.toLowerCase()) ||
     (p.adresse || '').toLowerCase().includes(sok.toLowerCase())
-  )
+  ), [prosjekter, sok])
 
   return (
     <div ref={ref} style={{ position: 'relative', marginBottom: 16 }}>
@@ -2359,8 +2365,8 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
     return init
   })
 
-  const ksSjekklister = prosjekt.ksSjekklister || []
-  const tildelteMalIds = new Set(ksSjekklister.map(k => k.malId))
+  const ksSjekklister = useMemo(() => prosjekt.ksSjekklister || [], [prosjekt])
+  const tildelteMalIds = useMemo(() => new Set(ksSjekklister.map(k => k.malId)), [ksSjekklister])
 
   function visToast(msg, type = 'info') { setToast({ msg, type }); setTimeout(() => setToast(null), 3000) }
   function toggleKollaps(key) { setKollapset(k => ({ ...k, [key]: !k[key] })) }
@@ -2411,8 +2417,10 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
     setDragType(null); setDragData(null)
   }
 
-  const soekLow = soekBibliotek.toLowerCase()
-  const biblFiltrert = maler.filter(m => !soekBibliotek || m.navn.toLowerCase().includes(soekLow))
+  const biblFiltrert = useMemo(() => {
+    const fl = soekBibliotek.toLowerCase()
+    return maler.filter(m => !soekBibliotek || m.navn.toLowerCase().includes(fl))
+  }, [maler, soekBibliotek])
 
   function renderTildeltListe(malListe) {
     return malListe.map(ks => {
@@ -2673,28 +2681,31 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
     localStorage.setItem('ks_nylig_brukt', JSON.stringify(oppdatert))
     onVelgProsjekt(p)
   }
-  const nyligeProsjekter = nyligBrukt.map(id => prosjekter.find(p => p.id === id)).filter(Boolean)
+  const nyligeProsjekter = useMemo(() => nyligBrukt.map(id => prosjekter.find(p => p.id === id)).filter(Boolean), [nyligBrukt, prosjekter])
 
   // KPI beregninger
-  // I gang: prosjekter med aktive sjekklister (API) ELLER ksSjekklister
-  const iGangIds = new Set([
-    ...sjekklister.filter(s => s.status !== 'ferdig').map(s => s.prosjektId),
-    ...prosjekter.filter(p => (p.ksSjekklister || []).some(k => k.status !== 'fullfort')).map(p => p.id),
-  ])
-  // Avvik åpne: fra API-sjekklister ELLER ksSjekklister med avvik
-  const avvikAapne = sjekklister.filter(s => (s.punkter || []).some(p => p.status === 'avvik')).length +
-    prosjekter.reduce((sum, p) => sum + (p.ksSjekklister || []).filter(k => k.status === 'avvik').length, 0)
-  const klarSlutt = prosjekter.filter(p => {
-    const mine = sjekklister.filter(s => s.prosjektId === p.id)
-    const ksItems = p.ksSjekklister || []
-    const harFerdig = mine.some(s => s.status === 'ferdig') || ksItems.some(k => k.status === 'fullfort')
-    const harSlutt = mine.some(s => s.malId === 'mal-sluttkontroll') || ksItems.some(k => k.malId === 'mal-sluttkontroll')
-    return (mine.length > 0 || ksItems.length > 0) && harFerdig && !harSlutt
-  }).length
-  const prosjektIds = new Set(prosjekter.map(p => p.id))
-  const ugyldigeSl = sjekklister.filter(s => !prosjektIds.has(s.prosjektId))
-  const harMismatch = ugyldigeSl.length > 0 && sjekklister.length > 0
-  const malerUtenBeskrivelse = maler.filter(m => !m.punkter?.some(p => p.beskrivelse))
+  const { iGangIds, avvikAapne, klarSlutt, ugyldigeSl, harMismatch, malerUtenBeskrivelse } = useMemo(() => {
+    // I gang: prosjekter med aktive sjekklister (API) ELLER ksSjekklister
+    const iGangIds = new Set([
+      ...sjekklister.filter(s => s.status !== 'ferdig').map(s => s.prosjektId),
+      ...prosjekter.filter(p => (p.ksSjekklister || []).some(k => k.status !== 'fullfort')).map(p => p.id),
+    ])
+    // Avvik åpne: fra API-sjekklister ELLER ksSjekklister med avvik
+    const avvikAapne = sjekklister.filter(s => (s.punkter || []).some(p => p.status === 'avvik')).length +
+      prosjekter.reduce((sum, p) => sum + (p.ksSjekklister || []).filter(k => k.status === 'avvik').length, 0)
+    const klarSlutt = prosjekter.filter(p => {
+      const mine = sjekklister.filter(s => s.prosjektId === p.id)
+      const ksItems = p.ksSjekklister || []
+      const harFerdig = mine.some(s => s.status === 'ferdig') || ksItems.some(k => k.status === 'fullfort')
+      const harSlutt = mine.some(s => s.malId === 'mal-sluttkontroll') || ksItems.some(k => k.malId === 'mal-sluttkontroll')
+      return (mine.length > 0 || ksItems.length > 0) && harFerdig && !harSlutt
+    }).length
+    const prosjektIds = new Set(prosjekter.map(p => p.id))
+    const ugyldigeSl = sjekklister.filter(s => !prosjektIds.has(s.prosjektId))
+    const harMismatch = ugyldigeSl.length > 0 && sjekklister.length > 0
+    const malerUtenBeskrivelse = maler.filter(m => !m.punkter?.some(p => p.beskrivelse))
+    return { iGangIds, avvikAapne, klarSlutt, ugyldigeSl, harMismatch, malerUtenBeskrivelse }
+  }, [prosjekter, sjekklister, maler])
 
 
   return (
@@ -2856,12 +2867,12 @@ export default function KS({ readOnly = false, ansattId = null }) {
 
   // Kun aktive prosjekter med KS-relevans
   // Ansatt (lesetilgang): kun prosjekter de er tildelt via bemanningsplanen
-  const tildelteProsjektIds = ansattId
+  const tildelteProsjektIds = useMemo(() => ansattId
     ? new Set((state.tildelinger || []).filter(t => t.ansattId === ansattId).map(t => t.prosjektId))
-    : null
-  const prosjekter = (state.prosjekter || [])
+    : null, [ansattId, state.tildelinger])
+  const prosjekter = useMemo(() => (state.prosjekter || [])
     .filter(p => p.status === 'aktiv' || p.status === undefined)
-    .filter(p => !tildelteProsjektIds || tildelteProsjektIds.has(p.id))
+    .filter(p => !tildelteProsjektIds || tildelteProsjektIds.has(p.id)), [state.prosjekter, tildelteProsjektIds])
 
   const ansatte = state.ansatte || []
 
