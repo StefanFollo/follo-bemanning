@@ -2,14 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { dateToIso } from '../store';
 import ServiceReklKalender from '../components/ServiceReklKalender';
-
-const SERV_STATUS = {
-  ny:           { label: 'Ny',           farge: '#3b82f6', bg: '#eff6ff', ikon: '🔵' },
-  planlagt:     { label: 'Planlagt',     farge: '#f59e0b', bg: '#fffbeb', ikon: '📅' },
-  under_arbeid: { label: 'Under arbeid', farge: '#8b5cf6', bg: '#f5f3ff', ikon: '🔨' },
-  ferdig:       { label: 'Ferdig – ikke fakturert', farge: '#16a34a', bg: '#f0fdf4', ikon: '✅' },
-  fakturert:    { label: 'Fakturert',    farge: '#0891b2', bg: '#ecfeff', ikon: '🧾' },
-};
+import { SERV_STATUS } from '../statuses';
 
 const SERV_TYPER = [
   'Diverse', 'Tømrer', 'Maling', 'Rørlegger', 'Flislegging',

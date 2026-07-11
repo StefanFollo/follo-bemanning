@@ -2,15 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { dateToIso } from '../store';
 import ServiceReklKalender from '../components/ServiceReklKalender';
-
-const REKL_STATUS = {
-  ny:           { label: 'Ny',             farge: '#3b82f6', bg: '#eff6ff', ikon: '🔵' },
-  planlagt:     { label: 'Planlagt',       farge: '#f59e0b', bg: '#fffbeb', ikon: '📅' },
-  under_arbeid: { label: 'Under utbedring', farge: '#8b5cf6', bg: '#f5f3ff', ikon: '🔨' },
-  utbedret:     { label: 'Utbedret',        farge: '#16a34a', bg: '#f0fdf4', ikon: '✅' },
-  avvist:       { label: 'Avvist',          farge: '#dc2626', bg: '#fef2f2', ikon: '🚫' },
-  lukket:       { label: 'Lukket',          farge: '#6b7280', bg: '#f9fafb', ikon: '🔒' },
-};
+import { REKL_STATUS } from '../statuses';
 
 const REKL_TYPER = [
   'Tømrer', 'Maling', 'Rørlegger', 'Flislegging', 'Elektro',

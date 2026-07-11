@@ -269,12 +269,29 @@ export async function loadFromCloud() {
   }
 }
 
+// ── Synk-status (for indikator i toppmenyen) ──
+// Egen mini-store utenfor React-treet så statusendringer ikke re-rendrer
+// hele appen — kun indikator-komponenten abonnerer (useSyncExternalStore).
+let synkStatus = 'lagret'; // 'lagret' | 'lagrer' | 'feil'
+const synkLyttere = new Set();
+export function hentSynkStatus() { return synkStatus; }
+export function abonnerSynk(lytter) {
+  synkLyttere.add(lytter);
+  return () => synkLyttere.delete(lytter);
+}
+function settSynkStatus(s) {
+  if (s === synkStatus) return;
+  synkStatus = s;
+  synkLyttere.forEach(f => f());
+}
+
 // Returns 'conflict' if server blocked save (caller should reload from cloud)
 // _slettinger: klientens tombstones — lar serveren skille «slettet med vilje»
 // fra «mangler fordi klienten er utdatert».
 export async function saveToCloud(state) {
   const token = getToken();
   if (!token) return 'ok';
+  settSynkStatus('lagrer');
   try {
     const res = await fetch('/api/state', {
       method: 'POST',
@@ -287,10 +304,16 @@ export async function saveToCloud(state) {
     if (res.status === 409) {
       const data = await res.json().catch(() => ({}));
       console.warn('[FBS] Sky-lagring blokkert – laster ny data fra sky:', data.error);
-      return 'conflict';
+      return 'conflict'; // beholder 'lagrer' — fletting + nytt forsøk følger
     }
+    if (!res.ok) {
+      settSynkStatus('feil');
+      return 'error';
+    }
+    settSynkStatus('lagret');
     return 'ok';
   } catch {
+    settSynkStatus('feil');
     return 'error'; // localStorage er backup
   }
 }

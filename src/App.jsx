@@ -1,7 +1,7 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense, useSyncExternalStore } from 'react';
 import { AppProvider } from './context/AppContext';
 import { useApp } from './context/AppContext';
-import { saveToCloud, forceTimestampAlleFields } from './store';
+import { saveToCloud, forceTimestampAlleFields, abonnerSynk, hentSynkStatus } from './store';
 import LoginPage from './pages/LoginPage';
 import './App.css';
 
@@ -79,42 +79,44 @@ function clearResetToken() {
   window.history.replaceState({}, '', url.pathname + (url.search !== '?' ? url.search : ''));
 }
 
+// Synk-indikator: viser passivt at alt autolagres. Grønn hake = trygt,
+// gul = lagrer, rød = får ikke kontakt med skyen (endringene ligger lokalt
+// og sendes automatisk når nettet er tilbake). Klikk tvinger en lagring nå.
 function SaveButton() {
   const { state } = useApp();
-  const [status, setStatus] = useState('idle'); // 'idle' | 'saving' | 'ok' | 'error'
+  const synk = useSyncExternalStore(abonnerSynk, hentSynkStatus);
+  const [klikkLagrer, setKlikkLagrer] = useState(false);
 
   async function handleSave() {
-    if (status === 'saving') return;
+    if (klikkLagrer) return;
     // Bump alle lokale timestamps til nå slik at brukerens state alltid
     // vinner over cloud-skrivinger fra event.js ved mergeWithCloud-konflikt
     forceTimestampAlleFields();
-    setStatus('saving');
-    const result = await saveToCloud(state);
-    setStatus(result === 'error' ? 'error' : 'ok');
-    setTimeout(() => setStatus('idle'), 2500);
+    setKlikkLagrer(true);
+    await saveToCloud(state);
+    setKlikkLagrer(false);
   }
 
-  const label = status === 'saving' ? '⏳ Lagrer...'
-              : status === 'ok'     ? '✅ Lagret!'
-              : status === 'error'  ? '❌ Feil'
-              :                       '💾 Lagre nå';
+  const visning = synk === 'feil'
+    ? { label: '⚠️ Ikke lagret', bg: '#dc2626', tittel: 'Får ikke kontakt med skyen — endringene dine ligger trygt lokalt og sendes automatisk når nettet er tilbake. Klikk for å prøve nå.' }
+    : synk === 'lagrer' || klikkLagrer
+    ? { label: '⏳ Lagrer…', bg: '#f59e0b', tittel: 'Lagrer til skyen…' }
+    : { label: '✓ Alt lagret', bg: '#16a34a', tittel: 'Alle endringer lagres automatisk til skyen. Klikk for å tvinge en lagring nå.' };
 
   return (
     <button
       className="nav-btn"
       style={{
-        background: status === 'ok' ? '#16a34a' : status === 'error' ? '#dc2626' : '#2563eb',
+        background: visning.bg,
         color: '#fff',
         borderColor: 'transparent',
         fontWeight: 600,
         transition: 'background .3s',
-        opacity: status === 'saving' ? 0.7 : 1,
       }}
       onClick={handleSave}
-      disabled={status === 'saving'}
-      title="Lagre og sikkerhetskopier alle data til skyen nå"
+      title={visning.tittel}
     >
-      {label}
+      {visning.label}
     </button>
   );
 }

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { dateToIso, addDays, weekStart, overlaps, PROSJEKT_PALETTE, uid } from '../store';
+import { BEF_STATUS } from '../statuses';
 
 const JOBB_TYPER = ['Ny bygg', 'Tilbygg', 'Tak jobb', 'Fasade jobb', 'Bad', 'Tømrer', 'Maling', 'Rørlegger', 'Flislegging', 'Elektro', 'Rehabilitering', 'Annet'];
 
@@ -19,14 +20,7 @@ function byggTimer(poster) {
   return timer;
 }
 
-const STATUS = {
-  lead:          { label: 'Lead',                farge: '#0d9488', bg: '#f0fdfa', ikon: '🌱' },
-  planlagt:      { label: 'Planlagt befaring',   farge: '#3b82f6', bg: '#eff6ff', ikon: '📋' },
-  tilbud_arbeid: { label: 'Tilbud under arbeid', farge: '#f59e0b', bg: '#fffbeb', ikon: '✏️' },
-  tilbud_sendt:  { label: 'Tilbud sendt',        farge: '#8b5cf6', bg: '#f5f3ff', ikon: '📤' },
-  godkjent:      { label: 'Godkjent',            farge: '#16a34a', bg: '#f0fdf4', ikon: '✅' },
-  tapt:          { label: 'Tapt',                farge: '#6b7280', bg: '#f9fafb', ikon: '❌' },
-};
+const STATUS = BEF_STATUS;
 
 const PL_FARGER = ['#2563eb','#16a34a','#9333ea','#ea580c','#0891b2','#be185d','#854d0e','#0f766e','#b45309','#1d4ed8'];
 const MAANED_NAVN = ['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];

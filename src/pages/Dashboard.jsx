@@ -1,4 +1,3 @@
-import React from 'react';
 import { useApp } from '../context/AppContext';
 import { dateToIso, addDays, weekStart, overlaps } from '../store';
 
@@ -9,21 +8,9 @@ const FAG_COLORS = {
 };
 function fagColor(fag) { return FAG_COLORS[fag] || '#6b7280'; }
 
-const REKL_STATUS = {
-  ny:           { label: 'Ny',             farge: '#3b82f6', bg: '#eff6ff', ikon: '🔵' },
-  under_arbeid: { label: 'Under utbedring', farge: '#f59e0b', bg: '#fffbeb', ikon: '🔨' },
-  utbedret:     { label: 'Utbedret',        farge: '#16a34a', bg: '#f0fdf4', ikon: '✅' },
-  avvist:       { label: 'Avvist',          farge: '#dc2626', bg: '#fef2f2', ikon: '🚫' },
-  lukket:       { label: 'Lukket',          farge: '#6b7280', bg: '#f9fafb', ikon: '🔒' },
-};
-
-const BEF_STATUS = {
-  planlagt:      { label: 'Planlagt',          farge: '#3b82f6', ikon: '📋' },
-  tilbud_arbeid: { label: 'Tilbud under arbeid', farge: '#f59e0b', ikon: '✏️' },
-  tilbud_sendt:  { label: 'Tilbud sendt',       farge: '#8b5cf6', ikon: '📤' },
-  godkjent:      { label: 'Godkjent',           farge: '#16a34a', ikon: '✅' },
-  tapt:          { label: 'Tapt',               farge: '#6b7280', ikon: '❌' },
-};
+// Felles status-definisjoner — Dashboard hadde tidligere egne kopier som
+// manglet 'lead' og 'planlagt' og dermed viste feil farge/ikon.
+import { BEF_STATUS, REKL_STATUS } from '../statuses';
 
 const UKEDAGER = ['søndag', 'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag'];
 const MAANEDER = ['januar','februar','mars','april','mai','juni','juli','august','september','oktober','november','desember'];
@@ -116,6 +103,17 @@ export default function Dashboard({ onNavigate }) {
     .map(b => ({ ...b, dager: dagerTil(b.tilbudFrist) }))
     .sort((a, b) => a.tilbudFrist.localeCompare(b.tilbudFrist))
     .slice(0, 5);
+
+  // ── Oppfølging (neste kontakt) på leads/befaringer/tilbud ──
+  // Datoen skrives inn på befaringskortet, men var tidligere ikke synlig
+  // noe sted som påminnelse — leads ble glemt. Viser forfalte + de neste 3 dager.
+  const AKTIV_PIPELINE = new Set(['lead', 'planlagt', 'tilbud_arbeid', 'tilbud_sendt']);
+  const oppfolginger = (state.befaringer || [])
+    .filter(b => AKTIV_PIPELINE.has(b.status) && b.nesteKontakt)
+    .map(b => ({ ...b, dager: dagerTil(b.nesteKontakt) }))
+    .filter(b => b.dager <= 3)
+    .sort((a, b) => a.nesteKontakt.localeCompare(b.nesteKontakt))
+    .slice(0, 8);
 
   const ukedagNavn = UKEDAGER[todayDate.getDay()];
 
@@ -340,6 +338,42 @@ export default function Dashboard({ onNavigate }) {
 
         {/* ── Høyre kolonne ── */}
         <div className="dash-kolonne">
+
+          {/* Oppfølging: neste kontakt på leads/tilbud */}
+          {oppfolginger.length > 0 && (
+            <div className="dash-seksjon">
+              <div className="dash-seksjon-header">
+                <span>📞 Oppfølging — neste kontakt</span>
+                <span className="dash-seksjon-teller" style={{ color: oppfolginger.some(b => b.dager <= 0) ? '#dc2626' : undefined }}>
+                  {oppfolginger.length}
+                </span>
+              </div>
+              {oppfolginger.map(b => {
+                const s = BEF_STATUS[b.status] || BEF_STATUS.planlagt;
+                const farge = b.dager < 0 ? '#dc2626' : b.dager === 0 ? '#f59e0b' : '#16a34a';
+                return (
+                  <div
+                    key={b.id}
+                    className="dash-frist-rad"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => onNavigate && onNavigate('befaring')}
+                    title="Gå til Befaring"
+                  >
+                    <div className="dash-frist-info">
+                      <div className="dash-frist-navn">{s.ikon} {b.kontaktNavn || b.adresse}</div>
+                      <div className="dash-frist-adresse">{b.adresse}{b.telefon ? ` · 📱 ${b.telefon}` : ''}</div>
+                      <div style={{ fontSize: 11, color: s.farge, marginTop: 2 }}>{s.label}</div>
+                    </div>
+                    <div className="dash-frist-badge" style={{ background: farge + '1a', color: farge }}>
+                      {b.dager < 0 ? `${Math.abs(b.dager)}d forfalt`
+                        : b.dager === 0 ? 'I dag!'
+                        : `om ${b.dager}d`}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Tilbudsfrister */}
           {tilbudFrister.length > 0 && (

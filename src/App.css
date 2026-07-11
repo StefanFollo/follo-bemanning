@@ -1404,13 +1404,19 @@ body {
   padding: 4px 0 env(safe-area-inset-bottom, 4px);
 }
 .mobile-nav-inner {
-  display: flex; justify-content: space-around;
+  display: flex; justify-content: flex-start;
+  /* Admin har 12 faner — uten scrolling ble de presset sammen og noen uklikkbare */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
+.mobile-nav-inner::-webkit-scrollbar { display: none; }
 .mobile-nav-btn {
   background: none; border: none; color: #94a3b8;
   cursor: pointer; padding: 6px 12px;
   display: flex; flex-direction: column; align-items: center; gap: 2px;
   font-size: 10px; font-weight: 500; min-width: 60px;
+  flex-shrink: 0;
   transition: color .15s;
 }
 .mobile-nav-btn.active { color: #3b82f6; }
