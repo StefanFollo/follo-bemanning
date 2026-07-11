@@ -1,22 +1,29 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { AppProvider } from './context/AppContext';
 import { useApp } from './context/AppContext';
 import { saveToCloud, forceTimestampAlleFields } from './store';
-import Prosjekter from './pages/Prosjekter';
-import Ansatte from './pages/Ansatte';
-import Bemanningsplan from './pages/Bemanningsplan';
-import Framdriftsplan from './pages/Framdriftsplan';
-import RorleggerPlan from './pages/RorleggerPlan';
-import BefaringPlan from './pages/BefaringPlan';
-import Reklamasjon from './pages/Reklamasjon';
-import Service from './pages/Service';
-import Dashboard from './pages/Dashboard';
 import LoginPage from './pages/LoginPage';
-import ResetPassword from './pages/ResetPassword';
-import AdminUsers from './pages/AdminUsers';
-import KS from './pages/KS';
-import Biler from './pages/Biler';
 import './App.css';
+
+// Sidene lastes ved behov (code-splitting): en ansatt laster ikke hele
+// admin-flaten, og førstelastingen på iPad/mobil blir vesentlig raskere.
+const Prosjekter = lazy(() => import('./pages/Prosjekter'));
+const Ansatte = lazy(() => import('./pages/Ansatte'));
+const Bemanningsplan = lazy(() => import('./pages/Bemanningsplan'));
+const Framdriftsplan = lazy(() => import('./pages/Framdriftsplan'));
+const RorleggerPlan = lazy(() => import('./pages/RorleggerPlan'));
+const BefaringPlan = lazy(() => import('./pages/BefaringPlan'));
+const Reklamasjon = lazy(() => import('./pages/Reklamasjon'));
+const Service = lazy(() => import('./pages/Service'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
+const AdminUsers = lazy(() => import('./pages/AdminUsers'));
+const KS = lazy(() => import('./pages/KS'));
+const Biler = lazy(() => import('./pages/Biler'));
+
+function SideLaster() {
+  return <div style={{ padding: 48, textAlign: 'center', color: '#94a3b8', fontSize: 15 }}>Laster…</div>;
+}
 
 const ADMIN_TABS = [
   { id: 'dashboard', label: 'Oversikt', icon: '🏠' },
@@ -179,13 +186,15 @@ function App() {
 
   if (showReset && !resetDone) {
     return (
-      <ResetPassword
-        token={resetToken}
-        onDone={() => {
-          clearResetToken();
-          setResetDone(true);
-        }}
-      />
+      <Suspense fallback={<SideLaster />}>
+        <ResetPassword
+          token={resetToken}
+          onDone={() => {
+            clearResetToken();
+            setResetDone(true);
+          }}
+        />
+      </Suspense>
     );
   }
 
@@ -237,6 +246,7 @@ function App() {
         </header>
 
         <main className="main">
+          <Suspense fallback={<SideLaster />}>
           {activeTab === 'dashboard' && (isAdmin || isKontor) && <Dashboard onNavigate={setActiveTab} />}
           {activeTab === 'befaring' && (isAdmin || isKontor || isBefaring) && <BefaringPlan />}
           {activeTab === 'reklamasjon' && (isAdmin || isKontor || isBefaring) && <Reklamasjon />}
@@ -249,6 +259,7 @@ function App() {
           {activeTab === 'ks' && (isAdmin || isKontor || role === 'ansatt') && <KS readOnly={role === 'ansatt'} ansattId={role === 'ansatt' ? ansattId : null} />}
           {activeTab === 'biler' && (isAdmin || isKontor) && <Biler />}
           {activeTab === 'brukere' && isAdmin && <AdminUsers />}
+          </Suspense>
         </main>
 
         <nav className="mobile-nav">
