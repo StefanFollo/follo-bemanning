@@ -73,10 +73,15 @@ export default async function handler(req, res) {
 
   const result = await sendResetEmail(emailKey, user.navn, resetUrl);
 
-  // In dev/no-email mode, return the URL so admin can share it manually
-  if (result.skipped || result.error) {
+  // SIKKERHET: reset-lenken må ALDRI returneres i produksjon. Endepunktet er
+  // uautentisert — en returnert lenke gir kontoovertakelse til hvem som helst
+  // som kjenner e-postadressen. Kun i lokal utvikling.
+  const erProduksjon = process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
+  if ((result.skipped || result.error) && !erProduksjon) {
     return res.status(200).json({ ok: true, devResetUrl: resetUrl });
   }
+  if (result.skipped) console.error('[forgot-password] RESEND_API_KEY mangler — reset-epost IKKE sendt til', emailKey);
+  if (result.error) console.error('[forgot-password] e-postutsending feilet:', result.error);
 
   return res.status(200).json({ ok: true });
 }

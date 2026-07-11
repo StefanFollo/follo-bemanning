@@ -199,7 +199,9 @@ export default function BefaringPlan() {
     setVisModal(true);
     // Hent aktivitetslogg i bakgrunnen
     setAktivitetLaster(true);
-    fetch(`/api/befaringer/audit?befaringId=${encodeURIComponent(b.id)}`)
+    fetch(`/api/befaringer/audit?befaringId=${encodeURIComponent(b.id)}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('fbs_token') || ''}` },
+    })
       .then(r => r.ok ? r.json() : { entries: [] })
       .then(d => setAktivitetLog((d.entries || []).reverse()))
       .catch(() => {})
@@ -583,7 +585,10 @@ export default function BefaringPlan() {
               // Logg manuell statusendring til audit-log
               fetch('/api/befaringer/audit-log', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${localStorage.getItem('fbs_token') || ''}`,
+                },
                 body: JSON.stringify({
                   objektId: b.id,
                   felt: 'status',

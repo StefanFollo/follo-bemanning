@@ -15,11 +15,13 @@ export const config = {
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
-  if (req.method === 'OPTIONS') return res.status(200).end()
   if (req.method !== 'POST') return res.status(405).end()
+
+  // SIKKERHET: krever innlogget økt — ellers kan hvem som helst forfalske
+  // eller fylle opp endringsloggen. (Var tidligere helt åpen med CORS *.)
+  const token = (req.headers.authorization || '').replace('Bearer ', '').trim()
+  const session = token ? await redis.get(`fbs_session:${token}`) : null
+  if (!session) return res.status(401).json({ error: 'Ikke autorisert' })
 
   const { objektId, felt, fraVerdi, tilVerdi, endretAv, kilde, begrunnelse } = req.body || {}
   if (!objektId || !felt) return res.status(400).json({ error: 'Mangler objektId eller felt' })
@@ -31,7 +33,7 @@ export default async function handler(req, res) {
       felt,
       fraVerdi,
       tilVerdi,
-      endretAv: endretAv || 'manuell',
+      endretAv: endretAv || session.navn || session.email || 'manuell',
       kilde: kilde || 'bemannings-app',
       begrunnelse: begrunnelse || null,
     }))

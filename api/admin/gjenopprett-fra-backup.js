@@ -12,6 +12,7 @@
 
 import { Redis } from '@upstash/redis'
 import { appendAuditLog, byggAuditEntry } from '../_dataIntegritet.js'
+import { lesBackupBlob } from '../_backupKrypto.js'
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -53,9 +54,12 @@ export default async function handler(req, res) {
     if (!state) return res.status(500).json({ error: 'Fant ikke fbs_state' })
     if (!sisteBackup?.url) return res.status(404).json({ error: 'Ingen nattbackup funnet (fbs_siste_backup mangler)' })
 
-    const r = await fetch(sisteBackup.url)
-    if (!r.ok) return res.status(502).json({ error: `Kunne ikke hente backup-blob: HTTP ${r.status}` })
-    const blob = await r.json()
+    let blob
+    try {
+      blob = await lesBackupBlob(sisteBackup.url)
+    } catch (e) {
+      return res.status(502).json({ error: e.message })
+    }
     const foer = blob.state || {}
 
     const nu = Date.now()

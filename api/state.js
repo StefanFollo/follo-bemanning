@@ -24,8 +24,9 @@ export default async function handler(req, res) {
     }
   } else if (req.method === 'POST') {
     const WRITE_ROLES = ['admin', 'kontor', 'befaring'];
-    if (session.role && !WRITE_ROLES.includes(session.role)) {
-      return res.status(403).json({ error: 'Kun administratorer kan lagre endringer.' });
+    // Manglende rolle skal AVVISES, ikke slippes gjennom (fail-closed)
+    if (!WRITE_ROLES.includes(session.role)) {
+      return res.status(403).json({ error: 'Rollen din har ikke skrivetilgang.' });
     }
     try {
       // Sikkerhetssperre: ikke tillat lagring som reduserer befaringer drastisk

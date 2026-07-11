@@ -7,12 +7,20 @@ const redis = new Redis({
   token: process.env.KV_REST_API_TOKEN,
 });
 
-async function rateLimit(ip) {
+// x-real-ip settes av Vercel-plattformen og kan ikke forfalskes av klienten.
+// Første ledd i x-forwarded-for er klient-styrt og kan spoofes for å omgå
+// sperren — bruk derfor x-real-ip, med siste XFF-ledd (nærmeste proxy) som fallback.
+function klientIp(req) {
+  const xff = (req.headers['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(Boolean);
+  return req.headers['x-real-ip'] || xff[xff.length - 1] || 'unknown';
+}
+
+async function rateLimit(nokkel, maks) {
   try {
-    const key = `fbs_attempts:${ip}`;
+    const key = `fbs_attempts:${nokkel}`;
     const attempts = await redis.incr(key);
     if (attempts === 1) await redis.expire(key, 900);
-    return attempts > 10;
+    return attempts > maks;
   } catch {
     return false;
   }
@@ -27,8 +35,8 @@ export default async function handler(req, res) {
   }
   const { email, password } = body || {};
 
-  const ip = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
-  if (await rateLimit(ip)) {
+  const ip = klientIp(req);
+  if (await rateLimit(`ip:${ip}`, 10)) {
     return res.status(429).json({ error: 'For mange forsøk. Vent 15 minutter.' });
   }
 
@@ -37,6 +45,12 @@ export default async function handler(req, res) {
   }
 
   const emailKey = email.trim().toLowerCase();
+
+  // Per-konto-sperre i tillegg til per-IP: hindrer brute-force mot én konto
+  // fra mange IP-er (eller med forfalskede headere).
+  if (await rateLimit(`konto:${emailKey}`, 10)) {
+    return res.status(429).json({ error: 'For mange forsøk på denne kontoen. Vent 15 minutter.' });
+  }
 
   // Try per-user account first
   const user = await redis.get(`fbs_user:${emailKey}`);
@@ -53,10 +67,13 @@ export default async function handler(req, res) {
     return res.status(200).json({ token, role: user.role, navn: user.navn });
   }
 
-  // Fallback: env-var admin (backwards compatible)
-  const APP_USER = process.env.APP_USER || 'admin';
-  const APP_PASS = process.env.APP_PASS || 'follo2026';
-  if (emailKey === APP_USER.toLowerCase() || emailKey === (process.env.APP_EMAIL || '').toLowerCase()) {
+  // Fallback: env-var admin — KUN hvis begge variablene er eksplisitt satt i
+  // Vercel. Ingen innebygde standardverdier (admin/follo2026 var en bakdør:
+  // hvis env-variablene noen gang ble fjernet, var systemet åpent).
+  const APP_USER = process.env.APP_USER;
+  const APP_PASS = process.env.APP_PASS;
+  if (APP_USER && APP_PASS &&
+      (emailKey === APP_USER.toLowerCase() || (process.env.APP_EMAIL && emailKey === process.env.APP_EMAIL.toLowerCase()))) {
     if (password !== APP_PASS) return res.status(401).json({ error: 'Feil e-post eller passord.' });
     const token = randomBytes(32).toString('hex');
     await redis.set(`fbs_session:${token}`, {

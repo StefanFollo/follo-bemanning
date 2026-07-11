@@ -3,8 +3,9 @@
 // Kan også kalles manuelt med Authorization: Bearer {CRON_SECRET}
 
 import { Redis } from '@upstash/redis'
-import { put } from '@vercel/blob'
+import { put, list, del } from '@vercel/blob'
 import { Resend } from 'resend'
+import { krypterBackup } from '../_backupKrypto.js'
 
 export const config = {
   api: { bodyParser: false },
@@ -89,10 +90,36 @@ export default async function handler(req, res) {
     const json = JSON.stringify(backupData)
     const filnavn = `backup/fbs-${ts}.json`
 
-    const blob = await put(filnavn, json, {
-      access: 'public',  // private krever premium Blob-plan
+    // SIKKERHET: blob-lagringen er offentlig (privat tier krever premium-plan)
+    // og inneholder hele kundedatabasen — krypter ALLTID når nøkkel finnes.
+    const kryptert = krypterBackup(json)
+    if (!kryptert) {
+      // Ingen nøkkel: ta backup likevel (datasikkerhet først), men varsle høylytt
+      console.error('[backup] ADVARSEL: BACKUP_KEY/CRON_SECRET mangler — backup lagres UKRYPTERT på offentlig blob!')
+      await sendAlarmEpost('BACKUP_KEY/CRON_SECRET mangler i Vercel — nattbackupen lagres UKRYPTERT på offentlig blob-lagring. Sett BACKUP_KEY snarest.')
+    }
+
+    const blob = await put(filnavn, kryptert || json, {
+      access: 'public',  // private krever premium Blob-plan — derfor kryptering
       contentType: 'application/json',
     })
+
+    // Rydd bort backuper eldre enn 30 dager (gamle ukrypterte kopier skal vekk)
+    let slettetGamle = 0
+    try {
+      const grense = Date.now() - 30 * 24 * 3600 * 1000
+      const { blobs } = await list({ prefix: 'backup/', limit: 1000 })
+      for (const b of blobs) {
+        if (b.pathname === filnavn) continue
+        if (new Date(b.uploadedAt).getTime() < grense) {
+          await del(b.url)
+          slettetGamle++
+        }
+      }
+      if (slettetGamle > 0) console.log(`[backup] Slettet ${slettetGamle} backuper eldre enn 30 dager`)
+    } catch (e) {
+      console.error('[backup] Opprydding av gamle backuper feilet:', e.message)
+    }
 
     // Oppdater "siste vellykkede backup"-nøkkel
     const backupInfo = {
@@ -100,11 +127,12 @@ export default async function handler(req, res) {
       url: blob.url,
       statistikk,
       storrelseBytes: json.length,
+      kryptert: !!kryptert,
     }
     await redis.set('fbs_siste_backup', backupInfo)
 
     const varighet = Date.now() - startTid
-    console.log(`[backup] OK — ${json.length} bytes → ${blob.url} (${varighet}ms)`)
+    console.log(`[backup] OK — ${json.length} bytes (kryptert: ${!!kryptert}) → ${blob.url} (${varighet}ms)`)
 
     return res.status(200).json({
       ok: true,

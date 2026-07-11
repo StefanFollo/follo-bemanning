@@ -12,6 +12,7 @@
 // Auth: Bearer-token med role=admin
 
 import { Redis } from '@upstash/redis'
+import { lesBackupBlob } from '../_backupKrypto.js'
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -138,24 +139,19 @@ export default async function handler(req, res) {
         statistikk: sisteBackup.statistikk,
       }
       try {
-        const r = await fetch(sisteBackup.url)
-        if (r.ok) {
-          const blob = await r.json()
-          const foer = blob.state || {}
-          rapport.nattbackup.antall = tellArrays(foer)
+        const blob = await lesBackupBlob(sisteBackup.url)
+        const foer = blob.state || {}
+        rapport.nattbackup.antall = tellArrays(foer)
 
-          const manglende = {}
-          for (const k of ARRAYS) {
-            const tapte = finnManglende(foer[k], state?.[k])
-            if (tapte.length > 0) manglende[k] = tapte.slice(0, 50).map(x => beskrivItem(k, x, foer))
-          }
-          rapport.manglerSidenNatt = Object.keys(manglende).length ? manglende : 'Ingen elementer mangler siden nattens backup'
-
-          const innholdstap = finnInnholdstap(foer.prosjekter, state?.prosjekter)
-          rapport.prosjektInnholdstap = innholdstap.length ? innholdstap : 'Ingen prosjekter har mistet framdrift/sjekklister siden natten'
-        } else {
-          rapport.nattbackup.feil = `Kunne ikke hente blob: HTTP ${r.status}`
+        const manglende = {}
+        for (const k of ARRAYS) {
+          const tapte = finnManglende(foer[k], state?.[k])
+          if (tapte.length > 0) manglende[k] = tapte.slice(0, 50).map(x => beskrivItem(k, x, foer))
         }
+        rapport.manglerSidenNatt = Object.keys(manglende).length ? manglende : 'Ingen elementer mangler siden nattens backup'
+
+        const innholdstap = finnInnholdstap(foer.prosjekter, state?.prosjekter)
+        rapport.prosjektInnholdstap = innholdstap.length ? innholdstap : 'Ingen prosjekter har mistet framdrift/sjekklister siden natten'
       } catch (e) {
         rapport.nattbackup.feil = `Kunne ikke lese blob: ${e.message}`
       }

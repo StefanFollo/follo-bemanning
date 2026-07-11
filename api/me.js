@@ -15,7 +15,8 @@ export default async function handler(req, res) {
 
   res.status(200).json({
     email: session.email,
-    role: session.role || 'admin',
+    // Manglende rolle → laveste privilegium (aldri admin som standard)
+    role: session.role || 'ansatt',
     navn: session.navn || '',
     ansattId: session.ansattId || null,
   });
