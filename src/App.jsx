@@ -1,5 +1,5 @@
 import { useState, useEffect, lazy, Suspense, useSyncExternalStore } from 'react';
-import { AppProvider } from './context/AppContext';
+import { AppProvider, harUlagredeEndringer } from './context/AppContext';
 import { useApp } from './context/AppContext';
 import { saveToCloud, forceTimestampAlleFields, abonnerSynk, hentSynkStatus } from './store';
 import LoginPage from './pages/LoginPage';
@@ -23,6 +23,53 @@ const Biler = lazy(() => import('./pages/Biler'));
 
 function SideLaster() {
   return <div style={{ padding: 48, textAlign: 'center', color: '#94a3b8', fontSize: 15 }}>Laster…</div>;
+}
+
+// ── Auto-oppdatering ──
+// Åpne faner kjører gammel kode etter en deploy — og gammel synk-logikk mot ny
+// server kan gi at endringer ikke synes hos andre. Sjekk hvert 5. minutt (og
+// når fanen får fokus) om det ligger en ny versjon ute; last på nytt når
+// brukeren ikke har ulagrede endringer. Data er trygt i localStorage + sky.
+function gjeldendeBundle() {
+  const script = document.querySelector('script[src*="/assets/index-"]');
+  return script ? script.getAttribute('src') : null;
+}
+async function nyVersjonUte() {
+  try {
+    const res = await fetch(`/?vsjekk=${Date.now()}`, { cache: 'no-store' });
+    if (!res.ok) return false;
+    const html = await res.text();
+    const m = html.match(/\/assets\/index-[\w-]+\.js/);
+    const naa = gjeldendeBundle();
+    return !!(m && naa && !naa.endsWith(m[0]) && m[0] !== naa);
+  } catch {
+    return false;
+  }
+}
+function useAutoOppdatering(aktiv) {
+  useEffect(() => {
+    if (!aktiv) return;
+    let stoppet = false;
+    async function sjekk() {
+      if (stoppet || document.visibilityState !== 'visible') return;
+      if (await nyVersjonUte()) {
+        if (!harUlagredeEndringer()) {
+          console.log('[FBS] Ny versjon tilgjengelig — laster på nytt');
+          window.location.reload();
+        }
+        // Har brukeren ulagrede endringer, prøver vi igjen ved neste sjekk —
+        // autolagringen (1 s) har som regel rukket å tømme dem innen da.
+      }
+    }
+    const interval = setInterval(sjekk, 5 * 60 * 1000);
+    const onVis = () => { if (document.visibilityState === 'visible') sjekk(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      stoppet = true;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [aktiv]);
 }
 
 const ADMIN_TABS = [
@@ -130,6 +177,7 @@ function App() {
   const [userNavn, setUserNavn] = useState(() => localStorage.getItem('fbs_user_navn') || '');
   const [ansattId, setAnsattId] = useState(() => localStorage.getItem('fbs_ansatt_id') || '');
   const [resetDone, setResetDone] = useState(false);
+  useAutoOppdatering(loggedIn);
 
   // Hent fersk rolle fra server ved oppstart — fanger opp rolle-endringer
   // gjort av admin uten at brukeren må logge ut og inn igjen.

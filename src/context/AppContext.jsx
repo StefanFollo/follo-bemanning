@@ -38,6 +38,10 @@ const SLETT_FELT = {
 // utløst en meningsløs re-lagring som roterer backupene i stykker.
 let harLokaleEndringer = false;
 
+// Brukes av auto-oppdateringen i App.jsx: ikke last siden på nytt
+// mens brukeren har ulagrede endringer.
+export function harUlagredeEndringer() { return harLokaleEndringer; }
+
 function reducer(state, action) {
   if (action.type !== 'LOAD_STATE') harLokaleEndringer = true;
   if (STEMPLE_ENDRET.has(action.type) && action.payload && typeof action.payload === 'object') {
