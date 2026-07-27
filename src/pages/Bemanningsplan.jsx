@@ -78,6 +78,14 @@ export default function Bemanningsplan({ readOnly = false }) {
   const [storskjerm, setStorskjerm] = useState(false);
   const [storskjermZoom, setStorskjermZoom] = useState(1);
   const [fagFilter, setFagFilter] = useState(null);
+  // Kompakt visning (lavere rader, som ProResult) — valget huskes per enhet
+  const [kompakt, setKompakt] = useState(() => localStorage.getItem('fbs_oversikt_kompakt') === '1');
+  function toggleKompakt() {
+    setKompakt(k => {
+      localStorage.setItem('fbs_oversikt_kompakt', k ? '0' : '1');
+      return !k;
+    });
+  }
   const storskjermContentRef = useRef(null);
   const [ukeMode, setUkeMode] = useState('dag'); // 'dag' | 'uke' | 'maaned'
   const [ferieYearOffset, setFerieYearOffset] = useState(0);
@@ -450,6 +458,8 @@ export default function Bemanningsplan({ readOnly = false }) {
             planAnsatte={planAnsatte}
             fagFilter={fagFilter}
             setFagFilter={setFagFilter}
+            kompakt={kompakt}
+            toggleKompakt={toggleKompakt}
             ansatteOrder={ansatteOrder}
             setAnsatteOrder={setAnsatteOrder}
             oversiktScrollRef={oversiktScrollRef}
@@ -1220,7 +1230,7 @@ function MaanedGridHeader({ SIX_MONTHS, today }) {
 
 // --- MULTI-UKE GANTT OVERSIKT ---
 function OversiktVisning({
-  state, readOnly, planAnsatte, fagFilter, setFagFilter,
+  state, readOnly, planAnsatte, fagFilter, setFagFilter, kompakt, toggleKompakt,
   ansatteOrder, setAnsatteOrder, oversiktScrollRef, oversiktPanRef, oversiktDragId,
   dragRef, HOLIDAYS, handleDrop, openAddTildeling, openBarMenu,
 }) {
@@ -1228,7 +1238,9 @@ function OversiktVisning({
   const PAST_WEEKS  = 4;   // uker før i dag som vises
   const GANTT_WEEKS = 60;  // total antall uker (4 bak + 56 frem ≈ 14 måneder)
   const DAY_W = 36;   // px per weekday
-  const ROW_H = 34;   // px per employee row
+  // Kompakt = lavere rader (som ProResult); full = som før.
+  // Redigering (dra, klikk, splitt) virker likt i begge visninger.
+  const LANE_H = kompakt ? 20 : 34;  // px per prosjekt-linje
   const LABEL_W = 162;
 
   // Fast startpunkt – alltid 4 uker før i dag, uavhengig av navigasjon
@@ -1313,6 +1325,116 @@ function OversiktVisning({
   const ovFagOptions = state.fag.filter(f => planAnsatte.some(a => a.fag === f));
   const filteredAnsatte = fagFilter ? orderedAnsatte.filter(a => a.fag === fagFilter) : orderedAnsatte;
 
+  // ── PDF-rapport: bemanningsplan for 1 uke (per dag) eller flere uker (per uke) ──
+  function skrivUtPlanPdf(antallUker) {
+    const start = weekStart(today);
+    const perDag = antallUker === 1;
+    // Kolonner: dager (1 uke) eller uker (periode)
+    const kolonner = [];
+    if (perDag) {
+      for (let d = 0; d < 5; d++) {
+        const dato = addDays(start, d);
+        kolonner.push({ start: dato, end: dato, label: `${DAY_NAMES[d]} ${parseInt(dato.slice(8), 10)}.${parseInt(dato.slice(5, 7), 10)}` });
+      }
+    } else {
+      for (let w = 0; w < antallUker; w++) {
+        const ws = addDays(start, w * 7);
+        kolonner.push({ start: ws, end: addDays(ws, 4), label: `Uke ${wkNr(ws)}` });
+      }
+    }
+    const periodeSlutt = kolonner[kolonner.length - 1].end;
+
+    function celle(ansatt, kol) {
+      const deler = [];
+      if (ansatt.sykmeldt) {
+        const fra = ansatt.sykmeldtFra || kol.start;
+        const til = ansatt.sykmeldtTil || kol.end;
+        if (overlaps(fra, til, kol.start, kol.end)) deler.push('<span class="syk">🤒 Sykmeldt</span>');
+      }
+      for (const t of state.tildelinger) {
+        if (t.ansattId !== ansatt.id || !overlaps(t.startDato, t.sluttDato, kol.start, kol.end)) continue;
+        if (t.prosjektId === FERIE_ID) { deler.push('<span class="ferie">🏖 Ferie</span>'); continue; }
+        const p = state.prosjekter.find(pr => pr.id === t.prosjektId);
+        deler.push(`<span class="prosj" style="border-left-color:${p?.farge || '#6b7280'}">${p?.navn || '?'}</span>`);
+      }
+      return deler.length ? deler.join('') : '<span class="tom">–</span>';
+    }
+
+    // Rader gruppert etter team, samme rekkefølge som i visningen
+    const teams = state.teams || [];
+    const grupper = [];
+    if (teams.length === 0) {
+      grupper.push({ navn: null, farge: null, medlemmer: filteredAnsatte });
+    } else {
+      const iTeam = new Set(teams.flatMap(t => t.ansatteIds || []));
+      for (const team of teams) {
+        const m = filteredAnsatte.filter(a => (team.ansatteIds || []).includes(a.id));
+        if (m.length) grupper.push({ navn: team.navn, farge: team.farge, medlemmer: m });
+      }
+      const uten = filteredAnsatte.filter(a => !iTeam.has(a.id));
+      if (uten.length) grupper.push({ navn: 'Uten team', farge: '#94a3b8', medlemmer: uten });
+    }
+
+    const rader = grupper.map(g => {
+      const teamRad = g.navn
+        ? `<tr class="teamrad"><td colspan="${kolonner.length + 1}" style="border-left:4px solid ${g.farge}">${g.navn}</td></tr>`
+        : '';
+      const ansattRader = g.medlemmer.map(a => `<tr>
+        <td class="navn">${a.navn}${a.innleie ? ' <span class="lite">(innleie)</span>' : ''}</td>
+        ${kolonner.map(k => `<td>${celle(a, k)}</td>`).join('')}
+      </tr>`).join('');
+      return teamRad + ansattRader;
+    }).join('');
+
+    const idag = new Date().toLocaleDateString('nb-NO', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const tittel = perDag
+      ? `Uke ${wkNr(start)} (${formatDate(start)} – ${formatDate(periodeSlutt)})`
+      : `Uke ${wkNr(start)}–${wkNr(kolonner[kolonner.length - 1].start)} (${formatDate(start)} – ${formatDate(periodeSlutt)})`;
+
+    const w = window.open('', '_blank');
+    w.document.write(`<!DOCTYPE html><html><head>
+      <meta charset="utf-8">
+      <title>Bemanningsplan – ${tittel}</title>
+      <style>
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:Arial,sans-serif;font-size:11px;color:#111;padding:20px}
+        .hdr{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:2px solid #185FA5;padding-bottom:10px;margin-bottom:12px}
+        .logo{font-size:20px;font-weight:700;color:#185FA5}
+        .sub{font-size:10px;color:#666;margin-top:2px}
+        .tittel{font-size:15px;font-weight:700;text-align:right}
+        table{width:100%;border-collapse:collapse;table-layout:fixed}
+        th{background:#f1f5f9;text-align:left;padding:5px 7px;font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:#475569;border-bottom:2px solid #cbd5e1}
+        th.navn,td.navn{width:150px}
+        td{padding:4px 7px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-size:10px}
+        td.navn{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        tr.teamrad td{background:#f8fafc;font-weight:700;font-size:11px;padding:5px 8px}
+        .prosj{display:block;border-left:3px solid #6b7280;padding-left:4px;margin:1px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .ferie{display:block;color:#0891b2;margin:1px 0}
+        .syk{display:block;color:#94a3b8;margin:1px 0}
+        .tom{color:#cbd5e1}
+        .lite{font-size:9px;color:#888;font-weight:400}
+        @media print{body{padding:6px}@page{size:landscape;margin:10mm}}
+      </style>
+    </head><body>
+      <div class="hdr">
+        <div>
+          <div class="logo">FolloByggService</div>
+          <div class="sub">Bemanningsplan</div>
+        </div>
+        <div>
+          <div class="tittel">${tittel}</div>
+          <div class="sub" style="text-align:right">Generert: ${idag}${fagFilter ? ` · Filter: ${fagFilter}` : ''}</div>
+        </div>
+      </div>
+      <table>
+        <thead><tr><th class="navn">Ansatt</th>${kolonner.map(k => `<th>${k.label}</th>`).join('')}</tr></thead>
+        <tbody>${rader}</tbody>
+      </table>
+      <script>window.onload = function(){ window.print(); }<\/script>
+    </body></html>`);
+    w.document.close();
+  }
+
   return (
     <div>
       {/* Navigation */}
@@ -1328,6 +1450,24 @@ function OversiktVisning({
           <button className="btn" title="Tilbakestill til alfabetisk rekkefølge"
             onClick={() => saveOrder([])}>↺ Alfabetisk</button>
         )}
+        <button className="btn" onClick={toggleKompakt}
+          title={kompakt ? 'Bytt til full visning (høyere rader)' : 'Bytt til kompakt visning (lavere rader, som ProResult)'}>
+          {kompakt ? '▥ Full visning' : '▤ Kompakt'}
+        </button>
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <button className="btn" onClick={() => skrivUtPlanPdf(1)} title="PDF for inneværende uke (per dag) — velg «Lagre som PDF» i utskriftsdialogen">🖨 Uke-PDF</button>
+          <select
+            className="input" defaultValue="" style={{ width: 120, height: 30, fontSize: 12 }}
+            onChange={e => { const v = parseInt(e.target.value, 10); if (v) skrivUtPlanPdf(v); e.target.value = ''; }}
+            title="PDF for en lengre periode (per uke)"
+          >
+            <option value="" disabled>🖨 Periode…</option>
+            <option value="2">2 uker</option>
+            <option value="4">4 uker</option>
+            <option value="8">8 uker</option>
+            <option value="12">12 uker</option>
+          </select>
+        </div>
         {!readOnly && <button className="btn btn-primary no-print" onClick={() => openAddTildeling()}>+ Ny tildeling</button>}
       </div>
 
@@ -1447,11 +1587,26 @@ function OversiktVisning({
               const myTils = state.tildelinger
                 .filter(t => t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, viewStart, viewEnd))
                 .sort((a, b) => (a.prosjektId === FERIE_ID ? 1 : 0) - (b.prosjektId === FERIE_ID ? 1 : 0));
+
+              // Lane-oppdeling: overlappende tildelinger får hver sin linje,
+              // slik at tre samtidige prosjekter vises som tre separate striper
+              // i stedet for å ligge oppå hverandre.
+              const laneSlutt = [];
+              const laneOf = {};
+              for (const t of [...myTils].sort((a, b) => a.startDato.localeCompare(b.startDato) || a.sluttDato.localeCompare(b.sluttDato))) {
+                let l = laneSlutt.findIndex(slutt => t.startDato > slutt);
+                if (l === -1) { l = laneSlutt.length; laneSlutt.push(t.sluttDato); }
+                else laneSlutt[l] = t.sluttDato;
+                laneOf[t.id] = l;
+              }
+              const antallLaner = Math.max(1, laneSlutt.length);
+              const rowH = antallLaner * LANE_H;
+
               const ri = rowIdx++;
               return (
               <div key={ansatt.id}
                 className={`oversikt-row${ri % 2 === 0 ? '' : ' alt'}`}
-                style={{ height: ROW_H }}
+                style={{ height: rowH }}
                 onDragOver={e => {
                   if (!oversiktDragId.current) return;
                   e.preventDefault();
@@ -1479,7 +1634,7 @@ function OversiktVisning({
               >
 
                 {/* Sticky name label */}
-                <div className="oversikt-row-label" style={{ width: LABEL_W, height: ROW_H }}>
+                <div className="oversikt-row-label" style={{ width: LABEL_W, height: rowH }}>
                   <span
                     className="oversikt-drag-handle"
                     title="Dra for å flytte"
@@ -1513,7 +1668,7 @@ function OversiktVisning({
                 </div>
 
                 {/* Bar area */}
-                <div className="oversikt-bars-area" style={{ width: totalW, height: ROW_H }}
+                <div className="oversikt-bars-area" style={{ width: totalW, height: rowH }}
                   onPointerUp={e => {
                     if (!dragRef.current) return;
                     const rect = e.currentTarget.getBoundingClientRect();
@@ -1546,7 +1701,7 @@ function OversiktVisning({
                     if (!bp) return null;
                     return (
                       <div key="syk" style={{
-                        position: 'absolute', top: 4, height: ROW_H - 8,
+                        position: 'absolute', top: 2, height: rowH - 4,
                         left: bp.left, width: bp.width,
                         background: 'repeating-linear-gradient(45deg,#e2e8f0,#e2e8f0 4px,#f1f5f9 4px,#f1f5f9 8px)',
                         borderRadius: 4, border: '1px solid #cbd5e1',
@@ -1571,7 +1726,12 @@ function OversiktVisning({
                     return (
                       <div key={t.id}
                         className={`oversikt-bar${isFerie ? ' oversikt-bar-ferie' : ''}`}
-                        style={{ left: bp.left, width: bp.width, ...(isFerie ? {} : { background: color }) }}
+                        style={{
+                          left: bp.left, width: bp.width,
+                          top: laneOf[t.id] * LANE_H + 2,
+                          height: LANE_H - 4,
+                          ...(isFerie ? {} : { background: color }),
+                        }}
                         title={`${label} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)} — klikk for valg`}
                         onClick={e => {
                           e.stopPropagation();
@@ -1594,7 +1754,7 @@ function OversiktVisning({
                           }}
                           onClick={e => e.stopPropagation()}
                         />
-                        <span className="oversikt-bar-label">{label}</span>
+                        <span className="oversikt-bar-label" style={{ fontSize: kompakt ? 10 : 11 }}>{label}</span>
                         <div className="oversikt-handle oversikt-handle-r"
                           title="Dra for å endre sluttdato"
                           onPointerDown={e => {

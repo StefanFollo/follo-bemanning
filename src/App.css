@@ -759,6 +759,12 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   padding: 0 5px;
+  /* Klistret: når starten av en lang bar er scrollet ut av bildet, følger
+     prosjektnavnet med og vises alltid ved venstre kant av synlig område
+     (166px = bredden på den faste ansatt-kolonnen). */
+  position: sticky;
+  left: 166px;
+  max-width: 100%;
 }
 .oversikt-handle {
   width: 8px;
