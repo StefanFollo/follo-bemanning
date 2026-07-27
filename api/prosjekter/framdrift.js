@@ -156,7 +156,7 @@ RETURNER KUN VALID JSON (ingen forklaringstekst):
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-opus-5',
       max_tokens: 3000,
       messages: [{ role: 'user', content: prompt }],
     }),
