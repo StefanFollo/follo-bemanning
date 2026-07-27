@@ -2,7 +2,7 @@ import { createContext, useContext, useReducer, useEffect, useState, useRef } fr
 import {
   loadState, FIELD_MAP,
   saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag, saveTeams, saveRorTimer, saveRorPlaner, saveBefaringer, saveReklamasjoner, saveServiceJobber, saveBiler,
-  loadFromCloud, saveToCloud, getLocalUpdatedAt, getFieldTs, mergeWithCloud,
+  loadFromCloud, saveToCloud, getLocalUpdatedAt, mergeWithCloud,
   registrerSletting,
   uid,
 } from '../store';
@@ -390,10 +390,23 @@ export function AppProvider({ children }) {
       // flagget på nytt og får sin egen lagring.
       harLokaleEndringer = false;
       const result = await saveToCloud(state);
-      if (result === 'ok') {
-        // Track what we just sent so polling doesn't re-trigger on our own save
-        lastCloudTsRef.current = Math.max(lastCloudTsRef.current, getLocalUpdatedAt());
-      } else if (result === 'conflict') {
+      if (result.status === 'ok') {
+        if (result.merged) {
+          // Serveren flettet inn andres endringer i det vi lagret —
+          // hent resultatet STRAKS i stedet for å vente på neste poll
+          const cloudState = await loadFromCloud();
+          if (cloudState) {
+            const merged = mergeWithCloud(stateRef.current, cloudState);
+            lastCloudTsRef.current = cloudState._updatedAt || 0;
+            dispatch({ type: 'LOAD_STATE', payload: merged });
+          }
+        } else if (result.updatedAt) {
+          // Sett polle-referansen til SERVERENS tidsstempel — aldri egen klokke.
+          // (Egen klokke foran servertid gjorde at andres lagringer aldri
+          // passerte referansen → deres endringer ble usynlige.)
+          lastCloudTsRef.current = Math.max(lastCloudTsRef.current, result.updatedAt);
+        }
+      } else if (result.status === 'conflict') {
         const cloudState = await loadFromCloud();
         if (cloudState) {
           // stateRef (ikke state fra closure): brukeren kan ha endret ting

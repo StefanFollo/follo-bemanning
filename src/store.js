@@ -290,7 +290,7 @@ function settSynkStatus(s) {
 // fra «mangler fordi klienten er utdatert».
 export async function saveToCloud(state) {
   const token = getToken();
-  if (!token) return 'ok';
+  if (!token) return { status: 'ok', updatedAt: 0 };
   settSynkStatus('lagrer');
   try {
     const res = await fetch('/api/state', {
@@ -304,16 +304,19 @@ export async function saveToCloud(state) {
     if (res.status === 409) {
       const data = await res.json().catch(() => ({}));
       console.warn('[FBS] Sky-lagring blokkert – laster ny data fra sky:', data.error);
-      return 'conflict'; // beholder 'lagrer' — fletting + nytt forsøk følger
+      return { status: 'conflict' }; // beholder 'lagrer' — fletting + nytt forsøk følger
     }
     if (!res.ok) {
       settSynkStatus('feil');
-      return 'error';
+      return { status: 'error' };
     }
+    const data = await res.json().catch(() => ({}));
     settSynkStatus('lagret');
-    return 'ok';
+    // updatedAt er SERVERENS tidsstempel — klienten bruker det som
+    // polle-referanse i stedet for egen (potensielt skjev) klokke
+    return { status: 'ok', updatedAt: data.updatedAt || 0 };
   } catch {
     settSynkStatus('feil');
-    return 'error'; // localStorage er backup
+    return { status: 'error' }; // localStorage er backup
   }
 }

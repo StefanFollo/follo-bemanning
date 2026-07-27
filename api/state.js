@@ -11,6 +11,19 @@ async function getSession(req) {
   return await redis.get(`fbs_session:${token}`);
 }
 
+// Sammenlign to elementer uten _endret-stempelet, ufølsom for nøkkelrekkefølge
+// på toppnivå. Brukes for å avgjøre om innholdet FAKTISK er endret.
+function likUtenStempel(a, b) {
+  const ka = Object.keys(a).filter(k => k !== '_endret').sort();
+  const kb = Object.keys(b).filter(k => k !== '_endret').sort();
+  if (ka.length !== kb.length) return false;
+  for (let i = 0; i < ka.length; i++) {
+    if (ka[i] !== kb[i]) return false;
+    if (JSON.stringify(a[ka[i]]) !== JSON.stringify(b[kb[i]])) return false;
+  }
+  return true;
+}
+
 export default async function handler(req, res) {
   const session = await getSession(req);
   if (!session) return res.status(401).json({ error: 'Ikke autorisert' });
@@ -32,6 +45,7 @@ export default async function handler(req, res) {
       // Sikkerhetssperre: ikke tillat lagring som reduserer befaringer drastisk
       // (beskytter mot at seed-data ved ny browser-oppstart overskriver sky-data)
       let newState = req.body;
+      let serverEndretYtre = false; // ble sky-elementer flettet inn i klientens lagring?
       const currentState = await redis.get('fbs_state');
       if (currentState) {
         // ── Tombstones: bevisste slettinger (bygges FØR guards, så guards kan
@@ -105,11 +119,17 @@ export default async function handler(req, res) {
             const ct = c._endret || 0;
             const it = item._endret || 0;
             if (ct > it) { beholdt++; return c; }        // skyen er nyere for DETTE elementet
-            if (it > ct) return item;                     // klienten er nyere
+            if (it > ct) {
+              // Klienten er nyere for DETTE elementet. RE-STEMPLE med SERVER-tid
+              // når innholdet faktisk er endret — klient-klokker kan ikke stoles
+              // på (en enhet med klokka foran kunne ellers «vinne» for alltid).
+              // Identisk innhold → behold skyens stempel (unngå stempel-inflasjon).
+              return likUtenStempel(c, item) ? c : { ...item, _endret: nu };
+            }
             // Uten stempler (gamle data): felt-tidsstempel avgjør; hvis klienten
             // vinner og innholdet faktisk er endret, stemple det nå slik at
             // fremtidig fletting har noe å sammenligne med.
-            const ulikt = JSON.stringify(c) !== JSON.stringify(item);
+            const ulikt = !likUtenStempel(c, item);
             if (cloudTsFelt > inTsFelt) { if (ulikt) beholdt++; return c; }
             if (ulikt) return { ...item, _endret: nu };
             return item;
@@ -162,15 +182,14 @@ export default async function handler(req, res) {
 
         newState = { ...newState, _fieldTs: mergedFieldTs };
         const cloudUpd = currentState._updatedAt || 0;
+        // _updatedAt settes ALLTID av SERVEREN, garantert stigende.
+        // Tidligere kom verdien fra klient-klokker: en enhet med klokka foran
+        // «låste» _updatedAt fremover i tid, og andres lagringer (med korrekt
+        // klokke) passerte aldri verdien → polling så aldri endringene deres.
+        newState = { ...newState, _updatedAt: Math.max(nu, cloudUpd + 1) };
+        serverEndretYtre = serverEndret;
         if (serverEndret) {
-          // Serveren beholdt sky-elementer klienten ikke hadde → bump _updatedAt
-          // GARANTERT forbi skyens verdi (klient-klokker kan ligge foran server),
-          // slik at klienten som nettopp lagret (og alle andre) poller inn resultatet.
-          newState = { ...newState, _updatedAt: Math.max(nu, cloudUpd + 1) };
           console.log(`[state] Per-element-merge beholdt: ${beholdtOversikt.join(', ')}`);
-        } else if (cloudUpd > (newState._updatedAt || 0)) {
-          // Bevar høyeste _updatedAt så polling i klientene oppdager endringen
-          newState = { ...newState, _updatedAt: cloudUpd };
         }
       }
       // Klient-feltet _slettinger skal aldri lagres (dekker også første lagring
@@ -194,7 +213,14 @@ export default async function handler(req, res) {
       } catch { /* backup-feil stopper ikke lagring */ }
 
       await redis.set('fbs_state', newState);
-      res.status(200).json({ ok: true });
+      // updatedAt: serverens tidsstempel → klientens polle-referanse (ikke egen klokke).
+      // merged: serveren beholdt sky-elementer klienten ikke hadde → klienten
+      // må hente resultatet straks i stedet for å vente på neste poll.
+      res.status(200).json({
+        ok: true,
+        updatedAt: newState._updatedAt || 0,
+        merged: serverEndretYtre,
+      });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }
