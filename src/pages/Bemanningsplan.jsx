@@ -1238,9 +1238,10 @@ function OversiktVisning({
   const PAST_WEEKS  = 4;   // uker før i dag som vises
   const GANTT_WEEKS = 60;  // total antall uker (4 bak + 56 frem ≈ 14 måneder)
   const DAY_W = 36;   // px per weekday
-  // Kompakt = lavere rader (som ProResult); full = som før.
+  // Kompakt = lave rader (som ProResult); full = litt tettere enn før.
   // Redigering (dra, klikk, splitt) virker likt i begge visninger.
-  const LANE_H = kompakt ? 20 : 34;  // px per prosjekt-linje
+  const LANE_H = kompakt ? 16 : 26;  // px per prosjekt-linje
+  const AVATAR = kompakt ? 15 : 20;  // px avatar-størrelse i ansatt-kolonnen
   const LABEL_W = 162;
 
   // Fast startpunkt – alltid 4 uker før i dag, uavhengig av navigasjon
@@ -1653,12 +1654,12 @@ function OversiktVisning({
                   >⠿</span>
                   <div className="mini-avatar" style={{
                     background: ansatt.sykmeldt ? '#94a3b8' : ansatt.innleie ? '#f97316' : fagColor(ansatt.fag),
-                    width: 22, height: 22, fontSize: 9, flexShrink: 0,
+                    width: AVATAR, height: AVATAR, fontSize: kompakt ? 7 : 8, flexShrink: 0,
                     filter: ansatt.sykmeldt ? 'grayscale(1)' : 'none',
                   }}>
                     {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                   </div>
-                  <span className="oversikt-row-navn" style={ansatt.sykmeldt ? { color: '#94a3b8' } : {}}>
+                  <span className="oversikt-row-navn" style={{ fontSize: kompakt ? 11 : 12, ...(ansatt.sykmeldt ? { color: '#94a3b8' } : {}) }}>
                     {ansatt.navn}
                   </span>
                   {ansatt.sykmeldt
@@ -1754,7 +1755,7 @@ function OversiktVisning({
                           }}
                           onClick={e => e.stopPropagation()}
                         />
-                        <span className="oversikt-bar-label" style={{ fontSize: kompakt ? 10 : 11 }}>{label}</span>
+                        <span className="oversikt-bar-label" style={{ fontSize: kompakt ? 9 : 10.5 }}>{label}</span>
                         <div className="oversikt-handle oversikt-handle-r"
                           title="Dra for å endre sluttdato"
                           onPointerDown={e => {
@@ -1775,7 +1776,7 @@ function OversiktVisning({
 
             function renderTeamHeader(team, count) {
               return (
-                <div key={`th-${team.id}`} style={{ display: 'flex', height: 30, alignItems: 'stretch', background: team.farge + '18', borderTop: `2px solid ${team.farge}`, borderBottom: `1px solid ${team.farge}33`, minWidth: LABEL_W + totalW }}>
+                <div key={`th-${team.id}`} style={{ display: 'flex', height: kompakt ? 22 : 26, alignItems: 'stretch', background: team.farge + '18', borderTop: `2px solid ${team.farge}`, borderBottom: `1px solid ${team.farge}33`, minWidth: LABEL_W + totalW }}>
                   <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '0 12px', position: 'sticky', left: 0, zIndex: 3, background: '#fff', borderRight: `2px solid ${team.farge}33` }}>
                     <div style={{ width: 10, height: 10, borderRadius: '50%', background: team.farge, flexShrink: 0 }} />
                     <span style={{ fontWeight: 700, fontSize: 12, color: team.farge, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{team.navn}</span>
@@ -1803,7 +1804,7 @@ function OversiktVisning({
             const unassigned = filteredAnsatte.filter(a => !assignedIds.has(a.id));
             if (unassigned.length > 0) {
               rows.push(
-                <div key="th-uten" style={{ display: 'flex', height: 30, alignItems: 'stretch', background: '#f1f5f9', borderTop: '2px solid #94a3b8', borderBottom: '1px solid #e2e8f0', minWidth: LABEL_W + totalW }}>
+                <div key="th-uten" style={{ display: 'flex', height: kompakt ? 22 : 26, alignItems: 'stretch', background: '#f1f5f9', borderTop: '2px solid #94a3b8', borderBottom: '1px solid #e2e8f0', minWidth: LABEL_W + totalW }}>
                   <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '0 12px', position: 'sticky', left: 0, zIndex: 3, background: '#fff', borderRight: '2px solid #e2e8f0' }}>
                     <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#94a3b8', flexShrink: 0 }} />
                     <span style={{ fontWeight: 700, fontSize: 12, color: '#64748b' }}>Uten team</span>
