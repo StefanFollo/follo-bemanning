@@ -31,6 +31,7 @@ export default function AdminUsers() {
   const [diagnose, setDiagnose] = useState(null);
   const [diagnoseLaster, setDiagnoseLaster] = useState(false);
   const [gjenoppretter, setGjenoppretter] = useState(false);
+  const [manuellBackupJobber, setManuellBackupJobber] = useState(null); // null | 'nedlasting' | 'epost'
   const [visAnsattInvite, setVisAnsattInvite] = useState(false);
   const [ansattRoller, setAnsattRoller] = useState({});   // { ansattId: rolle }
   const [inviterer, setInviterer] = useState(null);        // ansattId som sendes nå
@@ -80,6 +81,51 @@ export default function AdminUsers() {
       setBackupMsg('Feil ved gjenoppretting: ' + e.message);
     }
     setGjenoppretter(false);
+  }
+
+  async function lastNedBackup() {
+    setManuellBackupJobber('nedlasting');
+    setBackupMsg('');
+    try {
+      const res = await fetch('/api/admin/backup-nedlasting', { headers: authHeader() });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+      const blob = await res.blob();
+      const cd = res.headers.get('Content-Disposition') || '';
+      const navn = (cd.match(/filename="([^"]+)"/) || [])[1] || 'fbs-backup.json';
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = navn;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      setBackupMsg(`✅ Sikkerhetskopi lastet ned (${navn})`);
+    } catch (e) {
+      setBackupMsg('Feil ved nedlasting: ' + e.message);
+    }
+    setManuellBackupJobber(null);
+  }
+
+  async function sendBackupEpost() {
+    const standard = localStorage.getItem('fbs_user_email') || '';
+    const til = prompt('Send sikkerhetskopien til hvilken e-postadresse?', standard);
+    if (til === null) return; // avbrutt
+    setManuellBackupJobber('epost');
+    setBackupMsg('');
+    try {
+      const res = await fetch('/api/admin/backup-nedlasting', {
+        method: 'POST',
+        headers: authHeader(),
+        body: JSON.stringify(til.trim() ? { til: til.trim() } : {}),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      setBackupMsg(`✅ Sikkerhetskopi sendt til ${data.sendtTil} (${Math.round(data.storrelseBytes / 1024)} kB)`);
+    } catch (e) {
+      setBackupMsg('Feil ved e-postutsending: ' + e.message);
+    }
+    setManuellBackupJobber(null);
   }
 
   async function kjorDiagnose() {
@@ -467,16 +513,36 @@ export default function AdminUsers() {
 
       {/* Sikkerhetskopier */}
       <div style={{ marginTop: 32 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
           <h3 style={{ margin: 0, fontSize: 17, color: '#1e3a5f' }}>Sikkerhetskopier</h3>
-          <button
-            className="btn-secondary"
-            style={{ fontSize: 13 }}
-            onClick={loadBackups}
-            disabled={backupLoading}
-          >
-            {backupLoading ? 'Laster…' : 'Last inn sikkerhetskopier'}
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              className="btn-secondary"
+              style={{ fontSize: 13 }}
+              onClick={lastNedBackup}
+              disabled={manuellBackupJobber}
+              title="Tar en fullstendig sikkerhetskopi nå og laster den ned som JSON-fil"
+            >
+              {manuellBackupJobber === 'nedlasting' ? '⏳ Lager kopi…' : '⬇️ Last ned kopi nå'}
+            </button>
+            <button
+              className="btn-secondary"
+              style={{ fontSize: 13 }}
+              onClick={sendBackupEpost}
+              disabled={manuellBackupJobber}
+              title="Tar en fullstendig sikkerhetskopi nå og sender den som e-postvedlegg"
+            >
+              {manuellBackupJobber === 'epost' ? '⏳ Sender…' : '📧 Send på e-post'}
+            </button>
+            <button
+              className="btn-secondary"
+              style={{ fontSize: 13 }}
+              onClick={loadBackups}
+              disabled={backupLoading}
+            >
+              {backupLoading ? 'Laster…' : 'Last inn sikkerhetskopier'}
+            </button>
+          </div>
         </div>
 
         {backupMsg && (
