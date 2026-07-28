@@ -25,6 +25,11 @@ function SideLaster() {
   return <div style={{ padding: 48, textAlign: 'center', color: '#94a3b8', fontSize: 15 }}>Laster…</div>;
 }
 
+// Byggtidspunkt satt av vite.config.js — vises som versjon så man enkelt kan
+// se om to enheter kjører samme versjon av appen.
+// eslint-disable-next-line no-undef
+const FBS_VERSJON = typeof __FBS_VERSJON__ !== 'undefined' ? __FBS_VERSJON__ : 'dev';
+
 // ── Auto-oppdatering ──
 // Åpne faner kjører gammel kode etter en deploy — og gammel synk-logikk mot ny
 // server kan gi at endringer ikke synes hos andre. Sjekk hvert 5. minutt (og
@@ -268,7 +273,12 @@ function App() {
             <div className="brand-logo">FBS</div>
             <div>
               <div className="brand-name">FolloByggService</div>
-              <div className="brand-sub">Bemannings- og framdriftsplanlegger</div>
+              <div className="brand-sub">
+                Bemannings- og framdriftsplanlegger
+                <span style={{ marginLeft: 6, opacity: 0.6, fontSize: 10 }} title="Versjon (byggtidspunkt) — skal være lik på alle enheter">
+                  v{FBS_VERSJON}
+                </span>
+              </div>
             </div>
           </div>
           <nav className="nav">
