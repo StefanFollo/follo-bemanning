@@ -740,7 +740,9 @@ body {
   display: flex;
   align-items: center;
   padding: 0;
-  overflow: hidden;
+  /* IKKE overflow:hidden her — det bryter position:sticky på etiketten
+     (en klippende forelder blir sticky-containeren). Tekstklipping gjøres
+     på selve etiketten i stedet. */
   white-space: nowrap;
   z-index: 1;
   cursor: pointer;
@@ -749,7 +751,11 @@ body {
 }
 .oversikt-bar:hover { filter: brightness(1.1); }
 .oversikt-bar-label {
-  flex: 1;
+  /* Smal (ikke flex:1) slik at etiketten har plass å GLI på innenfor baren —
+     en etikett som fyller hele baren kan ikke flytte seg. */
+  flex: 0 1 auto;
+  width: max-content;
+  max-width: calc(100% - 16px);
   font-size: 11px;
   font-weight: 600;
   color: #fff;
@@ -764,7 +770,6 @@ body {
      (166px = bredden på den faste ansatt-kolonnen). */
   position: sticky;
   left: 166px;
-  max-width: 100%;
 }
 .oversikt-handle {
   width: 8px;
@@ -781,7 +786,7 @@ body {
 }
 .oversikt-handle:hover { background: rgba(0,0,0,.35); }
 .oversikt-handle-l { border-radius: 5px 0 0 5px; }
-.oversikt-handle-r { border-radius: 0 5px 5px 0; }
+.oversikt-handle-r { border-radius: 0 5px 5px 0; margin-left: auto; }
 .oversikt-bar-ferie {
   background: repeating-linear-gradient(
     45deg,
