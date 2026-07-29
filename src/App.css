@@ -451,7 +451,8 @@ body {
   color: white;
   font-size: 11px;
   font-weight: 600;
-  overflow: hidden;
+  /* IKKE overflow:hidden — bryter position:sticky på etiketten.
+     Tekstklipping gjøres på selve etiketten. */
   cursor: pointer;
   z-index: 2;
   box-shadow: 0 1px 3px rgba(0,0,0,.25);
@@ -469,7 +470,6 @@ body {
   z-index: 0;
   display: flex;
   align-items: center;
-  overflow: hidden;
   padding: 0 5px;
 }
 .gantt-busy-label {
@@ -481,6 +481,10 @@ body {
   text-overflow: ellipsis;
   text-shadow: 0 1px 2px rgba(0,0,0,.35);
   pointer-events: none;
+  width: max-content;
+  max-width: 100%;
+  position: sticky;
+  left: 154px;
 }
 
 /* ─── Fag-filter pills ──────────────────────────────────────────────────── */
@@ -926,14 +930,24 @@ body {
 .gantt-handle-r { border-radius: 0 5px 5px 0; }
 .gantt-handle-spacer { width: 6px; flex-shrink: 0; }
 .gantt-label {
-  flex: 1;
+  /* Smal + klistret: navnet glir med når baren scrolles horisontalt,
+     og er alltid synlig ved kanten av ansatt-kolonnen (150px). */
+  flex: 0 1 auto;
+  width: max-content;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: center;
   padding: 0 4px;
   text-shadow: 0 1px 2px rgba(0,0,0,.3);
+  position: sticky;
+  left: 154px;
 }
+/* Høyre-elementer skal bli ved barens høyrekant selv om etiketten er smal.
+   Kun ÉN auto-margin aktiv om gangen (actions er display:none til hover). */
+.gantt-bar .gantt-handle-r { margin-left: auto; }
+.gantt-bar:hover .gantt-handle-r { margin-left: 0; }
+.gantt-bar:hover .gantt-actions { margin-left: auto; }
 .gantt-actions {
   display: none;
   gap: 2px;
