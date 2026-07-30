@@ -20,6 +20,7 @@ const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const AdminUsers = lazy(() => import('./pages/AdminUsers'));
 const KS = lazy(() => import('./pages/KS'));
 const Biler = lazy(() => import('./pages/Biler'));
+const Rutiner = lazy(() => import('./pages/Rutiner'));
 
 function SideLaster() {
   return <div style={{ padding: 48, textAlign: 'center', color: '#94a3b8', fontSize: 15 }}>Laster…</div>;
@@ -89,6 +90,7 @@ const ADMIN_TABS = [
   { id: 'framdrift', label: 'Framdrift', icon: '📊' },
   { id: 'ks', label: 'KS / HMS', icon: '✅' },
   { id: 'biler', label: 'Biler', icon: '🚐' },
+  { id: 'rutiner', label: 'Rutiner', icon: '📘' },
   { id: 'brukere', label: 'Brukere', icon: '👥' },
 ];
 
@@ -102,22 +104,26 @@ const KONTOR_TABS = [
   { id: 'framdrift', label: 'Framdrift', icon: '📊' },
   { id: 'ks', label: 'KS / HMS', icon: '✅' },
   { id: 'biler', label: 'Biler', icon: '🚐' },
+  { id: 'rutiner', label: 'Rutiner', icon: '📘' },
 ];
 
 const RORLEGGER_TABS = [
   { id: 'rorlegger', label: 'Rørlegger', icon: '🔧' },
+  { id: 'rutiner', label: 'Rutiner', icon: '📘' },
 ];
 
 const ANSATT_TABS = [
   { id: 'bemanningsplan', label: 'Bemanningsplan', icon: '📅' },
   { id: 'framdrift', label: 'Framdrift', icon: '📊' },
   { id: 'ks', label: 'KS / HMS', icon: '✅' },
+  { id: 'rutiner', label: 'Rutiner', icon: '📘' },
 ];
 
 const BEFARING_TABS = [
   { id: 'befaring', label: 'Befaring', icon: '🔍' },
   { id: 'service', label: 'Service', icon: '⚡' },
   { id: 'reklamasjon', label: 'Reklamasjon', icon: '⚠️' },
+  { id: 'rutiner', label: 'Rutiner', icon: '📘' },
 ];
 
 function getResetToken() {
@@ -318,6 +324,7 @@ function App() {
           {activeTab === 'framdrift' && (isAdmin || isKontor || role === 'ansatt') && <Framdriftsplan readOnly={role === 'ansatt'} ansattId={role === 'ansatt' ? ansattId : null} />}
           {activeTab === 'ks' && (isAdmin || isKontor || role === 'ansatt') && <KS readOnly={role === 'ansatt'} ansattId={role === 'ansatt' ? ansattId : null} />}
           {activeTab === 'biler' && (isAdmin || isKontor) && <Biler />}
+          {activeTab === 'rutiner' && <Rutiner />}
           {activeTab === 'brukere' && isAdmin && <AdminUsers />}
           </Suspense>
         </main>
