@@ -140,8 +140,9 @@ export default async function handler(req, res) {
             status: 'apen',
             registrert_av: session.navn || session.email || 'Ukjent',
             registrert_dato: new Date().toISOString(),
-            ansvarlig_for_lukking: oppdatert.ansvarlig?.[0] || null,
-            frist: oppdatert.frist || null,
+            // Foretrekk punktets egne avvik-felter (satt i AvvikRegistrerModal), fall tilbake til sjekkliste-nivå
+            ansvarlig_for_lukking: p.avvikAnsvarlig || oppdatert.ansvarlig?.[0] || null,
+            frist: p.avvikFrist || oppdatert.frist || null,
             tiltak_beskrivelse: '',
             bilder: p.bilder || [],
             kommentarer: [],

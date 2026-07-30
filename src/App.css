@@ -3102,12 +3102,13 @@ body {
 .ks-lenke { background: none; border: none; color: #3b82f6; cursor: pointer; font-size: 12px; padding: 0; }
 .ks-lenke:hover { text-decoration: underline; }
 
-/* Punkt-knapper */
-.ks-punkt-knapper { display: flex; gap: 4px; flex-wrap: wrap; flex-shrink: 0; }
+/* Punkt-knapper — min. 44px høye for touch (iPad på byggeplass) */
+.ks-punkt-knapper { display: flex; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
 .ks-pkt-btn {
-  padding: 5px 10px;
+  padding: 8px 14px;
+  min-height: 44px;
   border-radius: 7px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   border: 1.5px solid #e2e8f0;
   background: #fff;
@@ -3213,14 +3214,14 @@ body {
 }
 .ks-tegning-kort:hover { box-shadow: 0 2px 8px rgba(0,0,0,.1); }
 
-/* ── Responsiv ───────────────────────────────────────── */
-@media (max-width: 768px) {
+/* ── Responsiv — 1024px så iPad-er også får touch-layout ── */
+@media (max-width: 1024px) {
   .ks-stats { grid-template-columns: repeat(2, 1fr); }
   .ks-faner { gap: 2px; }
   .ks-fane-btn { font-size: 11px; padding: 7px 6px; min-width: 0; }
   .ks-punkt-rad-topp { flex-direction: column; }
   .ks-punkt-knapper { width: 100%; }
-  .ks-pkt-btn { flex: 1; text-align: center; padding: 8px 4px; font-size: 13px; }
+  .ks-pkt-btn { flex: 1; text-align: center; padding: 8px 6px; font-size: 14px; }
   .ks-detalj-topp { flex-direction: column; }
   .ks-sl-rad { flex-wrap: wrap; }
   .ks-fab { bottom: 70px; right: 12px; width: 48px; height: 48px; font-size: 20px; }

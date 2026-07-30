@@ -565,12 +565,40 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
   const [aiPunkt, setAiPunkt] = useState(null)
   const [visTildel, setVisTildel] = useState(false)
   const [opplaster, setOpplaster] = useState(null)
+  const [sistLagret, setSistLagret] = useState(null)
   const kanSkrive = ROLLE() !== 'les' && ROLLE() !== 'ansatt'
   const kanAdmin = ROLLE() === 'admin' || ROLLE() === 'kontor'
+
+  // Autosave-hjelpere
+  const dirtyRef = useRef(false)
+  const autosaveTimerRef = useRef(null)
+  const lagreRef = useRef(null)
+  const forsteRenderRef = useRef(true)
 
   useEffect(() => {
     apiFetch(`/api/ks/avvik?sjekklisteId=${sl.id}`).then(setAvvik).catch(() => {})
   }, [sl.id])
+
+  // Debounced autosave: 1,5 s etter siste endring i punktene
+  useEffect(() => {
+    if (forsteRenderRef.current) { forsteRenderRef.current = false; return }
+    if (!kanSkrive) return
+    dirtyRef.current = true
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
+    autosaveTimerRef.current = setTimeout(() => { lagreRef.current && lagreRef.current(true) }, 1500)
+  }, [lokale, kanSkrive])
+
+  // Rydd opp timer ved unmount + advar ved lukking med ulagrede endringer
+  useEffect(() => {
+    function beforeUnload(e) {
+      if (dirtyRef.current) { e.preventDefault(); e.returnValue = '' }
+    }
+    window.addEventListener('beforeunload', beforeUnload)
+    return () => {
+      window.removeEventListener('beforeunload', beforeUnload)
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current)
+    }
+  }, [])
 
   function oppdaterPunkt(oppdatert) {
     setLokale(prev => prev.map(p => p.id === oppdatert.id ? oppdatert : p))
@@ -581,19 +609,33 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
     setSignerPunkt(null)
   }
 
-  async function lagre() {
+  async function lagre(auto = false) {
+    if (autosaveTimerRef.current) { clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null }
     setLagrer(true)
     try {
       const oppdatert = await apiFetch(`/api/ks/sjekklister?id=${sl.id}`, { method: 'PUT', body: { ...sl, punkter: lokale } })
+      dirtyRef.current = false
       onOppdater(oppdatert)
-      setLagret(true)
-      setTimeout(() => setLagret(false), 2000)
+      setSistLagret(new Date())
+      if (!auto) {
+        setLagret(true)
+        setTimeout(() => setLagret(false), 2000)
+      }
       // Last inn avvik på nytt
       apiFetch(`/api/ks/avvik?sjekklisteId=${sl.id}`).then(setAvvik).catch(() => {})
     } catch (e) {
-      alert('Feil ved lagring: ' + e.message)
+      if (auto) console.error('Autolagring feilet:', e.message)
+      else alert('Feil ved lagring: ' + e.message)
     }
     setLagrer(false)
+  }
+  lagreRef.current = lagre
+
+  function haandterTilbake() {
+    // Flush ventende autosave før vi går tilbake
+    if (autosaveTimerRef.current) { clearTimeout(autosaveTimerRef.current); autosaveTimerRef.current = null }
+    if (dirtyRef.current && kanSkrive) lagre(true)
+    onTilbake()
   }
 
   async function lastOppBilde(punktId, fil) {
@@ -653,7 +695,7 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
     <div className="ks-detalj-side">
       {/* Topplinje */}
       <div className="ks-detalj-topp">
-        <button className="btn" onClick={onTilbake}>← Tilbake</button>
+        <button className="btn" onClick={haandterTilbake}>← Tilbake</button>
         <div style={{ flex: 1 }}>
           <h2 style={{ margin: 0, fontSize: 18, color: '#1e293b' }}>{sl.navn}</h2>
           <div style={{ fontSize: 12, color: '#64748b', marginTop: 2, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -671,9 +713,14 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
             <div style={{ color: '#94a3b8', fontSize: 11 }}>{lokale.filter(p => p.status === 'ok' || p.status === 'ikke-aktuelt').length}/{lokale.length}</div>
           </div>
           {kanSkrive && (
-            <button className="btn btn-primary" onClick={lagre} disabled={lagrer} style={{ background: lagret ? '#16a34a' : undefined }}>
-              {lagrer ? '⏳ Lagrer...' : lagret ? '✅ Lagret!' : '💾 Lagre'}
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 600, color: lagrer ? '#f59e0b' : '#16a34a', whiteSpace: 'nowrap' }}>
+                {lagrer ? '⏳ Lagrer…' : sistLagret ? `✓ Lagret ${sistLagret.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })}` : ''}
+              </span>
+              <button className="btn" onClick={() => lagre(false)} disabled={lagrer} style={{ background: lagret ? '#16a34a' : undefined, color: lagret ? '#fff' : undefined }} title="Lagres automatisk — klikk for å lagre nå">
+                {lagret ? '✅ Lagret!' : '💾 Lagre'}
+              </button>
+            </div>
           )}
         </div>
       </div>
@@ -1990,14 +2037,32 @@ function ProsjektSjekklisteUtfylling({ sjekkliste, prosjekt, onTilbake, onOppdat
   const [avvikPunktId, setAvvikPunktId] = useState(null)
   const [avvikKommentar, setAvvikKommentar] = useState('')
   const [visSluttrapport, setVisSluttrapport] = useState(false)
+  const [punktFilter, setPunktFilter] = useState('alle') // alle | gjenstar | avvik
+  const punktRefs = useRef({})
   const bruker = BRUKER()
   const kanSkrive = ROLLE() !== 'les' && ROLLE() !== 'ansatt'
 
+  // 'ikke-aktuelt' (N/A) teller som behandlet, på lik linje med ok/avvik
   const ferdig = punkter.filter(p => p.status !== 'ikke-utfort').length
   const totalt = punkter.length
   const pst = totalt > 0 ? Math.round((ferdig / totalt) * 100) : 0
   const harAvvik = punkter.some(p => p.status === 'avvik')
   const alleBehandlet = punkter.every(p => p.status !== 'ikke-utfort')
+
+  const gjenstaar = punkter.filter(p => p.status === 'ikke-utfort')
+  const avvikAntall = punkter.filter(p => p.status === 'avvik').length
+  const vistePunkter = punktFilter === 'gjenstar'
+    ? gjenstaar
+    : punktFilter === 'avvik'
+      ? punkter.filter(p => p.status === 'avvik')
+      : punkter
+
+  function gaaTilNesteUgjorte() {
+    const neste = gjenstaar[0]
+    if (!neste) return
+    const el = punktRefs.current[neste.id]
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
 
   async function settPunktStatus(punktId, status, kommentar = '') {
     const dato = new Date().toISOString()
@@ -2119,11 +2184,35 @@ function ProsjektSjekklisteUtfylling({ sjekkliste, prosjekt, onTilbake, onOppdat
 
       {/* Punktliste */}
       <div style={{ flex: 1, overflow: 'auto', padding: 16 }}>
-        {punkter.map((p, i) => (
-          <div key={p.id} style={{ border: '1px solid ' + (p.status === 'avvik' ? '#fca5a5' : p.status === 'ok' ? '#bbf7d0' : '#e2e8f0'), borderRadius: 10, padding: '12px 14px', marginBottom: 10, background: p.status === 'avvik' ? '#fff5f5' : p.status === 'ok' ? '#f0fdf4' : '#fff' }}>
+        {/* Filter-chips (sticky) */}
+        <div style={{ position: 'sticky', top: 0, zIndex: 20, background: '#f8fafc', margin: '-16px -16px 10px', padding: '10px 16px', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap', borderBottom: '1px solid #e2e8f0' }}>
+          {[
+            { key: 'alle', label: 'Alle' },
+            { key: 'gjenstar', label: `Gjenstår (${gjenstaar.length})` },
+            { key: 'avvik', label: `Avvik (${avvikAntall})` },
+          ].map(f => (
+            <button key={f.key} onClick={() => setPunktFilter(f.key)}
+              style={{ padding: '6px 14px', minHeight: 36, borderRadius: 18, fontSize: 13, fontWeight: punktFilter === f.key ? 700 : 500, cursor: 'pointer', border: '1.5px solid ' + (punktFilter === f.key ? '#2563eb' : '#e2e8f0'), background: punktFilter === f.key ? '#eff6ff' : '#fff', color: punktFilter === f.key ? '#2563eb' : '#64748b' }}>
+              {f.label}
+            </button>
+          ))}
+          {gjenstaar.length > 0 && (
+            <button onClick={gaaTilNesteUgjorte}
+              style={{ marginLeft: 'auto', padding: '6px 14px', minHeight: 36, borderRadius: 18, fontSize: 13, fontWeight: 600, cursor: 'pointer', border: '1.5px solid #e2e8f0', background: '#fff', color: '#374151', whiteSpace: 'nowrap' }}>
+              Neste ugjorte ↓
+            </button>
+          )}
+        </div>
+        {vistePunkter.length === 0 && (
+          <div style={{ textAlign: 'center', color: '#94a3b8', padding: '32px 0', fontSize: 13 }}>
+            {punktFilter === 'gjenstar' ? '✅ Ingen punkter gjenstår' : punktFilter === 'avvik' ? 'Ingen avvik registrert' : 'Ingen punkter'}
+          </div>
+        )}
+        {vistePunkter.map(p => (
+          <div key={p.id} ref={el => { punktRefs.current[p.id] = el }} style={{ border: '1px solid ' + (p.status === 'avvik' ? '#fca5a5' : p.status === 'ok' ? '#bbf7d0' : '#e2e8f0'), borderRadius: 10, padding: '12px 14px', marginBottom: 10, background: p.status === 'avvik' ? '#fff5f5' : p.status === 'ok' ? '#f0fdf4' : p.status === 'ikke-aktuelt' ? '#f1f5f9' : '#fff' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
               <div style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>
-                {p.status === 'ok' ? '✅' : p.status === 'avvik' ? '⚠️' : '⬜'}
+                {p.status === 'ok' ? '✅' : p.status === 'avvik' ? '⚠️' : p.status === 'ikke-aktuelt' ? '➖' : '⬜'}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: p.kritisk ? 700 : 500, fontSize: 14, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -2158,21 +2247,25 @@ function ProsjektSjekklisteUtfylling({ sjekkliste, prosjekt, onTilbake, onOppdat
 
               {/* Statusknapper (skjult ved lesetilgang) */}
               {kanSkrive && avvikPunktId !== p.id && (
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                  <button style={{ padding: '6px 12px', borderRadius: 8, border: '1.5px solid ' + (p.status === 'ok' ? '#16a34a' : '#e2e8f0'), background: p.status === 'ok' ? '#16a34a' : '#fff', color: p.status === 'ok' ? '#fff' : '#374151', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  <button style={{ padding: '6px 12px', minHeight: 44, minWidth: 72, borderRadius: 8, border: '1.5px solid ' + (p.status === 'ok' ? '#16a34a' : '#e2e8f0'), background: p.status === 'ok' ? '#16a34a' : '#fff', color: p.status === 'ok' ? '#fff' : '#374151', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}
                     onClick={() => settPunktStatus(p.id, p.status === 'ok' ? 'ikke-utfort' : 'ok')}>
                     ✓ OK
                   </button>
-                  <button style={{ padding: '6px 12px', borderRadius: 8, border: '1.5px solid ' + (p.status === 'avvik' ? '#dc2626' : '#e2e8f0'), background: p.status === 'avvik' ? '#dc2626' : '#fff', color: p.status === 'avvik' ? '#fff' : '#374151', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}
+                  <button style={{ padding: '6px 12px', minHeight: 44, minWidth: 72, borderRadius: 8, border: '1.5px solid ' + (p.status === 'avvik' ? '#dc2626' : '#e2e8f0'), background: p.status === 'avvik' ? '#dc2626' : '#fff', color: p.status === 'avvik' ? '#fff' : '#374151', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}
                     onClick={() => { if (p.status === 'avvik') { settPunktStatus(p.id, 'ikke-utfort', ''); } else { setAvvikPunktId(p.id); setAvvikKommentar(p.kommentar || ''); } }}>
                     ⚠ Avvik
+                  </button>
+                  <button style={{ padding: '6px 12px', minHeight: 44, minWidth: 72, borderRadius: 8, border: '1.5px solid ' + (p.status === 'ikke-aktuelt' ? '#64748b' : '#e2e8f0'), background: p.status === 'ikke-aktuelt' ? '#64748b' : '#fff', color: p.status === 'ikke-aktuelt' ? '#fff' : '#374151', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}
+                    onClick={() => settPunktStatus(p.id, p.status === 'ikke-aktuelt' ? 'ikke-utfort' : 'ikke-aktuelt')}>
+                    N/A
                   </button>
                 </div>
               )}
               {/* Status-indikator ved lesetilgang */}
               {!kanSkrive && avvikPunktId !== p.id && (
-                <span style={{ flexShrink: 0, fontSize: 13, fontWeight: 600, color: p.status === 'ok' ? '#16a34a' : p.status === 'avvik' ? '#dc2626' : '#94a3b8' }}>
-                  {p.status === 'ok' ? '✓ OK' : p.status === 'avvik' ? '⚠ Avvik' : '⬜ Ikke utført'}
+                <span style={{ flexShrink: 0, fontSize: 13, fontWeight: 600, color: p.status === 'ok' ? '#16a34a' : p.status === 'avvik' ? '#dc2626' : p.status === 'ikke-aktuelt' ? '#64748b' : '#94a3b8' }}>
+                  {p.status === 'ok' ? '✓ OK' : p.status === 'avvik' ? '⚠ Avvik' : p.status === 'ikke-aktuelt' ? 'N/A' : '⬜ Ikke utført'}
                 </span>
               )}
             </div>
@@ -2368,7 +2461,10 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
   const ksSjekklister = useMemo(() => prosjekt.ksSjekklister || [], [prosjekt])
   const tildelteMalIds = useMemo(() => new Set(ksSjekklister.map(k => k.malId)), [ksSjekklister])
 
-  function visToast(msg, type = 'info') { setToast({ msg, type }); setTimeout(() => setToast(null), 3000) }
+  function visToast(msg, type = 'info', angreIds = null) {
+    setToast({ msg, type, angreIds })
+    setTimeout(() => setToast(null), angreIds?.length ? 6000 : 3000)
+  }
   function toggleKollaps(key) { setKollapset(k => ({ ...k, [key]: !k[key] })) }
 
   function lagNyKS(m, kilde) {
@@ -2388,7 +2484,12 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
     const dup = malListe.length - nye.length
     if (nye.length === 0) { visToast('Alle er allerede tildelt', 'warn'); return }
     onOppdaterProsjekt({ ...prosjekt, ksSjekklister: [...ksSjekklister, ...nye.map(m => lagNyKS(m, kilde))] })
-    visToast(dup > 0 ? `La til ${nye.length} nye. ${dup} fantes allerede.` : `La til ${nye.length} sjekklister.`, 'ok')
+    visToast(dup > 0 ? `La til ${nye.length} nye. ${dup} fantes allerede.` : `La til ${nye.length} sjekklister.`, 'ok', nye.map(m => m.id))
+  }
+
+  function angreTillegg(malIds) {
+    onOppdaterProsjekt({ ...prosjekt, ksSjekklister: ksSjekklister.filter(k => !malIds.includes(k.malId)) })
+    setToast(null)
   }
 
   async function aapneKSSjekkliste(ks) {
@@ -2422,12 +2523,30 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
     return maler.filter(m => !soekBibliotek || m.navn.toLowerCase().includes(fl))
   }, [maler, soekBibliotek])
 
+  function fjernTildeling(ks) {
+    const navn = ks.mal?.navn || maler.find(m => m.id === ks.malId)?.navn || ks.malId
+    if (!window.confirm(`Fjerne «${navn}» fra prosjektet?\n\nUtfylte data slettes ikke — listen kan legges til igjen senere.`)) return
+    onOppdaterProsjekt({ ...prosjekt, ksSjekklister: ksSjekklister.filter(k => k.malId !== ks.malId) })
+    visToast('Sjekkliste fjernet fra prosjektet', 'ok')
+  }
+
   function renderTildeltListe(malListe) {
     return malListe.map(ks => {
-      const ut = ks.framdrift?.utfylt || 0
-      const tot = Math.max(ks.framdrift?.totalt || 0, 1)
-      const pst = Math.round((ut / tot) * 100)
-      const harAvvik = ks.avvik?.length > 0
+      // Ekte framdrift: hent live-tall fra API-instansen hvis den finnes
+      const instans = sjekklister.find(s => s.malId === ks.malId && s.prosjektId === prosjekt.id)
+      let ut, totVis, avvikAntall
+      if (instans) {
+        const pkt = instans.punkter || []
+        ut = pkt.filter(p => p.status !== 'ikke-utfort' && p.status !== 'ikke_utfort').length
+        totVis = pkt.length
+        avvikAntall = pkt.filter(p => p.status === 'avvik').length
+      } else {
+        ut = ks.framdrift?.utfylt || 0
+        totVis = ks.framdrift?.totalt || 0
+        avvikAntall = ks.avvik?.length || 0
+      }
+      const pst = totVis > 0 ? Math.round((ut / totVis) * 100) : 0
+      const harAvvik = avvikAntall > 0
       return (
         <div key={ks.malId} onClick={() => aapneKSSjekkliste(ks)}
           style={{ padding: '9px 12px', border: '1px solid #e2e8f0', borderRadius: 8, marginBottom: 5, cursor: 'pointer', background: harAvvik ? '#fff5f5' : pst === 100 ? '#f0fdf4' : '#fff', display: 'flex', alignItems: 'center', gap: 10 }}
@@ -2439,11 +2558,16 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
               <div style={{ flex: 1, maxWidth: 80, height: 3, background: '#e2e8f0', borderRadius: 2 }}>
                 <div style={{ width: pst + '%', height: '100%', background: pst === 100 ? '#16a34a' : harAvvik ? '#dc2626' : '#3b82f6', borderRadius: 2 }} />
               </div>
-              <span style={{ fontSize: 10, color: '#94a3b8' }}>{ut}/{ks.framdrift?.totalt || 0}</span>
+              <span style={{ fontSize: 10, color: '#94a3b8' }}>{ut}/{totVis}</span>
             </div>
           </div>
-          {harAvvik && <span style={{ fontSize: 11, color: '#dc2626' }}>⚠</span>}
+          {harAvvik && <span style={{ fontSize: 11, fontWeight: 700, color: '#dc2626', background: '#fee2e2', borderRadius: 8, padding: '1px 7px', flexShrink: 0 }}>⚠ {avvikAntall}</span>}
           {pst === 100 && !harAvvik && <span style={{ fontSize: 11, color: '#16a34a' }}>✓</span>}
+          <button title="Fjern fra prosjektet"
+            onClick={e => { e.stopPropagation(); fjernTildeling(ks) }}
+            style={{ flexShrink: 0, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'transparent', color: '#94a3b8', cursor: 'pointer', fontSize: 13, borderRadius: 6 }}
+            onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.color = '#dc2626' }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#94a3b8' }}>✕</button>
           <span style={{ color: '#cbd5e1', fontSize: 14 }}>›</span>
         </div>
       )
@@ -2487,6 +2611,11 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
           <span style={{ fontSize: 11, background: '#eff6ff', color: '#2563eb', borderRadius: 6, padding: '3px 10px', fontWeight: 600 }}>
             {ksSjekklister.length} sjekklister
           </span>
+          <button className="btn" style={{ fontSize: 12, padding: '5px 12px' }}
+            onClick={() => genererRapport(prosjekt, sjekklister.filter(s => s.prosjektId === prosjekt.id))}
+            title="Generer KS-rapport med dagens status (PDF)">
+            📄 Rapport
+          </button>
           <button className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px' }}
             onClick={() => setVisForslagsModal(true)} title="Foreslå sjekkliste-plan basert på prosjektinfo">
             ✨ Foreslå plan
@@ -2496,8 +2625,14 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
 
       {/* Toast */}
       {toast && (
-        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: toast.type === 'warn' ? '#f59e0b' : toast.type === 'ok' ? '#16a34a' : toast.type === 'error' ? '#dc2626' : '#1e293b', color: '#fff', padding: '10px 20px', borderRadius: 10, zIndex: 9999, fontSize: 13, fontWeight: 600, boxShadow: '0 4px 12px rgba(0,0,0,.2)', maxWidth: 320, textAlign: 'center' }}>
-          {toast.msg}
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: toast.type === 'warn' ? '#f59e0b' : toast.type === 'ok' ? '#16a34a' : toast.type === 'error' ? '#dc2626' : '#1e293b', color: '#fff', padding: '10px 20px', borderRadius: 10, zIndex: 9999, fontSize: 13, fontWeight: 600, boxShadow: '0 4px 12px rgba(0,0,0,.2)', maxWidth: 360, textAlign: 'center', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span>{toast.msg}</span>
+          {toast.angreIds?.length > 0 && (
+            <button onClick={() => angreTillegg(toast.angreIds)}
+              style={{ flexShrink: 0, padding: '4px 12px', minHeight: 32, borderRadius: 8, border: '1.5px solid rgba(255,255,255,.6)', background: 'transparent', color: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              Angre
+            </button>
+          )}
         </div>
       )}
 
@@ -2580,7 +2715,7 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
               <div key={fase} style={{ marginBottom: 10 }}>
                 <div onClick={() => toggleKollaps('t-' + fase)}
                   style={{ fontSize: 13, fontWeight: 700, color: info.farge, marginBottom: erk ? 0 : 8, display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', userSelect: 'none', padding: '4px 0' }}>
-                  <span style={{ fontSize: 9 }}>{erk ? '▶' : '▼'}</span>
+                  <span style={{ fontSize: 11, width: 24, height: 24, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{erk ? '▶' : '▼'}</span>
                   {info.label} <span style={{ fontSize: 11, fontWeight: 400, color: '#94a3b8' }}>({faseMaler.length})</span>
                 </div>
                 {!erk && (fase === 'bygg'
@@ -2593,7 +2728,7 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
                         <div key={subkat} style={{ marginBottom: 6, paddingLeft: 10 }}>
                           <div onClick={() => toggleKollaps('t-bygg-' + subkat)}
                             style={{ fontSize: 12, fontWeight: 600, color: sInfo.farge, marginBottom: sk ? 0 : 5, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
-                            <span style={{ fontSize: 8 }}>{sk ? '▶' : '▼'}</span>
+                            <span style={{ fontSize: 10, width: 24, height: 24, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{sk ? '▶' : '▼'}</span>
                             {sInfo.label} <span style={{ fontSize: 10, fontWeight: 400, color: '#94a3b8' }}>({sub.length})</span>
                           </div>
                           {!sk && renderTildeltListe(sub)}
@@ -2623,6 +2758,7 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
             if (faseMaler.length === 0) return null
             const info = FASE_INFO_KS[fase]
             const erk = !!kollapset['b-' + fase]
+            const faseNye = faseMaler.filter(m => !tildelteMalIds.has(m.id))
             return (
               <div key={fase} style={{ marginBottom: 10 }}>
                 <div style={{ fontSize: 13, fontWeight: 700, color: info.farge, marginBottom: erk ? 0 : 8, display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -2630,9 +2766,16 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
                     title={'Dra hele ' + info.label}
                     style={{ cursor: 'grab', padding: '2px 4px', borderRadius: 3, background: 'rgba(0,0,0,.06)', fontSize: 10 }}>☰</span>
                   <span onClick={() => toggleKollaps('b-' + fase)} style={{ cursor: 'pointer', flex: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ fontSize: 9 }}>{erk ? '▶' : '▼'}</span>
+                    <span style={{ fontSize: 11, width: 24, height: 24, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{erk ? '▶' : '▼'}</span>
                     {info.label} <span style={{ fontSize: 10, fontWeight: 400, color: '#94a3b8' }}>({faseMaler.length})</span>
                   </span>
+                  {faseNye.length > 0 && (
+                    <button onClick={() => leggTilListe(faseNye, 'klikk:fase-' + fase)}
+                      title={'Legg til alle i ' + info.label}
+                      style={{ flexShrink: 0, fontSize: 11, fontWeight: 600, padding: '4px 8px', minHeight: 28, borderRadius: 7, border: '1px solid #e2e8f0', background: '#fff', color: '#2563eb', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                      + Legg til alle ({faseNye.length})
+                    </button>
+                  )}
                 </div>
                 {!erk && (fase === 'bygg'
                   ? BYGGRUPPE_ORDEN.map(subkat => {
@@ -2640,6 +2783,7 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
                       if (subMaler.length === 0) return null
                       const sInfo = BYGGRUPPE_INFO[subkat]
                       const sk = !!kollapset['b-bygg-' + subkat]
+                      const subNye = subMaler.filter(m => !tildelteMalIds.has(m.id))
                       return (
                         <div key={subkat} style={{ marginBottom: 6, paddingLeft: 8 }}>
                           <div style={{ fontSize: 11, fontWeight: 700, color: sInfo.farge, marginBottom: sk ? 0 : 4, display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -2647,9 +2791,16 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
                               title={'Dra ' + sInfo.label}
                               style={{ cursor: 'grab', padding: '1px 3px', borderRadius: 3, background: 'rgba(0,0,0,.06)', fontSize: 9 }}>☰</span>
                             <span onClick={() => toggleKollaps('b-bygg-' + subkat)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3, flex: 1 }}>
-                              <span style={{ fontSize: 8 }}>{sk ? '▶' : '▼'}</span>
+                              <span style={{ fontSize: 10, width: 24, height: 24, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{sk ? '▶' : '▼'}</span>
                               {sInfo.label} <span style={{ fontWeight: 400, color: '#94a3b8' }}>({subMaler.length})</span>
                             </span>
+                            {subNye.length > 0 && (
+                              <button onClick={() => leggTilListe(subNye, 'klikk:sub-' + subkat)}
+                                title={'Legg til alle i ' + sInfo.label}
+                                style={{ flexShrink: 0, fontSize: 10, fontWeight: 600, padding: '3px 7px', minHeight: 26, borderRadius: 6, border: '1px solid #e2e8f0', background: '#fff', color: '#2563eb', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                                + Legg til alle ({subNye.length})
+                              </button>
+                            )}
                           </div>
                           {!sk && renderBibliotekListe(subMaler)}
                         </div>
@@ -2749,8 +2900,8 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
         ))}
       </div>
 
-      {/* ── Trenger oppmerksomhet ────────────────────────────────── */}
-      {(malerUtenBeskrivelse.length > 0 || harMismatch) && (
+      {/* ── Trenger oppmerksomhet (kun admin) ────────────────────── */}
+      {ROLLE() === 'admin' && (malerUtenBeskrivelse.length > 0 || harMismatch) && (
         <div style={{ background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 12, padding: '12px 16px', marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 13, color: '#92400e', marginBottom: 6 }}>🚨 Trenger oppmerksomhet</div>
           {malerUtenBeskrivelse.length > 0 && (
