@@ -219,11 +219,17 @@ export default function Bemanningsplan({ readOnly = false }) {
     );
   }
 
+  // Parallelle prosjekter er LOV (f.eks. Helena på flere prosjekter samme uke)
+  // — men vi spør først, så utilsiktet dobbeltbooking fortsatt fanges.
+  function bekreftParallell(ansattId, startDato, sluttDato, ekskluderTildelingId = null) {
+    if (!harKonflikt(ansattId, startDato, sluttDato, ekskluderTildelingId)) return true;
+    const navn = state.ansatte.find(a => a.id === ansattId)?.navn || 'Ansatt';
+    return confirm(`${navn} er allerede tildelt et prosjekt i denne perioden.\n\nLegge inn som parallelt prosjekt likevel?`);
+  }
+
   function handleAddTildeling() {
     if (!tilForm.ansattId || !tilForm.prosjektId || !tilForm.startDato || !tilForm.sluttDato) return;
-    if (tilForm.prosjektId !== FERIE_ID && harKonflikt(tilForm.ansattId, tilForm.startDato, tilForm.sluttDato)) {
-      const navn = state.ansatte.find(a => a.id === tilForm.ansattId)?.navn || 'Ansatt';
-      alert(`${navn} er allerede tildelt et prosjekt i denne perioden.`);
+    if (tilForm.prosjektId !== FERIE_ID && !bekreftParallell(tilForm.ansattId, tilForm.startDato, tilForm.sluttDato)) {
       return;
     }
     dispatch({ type: 'ADD_TILDELING', payload: tilForm });
@@ -301,14 +307,12 @@ export default function Bemanningsplan({ readOnly = false }) {
     dragRef.current = null;
     const t = state.tildelinger.find(t => t.id === d.tildelingId);
     if (!t) return;
-    const navn = state.ansatte.find(a => a.id === t.ansattId)?.navn || 'Ansatt';
     if (d.type === 'move') {
       const duration = daysDiff(t.startDato, t.sluttDato);
       const offset = unit === 'day' ? d.offsetDays : 0;
       const newStart = addDays(targetDay, -offset);
       const newEnd = addDays(newStart, duration);
-      if (t.prosjektId !== FERIE_ID && harKonflikt(t.ansattId, newStart, newEnd, t.id)) {
-        alert(`${navn} er allerede tildelt et annet prosjekt i denne perioden.`);
+      if (t.prosjektId !== FERIE_ID && !bekreftParallell(t.ansattId, newStart, newEnd, t.id)) {
         return;
       }
       dispatchKeepScroll({ type: 'UPDATE_TILDELING', payload: { ...t, startDato: newStart, sluttDato: newEnd } });
@@ -330,8 +334,7 @@ export default function Bemanningsplan({ readOnly = false }) {
             });
             return;
           }
-          if (harKonflikt(t.ansattId, t.startDato, newEnd, t.id)) {
-            alert(`${navn} er allerede tildelt et annet prosjekt i denne perioden.`);
+          if (!bekreftParallell(t.ansattId, t.startDato, newEnd, t.id)) {
             return;
           }
         }
@@ -353,8 +356,7 @@ export default function Bemanningsplan({ readOnly = false }) {
             });
             return;
           }
-          if (harKonflikt(t.ansattId, newStart, t.sluttDato, t.id)) {
-            alert(`${navn} er allerede tildelt et annet prosjekt i denne perioden.`);
+          if (!bekreftParallell(t.ansattId, newStart, t.sluttDato, t.id)) {
             return;
           }
         }
@@ -637,8 +639,8 @@ export default function Bemanningsplan({ readOnly = false }) {
 
             {tilForm.prosjektId !== FERIE_ID && tilForm.ansattId && tilForm.startDato && tilForm.sluttDato &&
               harKonflikt(tilForm.ansattId, tilForm.startDato, tilForm.sluttDato) && (
-              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#dc2626' }}>
-                ⚠️ {state.ansatte.find(a => a.id === tilForm.ansattId)?.navn} er allerede tildelt et prosjekt i denne perioden.
+              <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#92400e' }}>
+                ℹ️ {state.ansatte.find(a => a.id === tilForm.ansattId)?.navn} er allerede tildelt et prosjekt i denne perioden — dette legges inn som <strong>parallelt prosjekt</strong> (vises på egen linje i oversikten).
               </div>
             )}
 
