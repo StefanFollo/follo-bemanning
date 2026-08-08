@@ -2,6 +2,7 @@
 // Body: { befaringId, snapId }
 // Gjenoppretter en befaring til tilstanden i snapshoten ("Tilbake til"-knapp)
 
+import { skrivStateOgBump } from '../_stateCas.js'
 import { Redis } from '@upstash/redis'
 import { appendAuditLog, byggAuditEntry } from '../_dataIntegritet.js'
 import { validerInterAppToken } from '../_interApp.js'
@@ -51,7 +52,7 @@ export default async function handler(req, res) {
       manueltOverstyrtDato: undefined,
     }
 
-    await redis.set('fbs_state', {
+    await skrivStateOgBump(redis, {
       ...state,
       befaringer: befaringer.map(b => b.id === befaringId ? gjenopprettet : b),
       _updatedAt: Date.now(),

@@ -15,6 +15,7 @@
 //
 // Returnerer: { prosjektId, varsling, alleredeOpprettet? }
 
+import { skrivStateOgBump } from '../_stateCas.js'
 import { Redis } from '@upstash/redis'
 import { Resend } from 'resend'
 import { validerInterAppToken } from '../_interApp.js'
@@ -204,7 +205,7 @@ export default async function handler(req, res) {
       _updatedAt: opprettTs,
     }
 
-    await redis.set('fbs_state', oppdatertState)
+    await skrivStateOgBump(redis, oppdatertState)
 
     // Send PL-varsel i bakgrunnen (ikke-blokkerende — feil her stopper ikke respons)
     let varslingResultat = { sendt: false, grunn: 'ingen PL-epost' }

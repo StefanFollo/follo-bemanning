@@ -1,4 +1,6 @@
 import { Redis } from '@upstash/redis';
+import { lesStateOgVer, skrivStateCas } from './_stateCas.js';
+import { appendAuditLog, byggAuditEntry } from './_dataIntegritet.js';
 
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
@@ -42,11 +44,20 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: 'Rollen din har ikke skrivetilgang.' });
     }
     try {
-      // Sikkerhetssperre: ikke tillat lagring som reduserer befaringer drastisk
-      // (beskytter mot at seed-data ved ny browser-oppstart overskriver sky-data)
+      // ── CAS-LØKKE (fase 1 sync-reparasjon aug 2026) ──
+      // Les state + versjon, flett, skriv KUN hvis versjonen er uendret.
+      // Skrev noen (f.eks. /api/befaringer/event) i mellomtiden, feiler
+      // skrivingen og vi fletter PÅ NYTT mot fersk tilstand. Uten dette ble
+      // event-opprettede befaringer visket ut av klient-lagringer som hadde
+      // lest state før eventet skrev (les→skriv-vinduet var flere hundre ms).
+      const MAKS_FORSOK = 4;
+      let backupTatt = false;
+
+      for (let forsok = 1; forsok <= MAKS_FORSOK; forsok++) {
       let newState = req.body;
       let serverEndretYtre = false; // ble sky-elementer flettet inn i klientens lagring?
-      const currentState = await redis.get('fbs_state');
+      const beholdtNyeServerElementer = {}; // felt → antall sky-elementer klienten ikke hadde
+      const { ver, state: currentState } = await lesStateOgVer(redis);
       if (currentState) {
         // ── Tombstones: bevisste slettinger (bygges FØR guards, så guards kan
         // se bort fra elementer som er slettet med vilje — ellers oppstår en
@@ -136,12 +147,16 @@ export default async function handler(req, res) {
           });
 
           // Elementer som finnes i sky men ikke hos klienten: BEHOLD alltid —
-          // de er enten lagt til av andre, eller klienten er utdatert.
+          // de er enten lagt til av andre (f.eks. event-opprettede befaringer),
+          // eller klienten er utdatert.
           // (Bevisste slettinger fjernes av tombstone-filteret under.)
           for (const c of cloudArr) {
             if (!c || c.id == null || inIds.has(c.id)) continue;
             resultat.push(c);
-            if (!erSlettet(c)) beholdt++;
+            if (!erSlettet(c)) {
+              beholdt++;
+              beholdtNyeServerElementer[felt] = (beholdtNyeServerElementer[felt] || 0) + 1;
+            }
           }
 
           // Tombstone-filter: fjern alt som er slettet med vilje (og null fra over)
@@ -198,29 +213,62 @@ export default async function handler(req, res) {
         const { _slettinger, ...utenSlettingerYtre } = newState;
         newState = utenSlettingerYtre;
       }
-      // Rullerende backup: bevar siste 5 lagringer i 7 dager
-      try {
-        const b4 = await redis.get('fbs_backup_4');
-        if (b4) await redis.set('fbs_backup_5', b4, { ex: 7 * 24 * 3600 });
-        const b3 = await redis.get('fbs_backup_3');
-        if (b3) await redis.set('fbs_backup_4', b3, { ex: 7 * 24 * 3600 });
-        const b2 = await redis.get('fbs_backup_2');
-        if (b2) await redis.set('fbs_backup_3', b2, { ex: 7 * 24 * 3600 });
-        const b1 = await redis.get('fbs_backup_1');
-        if (b1) await redis.set('fbs_backup_2', b1, { ex: 7 * 24 * 3600 });
-        const current = await redis.get('fbs_state');
-        if (current) await redis.set('fbs_backup_1', { ...current, _backedUpAt: Date.now() }, { ex: 7 * 24 * 3600 });
-      } catch { /* backup-feil stopper ikke lagring */ }
+      // Rullerende backup: bevar siste 5 lagringer i 7 dager.
+      // Kun på FØRSTE forsøk — retry skal ikke rotere backupene flere ganger.
+      if (!backupTatt) {
+        backupTatt = true;
+        try {
+          const b4 = await redis.get('fbs_backup_4');
+          if (b4) await redis.set('fbs_backup_5', b4, { ex: 7 * 24 * 3600 });
+          const b3 = await redis.get('fbs_backup_3');
+          if (b3) await redis.set('fbs_backup_4', b3, { ex: 7 * 24 * 3600 });
+          const b2 = await redis.get('fbs_backup_2');
+          if (b2) await redis.set('fbs_backup_3', b2, { ex: 7 * 24 * 3600 });
+          const b1 = await redis.get('fbs_backup_1');
+          if (b1) await redis.set('fbs_backup_2', b1, { ex: 7 * 24 * 3600 });
+          if (currentState) await redis.set('fbs_backup_1', { ...currentState, _backedUpAt: Date.now() }, { ex: 7 * 24 * 3600 });
+        } catch { /* backup-feil stopper ikke lagring */ }
+      }
 
-      await redis.set('fbs_state', newState);
+      // Atomisk skriving: kun hvis ingen andre har skrevet siden vi leste.
+      const skrevet = await skrivStateCas(redis, ver, newState);
+      if (!skrevet) {
+        console.log(`[state] CAS-kollisjon (forsøk ${forsok}/${MAKS_FORSOK}) — noen skrev i mellomtiden, fletter på nytt`);
+        continue;
+      }
+
+      // Audit-logg når klient-lagringen fikk flettet inn server-opprettede
+      // elementer klienten ikke kjente til (f.eks. event-opprettede befaringer)
+      const bevarte = Object.entries(beholdtNyeServerElementer);
+      if (bevarte.length > 0) {
+        try {
+          await appendAuditLog(redis, byggAuditEntry({
+            objekt: 'state',
+            objektId: 'klient-lagring',
+            felt: 'merge',
+            fraVerdi: null,
+            tilVerdi: bevarte.map(([f, n]) => `${f}:${n}`).join(', '),
+            endretAv: session.navn || session.email || 'ukjent',
+            kilde: 'state-merge',
+            begrunnelse: `Beholdt ${bevarte.map(([f, n]) => `${n} ${f}`).join(', ')} som klienten ikke hadde (server-opprettet/annen bruker) ved klient-lagring`,
+          }));
+        } catch { /* audit-feil stopper ikke lagring */ }
+      }
+
       // updatedAt: serverens tidsstempel → klientens polle-referanse (ikke egen klokke).
       // merged: serveren beholdt sky-elementer klienten ikke hadde → klienten
       // må hente resultatet straks i stedet for å vente på neste poll.
-      res.status(200).json({
+      return res.status(200).json({
         ok: true,
         updatedAt: newState._updatedAt || 0,
         merged: serverEndretYtre,
       });
+      } // slutt CAS-løkke
+
+      // Alle forsøk brukt opp — ekstremt samtidig trafikk. Klienten prøver
+      // igjen automatisk ved neste endring/poll; ingenting er tapt.
+      console.error(`[state] CAS ga opp etter ${MAKS_FORSOK} forsøk`);
+      return res.status(503).json({ error: 'Svært mange samtidige lagringer — prøver igjen automatisk.' });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }

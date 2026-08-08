@@ -8,6 +8,7 @@
 //
 // Auth: Bearer-token med role=admin
 
+import { skrivStateOgBump } from '../_stateCas.js'
 import { Redis } from '@upstash/redis'
 import { appendAuditLog, appendSnapshot, byggAuditEntry } from '../_dataIntegritet.js'
 
@@ -136,7 +137,7 @@ export default async function handler(req, res) {
       .map(b => mergeMap[b.id] ? { ...b, ...mergeMap[b.id] } : b)
 
     const nowTs = Date.now()
-    await redis.set('fbs_state', {
+    await skrivStateOgBump(redis, {
       ...state,
       befaringer: nyeBefaringer,
       _fieldTs: { ...(state._fieldTs || {}), befaringer: nowTs },

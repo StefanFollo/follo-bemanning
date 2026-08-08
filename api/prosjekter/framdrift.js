@@ -6,6 +6,7 @@
 // Henter kildeTilbudData fra prosjektet, kaller Claude claude-sonnet-4-6,
 // og lagrer rikt framdriftsplan-objekt tilbake i Redis.
 
+import { skrivStateOgBump } from '../_stateCas.js'
 import { Redis } from '@upstash/redis'
 
 export const config = {
@@ -271,7 +272,7 @@ export default async function handler(req, res) {
       _fieldTs: { ...(state._fieldTs || {}), prosjekter: nowTs },
       _updatedAt: nowTs,
     }
-    await redis.set('fbs_state', oppdatertState)
+    await skrivStateOgBump(redis, oppdatertState)
 
     console.log(
       `POST /api/prosjekter/framdrift prosjektId:${prosjektId}` +

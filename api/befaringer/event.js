@@ -22,6 +22,7 @@
 //   tapt         → befaring-status 'tapt' + logger dato
 //   avvist       → befaring-status 'tapt' (samme som tapt for nå, men eventType lagres)
 
+import { skrivStateOgBump } from '../_stateCas.js'
 import { Redis } from '@upstash/redis'
 import { Resend } from 'resend'
 import { validerInterAppToken } from '../_interApp.js'
@@ -211,7 +212,7 @@ export default async function handler(req, res) {
       })
 
       const nowTs = Date.now()
-      await redis.set('fbs_state', { ...state, befaringer: oppdatertBefaringer, _fieldTs: { ...(state._fieldTs || {}), befaringer: nowTs }, ...dedupUpdate, _updatedAt: nowTs })
+      await skrivStateOgBump(redis, { ...state, befaringer: oppdatertBefaringer, _fieldTs: { ...(state._fieldTs || {}), befaringer: nowTs }, ...dedupUpdate, _updatedAt: nowTs })
       console.log(`POST /api/befaringer/event type:kunde-aktivitet handling:${handling} befaringId:${befaringId}`)
       return res.status(200).json({ ok: true, befaringId, handling })
     }
@@ -247,7 +248,7 @@ export default async function handler(req, res) {
               : b
           )
           const dupTs = Date.now()
-          await redis.set('fbs_state', { ...state, befaringer: nyeBefaringer, _fieldTs: { ...(state._fieldTs || {}), befaringer: dupTs }, ...dedupUpdate, _updatedAt: dupTs })
+          await skrivStateOgBump(redis, { ...state, befaringer: nyeBefaringer, _fieldTs: { ...(state._fieldTs || {}), befaringer: dupTs }, ...dedupUpdate, _updatedAt: dupTs })
           await appendAuditLog(redis, byggAuditEntry({
             objekt: 'befaring',
             objektId: eksisterende.id,
@@ -318,7 +319,7 @@ export default async function handler(req, res) {
       })
 
       const nyBefaringTs = Date.now()
-      await redis.set('fbs_state', {
+      await skrivStateOgBump(redis, {
         ...state,
         befaringer: [...befaringer, nyBefaring],
         _fieldTs: { ...(state._fieldTs || {}), befaringer: nyBefaringTs },
@@ -453,7 +454,7 @@ export default async function handler(req, res) {
           }
           await appendSnapshot(redis, { objekt: 'befaring', objektId: nyBefaringId, dataFør: nyBefaring, utløstAv: `ghost-fallback-${type}` })
           const nowTs = Date.now()
-          await redis.set('fbs_state', {
+          await skrivStateOgBump(redis, {
             ...state,
             befaringer: [...befaringer, nyBefaring],
             _fieldTs: { ...(state._fieldTs || {}), befaringer: nowTs },
@@ -504,7 +505,7 @@ export default async function handler(req, res) {
           },
         }
         const konfliktTs = Date.now()
-        await redis.set('fbs_state', {
+        await skrivStateOgBump(redis, {
           ...state,
           befaringer: befaringer.map(b => b.id === resolvedBefaringId ? konfliktBef : b),
           _fieldTs: { ...(state._fieldTs || {}), befaringer: konfliktTs },
@@ -542,7 +543,7 @@ export default async function handler(req, res) {
         if (nyttOrdrenr < gjeldende) {
           if (dupKey) {
             const nowTs = Date.now()
-            await redis.set('fbs_state', { ...state, ...dedupUpdate, _updatedAt: nowTs })
+            await skrivStateOgBump(redis, { ...state, ...dedupUpdate, _updatedAt: nowTs })
           }
           console.log(`[event] Fremover-kun: ignorerer ${type}→${nyStatus} for ${resolvedBefaringId} (allerede ${bef.status}, ${oppslagsKilde})`)
           return res.status(200).json({ ok: true, foroverKunStatus: true, gjeldende: bef.status, forsøkt: nyStatus })
@@ -614,7 +615,7 @@ export default async function handler(req, res) {
     // PL bruker "Opprett prosjekt"-knappen manuelt på Godkjent-kortet.
     if (befaringFunnet) {
       const nowTs = Date.now()
-      await redis.set('fbs_state', {
+      await skrivStateOgBump(redis, {
         ...state,
         befaringer: oppdatertBefaringer,
         _fieldTs: { ...(state._fieldTs || {}), befaringer: nowTs },

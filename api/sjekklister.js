@@ -8,6 +8,7 @@
 // Sjekklister lagres direkte på prosjekt-objektet i fbs_state (Redis),
 // ikke i den separate fbs_ks_sjekklister-nøkkelen.
 
+import { skrivStateOgBump } from './_stateCas.js'
 import { Redis } from '@upstash/redis'
 
 const redis = new Redis({
@@ -98,7 +99,7 @@ export default async function handler(req, res) {
     const merged = [...eksisterende, ...validerte]
     const nowTs = Date.now()
 
-    await redis.set('fbs_state', {
+    await skrivStateOgBump(redis, {
       ...state,
       prosjekter: prosjekter.map((p, idx) =>
         idx === prosjektIdx ? { ...p, sjekklister: merged, _endret: nowTs } : p
@@ -145,7 +146,7 @@ export default async function handler(req, res) {
     })
 
     const nowTs = Date.now()
-    await redis.set('fbs_state', {
+    await skrivStateOgBump(redis, {
       ...state,
       prosjekter: oppdatertProsjekter,
       _fieldTs: { ...(state._fieldTs || {}), prosjekter: nowTs },
@@ -161,7 +162,7 @@ export default async function handler(req, res) {
     if (!prosjektId || !sjekklisteId) return res.status(400).json({ error: 'Mangler prosjektId eller sjekklisteId' })
 
     const nowTs = Date.now()
-    await redis.set('fbs_state', {
+    await skrivStateOgBump(redis, {
       ...state,
       prosjekter: prosjekter.map(p =>
         p.id !== prosjektId ? p

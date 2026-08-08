@@ -15,6 +15,7 @@
 //
 // Auth: Bearer-token med role=admin
 
+import { skrivStateOgBump } from '../_stateCas.js'
 import { Redis } from '@upstash/redis'
 import { appendAuditLog, byggAuditEntry } from '../_dataIntegritet.js'
 
@@ -127,7 +128,7 @@ export default async function handler(req, res) {
 
     if (!dry && antallRettet > 0) {
       const nowTs = Date.now()
-      await redis.set('fbs_state', {
+      await skrivStateOgBump(redis, {
         ...state,
         befaringer: oppdatertBefaringer,
         _fieldTs: { ...(state._fieldTs || {}), befaringer: nowTs },

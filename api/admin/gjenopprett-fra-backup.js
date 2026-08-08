@@ -10,6 +10,7 @@
 //
 // Auth: Bearer-token med role=admin
 
+import { skrivStateOgBump } from '../_stateCas.js'
 import { Redis } from '@upstash/redis'
 import { appendAuditLog, byggAuditEntry } from '../_dataIntegritet.js'
 import { lesBackupBlob } from '../_backupKrypto.js'
@@ -95,7 +96,7 @@ export default async function handler(req, res) {
     }
 
     nyState = { ...nyState, _fieldTs: nyFieldTs, _updatedAt: nu }
-    await redis.set('fbs_state', nyState)
+    await skrivStateOgBump(redis, nyState)
 
     const endretAv = bruker.brukernavn || bruker.epost || 'admin'
     for (const [k, items] of Object.entries(plan)) {

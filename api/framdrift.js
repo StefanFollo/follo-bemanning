@@ -9,6 +9,7 @@
 //   { prosjektId }
 //   → Henter kildeTilbudData fra prosjektet, kaller Claude og oppdaterer fdTasks.
 
+import { skrivStateOgBump } from './_stateCas.js'
 import { Redis } from '@upstash/redis'
 import { validerInterAppToken } from './_interApp.js'
 
@@ -177,7 +178,7 @@ export default async function handler(req, res) {
         _fieldTs: { ...(state._fieldTs || {}), prosjekter: nowTs1 },
         _updatedAt: nowTs1,
       }
-      await redis.set('fbs_state', oppdatertState)
+      await skrivStateOgBump(redis, oppdatertState)
 
       console.log(`POST /api/framdrift [regenerer] prosjektId:${body.prosjektId} → ${generated.fdTasks.length} faser`)
       return res.status(200).json({ ok: true, ...generated })
@@ -224,7 +225,7 @@ export default async function handler(req, res) {
       _fieldTs: { ...(state._fieldTs || {}), prosjekter: nowTs2 },
       _updatedAt: nowTs2,
     }
-    await redis.set('fbs_state', oppdatertState)
+    await skrivStateOgBump(redis, oppdatertState)
 
     console.log(`POST /api/framdrift [lagre] prosjektId:${prosjektId} → ${fdTasks.length} faser, uke ${fdStartWeek}`)
     return res.status(200).json({ ok: true, faser: fdTasks.length })

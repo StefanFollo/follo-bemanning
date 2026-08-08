@@ -1,3 +1,4 @@
+import { skrivStateOgBump } from './_stateCas.js'
 import { Redis } from '@upstash/redis';
 
 const redis = new Redis({
@@ -46,7 +47,7 @@ export default async function handler(req, res) {
       if (!backup) return res.status(404).json({ error: `Ingen backup i slot ${slot}` });
       const current = await redis.get('fbs_state');
       if (current) await redis.set('fbs_backup_1', { ...current, _backedUpAt: Date.now() }, { ex: 7 * 24 * 3600 });
-      await redis.set('fbs_state', backup);
+      await skrivStateOgBump(redis, backup);
       return res.status(200).json({ ok: true, restored: slot });
     } catch (e) {
       return res.status(500).json({ error: e.message });
