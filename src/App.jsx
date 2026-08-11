@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense, useSyncExternalStore } from 'react';
+import { useState, useEffect, lazy, Suspense, useSyncExternalStore, Component } from 'react';
 import { AppProvider, harUlagredeEndringer } from './context/AppContext';
 import { useApp } from './context/AppContext';
 import { saveToCloud, forceTimestampAlleFields, abonnerSynk, hentSynkStatus } from './store';
@@ -24,6 +24,43 @@ const Rutiner = lazy(() => import('./pages/Rutiner'));
 
 function SideLaster() {
   return <div style={{ padding: 48, textAlign: 'center', color: '#94a3b8', fontSize: 15 }}>Laster…</div>;
+}
+
+// Feilvern: en krasj på ÉN side skal aldri gi hvit side for hele appen.
+// Viser feilmeldingen tydelig (så den kan rapporteres/skjermdumpes) og lar
+// brukeren bytte fane eller laste på nytt. Nullstilles ved fanebytte (key).
+class FeilVern extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { feil: null };
+  }
+  static getDerivedStateFromError(feil) {
+    return { feil };
+  }
+  componentDidCatch(feil, info) {
+    console.error('[FBS] Side-krasj:', feil, info?.componentStack);
+  }
+  render() {
+    if (!this.state.feil) return this.props.children;
+    return (
+      <div style={{ maxWidth: 720, margin: '40px auto', padding: '24px 28px', background: '#fef2f2', border: '2px solid #fca5a5', borderRadius: 12 }}>
+        <h3 style={{ margin: '0 0 8px', color: '#991b1b' }}>⚠️ Noe gikk galt på denne siden</h3>
+        <p style={{ margin: '0 0 12px', fontSize: 14, color: '#7f1d1d' }}>
+          Resten av appen virker — bytt fane, eller last siden på nytt.
+          Send gjerne et skjermbilde av denne boksen til Stefan/support.
+        </p>
+        <pre style={{ background: '#fff', border: '1px solid #fecaca', borderRadius: 8, padding: '10px 12px', fontSize: 11, color: '#b91c1c', overflowX: 'auto', whiteSpace: 'pre-wrap', maxHeight: 180 }}>
+          {String(this.state.feil?.message || this.state.feil)}
+          {'\n'}
+          {String(this.state.feil?.stack || '').split('\n').slice(1, 4).join('\n')}
+        </pre>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <button className="btn" onClick={() => this.setState({ feil: null })}>↻ Prøv igjen</button>
+          <button className="btn btn-primary" onClick={() => window.location.reload()}>Last appen på nytt</button>
+        </div>
+      </div>
+    );
+  }
 }
 
 // Byggtidspunkt satt av vite.config.js — vises som versjon så man enkelt kan
@@ -312,6 +349,7 @@ function App() {
         </header>
 
         <main className="main">
+          <FeilVern key={activeTab}>
           <Suspense fallback={<SideLaster />}>
           {activeTab === 'dashboard' && (isAdmin || isKontor) && <Dashboard onNavigate={setActiveTab} />}
           {activeTab === 'befaring' && (isAdmin || isKontor || isBefaring) && <BefaringPlan />}
@@ -327,6 +365,7 @@ function App() {
           {activeTab === 'rutiner' && <Rutiner />}
           {activeTab === 'brukere' && isAdmin && <AdminUsers />}
           </Suspense>
+          </FeilVern>
         </main>
 
         <nav className="mobile-nav">

@@ -611,7 +611,7 @@ export default function Prosjekter() {
     return [...arr].sort((a, b) => {
       let va, vb;
       switch (sortKey) {
-        case 'navn':      va = a.navn.toLowerCase(); vb = b.navn.toLowerCase(); break;
+        case 'navn':      va = (a.navn || '').toLowerCase(); vb = (b.navn || '').toLowerCase(); break;
         case 'startDato': va = a.startDato || ''; vb = b.startDato || ''; break;
         case 'sluttDato': va = a.sluttDato || ''; vb = b.sluttDato || ''; break;
         case 'belop':     va = Number(a.belop) || 0; vb = Number(b.belop) || 0; break;
@@ -732,7 +732,7 @@ export default function Prosjekter() {
       const q = search.toLowerCase();
       const pl = p.prosjektlederId ? ansatteById[p.prosjektlederId] : null;
       const match =
-        p.navn.toLowerCase().includes(q) ||
+        (p.navn || '').toLowerCase().includes(q) ||
         (p.adresse || '').toLowerCase().includes(q) ||
         (p.jobbType || '').toLowerCase().includes(q) ||
         (p.beskrivelse || '').toLowerCase().includes(q) ||
@@ -1010,8 +1010,8 @@ export default function Prosjekter() {
                     const isExpanded = expandedId === p.id;
 
                     // Vis adresse som tittel; trekk kundeinfo fra p.kunde eller fra p.navn ("Navn — Adresse")
-                    const visAdresse = p.adresse || (p.navn.includes(' — ') ? p.navn.split(' — ').slice(1).join(' — ').trim() : p.navn);
-                    const kundeNavn   = p.kunde?.navn || (p.navn.includes(' — ') ? p.navn.split(' — ')[0].trim() : null);
+                    const visAdresse = p.adresse || ((p.navn || '').includes(' — ') ? (p.navn || '').split(' — ').slice(1).join(' — ').trim() : (p.navn || 'Uten navn'));
+                    const kundeNavn   = p.kunde?.navn || ((p.navn || '').includes(' — ') ? (p.navn || '').split(' — ')[0].trim() : null);
                     const kundeTlf    = p.kunde?.telefon || '';
                     const kundeEpost  = p.kunde?.epost || '';
 
