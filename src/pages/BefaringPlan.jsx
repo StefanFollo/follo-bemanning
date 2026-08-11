@@ -245,8 +245,28 @@ export default function BefaringPlan() {
   }
   function opprettProsjekt() {
     if (!prosjektForm.navn.trim()) return;
-    const prosjektId = uid();
     const bef = visKapasitet || {};
+
+    // Finnes prosjektet allerede (samme navn+adresse — f.eks. opprettet fra
+    // tilbuds-appen)? Da KOBLER vi befaringen til det i stedet. Tidligere
+    // blokkerte duplikat-vernet i ADD_PROSJEKT stille, og befaringen ble
+    // lenket til en prosjekt-ID som aldri ble opprettet («Prosjekt opprettet»
+    // uten prosjekt å gå inn i — jf. Bøhlerveien 41A).
+    const nNavn = prosjektForm.navn.toLowerCase().trim();
+    const nAdr = (bef.adresse || '').toLowerCase().trim();
+    const eksisterende = state.prosjekter.find(p =>
+      (p.navn || '').toLowerCase().trim() === nNavn &&
+      (p.adresse || '').toLowerCase().trim() === nAdr
+    );
+    if (eksisterende) {
+      dispatch({ type: 'UPDATE_BEFARING', payload: { ...bef, prosjektId: eksisterende.id, arkivert: true } });
+      alert(`Prosjektet «${eksisterende.navn}» finnes allerede — befaringen er koblet til det eksisterende prosjektet.`);
+      setVisKapasitet(null);
+      setVisProsjektModal(false);
+      return;
+    }
+
+    const prosjektId = uid();
     // Bygg kildeTilbudData for AI-framdrift fra tilbuds-data på befaringen
     const poster = bef.poster || [];
     const timerPerFag = byggTimer(poster);
@@ -635,7 +655,9 @@ export default function BefaringPlan() {
 
         {b.status === 'godkjent' && (
           <div className="bef-k-prosjekt-rad" onClick={e => e.stopPropagation()}>
-            {b.prosjektId ? (
+            {/* Selvhelbredende: prosjektId som peker på et prosjekt som ikke
+                finnes (historisk feil) behandles som «ikke opprettet» */}
+            {b.prosjektId && state.prosjekter.some(p => p.id === b.prosjektId) ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <span className="bef-k-prosjekt-badge">🏗 Prosjekt opprettet</span>
                 <button
