@@ -611,7 +611,14 @@ export default function Prosjekter() {
     return [...arr].sort((a, b) => {
       let va, vb;
       switch (sortKey) {
-        case 'navn':      va = (a.navn || '').toLowerCase(); vb = (b.navn || '').toLowerCase(); break;
+        // Sorter på det som VISES som tittel (adressen når den finnes) — ikke
+        // det skjulte navnet. Ellers havner «Angelica K. – Bøhlerveien 41A»
+        // under A mens raden viser «Bøhlerveien 41A», og ingen finner den.
+        case 'navn': {
+          const visA = a.adresse || ((a.navn || '').includes(' — ') ? (a.navn || '').split(' — ').slice(1).join(' — ') : (a.navn || ''));
+          const visB = b.adresse || ((b.navn || '').includes(' — ') ? (b.navn || '').split(' — ').slice(1).join(' — ') : (b.navn || ''));
+          va = visA.trim().toLowerCase(); vb = visB.trim().toLowerCase(); break;
+        }
         case 'startDato': va = a.startDato || ''; vb = b.startDato || ''; break;
         case 'sluttDato': va = a.sluttDato || ''; vb = b.sluttDato || ''; break;
         case 'belop':     va = Number(a.belop) || 0; vb = Number(b.belop) || 0; break;
