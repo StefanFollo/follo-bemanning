@@ -11,19 +11,24 @@ const AppContext = createContext(null);
 
 // Handlinger der payload er selve elementet — stemples med _endret slik at
 // per-element-fletting (klient + server) vet hvilken versjon som er nyest.
-const STEMPLE_ENDRET = new Set([
-  'ADD_ANSATT', 'UPDATE_ANSATT',
-  'ADD_PROSJEKT', 'UPDATE_PROSJEKT',
-  'ADD_TILDELING', 'UPDATE_TILDELING',
-  'ADD_OPPGAVE', 'UPDATE_OPPGAVE',
-  'ADD_ROR_TIMER', 'UPDATE_ROR_TIMER',
-  'ADD_ROR_PLAN', 'UPDATE_ROR_PLAN',
-  'ADD_BEFARING', 'UPDATE_BEFARING',
-  'ADD_REKLAMASJON', 'UPDATE_REKLAMASJON',
-  'ADD_SERVICE_JOBB', 'UPDATE_SERVICE_JOBB',
-  'ADD_BIL', 'UPDATE_BIL',
-  'ADD_TEAM', 'UPDATE_TEAM',
-]);
+// Verdien er feltet elementet bor i, slik at stemplingen kan gjøres MONOTON:
+// en redigering stemples alltid HØYERE enn stempelet den bygger på. Uten
+// dette ble brukere med klokke bak servertid «utdaterte» mot serverens
+// re-stempling — første lagring virket, alle påfølgende ble stille forkastet
+// (jf. Glenn/Stølsveien aug 2026).
+const STEMPLE_FELT = {
+  ADD_ANSATT: 'ansatte', UPDATE_ANSATT: 'ansatte',
+  ADD_PROSJEKT: 'prosjekter', UPDATE_PROSJEKT: 'prosjekter',
+  ADD_TILDELING: 'tildelinger', UPDATE_TILDELING: 'tildelinger',
+  ADD_OPPGAVE: 'oppgaver', UPDATE_OPPGAVE: 'oppgaver',
+  ADD_ROR_TIMER: 'rorTimer', UPDATE_ROR_TIMER: 'rorTimer',
+  ADD_ROR_PLAN: 'rorPlaner', UPDATE_ROR_PLAN: 'rorPlaner',
+  ADD_BEFARING: 'befaringer', UPDATE_BEFARING: 'befaringer',
+  ADD_REKLAMASJON: 'reklamasjoner', UPDATE_REKLAMASJON: 'reklamasjoner',
+  ADD_SERVICE_JOBB: 'serviceJobber', UPDATE_SERVICE_JOBB: 'serviceJobber',
+  ADD_BIL: 'biler', UPDATE_BIL: 'biler',
+  ADD_TEAM: 'teams', UPDATE_TEAM: 'teams',
+};
 
 // Slette-handlinger → felt, slik at tombstones registreres sentralt.
 const SLETT_FELT = {
@@ -44,8 +49,15 @@ export function harUlagredeEndringer() { return harLokaleEndringer; }
 
 function reducer(state, action) {
   if (action.type !== 'LOAD_STATE') harLokaleEndringer = true;
-  if (STEMPLE_ENDRET.has(action.type) && action.payload && typeof action.payload === 'object') {
-    action = { ...action, payload: { ...action.payload, _endret: Date.now() } };
+  const stempleFelt = STEMPLE_FELT[action.type];
+  if (stempleFelt && action.payload && typeof action.payload === 'object') {
+    // Monotont stempel: alltid høyere enn eksisterende elements stempel,
+    // uansett hva klokka på denne enheten viser.
+    const eksisterende = action.payload.id
+      ? (state[stempleFelt] || []).find(x => x && x.id === action.payload.id)
+      : null;
+    const minst = (eksisterende?._endret || 0) + 1;
+    action = { ...action, payload: { ...action.payload, _endret: Math.max(Date.now(), minst) } };
   }
   // Registrer bevisste slettinger som tombstones — slik at sky-fletting vet at
   // elementet er slettet med vilje (og ikke bare mangler hos en utdatert klient).
