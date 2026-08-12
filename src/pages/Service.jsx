@@ -41,7 +41,12 @@ function tomForm() {
 
 export default function Service() {
   const { state, dispatch } = useApp();
-  const serviceJobber = useMemo(() => state.serviceJobber || [], [state.serviceJobber]);
+  const serviceJobber = useMemo(() => (state.serviceJobber || []).filter(j => !j.arkivert), [state.serviceJobber]);
+  const arkiverte = useMemo(
+    () => (state.serviceJobber || []).filter(j => j.arkivert).sort((a, b) => (b.dato || '').localeCompare(a.dato || '')),
+    [state.serviceJobber]
+  );
+  const [visArkiv, setVisArkiv] = useState(false);
   const today = dateToIso(new Date());
 
   const [visModal, setVisModal] = useState(false);
@@ -291,6 +296,20 @@ export default function Service() {
           )}
         </div>
 
+        {/* Manuell arkivering av ferdige/fakturerte jobber */}
+        {(j.status === 'ferdig' || j.status === 'fakturert') && (
+          <div onClick={e => e.stopPropagation()} style={{ marginTop: 6 }}>
+            <button
+              className="btn btn-sm"
+              style={{ fontSize: 11, padding: '3px 10px', color: '#0891b2', borderColor: '#7dd3fc', background: '#f0f9ff' }}
+              onClick={() => dispatch({ type: 'UPDATE_SERVICE_JOBB', payload: { ...j, arkivert: true } })}
+              title="Flytt til arkivet — data beholdes og kan gjenopprettes"
+            >
+              📦 Arkiver
+            </button>
+          </div>
+        )}
+
         {/* Rask status-bytte */}
         <div className="bef-k-status-bytte" onClick={e => e.stopPropagation()}>
           <select
@@ -413,6 +432,36 @@ export default function Service() {
           {fakturerte.map(j => <ServKort key={j.id} j={j} />)}
         </div>
       </div>
+
+      {/* Arkiv — manuelt arkiverte jobber */}
+      {arkiverte.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <button className="bef-arkiv-toggle" onClick={() => setVisArkiv(v => !v)}>
+            📦 Arkiv <span className="bef-kolonne-teller">{arkiverte.length}</span>
+            <span style={{ marginLeft: 6, fontSize: 11 }}>{visArkiv ? '▲ Skjul' : '▼ Vis'}</span>
+          </button>
+          {visArkiv && (
+            <div className="bef-arkiv-liste">
+              {arkiverte.map(j => (
+                <div key={j.id} className="bef-arkiv-rad" onClick={() => apneRediger(j)}>
+                  <span className="bef-arkiv-ikon">{(SERV_STATUS[j.status] || SERV_STATUS.ny).ikon}</span>
+                  <span className="bef-arkiv-adresse">{j.adresse}</span>
+                  <span className="bef-arkiv-navn">{j.kontaktNavn}</span>
+                  {j.dato && <span className="bef-arkiv-dato">{datoKort(j.dato)}</span>}
+                  <button
+                    className="btn btn-sm"
+                    style={{ fontSize: 11, padding: '2px 8px', marginLeft: 'auto', flexShrink: 0 }}
+                    onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_SERVICE_JOBB', payload: { ...j, arkivert: false } }); }}
+                    title="Flytt tilbake til aktiv liste"
+                  >
+                    ↩ Gjenopprett
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       </>}
 
       {/* Modal */}

@@ -48,7 +48,12 @@ function tomForm() {
 
 export default function Reklamasjon() {
   const { state, dispatch } = useApp();
-  const reklamasjoner = useMemo(() => state.reklamasjoner || [], [state.reklamasjoner]);
+  const reklamasjoner = useMemo(() => (state.reklamasjoner || []).filter(r => !r.arkivert), [state.reklamasjoner]);
+  const arkiverte = useMemo(
+    () => (state.reklamasjoner || []).filter(r => r.arkivert).sort((a, b) => (b.dato || '').localeCompare(a.dato || '')),
+    [state.reklamasjoner]
+  );
+  const [visArkiv, setVisArkiv] = useState(false);
   const today = dateToIso(new Date());
 
   const [visModal, setVisModal] = useState(false);
@@ -297,6 +302,20 @@ export default function Reklamasjon() {
           )}
         </div>
 
+        {/* Manuell arkivering av avsluttede reklamasjoner */}
+        {(r.status === 'utbedret' || r.status === 'avvist' || r.status === 'lukket') && (
+          <div onClick={e => e.stopPropagation()} style={{ marginTop: 6 }}>
+            <button
+              className="btn btn-sm"
+              style={{ fontSize: 11, padding: '3px 10px', color: '#0891b2', borderColor: '#7dd3fc', background: '#f0f9ff' }}
+              onClick={() => dispatch({ type: 'UPDATE_REKLAMASJON', payload: { ...r, arkivert: true } })}
+              title="Flytt til arkivet — data beholdes og kan gjenopprettes"
+            >
+              📦 Arkiver
+            </button>
+          </div>
+        )}
+
         {/* Rask status-bytte */}
         <div className="bef-k-status-bytte" onClick={e => e.stopPropagation()}>
           <select
@@ -406,6 +425,36 @@ export default function Reklamasjon() {
           {utbedredeRekl.map(r => <ReklKort key={r.id} r={r} />)}
         </div>
       </div>
+
+      {/* Arkiv — manuelt arkiverte reklamasjoner */}
+      {arkiverte.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <button className="bef-arkiv-toggle" onClick={() => setVisArkiv(v => !v)}>
+            📦 Arkiv <span className="bef-kolonne-teller">{arkiverte.length}</span>
+            <span style={{ marginLeft: 6, fontSize: 11 }}>{visArkiv ? '▲ Skjul' : '▼ Vis'}</span>
+          </button>
+          {visArkiv && (
+            <div className="bef-arkiv-liste">
+              {arkiverte.map(r => (
+                <div key={r.id} className="bef-arkiv-rad" onClick={() => apneRediger(r)}>
+                  <span className="bef-arkiv-ikon">{(REKL_STATUS[r.status] || REKL_STATUS.ny).ikon}</span>
+                  <span className="bef-arkiv-adresse">{r.adresse}</span>
+                  <span className="bef-arkiv-navn">{r.kontaktNavn}</span>
+                  {r.dato && <span className="bef-arkiv-dato">{datoKort(r.dato)}</span>}
+                  <button
+                    className="btn btn-sm"
+                    style={{ fontSize: 11, padding: '2px 8px', marginLeft: 'auto', flexShrink: 0 }}
+                    onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_REKLAMASJON', payload: { ...r, arkivert: false } }); }}
+                    title="Flytt tilbake til aktiv liste"
+                  >
+                    ↩ Gjenopprett
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
       </>}
 
       {/* Modal */}
