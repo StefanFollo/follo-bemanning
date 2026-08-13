@@ -6,12 +6,12 @@ import { getHolidayMap } from '../holidays';
 const FERIE_ID = '__FERIE__';
 
 const FAG_COLORS = {
-  'Anleggsleder': '#f59e0b',
-  'Bas Tømrer': '#f59e0b', // bakoverkompatibilitet
+  'Anleggsleder': '#b45309',
+  'Bas Tømrer': '#b45309', // bakoverkompatibilitet
   'Montør': '#3b82f6',
-  'Lærling Tømrer': '#16a34a',
+  'Lærling Tømrer': '#15803d',
   'Maler': '#ec4899',
-  'Rørlegger': '#06b6d4',
+  'Rørlegger': '#0e7490',
   'Tømrer': '#8b5cf6',
   'Flislegger': '#f97316',
   'Prosjektleder': '#0ea5e9',
@@ -537,7 +537,7 @@ export default function Bemanningsplan({ readOnly = false }) {
             padding: '12px 14px',
             minWidth: 210,
           }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 2 }}>
+            <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 2 }}>
               {barMenu.t.prosjektId === FERIE_ID
                 ? '🏖 Ferie / Fri'
                 : state.prosjekter.find(p => p.id === barMenu.t.prosjektId)?.navn || '–'}
@@ -586,7 +586,7 @@ export default function Bemanningsplan({ readOnly = false }) {
                   {naboer.map(n => (
                     <button key={n.id}
                       onClick={() => { handleMergeWith(t, n); setBarMenu(null); }}
-                      style={{ width: '100%', padding: '6px', borderRadius: 6, border: '1px solid #d1fae5', background: '#f0fdf4', color: '#16a34a', fontSize: 12, cursor: 'pointer', marginBottom: 4, textAlign: 'left' }}
+                      style={{ width: '100%', padding: '6px', borderRadius: 6, border: '1px solid #d1fae5', background: '#f0fdf4', color: '#15803d', fontSize: 12, cursor: 'pointer', marginBottom: 4, textAlign: 'left' }}
                     >
                       ⟷ {n.sluttDato === addDays(t.startDato, -1) ? '← ' : '→ '}
                       {formatDate(n.startDato)} – {formatDate(n.sluttDato)}
@@ -815,7 +815,7 @@ function UkeVisning({
         })}
         {ikkeTildelt.length > 0 && (
           <React.Fragment>
-            <div className="uke-prosjekt-header" style={{ gridColumn: '1 / -1', borderLeft: '4px solid #9ca3af' }}>
+            <div className="uke-prosjekt-header" style={{ gridColumn: '1 / -1', borderLeft: '4px solid #5d6b80' }}>
               <span className="uke-prosjekt-navn" style={{ color: '#6b7280' }}>Ikke tildelt i perioden</span>
               <span className="uke-prosjekt-antall">{ikkeTildelt.length} ansatt{ikkeTildelt.length !== 1 ? 'e' : ''}</span>
             </div>
@@ -824,8 +824,8 @@ function UkeVisning({
         )}
         {ferieKun.length > 0 && (
           <React.Fragment>
-            <div className="uke-prosjekt-header" style={{ gridColumn: '1 / -1', borderLeft: '4px solid #f59e0b' }}>
-              <span className="uke-prosjekt-farge" style={{ background: '#f59e0b' }} />
+            <div className="uke-prosjekt-header" style={{ gridColumn: '1 / -1', borderLeft: '4px solid #b45309' }}>
+              <span className="uke-prosjekt-farge" style={{ background: '#b45309' }} />
               <span className="uke-prosjekt-navn">🏖 Ferie / Fri</span>
               <span className="uke-prosjekt-antall">{ferieKun.length} ansatt{ferieKun.length !== 1 ? 'e' : ''}</span>
             </div>
@@ -877,7 +877,7 @@ function UkeVisning({
           <span className="bplan-kap-tittel">Uke {getWeekNumber(currentWeek)}</span>
           <span className="bplan-kap-chip bplan-kap-chip--opptatt">🔨 {kapOpptatt} opptatt</span>
           {kapFerie > 0 && <span className="bplan-kap-chip bplan-kap-chip--ferie">🏖 {kapFerie} ferie</span>}
-          <span className="bplan-kap-chip" style={{ background: kapLedig > 0 ? '#f0fdf4' : '#fef2f2', color: kapLedig > 0 ? '#16a34a' : '#dc2626' }}>
+          <span className="bplan-kap-chip" style={{ background: kapLedig > 0 ? '#f0fdf4' : '#fef2f2', color: kapLedig > 0 ? '#15803d' : '#dc2626' }}>
             {kapLedig > 0 ? '✅' : '🔴'} {kapLedig} ledig
           </span>
           <div className="bplan-kap-bar-outer">
@@ -1087,7 +1087,7 @@ function DagAnsattRad({ ansatt, prosjektId, days, gantt }) {
         <div>
           <div className="row-navn">{ansatt.navn}</div>
           <div className="row-fag" style={{ color: fagColor(ansatt.fag) }}>
-            {ansatt.innleie && <span style={{ color: '#f97316', fontWeight: 600, marginRight: 3 }}>🔧</span>}
+            {ansatt.innleie && <span style={{ color: '#f97316', fontWeight: 500, marginRight: 3 }}>🔧</span>}
             {ansatt.fag}
           </div>
         </div>
@@ -1112,11 +1112,11 @@ function DagGridHeader({ weekDays, HOLIDAYS, today }) {
             style={{ fontSize: 11, padding: '4px 2px', textAlign: 'center' }}
             title={hol || undefined}>
             {isMonday && (
-              <div style={{ fontSize: 10, fontWeight: 700, color: isCurrentWeek ? '#2563eb' : '#94a3b8', lineHeight: 1.2 }}>
+              <div style={{ fontSize: 10, fontWeight: 500, color: isCurrentWeek ? '#2563eb' : '#5d6b80', lineHeight: 1.2 }}>
                 U{weekNum}
               </div>
             )}
-            <div style={{ fontWeight: isMonday ? 700 : 400 }}>{DAG_NAVN[dow - 1]}</div>
+            <div style={{ fontWeight: isMonday ? 500 : 400 }}>{DAG_NAVN[dow - 1]}</div>
             <div className="dag-dato" style={{ fontSize: 10 }}>{dag.slice(8)}.{dag.slice(5, 7)}</div>
             {hol && <div className="holiday-label">{hol.split(' ')[0]}</div>}
           </div>
@@ -1149,13 +1149,13 @@ function UkeAnsattRad({ ansatt, prosjektId, days, gantt }) {
   return (
     <React.Fragment>
       <div className="uke-row-label" style={ansatt.sykmeldt ? { opacity: 0.45, filter: 'grayscale(1)' } : {}}>
-        <div className="mini-avatar" style={{ background: ansatt.sykmeldt ? '#94a3b8' : fagColor(ansatt.fag) }}>
+        <div className="mini-avatar" style={{ background: ansatt.sykmeldt ? '#5d6b80' : fagColor(ansatt.fag) }}>
           {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
         </div>
         <div>
           <div className="row-navn">{ansatt.navn}</div>
-          <div className="row-fag" style={{ color: ansatt.sykmeldt ? '#94a3b8' : fagColor(ansatt.fag) }}>
-            {ansatt.sykmeldt ? '🤒 Sykmeldt' : ansatt.innleie ? <><span style={{ color: '#f97316', fontWeight: 600, marginRight: 3 }}>🔧</span>{ansatt.fag}</> : ansatt.fag}
+          <div className="row-fag" style={{ color: ansatt.sykmeldt ? '#5d6b80' : fagColor(ansatt.fag) }}>
+            {ansatt.sykmeldt ? '🤒 Sykmeldt' : ansatt.innleie ? <><span style={{ color: '#f97316', fontWeight: 500, marginRight: 3 }}>🔧</span>{ansatt.fag}</> : ansatt.fag}
           </div>
         </div>
       </div>
@@ -1180,11 +1180,11 @@ function UkeGridHeader({ WORK_DAYS_UKE, TEN_WEEKS, today, HOLIDAYS }) {
             style={{ fontSize: 11, padding: '4px 2px', textAlign: 'center' }}
             title={hol || undefined}>
             {isMonday && (
-              <div style={{ fontSize: 10, fontWeight: 700, color: isCurrentWeek ? '#2563eb' : '#94a3b8', lineHeight: 1.2 }}>
+              <div style={{ fontSize: 10, fontWeight: 500, color: isCurrentWeek ? '#2563eb' : '#5d6b80', lineHeight: 1.2 }}>
                 U{getWeekNumber(TEN_WEEKS[weekIdx])}
               </div>
             )}
-            <div style={{ fontWeight: isMonday ? 700 : 400 }}>{DAG_NAVN[i % 5]}</div>
+            <div style={{ fontWeight: isMonday ? 500 : 400 }}>{DAG_NAVN[i % 5]}</div>
             <div className="dag-dato" style={{ fontSize: 10 }}>{dag.slice(8)}.{dag.slice(5, 7)}</div>
             {hol && <div className="holiday-label">{hol.split(' ')[0]}</div>}
           </div>
@@ -1198,13 +1198,13 @@ function MaanedAnsattRad({ ansatt, prosjektId, days, gantt }) {
   return (
     <React.Fragment>
       <div className="uke-row-label" style={ansatt.sykmeldt ? { opacity: 0.45, filter: 'grayscale(1)' } : {}}>
-        <div className="mini-avatar" style={{ background: ansatt.sykmeldt ? '#94a3b8' : fagColor(ansatt.fag) }}>
+        <div className="mini-avatar" style={{ background: ansatt.sykmeldt ? '#5d6b80' : fagColor(ansatt.fag) }}>
           {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
         </div>
         <div>
           <div className="row-navn">{ansatt.navn}</div>
-          <div className="row-fag" style={{ color: ansatt.sykmeldt ? '#94a3b8' : fagColor(ansatt.fag) }}>
-            {ansatt.sykmeldt ? '🤒 Sykmeldt' : ansatt.innleie ? <><span style={{ color: '#f97316', fontWeight: 600, marginRight: 3 }}>🔧</span>{ansatt.fag}</> : ansatt.fag}
+          <div className="row-fag" style={{ color: ansatt.sykmeldt ? '#5d6b80' : fagColor(ansatt.fag) }}>
+            {ansatt.sykmeldt ? '🤒 Sykmeldt' : ansatt.innleie ? <><span style={{ color: '#f97316', fontWeight: 500, marginRight: 3 }}>🔧</span>{ansatt.fag}</> : ansatt.fag}
           </div>
         </div>
       </div>
@@ -1221,7 +1221,7 @@ function MaanedGridHeader({ SIX_MONTHS, today }) {
         const isCurrentMonth = m.slice(0, 7) === today.slice(0, 7);
         return (
           <div key={m} className={`uke-header-cell ${isCurrentMonth ? 'today' : ''}`} style={{ fontSize: 12 }}>
-            <div style={{ fontWeight: 700 }}>{monthLabel(m)}</div>
+            <div style={{ fontWeight: 500 }}>{monthLabel(m)}</div>
           </div>
         );
       })}
@@ -1375,7 +1375,7 @@ function OversiktVisning({
         if (m.length) grupper.push({ navn: team.navn, farge: team.farge, medlemmer: m });
       }
       const uten = filteredAnsatte.filter(a => !iTeam.has(a.id));
-      if (uten.length) grupper.push({ navn: 'Uten team', farge: '#94a3b8', medlemmer: uten });
+      if (uten.length) grupper.push({ navn: 'Uten team', farge: '#5d6b80', medlemmer: uten });
     }
 
     const rader = grupper.map(g => {
@@ -1413,7 +1413,7 @@ function OversiktVisning({
         tr.teamrad td{background:#f8fafc;font-weight:700;font-size:11px;padding:5px 8px}
         .prosj{display:block;border-left:3px solid #6b7280;padding-left:4px;margin:1px 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .ferie{display:block;color:#0891b2;margin:1px 0}
-        .syk{display:block;color:#94a3b8;margin:1px 0}
+        .syk{display:block;color:#5d6b80;margin:1px 0}
         .tom{color:#cbd5e1}
         .lite{font-size:9px;color:#888;font-weight:400}
         @media print{body{padding:6px}@page{size:landscape;margin:10mm}}
@@ -1448,7 +1448,7 @@ function OversiktVisning({
             const todayIdx = allDays.indexOf(today);
             if (todayIdx >= 0) oversiktScrollRef.current.scrollLeft = LABEL_W + todayIdx * DAY_W - 120;
           }}>⊙ I dag</button>
-        <span style={{ fontSize: 12, color: '#94a3b8' }}>Dra tidslinjen for å navigere</span>
+        <span style={{ fontSize: 12, color: '#5d6b80' }}>Dra tidslinjen for å navigere</span>
         {ansatteOrder.length > 0 && (state.teams || []).length === 0 && (
           <button className="btn" title="Tilbakestill til alfabetisk rekkefølge"
             onClick={() => saveOrder([])}>↺ Alfabetisk</button>
@@ -1568,7 +1568,7 @@ function OversiktVisning({
               const opp = planAnsatte.filter(a => wOpptattIds.has(a.id)).length;
               const led = tot - opp;
               const pst = tot > 0 ? Math.round((led / tot) * 100) : 0;
-              const farge = led === 0 ? '#dc2626' : led <= 2 ? '#f59e0b' : '#16a34a';
+              const farge = led === 0 ? '#dc2626' : led <= 2 ? '#b45309' : '#15803d';
               const isCurrent = wk.days.includes(today);
               return (
                 <div key={wi} className={`oversikt-kap-cell${isCurrent ? ' current' : ''}`} style={{ width: wk.days.length * DAY_W }}>
@@ -1655,17 +1655,17 @@ function OversiktVisning({
                     }}
                   >⠿</span>
                   <div className="mini-avatar" style={{
-                    background: ansatt.sykmeldt ? '#94a3b8' : ansatt.innleie ? '#f97316' : fagColor(ansatt.fag),
+                    background: ansatt.sykmeldt ? '#5d6b80' : ansatt.innleie ? '#f97316' : fagColor(ansatt.fag),
                     width: AVATAR, height: AVATAR, fontSize: kompakt ? 7 : 8, flexShrink: 0,
                     filter: ansatt.sykmeldt ? 'grayscale(1)' : 'none',
                   }}>
                     {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                   </div>
-                  <span className="oversikt-row-navn" style={{ fontSize: kompakt ? 11 : 12, ...(ansatt.sykmeldt ? { color: '#94a3b8' } : {}) }}>
+                  <span className="oversikt-row-navn" style={{ fontSize: kompakt ? 11 : 12, ...(ansatt.sykmeldt ? { color: '#5d6b80' } : {}) }}>
                     {ansatt.navn}
                   </span>
                   {ansatt.sykmeldt
-                    ? <span style={{ fontSize: 9, color: '#94a3b8', flexShrink: 0 }}>🤒</span>
+                    ? <span style={{ fontSize: 9, color: '#5d6b80', flexShrink: 0 }}>🤒</span>
                     : ansatt.innleie && <span style={{ fontSize: 9, color: '#f97316', flexShrink: 0 }}>🔧</span>
                   }
                 </div>
@@ -1709,7 +1709,7 @@ function OversiktVisning({
                         background: 'repeating-linear-gradient(45deg,#e2e8f0,#e2e8f0 4px,#f1f5f9 4px,#f1f5f9 8px)',
                         borderRadius: 4, border: '1px solid #cbd5e1',
                         display: 'flex', alignItems: 'center', paddingLeft: 6,
-                        fontSize: 10, color: '#94a3b8', fontWeight: 600, gap: 4,
+                        fontSize: 10, color: '#5d6b80', fontWeight: 500, gap: 4,
                         pointerEvents: 'none',
                       }}>
                         🤒 Sykmeldt{ansatt.sykmeldtTil ? ` t.o.m. ${new Date(ansatt.sykmeldtTil + 'T00:00:00').toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })}` : ''}
@@ -1781,8 +1781,8 @@ function OversiktVisning({
                 <div key={`th-${team.id}`} style={{ display: 'flex', height: kompakt ? 22 : 26, alignItems: 'stretch', background: team.farge + '18', borderTop: `2px solid ${team.farge}`, borderBottom: `1px solid ${team.farge}33`, minWidth: LABEL_W + totalW }}>
                   <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '0 12px', position: 'sticky', left: 0, zIndex: 3, background: '#fff', borderRight: `2px solid ${team.farge}33` }}>
                     <div style={{ width: 10, height: 10, borderRadius: '50%', background: team.farge, flexShrink: 0 }} />
-                    <span style={{ fontWeight: 700, fontSize: 12, color: team.farge, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{team.navn}</span>
-                    <span style={{ fontSize: 11, color: '#94a3b8', flexShrink: 0 }}>{count}</span>
+                    <span style={{ fontWeight: 500, fontSize: 12, color: team.farge, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{team.navn}</span>
+                    <span style={{ fontSize: 11, color: '#5d6b80', flexShrink: 0 }}>{count}</span>
                   </div>
                   <div style={{ flex: 1 }} />
                 </div>
@@ -1806,11 +1806,11 @@ function OversiktVisning({
             const unassigned = filteredAnsatte.filter(a => !assignedIds.has(a.id));
             if (unassigned.length > 0) {
               rows.push(
-                <div key="th-uten" style={{ display: 'flex', height: kompakt ? 22 : 26, alignItems: 'stretch', background: '#f1f5f9', borderTop: '2px solid #94a3b8', borderBottom: '1px solid #e2e8f0', minWidth: LABEL_W + totalW }}>
+                <div key="th-uten" style={{ display: 'flex', height: kompakt ? 22 : 26, alignItems: 'stretch', background: '#f1f5f9', borderTop: '2px solid #5d6b80', borderBottom: '1px solid #e2e8f0', minWidth: LABEL_W + totalW }}>
                   <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '0 12px', position: 'sticky', left: 0, zIndex: 3, background: '#fff', borderRight: '2px solid #e2e8f0' }}>
-                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#94a3b8', flexShrink: 0 }} />
-                    <span style={{ fontWeight: 700, fontSize: 12, color: '#64748b' }}>Uten team</span>
-                    <span style={{ fontSize: 11, color: '#94a3b8' }}>{unassigned.length}</span>
+                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#5d6b80', flexShrink: 0 }} />
+                    <span style={{ fontWeight: 500, fontSize: 12, color: '#5d6b80' }}>Uten team</span>
+                    <span style={{ fontSize: 11, color: '#5d6b80' }}>{unassigned.length}</span>
                   </div>
                   <div style={{ flex: 1 }} />
                 </div>
@@ -1885,15 +1885,15 @@ function FerieVisning({ state, readOnly, ferieYearOffset, setFerieYearOffset, op
       <div className="uke-grid-wrap">
         {/* Month header */}
         <div className="ferie-grid">
-          <div className="uke-header-cell ferie-label-col" style={{ fontWeight: 600, fontSize: 11, color: '#94a3b8' }}>Ansatt</div>
+          <div className="uke-header-cell ferie-label-col" style={{ fontWeight: 500, fontSize: 11, color: '#5d6b80' }}>Ansatt</div>
           {ferieMonths.map((m, i) => {
             const isThisMonth = m.slice(0, 7) === today.slice(0, 7);
             return (
               <div key={m} className={`uke-header-cell ferie-month-col ${isThisMonth ? 'today' : ''}`}
-                style={{ textAlign: 'center', fontSize: 11, fontWeight: isThisMonth ? 700 : 500 }}>
+                style={{ textAlign: 'center', fontSize: 11, fontWeight: isThisMonth ? 500 : 500 }}>
                 {MAANED_NAVN[parseInt(m.slice(5, 7), 10) - 1]}
                 {mndTotals[i] > 0 && (
-                  <div style={{ fontSize: 9, color: '#94a3b8', marginTop: 1 }}>{mndTotals[i]} stk</div>
+                  <div style={{ fontSize: 9, color: '#5d6b80', marginTop: 1 }}>{mndTotals[i]} stk</div>
                 )}
               </div>
             );
@@ -1919,7 +1919,7 @@ function FerieVisning({ state, readOnly, ferieYearOffset, setFerieYearOffset, op
                     <div className="row-fag" style={{ color: fagColor(ansatt.fag), fontSize: 10 }}>
                       {ansatt.innleie && <span style={{ color: '#f97316', marginRight: 2 }}>🔧</span>}
                       {totalDager > 0
-                        ? <span style={{ color: '#16a34a', fontWeight: 600 }}>🏖 {totalDager} dager</span>
+                        ? <span style={{ color: '#15803d', fontWeight: 500 }}>🏖 {totalDager} dager</span>
                         : ansatt.fag}
                     </div>
                   </div>
@@ -2043,8 +2043,8 @@ function TeamsVisning({
     <div style={{ padding: '20px 0' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
-          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>Team</h3>
-          <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>Grupper ansatte i team og tildel hele teamet til et prosjekt på én gang</div>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 500 }}>Team</h3>
+          <div style={{ fontSize: 13, color: '#5d6b80', marginTop: 2 }}>Grupper ansatte i team og tildel hele teamet til et prosjekt på én gang</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {teams.length > 0 && (
@@ -2118,14 +2118,14 @@ function TeamsVisning({
                 style={{
                   background: isMemberDragOver ? '#f0fdf4' : '#fff',
                   border: isMemberDragOver
-                    ? '2px dashed #16a34a'
+                    ? '2px dashed #15803d'
                     : isCardDragOver
                       ? `2px dashed ${team.farge || '#3b82f6'}`
                       : '1px solid #e2e8f0',
                   borderRadius: 14,
                   padding: (isMemberDragOver || isCardDragOver) ? 17 : 18,
                   boxShadow: isMemberDragOver
-                    ? '0 4px 16px #16a34a33'
+                    ? '0 4px 16px #15803d33'
                     : isCardDragOver
                       ? `0 4px 16px ${team.farge || '#3b82f6'}33`
                       : '0 1px 4px rgba(0,0,0,.04)',
@@ -2138,16 +2138,16 @@ function TeamsVisning({
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{ color: '#cbd5e1', fontSize: 16, lineHeight: 1, cursor: 'grab', userSelect: 'none' }}>⠿</span>
-                    <div style={{ fontWeight: 800, fontSize: 16, color: '#1e293b' }}>{team.navn}</div>
+                    <div style={{ fontWeight: 500, fontSize: 16, color: '#1e293b' }}>{team.navn}</div>
                   </div>
                   <div style={{ display: 'flex', gap: 6 }}>
                     <button className="btn btn-sm" onMouseDown={e => e.stopPropagation()} onClick={() => startRedigerTeam(team)}>Rediger</button>
                     <button className="btn btn-sm btn-danger" onMouseDown={e => e.stopPropagation()} onClick={() => slettTeam(team.id)}>Slett</button>
                   </div>
                 </div>
-                <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>
+                <div style={{ fontSize: 12, color: '#5d6b80', marginBottom: 8 }}>
                   {medlemmer.length} medlemmer
-                  {isMemberDragOver && <span style={{ color: '#16a34a', marginLeft: 6, fontWeight: 600 }}>↓ Slipp for å flytte hit</span>}
+                  {isMemberDragOver && <span style={{ color: '#15803d', marginLeft: 6, fontWeight: 500 }}>↓ Slipp for å flytte hit</span>}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {medlemmer.map(a => (
@@ -2172,17 +2172,17 @@ function TeamsVisning({
                         cursor: 'grab', opacity: a.sykmeldt ? 0.6 : 1,
                       }}
                     >
-                      <div style={{ width: 20, height: 20, borderRadius: '50%', background: a.sykmeldt ? '#94a3b8' : a.innleie ? '#f97316' : fagColor(a.fag), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 700, flexShrink: 0 }}>
+                      <div style={{ width: 20, height: 20, borderRadius: '50%', background: a.sykmeldt ? '#5d6b80' : a.innleie ? '#f97316' : fagColor(a.fag), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 500, flexShrink: 0 }}>
                         {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                       </div>
-                      <span style={{ color: a.sykmeldt ? '#64748b' : 'inherit' }}>{a.navn}</span>
-                      <span style={{ color: a.sykmeldt ? '#94a3b8' : a.innleie ? '#f97316' : '#94a3b8', fontSize: 10 }}>
+                      <span style={{ color: a.sykmeldt ? '#5d6b80' : 'inherit' }}>{a.navn}</span>
+                      <span style={{ color: a.sykmeldt ? '#5d6b80' : a.innleie ? '#f97316' : '#5d6b80', fontSize: 10 }}>
                         {a.sykmeldt ? '🤒' : a.innleie ? '🔧' : a.fag}
                       </span>
                     </div>
                   ))}
                   {medlemmer.length === 0 && (
-                    <span style={{ color: isMemberDragOver ? '#16a34a' : '#94a3b8', fontSize: 12, fontStyle: 'italic' }}>
+                    <span style={{ color: isMemberDragOver ? '#15803d' : '#5d6b80', fontSize: 12, fontStyle: 'italic' }}>
                       {isMemberDragOver ? '↓ Slipp her' : 'Ingen medlemmer ennå'}
                     </span>
                   )}
@@ -2209,7 +2209,7 @@ function TeamsVisning({
             <label>Medlemmer ({teamForm.ansatteIds.length} valgt)</label>
             <div style={{ maxHeight: 280, overflowY: 'auto', border: '1px solid #e2e8f0', borderRadius: 8, padding: 8, display: 'flex', flexDirection: 'column', gap: 2 }}>
               {fastAnsatte.length > 0 && (
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8', letterSpacing: '0.06em', padding: '2px 6px 4px', textTransform: 'uppercase' }}>Fast ansatte</div>
+                <div style={{ fontSize: 10, fontWeight: 500, color: '#5d6b80', letterSpacing: '0.06em', padding: '2px 6px 4px', textTransform: 'uppercase' }}>Fast ansatte</div>
               )}
               {fastAnsatte.map(a => {
                 const tatt = opptattIAnnetTeam.has(a.id);
@@ -2218,19 +2218,19 @@ function TeamsVisning({
                 return (
                   <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: tatt ? 'not-allowed' : 'pointer', padding: '4px 6px', borderRadius: 6, opacity: tatt ? 0.45 : 1, background: valgt ? '#eff6ff' : 'transparent' }}>
                     <input type="checkbox" checked={valgt} disabled={tatt} onChange={() => toggleMedlem(a.id)} />
-                    <div style={{ width: 20, height: 20, borderRadius: '50%', background: fagColor(a.fag), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 700, flexShrink: 0 }}>
+                    <div style={{ width: 20, height: 20, borderRadius: '50%', background: fagColor(a.fag), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 500, flexShrink: 0 }}>
                       {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                     </div>
                     <span style={{ fontSize: 13, fontWeight: 500 }}>{a.navn}</span>
                     {tatt
                       ? <span style={{ fontSize: 11, color: '#f97316', marginLeft: 'auto' }}>i {annetTeam?.navn || 'annet team'}</span>
-                      : <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 'auto' }}>{a.fag}</span>
+                      : <span style={{ fontSize: 11, color: '#5d6b80', marginLeft: 'auto' }}>{a.fag}</span>
                     }
                   </label>
                 );
               })}
               {innleieAnsatte.length > 0 && (
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#f97316', letterSpacing: '0.06em', padding: '6px 6px 4px', textTransform: 'uppercase', borderTop: fastAnsatte.length > 0 ? '1px solid #f1f5f9' : 'none', marginTop: fastAnsatte.length > 0 ? 4 : 0 }}>🔧 Innleie</div>
+                <div style={{ fontSize: 10, fontWeight: 500, color: '#f97316', letterSpacing: '0.06em', padding: '6px 6px 4px', textTransform: 'uppercase', borderTop: fastAnsatte.length > 0 ? '1px solid #f1f5f9' : 'none', marginTop: fastAnsatte.length > 0 ? 4 : 0 }}>🔧 Innleie</div>
               )}
               {innleieAnsatte.map(a => {
                 const tatt = opptattIAnnetTeam.has(a.id);
@@ -2239,7 +2239,7 @@ function TeamsVisning({
                 return (
                   <label key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: tatt ? 'not-allowed' : 'pointer', padding: '4px 6px', borderRadius: 6, opacity: tatt ? 0.45 : 1, background: valgt ? '#fff7ed' : 'transparent' }}>
                     <input type="checkbox" checked={valgt} disabled={tatt} onChange={() => toggleMedlem(a.id)} />
-                    <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#f97316', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 700, flexShrink: 0 }}>
+                    <div style={{ width: 20, height: 20, borderRadius: '50%', background: '#f97316', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#fff', fontWeight: 500, flexShrink: 0 }}>
                       {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                     </div>
                     <span style={{ fontSize: 13, fontWeight: 500 }}>{a.navn}</span>
@@ -2279,7 +2279,7 @@ function TeamsVisning({
             <label>Til dato</label>
             <input type="date" value={teamTildelForm.sluttDato} onChange={e => setTeamTildelForm(f => ({ ...f, sluttDato: e.target.value }))} />
             {teamTildelForm.teamId && (
-              <div style={{ fontSize: 12, color: '#64748b', background: '#f8fafc', borderRadius: 8, padding: '8px 12px', marginTop: 4 }}>
+              <div style={{ fontSize: 12, color: '#5d6b80', background: '#f8fafc', borderRadius: 8, padding: '8px 12px', marginTop: 4 }}>
                 Tildeler {(teams.find(t => t.id === teamTildelForm.teamId)?.ansatteIds || []).length} teammedlemmer til prosjektet
               </div>
             )}
@@ -2332,7 +2332,7 @@ function BursdagVisning({ state }) {
     <div>
       <div className="uke-nav">
         <span className="uke-label">🎂 Bursdagskalender</span>
-        <span style={{ fontSize: 13, color: '#94a3b8' }}>
+        <span style={{ fontSize: 13, color: '#5d6b80' }}>
           {totalMedBursdag} av {state.ansatte.length} ansatte har registrert bursdag
         </span>
       </div>
@@ -2350,8 +2350,8 @@ function BursdagVisning({ state }) {
                   {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                 </div>
                 <div>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{ansatt.navn}</div>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>{ansatt.fag}</div>
+                  <div style={{ fontWeight: 500, fontSize: 13 }}>{ansatt.navn}</div>
+                  <div style={{ fontSize: 11, color: '#5d6b80' }}>{ansatt.fag}</div>
                 </div>
                 <span className={`bursdag-upcoming-label${isToday ? ' today' : ''}`}>{dayLabel}</span>
               </div>
@@ -2450,7 +2450,7 @@ function ProsjektOversiktVisning({ state }) {
                     <div key={fag} className="proj-fag-rad">
                       <div className="proj-fag-label">
                         <span className="fag-dot" style={{ background: fagColor(fag) }} />
-                        <span style={{ color: fagColor(fag), fontWeight: 600, fontSize: 12 }}>{fag}</span>
+                        <span style={{ color: fagColor(fag), fontWeight: 500, fontSize: 12 }}>{fag}</span>
                         <span className="proj-fag-antall">{fagAnsatte.length}</span>
                       </div>
                       <div className="proj-avatar-rad">
@@ -2510,26 +2510,26 @@ function RessursVisning({ state, planAnsatte, currentWeek, prevWeek, nextWeek, t
         {ukeStats.map(s => {
           const ingen = s.ledige === 0;
           const faa = s.ledige > 0 && s.ledige <= 2;
-          const farge = ingen ? '#dc2626' : faa ? '#d97706' : '#16a34a';
+          const farge = ingen ? '#dc2626' : faa ? '#d97706' : '#15803d';
           const bg = ingen ? '#fef2f2' : faa ? '#fffbeb' : '#f0fdf4';
           return (
             <div key={s.weekStr}
               style={{ background: bg, border: `1px solid ${farge}33`, borderTop: `3px solid ${farge}`, borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}
               title={`Uke ${getWeekNumber(s.weekStr)}: ${s.ledige} ledige av ${s.total}${s.ferie ? ` · ${s.ferie} på ferie` : ''}${s.sykmeldte ? ` · ${s.sykmeldte} sykmeldt` : ''}`}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#475569' }}>
+              <div style={{ fontSize: 11, fontWeight: 500, color: '#475569' }}>
                 Uke {getWeekNumber(s.weekStr)}
               </div>
-              <div style={{ fontSize: 10, color: '#94a3b8', marginBottom: 4 }}>
+              <div style={{ fontSize: 10, color: '#5d6b80', marginBottom: 4 }}>
                 {s.weekStr.slice(8)}.{s.weekStr.slice(5, 7)} – {s.weekEnd.slice(8)}.{s.weekEnd.slice(5, 7)}
               </div>
-              <div style={{ fontSize: 20, fontWeight: 800, color: farge, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
+              <div style={{ fontSize: 20, fontWeight: 500, color: farge, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
                 👷 {s.ledige}
               </div>
-              <div style={{ fontSize: 10, color: farge, fontWeight: 600 }}>ledig{s.ledige !== 1 ? 'e' : ''}</div>
+              <div style={{ fontSize: 10, color: farge, fontWeight: 500 }}>ledig{s.ledige !== 1 ? 'e' : ''}</div>
               {(s.ferie > 0 || s.sykmeldte > 0) && (
                 <div style={{ fontSize: 10, marginTop: 2, display: 'flex', gap: 6, justifyContent: 'center' }}>
                   {s.ferie > 0 && <span style={{ color: '#0891b2' }}>🏖 {s.ferie}</span>}
-                  {s.sykmeldte > 0 && <span style={{ color: '#94a3b8' }}>🤒 {s.sykmeldte}</span>}
+                  {s.sykmeldte > 0 && <span style={{ color: '#5d6b80' }}>🤒 {s.sykmeldte}</span>}
                 </div>
               )}
             </div>

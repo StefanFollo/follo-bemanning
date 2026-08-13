@@ -183,8 +183,8 @@ function ProsjektFramdrift({ project, laster, feil, onGenerer }) {
     return (
       <div className="fd-tom">
         <div style={{ fontSize: 22 }}>⏳</div>
-        <div style={{ fontWeight: 600 }}>Genererer framdriftsplan med AI…</div>
-        <div style={{ fontSize: 12, color: '#94a3b8' }}>Tar 10–20 sekunder</div>
+        <div style={{ fontWeight: 500 }}>Genererer framdriftsplan med AI…</div>
+        <div style={{ fontSize: 12, color: '#5d6b80' }}>Tar 10–20 sekunder</div>
       </div>
     )
   }
@@ -196,7 +196,7 @@ function ProsjektFramdrift({ project, laster, feil, onGenerer }) {
         {project.kildeTilbudData ? (
           <button className="btn btn-primary" onClick={onGenerer}>✨ Generer framdriftsplan med AI</button>
         ) : (
-          <div style={{ fontSize: 12, color: '#94a3b8' }}>
+          <div style={{ fontSize: 12, color: '#5d6b80' }}>
             Prosjektet må opprettes fra tilbuds-appen for å bruke AI-generering.
           </div>
         )}
@@ -380,7 +380,7 @@ function ProsjektFramdrift({ project, laster, feil, onGenerer }) {
 }
 
 const FAG_COLORS = {
-  'Bas Tømrer': '#f59e0b', 'Montør': '#3b82f6', 'Lærling Tømrer': '#16a34a',
+  'Bas Tømrer': '#b45309', 'Montør': '#3b82f6', 'Lærling Tømrer': '#15803d',
   'Maler': '#ec4899', 'Rørlegger': '#06b6d4', 'Tømrer': '#8b5cf6',
   'Flislegger': '#f97316', 'Prosjektleder': '#0ea5e9',
 };
@@ -396,12 +396,12 @@ const STATUS_LABELS = {
 };
 
 const STATUS_COLORS = {
-  jobber_med: '#f59e0b',
-  planlagt:   '#f59e0b',
-  godkjent:   '#16a34a',
+  jobber_med: '#b45309',
+  planlagt:   '#b45309',
+  godkjent:   '#15803d',
   aktiv:      '#2563eb',
   pagaende:   '#2563eb',
-  fullfort:   '#64748b',
+  fullfort:   '#5d6b80',
 };
 
 const STATUS_BG = {
@@ -520,7 +520,7 @@ function ProsjektKSPlanKnapp({ project, onOppdater }) {
           {laster ? '⏳ Laster...' : '✨ Foreslå KS-sjekkliste-plan'}
         </button>
         {ksSjekklister.length > 0 && (
-          <span style={{ fontSize: 12, color: '#64748b' }}>{ksSjekklister.length} sjekklister tildelt</span>
+          <span style={{ fontSize: 12, color: '#5d6b80' }}>{ksSjekklister.length} sjekklister tildelt</span>
         )}
       </div>
 
@@ -529,11 +529,11 @@ function ProsjektKSPlanKnapp({ project, onOppdater }) {
           onClick={() => setVisModal(false)}>
           <div style={{ background: '#fff', borderRadius: 16, maxWidth: 520, width: '100%', padding: '22px 20px', maxHeight: '88vh', overflow: 'auto', boxShadow: '0 20px 48px rgba(0,0,0,.25)' }}
             onClick={e => e.stopPropagation()}>
-            <div style={{ fontWeight: 800, fontSize: 17, marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ fontWeight: 500, fontSize: 17, marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
               ✨ Foreslått sjekkliste-plan
               <button className="btn-icon" onClick={() => setVisModal(false)}>✕</button>
             </div>
-            <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: '#5d6b80', marginBottom: 16 }}>
               Basert på <strong>"{project.jobbType || project.navn}"</strong> — juster gjerne utvalget
             </div>
             {FASER.map(fase => {
@@ -541,15 +541,15 @@ function ProsjektKSPlanKnapp({ project, onOppdater }) {
               if (fm.length === 0) return null
               return (
                 <div key={fase.id} style={{ marginBottom: 12 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: fase.farge, marginBottom: 5 }}>{fase.label}</div>
+                  <div style={{ fontSize: 12, fontWeight: 500, color: fase.farge, marginBottom: 5 }}>{fase.label}</div>
                   {fm.map(m => {
                     const er = tildeltIds.has(m.id)
                     return (
                       <label key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 8px', borderRadius: 6, cursor: er ? 'default' : 'pointer', background: valgte.has(m.id) ? '#eff6ff' : 'transparent' }}>
                         <input type="checkbox" checked={er || valgte.has(m.id)} disabled={er}
                           onChange={e => { const s = new Set(valgte); if (e.target.checked) s.add(m.id); else s.delete(m.id); setValgte(s) }} />
-                        <span style={{ fontSize: 13, color: er ? '#94a3b8' : '#1e293b', flex: 1 }}>{m.navn}</span>
-                        {er ? <span style={{ fontSize: 10, color: '#94a3b8' }}>✓</span> : <span style={{ fontSize: 10, color: '#94a3b8' }}>{m.punkter?.length || 0} pkt</span>}
+                        <span style={{ fontSize: 13, color: er ? '#5d6b80' : '#1e293b', flex: 1 }}>{m.navn}</span>
+                        {er ? <span style={{ fontSize: 10, color: '#5d6b80' }}>✓</span> : <span style={{ fontSize: 10, color: '#5d6b80' }}>{m.punkter?.length || 0} pkt</span>}
                       </label>
                     )
                   })}
@@ -614,7 +614,7 @@ export default function Prosjekter({ onNavigate = null }) {
     const dager = Math.round((new Date(sluttDato + 'T00:00:00') - new Date()) / 86400000);
     if (dager < 0)    return { farge: '#dc2626', bg: '#fff5f5', label: `${Math.abs(dager)}d over` };
     if (dager <= 7)   return { farge: '#dc2626', bg: '#fff5f5', label: `${dager}d igjen` };
-    if (dager <= 14)  return { farge: '#f59e0b', bg: '#fffbeb', label: `${dager}d igjen` };
+    if (dager <= 14)  return { farge: '#b45309', bg: '#fffbeb', label: `${dager}d igjen` };
     return null;
   }
 
@@ -727,9 +727,9 @@ export default function Prosjekter({ onNavigate = null }) {
       lag('aktiv', 'Pågående', '🔨', STATUS_COLORS.aktiv),
       lag('godkjent', 'Godkjent', '✅', STATUS_COLORS.godkjent),
       lag('jobber_med', 'Vi jobber med', '📋', STATUS_COLORS.jobber_med),
-      lag('fullfort', 'Fullført', '🏁', '#64748b', true),
+      lag('fullfort', 'Fullført', '🏁', '#5d6b80', true),
       {
-        key: 'arkivert', label: 'Arkivert', ikon: '🗄', farge: '#94a3b8', dempet: true,
+        key: 'arkivert', label: 'Arkivert', ikon: '🗄', farge: '#5d6b80', dempet: true,
         teller: alleProsjekter.filter(p => p.arkivert).length, sum: 0,
       },
     ];
@@ -909,13 +909,13 @@ export default function Prosjekter({ onNavigate = null }) {
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px', margin: '0 0 12px 0', fontSize: 13 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <strong style={{ color: '#1e293b' }}>🔧 Dedup prosjekter</strong>
-            <button onClick={() => setDedupPanel(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#94a3b8' }}>✕</button>
+            <button onClick={() => setDedupPanel(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#5d6b80' }}>✕</button>
           </div>
 
-          {dedupPanel.loading && <div style={{ color: '#64748b' }}>⏳ Henter duplikater...</div>}
+          {dedupPanel.loading && <div style={{ color: '#5d6b80' }}>⏳ Henter duplikater...</div>}
           {dedupPanel.error && <div style={{ color: '#dc2626' }}>⚠️ Feil: {dedupPanel.error}</div>}
           {!dedupPanel.loading && !dedupPanel.error && dedupPanel.funnetDuplikater === 0 && (
-            <div style={{ color: '#16a34a' }}>✅ Ingen duplikater funnet</div>
+            <div style={{ color: '#15803d' }}>✅ Ingen duplikater funnet</div>
           )}
 
           {!dedupPanel.loading && !dedupPanel.error && dedupPanel.duplikatGrupper > 0 && (
@@ -929,8 +929,8 @@ export default function Prosjekter({ onNavigate = null }) {
               <div style={{ maxHeight: 220, overflowY: 'auto', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 10px', marginBottom: 10 }}>
                 {(dedupPanel.plan || []).map((g, i) => (
                   <div key={i} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: i < dedupPanel.plan.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
-                    <div style={{ fontWeight: 600 }}>Beholder: {g.behold.navn}</div>
-                    <div style={{ color: '#64748b', fontSize: 12 }}>
+                    <div style={{ fontWeight: 500 }}>Beholder: {g.behold.navn}</div>
+                    <div style={{ color: '#5d6b80', fontSize: 12 }}>
                       id: {g.behold.id} · {g.behold.status} · {g.behold.refs} ref
                       {g.behold.harFramdrift ? ' · framdrift' : ''}{g.behold.harTilbud ? ' · tilbud' : ''}
                     </div>
@@ -948,13 +948,13 @@ export default function Prosjekter({ onNavigate = null }) {
                     if (!window.confirm(`Slette ${dedupPanel.skalSlettes} duplikate prosjekter?\nReferanser (tildelinger/oppgaver) flyttes til keeper.\nDette kan ikke angres (men snapshots tas).`)) return;
                     kjorDedup(false);
                   }}
-                  style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontWeight: 600 }}
+                  style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontWeight: 500 }}
                 >
                   🗑 Slett {dedupPanel.skalSlettes} duplikater
                 </button>
               )}
               {dedupPanel.dry === false && (
-                <div style={{ color: '#16a34a', fontWeight: 600 }}>✅ Slettet {dedupPanel.slettet} duplikater · {dedupPanel.gjenværende} prosjekter igjen</div>
+                <div style={{ color: '#15803d', fontWeight: 500 }}>✅ Slettet {dedupPanel.slettet} duplikater · {dedupPanel.gjenværende} prosjekter igjen</div>
               )}
             </>
           )}
@@ -1011,7 +1011,7 @@ export default function Prosjekter({ onNavigate = null }) {
             </select>
           );
         })()}
-        <span style={{ fontSize: 12, color: '#94a3b8' }}>Sorter:</span>
+        <span style={{ fontSize: 12, color: '#5d6b80' }}>Sorter:</span>
         {[['handling', '⚠ Trenger handling'], ['tittel', 'A–Å'], ['frist', 'Frist'], ['sum', 'Sum']].map(([key, label]) => (
           <button
             key={key}
@@ -1022,7 +1022,7 @@ export default function Prosjekter({ onNavigate = null }) {
             {label}
           </button>
         ))}
-        <span style={{ fontSize: 12, color: '#94a3b8', marginLeft: 8 }}>Visning:</span>
+        <span style={{ fontSize: 12, color: '#5d6b80', marginLeft: 8 }}>Visning:</span>
         {[['liste', '☰ Liste'], ['gantt', '📊 Gantt']].map(([key, label]) => (
           <button
             key={key}
@@ -1043,7 +1043,7 @@ export default function Prosjekter({ onNavigate = null }) {
             {m} mnd
           </button>
         ))}
-        <span style={{ fontSize: 12, color: '#94a3b8', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 12, color: '#5d6b80', marginLeft: 'auto' }}>
           {faneProsjekter.length} prosjekter
         </span>
       </div>
@@ -1064,7 +1064,7 @@ export default function Prosjekter({ onNavigate = null }) {
           <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 16px', position: 'relative' }}>
             <div style={{ position: 'relative', height: 20, borderBottom: '1px solid #e2e8f0', marginBottom: 8, marginLeft: 180 }}>
               {mnder.map((m, i) => (
-                <span key={i} style={{ position: 'absolute', left: m.pct + '%', fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>{m.label}</span>
+                <span key={i} style={{ position: 'absolute', left: m.pct + '%', fontSize: 11, color: '#5d6b80', fontWeight: 500 }}>{m.label}</span>
               ))}
             </div>
             {(() => {
@@ -1082,7 +1082,7 @@ export default function Prosjekter({ onNavigate = null }) {
                     return (
                       <div key={p.id} style={{ display: 'flex', alignItems: 'center', height: 34, borderBottom: '1px solid #f8fafc', cursor: 'pointer' }}
                         onClick={() => aapnePanel(p)}>
-                        <div style={{ width: 180, flexShrink: 0, fontSize: 12.5, fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 8 }}>
+                        <div style={{ width: 180, flexShrink: 0, fontSize: 12.5, fontWeight: 500, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 8 }}>
                           {visAdr}
                         </div>
                         <div style={{ flex: 1, position: 'relative', height: '100%' }}>
@@ -1093,9 +1093,9 @@ export default function Prosjekter({ onNavigate = null }) {
                       </div>
                     );
                   })}
-                  {medDatoer.length === 0 && <div style={{ padding: 20, color: '#94a3b8', textAlign: 'center' }}>Ingen prosjekter med datoer i vinduet.</div>}
+                  {medDatoer.length === 0 && <div style={{ padding: 20, color: '#5d6b80', textAlign: 'center' }}>Ingen prosjekter med datoer i vinduet.</div>}
                   {utenDatoer.length > 0 && (
-                    <div style={{ padding: '10px 0 4px', fontSize: 12, color: '#94a3b8' }}>
+                    <div style={{ padding: '10px 0 4px', fontSize: 12, color: '#5d6b80' }}>
                       🗓 {utenDatoer.length} prosjekt{utenDatoer.length !== 1 ? 'er' : ''} uten datoer i vinduet — sett start-/sluttdato via Rediger, eller bytt til Liste-visningen
                     </div>
                   )}
@@ -1108,7 +1108,7 @@ export default function Prosjekter({ onNavigate = null }) {
 
       {/* Kompakte rader */}
       {visning === 'liste' && faneProsjekter.length === 0 && (
-        <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10 }}>
+        <div style={{ padding: 32, textAlign: 'center', color: '#5d6b80', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10 }}>
           {aktivFane === 'arkivert' ? 'Ingen arkiverte prosjekter.' : 'Ingen prosjekter i denne fanen.'}
         </div>
       )}
@@ -1161,7 +1161,7 @@ export default function Prosjekter({ onNavigate = null }) {
             tittel={visAdresse}
             undertittel={kundeNavn ? `👤 ${kundeNavn}` : null}
             varsel={varsel ? `⚠ ${varsel.label}` : manglerBemanning ? '👷 ingen bemanning neste uke' : null}
-            varselFarge={varsel ? varsel.farge : manglerBemanning ? '#f59e0b' : null}
+            varselFarge={varsel ? varsel.farge : manglerBemanning ? '#b45309' : null}
             hint={duplikatHint[p.id] ? `🔗 ligner på ${duplikatHint[p.id]}` : null}
             meta={[
               p.startDato ? `📅 ${formatDate(p.startDato)}${p.sluttDato ? ` – ${formatDate(p.sluttDato)}` : ''}` : null,
@@ -1190,7 +1190,7 @@ export default function Prosjekter({ onNavigate = null }) {
           />
           {forlengFristId === p.id && (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 14px', margin: '-4px 0 8px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: '#92400e' }}>Ny sluttdato:</span>
+              <span style={{ fontSize: 12.5, fontWeight: 500, color: '#92400e' }}>Ny sluttdato:</span>
               <input type="date" className="input" style={{ width: 160, height: 32 }} value={forlengDato} onChange={e => setForlengDato(e.target.value)} />
               <button className="btn btn-sm btn-primary" onClick={() => lagreForlengFrist(p)}>Lagre</button>
               <button className="btn btn-sm" onClick={() => setForlengFristId(null)}>Avbryt</button>
@@ -1242,13 +1242,13 @@ export default function Prosjekter({ onNavigate = null }) {
             )}
             {panelFane === 'bemanning' && (
               <div>
-                {tild.length === 0 && <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 12 }}>Ingen tildelinger på prosjektet.</div>}
+                {tild.length === 0 && <div style={{ color: '#5d6b80', fontSize: 13, marginBottom: 12 }}>Ingen tildelinger på prosjektet.</div>}
                 {tild.map(t => {
                   const a = ansatteById[t.ansattId];
                   return (
                     <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
-                      <span style={{ fontWeight: 600 }}>{a?.navn || 'Ukjent'}</span>
-                      <span style={{ color: '#64748b' }}>{t.startDato ? formatDate(t.startDato) : '?'} – {t.sluttDato ? formatDate(t.sluttDato) : '?'}</span>
+                      <span style={{ fontWeight: 500 }}>{a?.navn || 'Ukjent'}</span>
+                      <span style={{ color: '#5d6b80' }}>{t.startDato ? formatDate(t.startDato) : '?'} – {t.sluttDato ? formatDate(t.sluttDato) : '?'}</span>
                     </div>
                   );
                 })}
@@ -1259,11 +1259,11 @@ export default function Prosjekter({ onNavigate = null }) {
             )}
             {panelFane === 'ks' && (
               <div>
-                {!(p.ksSjekklister || []).length && <div style={{ color: '#94a3b8', fontSize: 13 }}>Ingen KS-sjekklister tildelt. Gå til KS / HMS-fanen for å legge til.</div>}
+                {!(p.ksSjekklister || []).length && <div style={{ color: '#5d6b80', fontSize: 13 }}>Ingen KS-sjekklister tildelt. Gå til KS / HMS-fanen for å legge til.</div>}
                 {(p.ksSjekklister || []).map((ks, i) => (
                   <div key={ks.id || i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
                     <span>{ks.ikon || '✅'} {ks.navn || ks.malNavn || 'Sjekkliste'}</span>
-                    <span style={{ color: '#64748b' }}>{ks.status || 'ikke startet'}</span>
+                    <span style={{ color: '#5d6b80' }}>{ks.status || 'ikke startet'}</span>
                   </div>
                 ))}
               </div>
@@ -1275,19 +1275,19 @@ export default function Prosjekter({ onNavigate = null }) {
               return (
                 <div style={{ fontSize: 13 }}>
                   {p.tilbudLink && (
-                    <a href={p.tilbudLink} target="_blank" rel="noopener noreferrer" style={{ color: '#2874a6', fontWeight: 600 }}>🔗 Åpne kundens tilbudside ↗</a>
+                    <a href={p.tilbudLink} target="_blank" rel="noopener noreferrer" style={{ color: '#2874a6', fontWeight: 500 }}>🔗 Åpne kundens tilbudside ↗</a>
                   )}
-                  <div style={{ margin: '10px 0', color: '#64748b' }}>
+                  <div style={{ margin: '10px 0', color: '#5d6b80' }}>
                     {[p.pristype && `Pristype: ${p.pristype}`, (p.estimertSum || tp.estimertSum) && `Estimert: ${formaterBelop(p.estimertSum || tp.estimertSum)}`,
                       (p.oppstartTekst || kd.oppstart) && `Oppstart: ${p.oppstartTekst || kd.oppstart}`, (p.varighetTekst || kd.varighet) && `Varighet: ${p.varighetTekst || kd.varighet}`,
                     ].filter(Boolean).map((r, i) => <div key={i}>{r}</div>)}
                   </div>
                   {poster.length > 0 && <>
-                    <div style={{ fontWeight: 700, margin: '10px 0 6px' }}>Poster ({poster.length})</div>
+                    <div style={{ fontWeight: 500, margin: '10px 0 6px' }}>Poster ({poster.length})</div>
                     {poster.map((post, i) => (
                       <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #f8fafc' }}>
                         <span>{post.navn || post.tittel || `Post ${i + 1}`}</span>
-                        {post.sum != null && <span style={{ color: '#64748b' }}>{formaterBelop(post.sum)}</span>}
+                        {post.sum != null && <span style={{ color: '#5d6b80' }}>{formaterBelop(post.sum)}</span>}
                       </div>
                     ))}
                   </>}
@@ -1296,12 +1296,12 @@ export default function Prosjekter({ onNavigate = null }) {
             })()}
             {panelFane === 'logg' && (
               <div style={{ fontSize: 12.5 }}>
-                {loggEntries === null && <div style={{ color: '#94a3b8' }}>⏳ Henter logg…</div>}
-                {Array.isArray(loggEntries) && loggEntries.length === 0 && <div style={{ color: '#94a3b8' }}>Ingen logg-innslag funnet for dette prosjektet.</div>}
+                {loggEntries === null && <div style={{ color: '#5d6b80' }}>⏳ Henter logg…</div>}
+                {Array.isArray(loggEntries) && loggEntries.length === 0 && <div style={{ color: '#5d6b80' }}>Ingen logg-innslag funnet for dette prosjektet.</div>}
                 {(loggEntries || []).map((e, i) => (
                   <div key={i} style={{ padding: '7px 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <div style={{ fontWeight: 600 }}>{e.felt}: {String(e.fraVerdi ?? '–')} → {String(e.tilVerdi ?? '–')}</div>
-                    <div style={{ color: '#94a3b8', fontSize: 11 }}>{e.endretAv || '?'} · {e.tidspunkt ? new Date(e.tidspunkt).toLocaleString('nb-NO') : ''} · {e.kilde || ''}</div>
+                    <div style={{ fontWeight: 500 }}>{e.felt}: {String(e.fraVerdi ?? '–')} → {String(e.tilVerdi ?? '–')}</div>
+                    <div style={{ color: '#5d6b80', fontSize: 11 }}>{e.endretAv || '?'} · {e.tidspunkt ? new Date(e.tidspunkt).toLocaleString('nb-NO') : ''} · {e.kilde || ''}</div>
                   </div>
                 ))}
               </div>

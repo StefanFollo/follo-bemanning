@@ -23,7 +23,7 @@ function serviceStatus(isoDate) {
   const d = dagerTil(isoDate);
   if (d === null) return null;
   if (d < 0)   return { farge: '#fff', bg: '#dc2626', label: `Forfalt ${Math.abs(d)}d`, ikon: '🚨' };
-  if (d === 0) return { farge: '#fff', bg: '#f59e0b', label: 'I dag', ikon: '🔧' };
+  if (d === 0) return { farge: '#fff', bg: '#b45309', label: 'I dag', ikon: '🔧' };
   if (d <= 14) return { farge: '#92400e', bg: '#fef3c7', label: `om ${d}d`, ikon: '🔧' };
   return { farge: '#166534', bg: '#dcfce7', label: `om ${d}d`, ikon: '🔧' };
 }
@@ -36,9 +36,9 @@ function fmtRestverdi(v) {
 
 function euStatus(isoDate) {
   const d = dagerTil(isoDate);
-  if (d === null) return { farge: '#94a3b8', bg: '#f8fafc', label: 'Ukjent' };
+  if (d === null) return { farge: '#5d6b80', bg: '#f8fafc', label: 'Ukjent' };
   if (d < 0)   return { farge: '#fff', bg: '#dc2626', label: `Forfalt ${Math.abs(d)}d`, ikon: '🚨' };
-  if (d <= 30) return { farge: '#fff', bg: '#f59e0b', label: `${d}d igjen`, ikon: '⚠️' };
+  if (d <= 30) return { farge: '#fff', bg: '#b45309', label: `${d}d igjen`, ikon: '⚠️' };
   if (d <= 90) return { farge: '#92400e', bg: '#fef3c7', label: `${d}d igjen`, ikon: '⏰' };
   return { farge: '#166534', bg: '#dcfce7', label: `${d}d`, ikon: '✅' };
 }
@@ -146,7 +146,7 @@ export default function Biler() {
 
   const summaryCards = [
     { label: 'Totalt',      count: biler.length,      icon: '🚐', color: '#2563eb', bg: '#eff6ff', key: 'alle' },
-    { label: 'Ledig',       count: ledigCount,         icon: '🔑', color: '#f59e0b', bg: '#fffbeb', key: 'ledig' },
+    { label: 'Ledig',       count: ledigCount,         icon: '🔑', color: '#b45309', bg: '#fffbeb', key: 'ledig' },
     { label: 'EU-varsel',   count: euVarselCount,      icon: '🚨', color: '#dc2626', bg: '#fff5f5', key: 'eu-varsel' },
     { label: 'Problemer',   count: problemCount,       icon: '⚠️', color: '#ea580c', bg: '#fff7ed', key: 'problem' },
   ];
@@ -232,7 +232,7 @@ export default function Biler() {
         <h2>🚐 Firmabiler <span className="count-badge">{biler.length}</span></h2>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {lagretMsg && (
-            <span style={{ fontSize: 13, color: lagretMsg.startsWith('🗑') ? '#64748b' : '#16a34a', fontWeight: 600, transition: 'opacity .3s' }}>
+            <span style={{ fontSize: 13, color: lagretMsg.startsWith('🗑') ? '#5d6b80' : '#15803d', fontWeight: 500, transition: 'opacity .3s' }}>
               {lagretMsg}
             </span>
           )}
@@ -274,7 +274,7 @@ export default function Biler() {
         {filter !== 'alle' && (
           <button className="btn btn-sm" onClick={() => setFilter('alle')}>✕ Fjern filter</button>
         )}
-        <span style={{ fontSize: 12, color: '#94a3b8', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 12, color: '#5d6b80', marginLeft: 'auto' }}>
           {filtrert.length} av {biler.length} biler
         </span>
       </div>
@@ -285,13 +285,13 @@ export default function Biler() {
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '2px solid #e2e8f0' }}>
               {['Modell','Reg.nr.','Sjåfør','EU-Kontroll','Service','Dekk','Dekklagring','KM','Restverdi','Problemer','Kommentar',''].map((h, i) => (
-                <th key={i} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
+                <th key={i} style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 500, color: '#475569', fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {filtrert.length === 0 && (
-              <tr><td colSpan={12} style={{ padding: 24, textAlign: 'center', color: '#94a3b8' }}>Ingen biler matcher søket.</td></tr>
+              <tr><td colSpan={12} style={{ padding: 24, textAlign: 'center', color: '#5d6b80' }}>Ingen biler matcher søket.</td></tr>
             )}
             {filtrert.map((b, idx) => {
               const eu = euStatus(b.euKontroll);
@@ -299,21 +299,21 @@ export default function Biler() {
               return (
                 <tr key={b.id} style={{ borderBottom: '1px solid #f1f5f9', background: idx % 2 === 0 ? '#fff' : '#f8fafc' }}>
                   {/* Modell */}
-                  <td style={{ padding: '8px 12px', fontWeight: 600, whiteSpace: 'nowrap' }}>
-                    <span style={{ fontSize: 11, background: '#e0f2fe', color: '#0369a1', borderRadius: 4, padding: '2px 7px', fontWeight: 700 }}>
+                  <td style={{ padding: '8px 12px', fontWeight: 500, whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: 11, background: '#e0f2fe', color: '#0369a1', borderRadius: 4, padding: '2px 7px', fontWeight: 500 }}>
                       {b.modell}
                     </span>
                   </td>
 
                   {/* Reg.nr. */}
-                  <td style={{ padding: '8px 12px', fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 14 }}>
+                  <td style={{ padding: '8px 12px', fontWeight: 500, color: '#1e293b', whiteSpace: 'nowrap', fontFamily: 'monospace', fontSize: 14 }}>
                     {b.regNr}
                   </td>
 
                   {/* Sjåfør */}
                   <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
                     {ledig
-                      ? <span style={{ color: '#f59e0b', fontWeight: 700, fontSize: 12 }}>🔑 LEDIG</span>
+                      ? <span style={{ color: '#b45309', fontWeight: 500, fontSize: 12 }}>🔑 LEDIG</span>
                       : <span style={{ color: '#1e293b' }}>{b.sjafor}</span>
                     }
                   </td>
@@ -322,8 +322,8 @@ export default function Biler() {
                   <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
                     {b.euKontroll ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <span style={{ fontSize: 11, color: '#64748b' }}>{fmt(b.euKontroll)}</span>
-                        <span style={{ fontSize: 11, fontWeight: 700, background: eu.bg, color: eu.farge, borderRadius: 4, padding: '1px 6px', display: 'inline-block' }}>
+                        <span style={{ fontSize: 11, color: '#5d6b80' }}>{fmt(b.euKontroll)}</span>
+                        <span style={{ fontSize: 11, fontWeight: 500, background: eu.bg, color: eu.farge, borderRadius: 4, padding: '1px 6px', display: 'inline-block' }}>
                           {eu.ikon} {eu.label}
                         </span>
                       </div>
@@ -336,8 +336,8 @@ export default function Biler() {
                       const sv = serviceStatus(b.planlagtService);
                       return (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                          <span style={{ fontSize: 11, color: '#64748b' }}>{fmt(b.planlagtService)}</span>
-                          <span style={{ fontSize: 11, fontWeight: 700, background: sv.bg, color: sv.farge, borderRadius: 4, padding: '1px 6px', display: 'inline-block' }}>
+                          <span style={{ fontSize: 11, color: '#5d6b80' }}>{fmt(b.planlagtService)}</span>
+                          <span style={{ fontSize: 11, fontWeight: 500, background: sv.bg, color: sv.farge, borderRadius: 4, padding: '1px 6px', display: 'inline-block' }}>
                             {sv.ikon} {sv.label}
                           </span>
                         </div>
@@ -349,7 +349,7 @@ export default function Biler() {
                   <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
                     {b.dekkType ? (
                       <span style={{
-                        fontSize: 12, fontWeight: 700, borderRadius: 4, padding: '2px 8px',
+                        fontSize: 12, fontWeight: 500, borderRadius: 4, padding: '2px 8px',
                         background: b.dekkType === 'V' ? '#dbeafe' : '#fef9c3',
                         color: b.dekkType === 'V' ? '#1d4ed8' : '#854d0e',
                       }}>
@@ -367,8 +367,8 @@ export default function Biler() {
                   <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
                     {b.km ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                        <span style={{ fontWeight: 600, color: '#1e293b' }}>{fmtKm(b.km)}</span>
-                        {b.kmDato && <span style={{ fontSize: 10, color: '#94a3b8' }}>{fmt(b.kmDato)}</span>}
+                        <span style={{ fontWeight: 500, color: '#1e293b' }}>{fmtKm(b.km)}</span>
+                        {b.kmDato && <span style={{ fontSize: 10, color: '#5d6b80' }}>{fmt(b.kmDato)}</span>}
                       </div>
                     ) : <span style={{ color: '#cbd5e1' }}>–</span>}
                   </td>
@@ -376,7 +376,7 @@ export default function Biler() {
                   {/* Restverdi Skatteetaten */}
                   <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
                     {b.restverdiSkatteetaten
-                      ? <span style={{ fontWeight: 600, color: '#166534' }}>{fmtRestverdi(b.restverdiSkatteetaten)}</span>
+                      ? <span style={{ fontWeight: 500, color: '#166534' }}>{fmtRestverdi(b.restverdiSkatteetaten)}</span>
                       : <span style={{ color: '#cbd5e1' }}>–</span>}
                   </td>
 
@@ -384,11 +384,11 @@ export default function Biler() {
                   <td style={{ padding: '8px 12px', maxWidth: 200 }}>
                     {(b.problemer || '').trim() ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <span style={{ fontSize: 12, color: '#c2410c', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={b.problemer}>
+                        <span style={{ fontSize: 12, color: '#c2410c', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={b.problemer}>
                           ⚠️ {b.problemer}
                         </span>
                         {(b.erstatningsbil || '').trim() && (
-                          <span style={{ fontSize: 11, color: '#64748b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`Erstatningsbil: ${b.erstatningsbil}`}>
+                          <span style={{ fontSize: 11, color: '#5d6b80', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`Erstatningsbil: ${b.erstatningsbil}`}>
                             🚗 {b.erstatningsbil}
                           </span>
                         )}
@@ -399,7 +399,7 @@ export default function Biler() {
                   {/* Kommentar */}
                   <td style={{ padding: '8px 12px', maxWidth: 220 }}>
                     {b.kommentar ? (
-                      <span style={{ fontSize: 12, color: b.kommentar.toLowerCase().includes('bestillt') ? '#f59e0b' : '#64748b', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                      <span style={{ fontSize: 12, color: b.kommentar.toLowerCase().includes('bestillt') ? '#b45309' : '#5d6b80', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                         title={b.kommentar}>
                         {b.kommentar}
                       </span>
@@ -437,7 +437,7 @@ export default function Biler() {
                   value={form.regNr}
                   onChange={e => setForm(f => ({ ...f, regNr: e.target.value.toUpperCase() }))}
                   placeholder="AB 12345"
-                  style={{ fontFamily: 'monospace', fontWeight: 700 }}
+                  style={{ fontFamily: 'monospace', fontWeight: 500 }}
                 />
               </div>
             </div>

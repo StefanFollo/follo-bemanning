@@ -2,8 +2,8 @@ import { useApp } from '../context/AppContext';
 import { dateToIso, addDays, weekStart, overlaps } from '../store';
 
 const FAG_COLORS = {
-  'Bas Tømrer': '#f59e0b', 'Montør': '#3b82f6', 'Lærling Tømrer': '#16a34a',
-  'Maler': '#ec4899', 'Rørlegger': '#06b6d4', 'Tømrer': '#8b5cf6',
+  'Bas Tømrer': '#b45309', 'Montør': '#3b82f6', 'Lærling Tømrer': '#15803d',
+  'Maler': '#ec4899', 'Rørlegger': '#0e7490', 'Tømrer': '#8b5cf6',
   'Flislegger': '#f97316', 'Prosjektleder': '#0ea5e9',
 };
 function fagColor(fag) { return FAG_COLORS[fag] || '#6b7280'; }
@@ -165,8 +165,8 @@ export default function Dashboard({ onNavigate }) {
           <div className="dash-stat-label">Planlagte befaringer</div>
           <div className="dash-stat-sub">{tilbudArbeid} tilbud under arbeid</div>
         </div>
-        <div className="dash-stat-kort dash-stat-kort--rekl" style={{ borderTop: aktiveRekl > 0 ? '4px solid #f59e0b' : undefined }}>
-          <div className="dash-stat-tall" style={{ color: aktiveRekl > 0 ? '#f59e0b' : undefined }}>{aktiveRekl}</div>
+        <div className="dash-stat-kort dash-stat-kort--rekl" style={{ borderTop: aktiveRekl > 0 ? '4px solid #b45309' : undefined }}>
+          <div className="dash-stat-tall" style={{ color: aktiveRekl > 0 ? '#b45309' : undefined }}>{aktiveRekl}</div>
           <div className="dash-stat-label">Aktive reklamasjoner</div>
           <div className="dash-stat-sub">{reklamasjonerUtenFrist > 0 ? `${reklamasjonerUtenFrist} uten frist` : 'Alle har frist'}</div>
         </div>
@@ -193,19 +193,19 @@ export default function Dashboard({ onNavigate }) {
                   onMouseLeave={e => e.currentTarget.style.background = '#f8faff'}
                 >
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 12, fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {b.kontaktNavn} — {b.adresse}
                     </div>
                     <div style={{ fontSize: 11, color: '#4b5563', marginTop: 2 }}>
                       {aktivitetTekst(b)}
                       {fristDgr !== null && fristDgr <= 3 && (
-                        <span style={{ marginLeft: 8, color: fristDgr < 0 ? '#dc2626' : '#f59e0b', fontWeight: 700 }}>
+                        <span style={{ marginLeft: 8, color: fristDgr < 0 ? '#dc2626' : '#b45309', fontWeight: 500 }}>
                           ⏰ Frist: {datoKort(b.tilbudFrist)}{fristDgr === 0 ? ' (i dag!)' : fristDgr < 0 ? ` (${Math.abs(fristDgr)}d over)` : ` (${fristDgr}d)`}
                         </span>
                       )}
                     </div>
                   </div>
-                  <div style={{ fontSize: 11, color: '#9ca3af', flexShrink: 0 }}>{tidRelativt(b.sistKundeAktivitet)}</div>
+                  <div style={{ fontSize: 11, color: '#5d6b80', flexShrink: 0 }}>{tidRelativt(b.sistKundeAktivitet)}</div>
                   {b.tilbudLink && (
                     <a
                       href={b.tilbudLink}
@@ -262,13 +262,13 @@ export default function Dashboard({ onNavigate }) {
               <div className="dash-prosjekt-rad dash-ferie-rad">
                 <div className="dash-prosjekt-topp">
                   <span>🏖</span>
-                  <span className="dash-proj-navn" style={{ color: '#f59e0b' }}>Ferie / Fri</span>
+                  <span className="dash-proj-navn" style={{ color: '#b45309' }}>Ferie / Fri</span>
                   <span className="dash-proj-antall">{ferieIdag.length} person{ferieIdag.length !== 1 ? 'er' : ''}</span>
                 </div>
                 <div className="dash-avatar-rad">
                   {ferieIdag.map(a => (
                     <div key={a.id} className="dash-avatar-wrap" title={a.navn}>
-                      <div className="mini-avatar" style={{ background: '#f59e0b', width: 30, height: 30, fontSize: 10 }}>
+                      <div className="mini-avatar" style={{ background: '#b45309', width: 30, height: 30, fontSize: 10 }}>
                         {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                       </div>
                       <div className="dash-avatar-navn">{a.navn.split(' ')[0]}</div>
@@ -283,13 +283,13 @@ export default function Dashboard({ onNavigate }) {
               <div className="dash-prosjekt-rad dash-ledige-rad">
                 <div className="dash-prosjekt-topp">
                   <span>✅</span>
-                  <span className="dash-proj-navn" style={{ color: '#16a34a' }}>Ledig / ikke tildelt</span>
+                  <span className="dash-proj-navn" style={{ color: '#15803d' }}>Ledig / ikke tildelt</span>
                   <span className="dash-proj-antall">{ledigeIdag.length} person{ledigeIdag.length !== 1 ? 'er' : ''}</span>
                 </div>
                 <div className="dash-avatar-rad">
                   {ledigeIdag.slice(0, 12).map(a => (
                     <div key={a.id} className="dash-avatar-wrap" title={`${a.navn} (${a.fag})`}>
-                      <div className="mini-avatar" style={{ background: '#94a3b8', width: 30, height: 30, fontSize: 10 }}>
+                      <div className="mini-avatar" style={{ background: '#5d6b80', width: 30, height: 30, fontSize: 10 }}>
                         {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                       </div>
                       <div className="dash-avatar-navn">{a.navn.split(' ')[0]}</div>
@@ -319,7 +319,7 @@ export default function Dashboard({ onNavigate }) {
               const erIdag = b.dato === today;
               return (
                 <div key={b.id} className={`dash-bef-rad${erIdag ? ' dash-bef-idag' : ''}`}>
-                  <div className="dash-bef-dato" style={{ color: erIdag ? '#2563eb' : '#64748b' }}>
+                  <div className="dash-bef-dato" style={{ color: erIdag ? '#2563eb' : '#5d6b80' }}>
                     {erIdag ? '📌 I dag' : datoKort(b.dato)}
                     {b.tid && <span style={{ marginLeft: 4, fontSize: 11 }}>kl. {b.tid}</span>}
                   </div>
@@ -350,7 +350,7 @@ export default function Dashboard({ onNavigate }) {
               </div>
               {oppfolginger.map(b => {
                 const s = BEF_STATUS[b.status] || BEF_STATUS.planlagt;
-                const farge = b.dager < 0 ? '#dc2626' : b.dager === 0 ? '#f59e0b' : '#16a34a';
+                const farge = b.dager < 0 ? '#dc2626' : b.dager === 0 ? '#b45309' : '#15803d';
                 return (
                   <div
                     key={b.id}
@@ -383,7 +383,7 @@ export default function Dashboard({ onNavigate }) {
                 <span className="dash-seksjon-teller">{tilbudFrister.length}</span>
               </div>
               {tilbudFrister.map(b => {
-                const farge = b.dager < 0 ? '#dc2626' : b.dager <= 3 ? '#f59e0b' : '#16a34a';
+                const farge = b.dager < 0 ? '#dc2626' : b.dager <= 3 ? '#b45309' : '#15803d';
                 return (
                   <div key={b.id} className="dash-frist-rad">
                     <div className="dash-frist-info">
@@ -392,7 +392,7 @@ export default function Dashboard({ onNavigate }) {
                       <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
                         <button
                           className="btn btn-sm"
-                          style={{ fontSize: 11, padding: '2px 8px', background: '#f0fdf4', color: '#16a34a', borderColor: '#bbf7d0' }}
+                          style={{ fontSize: 11, padding: '2px 8px', background: '#f0fdf4', color: '#15803d', borderColor: '#bbf7d0' }}
                           onClick={() => dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, status: 'godkjent' } })}
                         >
                           ✅ Godkjent
@@ -422,12 +422,12 @@ export default function Dashboard({ onNavigate }) {
           <div className="dash-seksjon">
             <div className="dash-seksjon-header">
               <span>⚠️ Reklamasjoner å følge opp</span>
-              <span className="dash-seksjon-teller" style={{ color: aktiveRekl > 0 ? '#f59e0b' : undefined }}>{aktiveRekl}</span>
+              <span className="dash-seksjon-teller" style={{ color: aktiveRekl > 0 ? '#b45309' : undefined }}>{aktiveRekl}</span>
             </div>
             {aktiveRekl === 0 && <div className="dash-tom">Ingen aktive reklamasjoner. 🎉</div>}
             {reklamasjonerFrist.map(r => {
               const s = REKL_STATUS[r.status] || REKL_STATUS.ny;
-              const farge = r.dager < 0 ? '#dc2626' : r.dager <= 5 ? '#f59e0b' : '#16a34a';
+              const farge = r.dager < 0 ? '#dc2626' : r.dager <= 5 ? '#b45309' : '#15803d';
               const prosjekt = r.prosjektId ? state.prosjekter.find(p => p.id === r.prosjektId) : null;
               return (
                 <div key={r.id} className="dash-frist-rad">
@@ -472,24 +472,24 @@ export default function Dashboard({ onNavigate }) {
                 <div className="dash-seksjon-header">
                   <span>📊 Tilbudsstatistikk</span>
                   {vinnRate !== null && (
-                    <span className="dash-seksjon-teller" style={{ color: vinnRate >= 50 ? '#16a34a' : '#f59e0b' }}>
+                    <span className="dash-seksjon-teller" style={{ color: vinnRate >= 50 ? '#15803d' : '#b45309' }}>
                       {vinnRate}% vinnrate
                     </span>
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <div style={{ flex: 1, minWidth: 80, background: '#f0fdf4', borderRadius: 8, padding: '8px 12px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: '#16a34a' }}>{vunnet}</div>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>Vunnet</div>
-                    {fmtKr(sumVunnet) && <div style={{ fontSize: 10, color: '#16a34a', marginTop: 2 }}>{fmtKr(sumVunnet)}</div>}
+                    <div style={{ fontSize: 22, fontWeight: 500, color: '#15803d' }}>{vunnet}</div>
+                    <div style={{ fontSize: 11, color: '#5d6b80' }}>Vunnet</div>
+                    {fmtKr(sumVunnet) && <div style={{ fontSize: 10, color: '#15803d', marginTop: 2 }}>{fmtKr(sumVunnet)}</div>}
                   </div>
                   <div style={{ flex: 1, minWidth: 80, background: '#fff7ed', borderRadius: 8, padding: '8px 12px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: '#f59e0b' }}>{aktive}</div>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>Under arbeid</div>
+                    <div style={{ fontSize: 22, fontWeight: 500, color: '#b45309' }}>{aktive}</div>
+                    <div style={{ fontSize: 11, color: '#5d6b80' }}>Under arbeid</div>
                   </div>
                   <div style={{ flex: 1, minWidth: 80, background: '#f9fafb', borderRadius: 8, padding: '8px 12px', textAlign: 'center' }}>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: '#6b7280' }}>{tapt}</div>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>Tapt</div>
+                    <div style={{ fontSize: 22, fontWeight: 500, color: '#6b7280' }}>{tapt}</div>
+                    <div style={{ fontSize: 11, color: '#5d6b80' }}>Tapt</div>
                     {fmtKr(sumTapt) && <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>{fmtKr(sumTapt)}</div>}
                   </div>
                 </div>

@@ -1,140 +1,143 @@
-/* ═══ FBS Designsystem (SPEC-prosjektside-C) ═══
+/* ═══ FBS Designsystem (SPEC-prosjektside-C + SPEC-tema-lys-strammet) ═══
    Én kilde til utseende for KPI-kort, status-faner, kompakte rader,
-   ⋯-menyer og varsel-bannere — gjenbrukes på alle sider. */
+   ⋯-menyer og varsel-bannere — gjenbrukes på alle sider.
+   Alle farger fra tokens i src/tema.css. */
 
-/* ── 1.1 KPI-kort ── */
+/* ── 1.1 KPI-kort — hvit flate, 3px farget VENSTRE-kant, farget tall ── */
 .ds-kpi {
   display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
-  background: #fff; border: 1px solid #e2e8f0; border-top: 3px solid #2563eb;
-  border-radius: 10px; padding: 10px 16px; cursor: pointer; min-width: 120px;
+  background: var(--bg-surface); border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-lg); padding: 10px 16px; cursor: pointer; min-width: 120px;
   transition: box-shadow .15s;
 }
-.ds-kpi:hover { box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.ds-kpi:hover { box-shadow: var(--shadow-sm); }
 .ds-kpi--aktiv { color: #fff; }
 .ds-kpi--aktiv .ds-kpi-label { color: rgba(255,255,255,.85); }
 .ds-kpi--aktiv .ds-kpi-tall { color: #fff; }
-.ds-kpi--varsel { background: #fef2f2; border-color: #fca5a5; }
-.ds-kpi-tall { font-size: 20px; font-weight: 800; }
-.ds-kpi-label { font-size: 12px; color: #64748b; font-weight: 600; }
+.ds-kpi--varsel { background: var(--danger-bg); border-color: var(--danger-border); }
+.ds-kpi-tall { font-size: 20px; font-weight: 700; } /* eneste 600+ i appen (KPI-tall, jf. spec) */
+.ds-kpi-label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
 
-/* ── 1.2 Status-faner ── */
+/* ── 1.2 Status-faner — aktiv: accent-subtle bg + accent tekst ── */
 .ds-faner {
   display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px;
 }
 .ds-fane {
   display: inline-flex; align-items: center; gap: 6px;
-  background: #fff; border: 1px solid #e2e8f0; border-radius: 999px;
-  padding: 7px 14px; cursor: pointer; font-size: 13px; font-weight: 600;
-  color: #334155; transition: box-shadow .12s, background .12s;
+  background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 7px 14px; cursor: pointer; font-size: 13px; font-weight: 500;
+  color: var(--text-secondary); transition: box-shadow .12s, background .12s;
   min-height: 38px;
 }
-.ds-fane:hover { box-shadow: 0 1px 5px rgba(0,0,0,.1); }
+.ds-fane:hover { box-shadow: var(--shadow-sm); }
 .ds-fane--aktiv { color: #fff; }
 .ds-fane--aktiv .ds-fane-teller,
 .ds-fane--aktiv .ds-fane-sum { color: rgba(255,255,255,.9) !important; }
-.ds-fane--dempet { color: #94a3b8; background: #f8fafc; }
-.ds-fane-teller { font-weight: 800; }
-.ds-fane-sum { font-size: 12px; color: #94a3b8; font-weight: 600; }
+.ds-fane--dempet { color: var(--text-muted); background: var(--bg-subtle); }
+.ds-fane-teller { font-weight: 500; }
+.ds-fane-sum { font-size: 12px; color: var(--text-muted); font-weight: 500; }
 
-/* ── 1.3 Kompakt rad ── */
+/* ── 1.3 Kompakt rad — hvit, 1px kant, varsel = 3px venstre-kant ── */
 .ds-rad {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+  background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md);
   padding: 10px 14px; margin-bottom: 6px; min-height: 52px;
 }
 .ds-rad--klikkbar { cursor: pointer; transition: box-shadow .12s; }
-.ds-rad--klikkbar:hover { box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.ds-rad--klikkbar:hover { box-shadow: var(--shadow-sm); }
 .ds-rad-venstre { flex: 1; min-width: 0; }
 .ds-rad-tittel-linje { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.ds-rad-tittel { font-weight: 700; font-size: 14px; color: #1e293b; }
-.ds-rad-undertittel { font-size: 12px; color: #64748b; }
-.ds-rad-varsel { font-size: 12px; font-weight: 700; }
+.ds-rad-tittel { font-weight: 500; font-size: 14px; color: var(--text-primary); }
+.ds-rad-undertittel { font-size: 12px; color: var(--text-muted); }
+.ds-rad-varsel { font-size: 12px; font-weight: 500; }
 .ds-rad-meta {
   display: flex; gap: 10px; flex-wrap: wrap; margin-top: 2px;
-  font-size: 12px; color: #64748b;
+  font-size: 12px; color: var(--text-muted);
 }
-.ds-rad-hint { color: #94a3b8; font-style: italic; }
+.ds-rad-hint { color: var(--text-muted); font-style: italic; }
 .ds-rad-hoyre { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
-.ds-rad-tall { font-size: 12.5px; font-weight: 600; color: #334155; white-space: nowrap; }
+.ds-rad-tall { font-size: 12.5px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; }
 .ds-rad-bar-wrap {
-  width: 64px; height: 7px; background: #e2e8f0; border-radius: 4px;
+  width: 64px; height: 7px; background: var(--border); border-radius: 4px;
   overflow: hidden; display: inline-block;
 }
-.ds-rad-bar { display: block; height: 100%; background: #16a34a; border-radius: 4px; }
+.ds-rad-bar { display: block; height: 100%; background: var(--success); border-radius: 4px; }
 .ds-rad-hurtigknapp {
-  font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 7px;
-  border: 1px solid #f59e0b; background: #fffbeb; color: #92400e; cursor: pointer;
+  font-size: 12px; font-weight: 500; padding: 5px 11px; border-radius: var(--radius-sm);
+  border: 1px solid var(--warning-border); background: var(--warning-bg); color: var(--warning); cursor: pointer;
   white-space: nowrap;
 }
-.ds-rad-hurtigknapp:hover { background: #fef3c7; }
+.ds-rad-hurtigknapp:hover { background: var(--warning-border); }
 
-/* ── 1.4 ⋯-meny ── */
+/* ── 1.4 ⋯-meny — hvit dropdown, 1px kant, panel-skygge ── */
 .ds-radmeny { position: relative; }
 .ds-radmeny-knapp {
-  width: 34px; height: 34px; border-radius: 8px; border: 1px solid #e2e8f0;
-  background: #fff; cursor: pointer; font-size: 17px; font-weight: 700;
-  color: #64748b; line-height: 1;
+  width: 34px; height: 34px; border-radius: var(--radius-md); border: 1px solid var(--border);
+  background: var(--bg-surface); cursor: pointer; font-size: 17px; font-weight: 500;
+  color: var(--text-muted); line-height: 1;
 }
-.ds-radmeny-knapp:hover { background: #f1f5f9; }
+.ds-radmeny-knapp:hover { background: var(--bg-subtle); }
 .ds-radmeny-liste {
   position: absolute; right: 0; top: 38px; z-index: 50;
-  background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
-  box-shadow: 0 6px 24px rgba(0,0,0,.14); padding: 4px; min-width: 190px;
+  background: var(--bg-surface); border: 1px solid var(--border); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-panel); padding: 4px; min-width: 190px;
 }
 .ds-radmeny-valg {
   display: block; width: 100%; text-align: left; background: none; border: none;
-  padding: 9px 12px; font-size: 13px; color: #1e293b; cursor: pointer;
-  border-radius: 7px; white-space: nowrap;
+  padding: 9px 12px; font-size: 13px; color: var(--text-primary); cursor: pointer;
+  border-radius: var(--radius-sm); white-space: nowrap;
 }
-.ds-radmeny-valg:hover { background: #f1f5f9; }
-.ds-radmeny-valg--farlig { color: #b45309; }
-.ds-radmeny-skille { height: 1px; background: #f1f5f9; margin: 4px 6px; }
+.ds-radmeny-valg:hover { background: var(--bg-subtle); }
+.ds-radmeny-valg--farlig { color: var(--warning); }
+.ds-radmeny-skille { height: 1px; background: var(--bg-subtle); margin: 4px 6px; }
 
-/* ── 1.5 Detaljpanel ── */
+/* ── 1.5 Detaljpanel — hvit, panel-skygge, 1px venstre-kant ── */
 .ds-panel-bakteppe {
   position: fixed; inset: 0; background: rgba(15,23,42,.35); z-index: 300;
   display: flex; justify-content: flex-end;
 }
 .ds-panel {
   width: 40%; min-width: 380px; max-width: 640px; height: 100%;
-  background: #fff; box-shadow: -8px 0 32px rgba(0,0,0,.18);
+  background: var(--bg-surface); border-left: 1px solid var(--border);
+  box-shadow: var(--shadow-panel);
   display: flex; flex-direction: column;
   animation: ds-panel-inn .18s ease-out;
 }
 @keyframes ds-panel-inn { from { transform: translateX(40px); opacity: .5; } to { transform: none; opacity: 1; } }
 .ds-panel-topp {
   display: flex; justify-content: space-between; align-items: flex-start;
-  padding: 16px 20px 10px; border-bottom: 1px solid #f1f5f9;
+  padding: 16px 20px 10px; border-bottom: 1px solid var(--border);
 }
-.ds-panel-tittel { font-size: 17px; font-weight: 800; color: #1e293b; }
-.ds-panel-undertittel { font-size: 12.5px; color: #64748b; margin-top: 2px; }
+.ds-panel-tittel { font-size: 17px; font-weight: 500; color: var(--text-primary); }
+.ds-panel-undertittel { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
 .ds-panel-lukk {
-  border: none; background: #f1f5f9; border-radius: 8px; width: 32px; height: 32px;
-  cursor: pointer; font-size: 14px; color: #64748b; flex-shrink: 0;
+  border: none; background: var(--bg-subtle); border-radius: var(--radius-md); width: 32px; height: 32px;
+  cursor: pointer; font-size: 14px; color: var(--text-muted); flex-shrink: 0;
 }
-.ds-panel-faner { display: flex; gap: 2px; padding: 8px 14px 0; border-bottom: 1px solid #e2e8f0; }
+.ds-panel-faner { display: flex; gap: 2px; padding: 8px 14px 0; border-bottom: 1px solid var(--border); }
 .ds-panel-fane {
-  border: none; background: none; padding: 8px 12px; font-size: 12.5px; font-weight: 600;
-  color: #64748b; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap;
+  border: none; background: none; padding: 8px 12px; font-size: 12.5px; font-weight: 500;
+  color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap;
 }
-.ds-panel-fane--aktiv { color: #1e3a5f; border-bottom-color: #1e3a5f; }
+.ds-panel-fane--aktiv { color: var(--accent); border-bottom-color: var(--accent); }
 .ds-panel-innhold { flex: 1; overflow-y: auto; padding: 16px 20px; }
 .ds-panel-handlinger {
   display: flex; gap: 8px; flex-wrap: wrap; padding: 12px 20px;
-  border-top: 1px solid #e2e8f0; background: #f8fafc;
+  border-top: 1px solid var(--border); background: var(--bg-subtle);
 }
 @media (max-width: 768px) {
   .ds-panel { width: 100%; max-width: none; min-width: 0; }
 }
 
-/* ── 1.6 Varsel-banner ── */
+/* ── 1.6 Varsel-banner — semantisk bg + 1px semantisk kant, kompakt ── */
 .ds-banner {
   display: inline-flex; align-items: center; gap: 6px;
-  border-radius: 9px; padding: 7px 14px; font-size: 13px; font-weight: 700;
+  border-radius: var(--radius-md); padding: 8px 12px; font-size: 13px; font-weight: 500;
   cursor: pointer; border: 1px solid transparent; margin-right: 8px; margin-bottom: 10px;
 }
-.ds-banner--roed { background: #fef2f2; color: #991b1b; border-color: #fca5a5; }
-.ds-banner--gul { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+.ds-banner--roed { background: var(--danger-bg); color: var(--danger); border-color: var(--danger-border); }
+.ds-banner--gul { background: var(--warning-bg); color: var(--warning); border-color: var(--warning-border); }
 .ds-banner--aktiv { outline: 2px solid currentColor; }
 
 /* Mobil */

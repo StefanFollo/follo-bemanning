@@ -8,7 +8,7 @@ function formatTs(ts) {
 }
 
 const ROLE_LABELS = { admin: 'Administrator', kontor: 'Kontor', rorlegger: 'Rørlegger', befaring: 'Befaring / Service', ansatt: 'Ansatt (lesetilgang)' };
-const ROLE_COLORS = { admin: '#1e3a5f', kontor: '#7c3aed', rorlegger: '#0891b2', befaring: '#d97706', ansatt: '#16a34a' };
+const ROLE_COLORS = { admin: '#1e3a5f', kontor: '#7c3aed', rorlegger: '#0891b2', befaring: '#d97706', ansatt: '#15803d' };
 
 function authHeader() {
   const token = localStorage.getItem('fbs_token') || '';
@@ -374,7 +374,7 @@ export default function AdminUsers() {
       <div style={{ marginBottom: 20, background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 10, overflow: 'hidden' }}>
         <button
           onClick={() => setVisAnsattInvite(v => !v)}
-          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, fontWeight: 600, color: '#0c4a6e' }}>
+          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 15, fontWeight: 500, color: '#0c4a6e' }}>
           <span>📋 Inviter fra ansattliste {inviterbareAnsatte.length > 0 && <span style={{ fontSize: 13, fontWeight: 400, color: '#0369a1' }}>({inviterbareAnsatte.length} uten brukerkonto)</span>}</span>
           <span style={{ fontSize: 13 }}>{visAnsattInvite ? '▲' : '▼'}</span>
         </button>
@@ -397,7 +397,7 @@ export default function AdminUsers() {
                     return (
                       <div key={a.id} style={{ background: 'white', border: '1px solid #e0f2fe', borderRadius: 8, padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
                         <div style={{ flex: 1, minWidth: 160 }}>
-                          <div style={{ fontWeight: 600, fontSize: 14 }}>{a.navn}</div>
+                          <div style={{ fontWeight: 500, fontSize: 14 }}>{a.navn}</div>
                           <div style={{ fontSize: 12, color: '#6b7280' }}>{a.epost}{a.fag ? ` · ${a.fag}` : ''}</div>
                         </div>
                         <select
@@ -443,24 +443,24 @@ export default function AdminUsers() {
             const kobletAnsatt = ansatte.find(a => a.id === u.ansattId);
             return (
               <div key={u.email} style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 16, opacity: u.active ? 1 : 0.6 }}>
-                <div style={{ width: 42, height: 42, borderRadius: '50%', background: ROLE_COLORS[u.role], color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 700, flexShrink: 0 }}>
+                <div style={{ width: 42, height: 42, borderRadius: '50%', background: ROLE_COLORS[u.role], color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, fontWeight: 500, flexShrink: 0 }}>
                   {(u.navn || u.email)[0].toUpperCase()}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 15 }}>{u.navn || u.email}</div>
+                  <div style={{ fontWeight: 500, fontSize: 15 }}>{u.navn || u.email}</div>
                   <div style={{ fontSize: 13, color: '#6b7280' }}>{u.email}</div>
                   {kobletAnsatt && (
                     <div style={{ fontSize: 12, color: '#3b82f6', marginTop: 2 }}>Koblet: {kobletAnsatt.navn}</div>
                   )}
                   {!u.hasPassword && (
-                    <div style={{ fontSize: 12, color: '#f59e0b', marginTop: 2 }}>⚠ Passord ikke satt ennå</div>
+                    <div style={{ fontSize: 12, color: '#b45309', marginTop: 2 }}>⚠ Passord ikke satt ennå</div>
                   )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                   <select
                     value={u.role}
                     onChange={e => handleRoleChange(u.email, e.target.value)}
-                    style={{ fontSize: 13, padding: '4px 8px', borderRadius: 6, border: '1px solid #e5e7eb', color: ROLE_COLORS[u.role] || '#374151', fontWeight: 600 }}
+                    style={{ fontSize: 13, padding: '4px 8px', borderRadius: 6, border: '1px solid #e5e7eb', color: ROLE_COLORS[u.role] || '#374151', fontWeight: 500 }}
                   >
                     <option value="admin">Administrator</option>
                     <option value="kontor">Kontor</option>
@@ -479,7 +479,7 @@ export default function AdminUsers() {
                   )}
                   <button
                     className="btn-secondary"
-                    style={{ fontSize: 12, padding: '4px 10px', color: u.active ? '#6b7280' : '#16a34a' }}
+                    style={{ fontSize: 12, padding: '4px 10px', color: u.active ? '#6b7280' : '#15803d' }}
                     onClick={() => handleToggleActive(u.email, u.active)}
                   >
                     {u.active ? 'Deaktiver' : 'Aktiver'}
@@ -559,11 +559,11 @@ export default function AdminUsers() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {backups.map(b => (
               <div key={b.slot} style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 8, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 16 }}>
-                <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#1e3a5f', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: 14, flexShrink: 0 }}>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#1e3a5f', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 500, fontSize: 14, flexShrink: 0 }}>
                   {b.slot}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>Backup {b.slot}</div>
+                  <div style={{ fontWeight: 500, fontSize: 14 }}>Backup {b.slot}</div>
                   <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>
                     Tidspunkt: {formatTs(b.backedUpAt)}
                   </div>
@@ -583,7 +583,7 @@ export default function AdminUsers() {
           </div>
         )}
 
-        <div style={{ marginTop: 12, fontSize: 12, color: '#9ca3af' }}>
+        <div style={{ marginTop: 12, fontSize: 12, color: '#5d6b80' }}>
           Systemet lagrer automatisk de 5 siste versjonene av alle data (slettes etter 7 dager). Kun administratorer kan gjenopprette.
         </div>
       </div>
@@ -601,7 +601,7 @@ export default function AdminUsers() {
             {diagnoseLaster ? 'Analyserer…' : 'Sammenlign mot nattens backup'}
           </button>
         </div>
-        <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 12 }}>
+        <div style={{ fontSize: 12, color: '#5d6b80', marginBottom: 12 }}>
           Kun lesing — viser hva som eventuelt mangler i dag sammenlignet med nattens automatiske backup. Ingenting endres eller slettes.
         </div>
 
@@ -620,7 +620,7 @@ export default function AdminUsers() {
           return (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div style={{ background: 'white', border: '1px solid #e5e7eb', borderRadius: 8, padding: '12px 16px', fontSize: 13 }}>
-                <div style={{ fontWeight: 600, marginBottom: 6 }}>Nå (sist lagret {r.naa._updatedAtLesbar || '–'})</div>
+                <div style={{ fontWeight: 500, marginBottom: 6 }}>Nå (sist lagret {r.naa._updatedAtLesbar || '–'})</div>
                 <div style={{ color: '#6b7280' }}>
                   {Object.entries(r.naa.antall || {}).map(([k, v]) => `${v} ${k}`).join(' · ')}
                 </div>
@@ -640,10 +640,10 @@ export default function AdminUsers() {
 
               {harMangler && (
                 <div style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '12px 16px', fontSize: 13 }}>
-                  <div style={{ fontWeight: 700, color: '#991b1b', marginBottom: 8 }}>⚠️ Elementer som fantes i natt men mangler nå:</div>
+                  <div style={{ fontWeight: 500, color: '#991b1b', marginBottom: 8 }}>⚠️ Elementer som fantes i natt men mangler nå:</div>
                   {Object.entries(mangler).map(([k, items]) => (
                     <div key={k} style={{ marginBottom: 8 }}>
-                      <div style={{ fontWeight: 600 }}>{k} ({items.length}):</div>
+                      <div style={{ fontWeight: 500 }}>{k} ({items.length}):</div>
                       {items.map(it => (
                         <div key={it.id} style={{ color: '#7f1d1d', paddingLeft: 12, fontSize: 12 }}>
                           • {it.navn || it.id}{it.adresse ? ` — ${it.adresse}` : ''}{it.status ? ` (${it.status})` : ''}
@@ -654,7 +654,7 @@ export default function AdminUsers() {
                   <button
                     onClick={() => gjenopprettManglende(Object.keys(mangler))}
                     disabled={gjenoppretter}
-                    style={{ marginTop: 8, background: '#16a34a', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 16px', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}
+                    style={{ marginTop: 8, background: '#15803d', color: '#fff', border: 'none', borderRadius: 6, padding: '8px 16px', cursor: 'pointer', fontWeight: 500, fontSize: 13 }}
                   >
                     {gjenoppretter ? '⏳ Gjenoppretter…' : '↩️ Gjenopprett manglende fra nattens backup'}
                   </button>
@@ -664,7 +664,7 @@ export default function AdminUsers() {
 
               {harInnholdstap && (
                 <div style={{ background: '#fff7ed', border: '1px solid #fdba74', borderRadius: 8, padding: '12px 16px', fontSize: 13 }}>
-                  <div style={{ fontWeight: 700, color: '#9a3412', marginBottom: 8 }}>⚠️ Prosjekter som har mistet framdrift/sjekklister siden natten:</div>
+                  <div style={{ fontWeight: 500, color: '#9a3412', marginBottom: 8 }}>⚠️ Prosjekter som har mistet framdrift/sjekklister siden natten:</div>
                   {innholdstap.map(p => (
                     <div key={p.id} style={{ color: '#7c2d12', paddingLeft: 12, fontSize: 12 }}>
                       • {p.navn}: framdrift-faser {p.framdriftFaser}, sjekklister {p.sjekklister}
@@ -673,7 +673,7 @@ export default function AdminUsers() {
                 </div>
               )}
 
-              <div style={{ fontSize: 12, color: '#9ca3af' }}>{r.bevart}</div>
+              <div style={{ fontSize: 12, color: '#5d6b80' }}>{r.bevart}</div>
             </div>
           );
         })()}

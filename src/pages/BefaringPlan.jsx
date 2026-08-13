@@ -22,7 +22,7 @@ function byggTimer(poster) {
 
 const STATUS = BEF_STATUS;
 
-const PL_FARGER = ['#2563eb','#16a34a','#9333ea','#ea580c','#0891b2','#be185d','#854d0e','#0f766e','#b45309','#1d4ed8'];
+const PL_FARGER = ['#2563eb','#15803d','#9333ea','#ea580c','#0891b2','#be185d','#854d0e','#0f766e','#b45309','#1d4ed8'];
 const MAANED_NAVN = ['Januar','Februar','Mars','April','Mai','Juni','Juli','August','September','Oktober','November','Desember'];
 const DAG_NAVN_KORT = ['Man','Tir','Ons','Tor','Fre','Lør','Søn'];
 
@@ -426,9 +426,9 @@ export default function BefaringPlan() {
       ? new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(Number(b.estimertBelop))
       : null;
     const fristDager = dagerTil(b.tilbudFrist);
-    const fristFarge = fristDager !== null ? (fristDager < 0 ? '#dc2626' : fristDager <= 3 ? '#f59e0b' : '#16a34a') : null;
+    const fristFarge = fristDager !== null ? (fristDager < 0 ? '#dc2626' : fristDager <= 3 ? '#b45309' : '#15803d') : null;
     const kontaktDager = dagerTil(b.nesteKontakt);
-    const kontaktFarge = kontaktDager !== null ? (kontaktDager < 0 ? '#dc2626' : kontaktDager <= 2 ? '#f59e0b' : '#64748b') : '#64748b';
+    const kontaktFarge = kontaktDager !== null ? (kontaktDager < 0 ? '#dc2626' : kontaktDager <= 2 ? '#b45309' : '#5d6b80') : '#5d6b80';
 
     const erForsinket = fristDager !== null && fristDager < 0;
     const erIdag = fristDager === 0;
@@ -506,7 +506,7 @@ export default function BefaringPlan() {
               </span>
             )}
             {b.kundeHarSettTilbud ? (
-              <span style={{ fontSize: 11, color: '#0891b2', fontWeight: 600 }}>
+              <span style={{ fontSize: 11, color: '#0891b2', fontWeight: 500 }}>
                 👁 Åpnet {b.antallKundeAapninger || 1}x
                 {(() => {
                   const aapnet = (b.kundeAktivitet || []).find(a => a.handling === 'aapnet')
@@ -522,13 +522,13 @@ export default function BefaringPlan() {
                 })()}
               </span>
             ) : (
-              b.status === 'tilbud_sendt' && <span style={{ fontSize: 11, color: '#9ca3af' }}>👁 Ikke åpnet ennå</span>
+              b.status === 'tilbud_sendt' && <span style={{ fontSize: 11, color: '#5d6b80' }}>👁 Ikke åpnet ennå</span>
             )}
             {(b.kundeAktivitet || []).some(a => a.handling === 'klikket-sporsmal') && (
-              <span style={{ fontSize: 11, color: '#f59e0b', fontWeight: 600 }}>💬 Klikket Spørsmål</span>
+              <span style={{ fontSize: 11, color: '#b45309', fontWeight: 500 }}>💬 Klikket Spørsmål</span>
             )}
             {(b.kundeAktivitet || []).some(a => a.handling === 'klikket-aksepter') && (
-              <span style={{ fontSize: 11, color: '#16a34a', fontWeight: 600 }}>✅ Klikket Aksepter</span>
+              <span style={{ fontSize: 11, color: '#15803d', fontWeight: 500 }}>✅ Klikket Aksepter</span>
             )}
             {b.tilbudLink && (
               <a
@@ -536,7 +536,7 @@ export default function BefaringPlan() {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={e => e.stopPropagation()}
-                style={{ fontSize: 11, color: '#2874a6', fontWeight: 600, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2 }}
+                style={{ fontSize: 11, color: '#2874a6', fontWeight: 500, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2 }}
               >
                 🔗 Åpne kundens tilbudside ↗
               </a>
@@ -551,7 +551,7 @@ export default function BefaringPlan() {
               background: erForsinket ? '#dc2626' : erIdag ? '#fef3c7' : 'transparent',
               padding: (erForsinket || erIdag) ? '2px 7px' : undefined,
               borderRadius: (erForsinket || erIdag) ? 5 : undefined,
-              fontWeight: (erForsinket || erIdag) ? 700 : undefined,
+              fontWeight: (erForsinket || erIdag) ? 500 : undefined,
               display: 'inline-block',
             }}>
               ⏰ Tilbudsfrist: {datoKort(b.tilbudFrist)}
@@ -559,7 +559,7 @@ export default function BefaringPlan() {
             </span>
           )}
           {b.nesteKontakt && (
-            <span className="bef-k-dato-rad" style={{ color: kontaktFarge, fontWeight: kontaktDager !== null && kontaktDager <= 2 ? 600 : 400 }}>
+            <span className="bef-k-dato-rad" style={{ color: kontaktFarge, fontWeight: kontaktDager !== null && kontaktDager <= 2 ? 500 : 400 }}>
               📞 Neste kontakt: {datoKort(b.nesteKontakt)}
               {kontaktDager !== null && kontaktDager <= 2 && (
                 <em> ({kontaktDager < 0 ? `${Math.abs(kontaktDager)}d over` : kontaktDager === 0 ? 'i dag!' : `${kontaktDager}d`})</em>
@@ -631,9 +631,9 @@ export default function BefaringPlan() {
 
         {/* Konflikt-banner: manuell overstyring vs. automatisk event */}
         {b.konflikt && (
-          <div style={{ margin: '6px 0', padding: '8px 10px', background: '#fef3c7', border: '1px solid #f59e0b', borderRadius: 7 }}
+          <div style={{ margin: '6px 0', padding: '8px 10px', background: '#fef3c7', border: '1px solid #b45309', borderRadius: 7 }}
             onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#92400e', marginBottom: 4 }}>
+            <div style={{ fontSize: 12, fontWeight: 500, color: '#92400e', marginBottom: 4 }}>
               ⚠️ Konflikt oppdaget!
             </div>
             <div style={{ fontSize: 11, color: '#78350f', lineHeight: 1.5 }}>
@@ -641,11 +641,11 @@ export default function BefaringPlan() {
               Fra tilbuds-app: <strong>{STATUS[b.konflikt.inkommendStatus]?.label || b.konflikt.inkommendStatus}</strong>
             </div>
             <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-              <button style={{ fontSize: 11, padding: '3px 8px', background: '#f59e0b', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
+              <button style={{ fontSize: 11, padding: '3px 8px', background: '#b45309', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 500 }}
                 onClick={() => dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, konflikt: undefined, manueltOverstyrtAv: 'manuell', manueltOverstyrtDato: new Date().toISOString() } })}>
                 Behold {STATUS[b.konflikt.manuellStatus]?.ikon}
               </button>
-              <button style={{ fontSize: 11, padding: '3px 8px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 600 }}
+              <button style={{ fontSize: 11, padding: '3px 8px', background: '#15803d', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 500 }}
                 onClick={() => dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, status: b.konflikt.inkommendStatus, konflikt: undefined, manueltOverstyrtAv: undefined, manueltOverstyrtDato: undefined } })}>
                 Endre til {STATUS[b.konflikt.inkommendStatus]?.ikon}
               </button>
@@ -758,15 +758,15 @@ export default function BefaringPlan() {
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px', margin: '0 0 12px 0', fontSize: 13 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <strong style={{ color: '#1e293b' }}>🔧 Dedup befaringer</strong>
-            <button onClick={() => setDedupPanel(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#94a3b8' }}>✕</button>
+            <button onClick={() => setDedupPanel(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#5d6b80' }}>✕</button>
           </div>
 
-          {dedupPanel.loading && <div style={{ color: '#64748b' }}>⏳ Henter duplikater...</div>}
+          {dedupPanel.loading && <div style={{ color: '#5d6b80' }}>⏳ Henter duplikater...</div>}
 
           {dedupPanel.error && <div style={{ color: '#dc2626' }}>⚠️ Feil: {dedupPanel.error}</div>}
 
           {!dedupPanel.loading && !dedupPanel.error && dedupPanel.funnetDuplikater === 0 && (
-            <div style={{ color: '#16a34a' }}>✅ Ingen duplikater funnet</div>
+            <div style={{ color: '#15803d' }}>✅ Ingen duplikater funnet</div>
           )}
 
           {!dedupPanel.loading && !dedupPanel.error && dedupPanel.duplikatGrupper > 0 && (
@@ -779,8 +779,8 @@ export default function BefaringPlan() {
               <div style={{ maxHeight: 180, overflowY: 'auto', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '8px 10px', marginBottom: 10 }}>
                 {(dedupPanel.plan || []).map((g, i) => (
                   <div key={i} style={{ marginBottom: 8, paddingBottom: 8, borderBottom: i < dedupPanel.plan.length - 1 ? '1px solid #f1f5f9' : 'none' }}>
-                    <div style={{ fontWeight: 600 }}>Beholder: {g.behold.adresse} — {g.behold.kontaktNavn}</div>
-                    <div style={{ color: '#64748b', fontSize: 12 }}>id: {g.behold.id} · {g.behold.dato} · {g.behold.status}</div>
+                    <div style={{ fontWeight: 500 }}>Beholder: {g.behold.adresse} — {g.behold.kontaktNavn}</div>
+                    <div style={{ color: '#5d6b80', fontSize: 12 }}>id: {g.behold.id} · {g.behold.dato} · {g.behold.status}</div>
                     {g.slett.map(s => (
                       <div key={s.id} style={{ color: '#dc2626', fontSize: 12, paddingLeft: 10 }}>
                         🗑 {s.id} · {s.dato} · {s.status}{s.kilde ? ` (${s.kilde})` : ''}
@@ -796,13 +796,13 @@ export default function BefaringPlan() {
                     if (!window.confirm(`Slette ${dedupPanel.skalSlettes} duplikate befaringer?\nDette kan ikke angres (men snapshots tas).`)) return;
                     kjorDedup(false);
                   }}
-                  style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontWeight: 600 }}
+                  style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontWeight: 500 }}
                 >
                   🗑 Slett {dedupPanel.skalSlettes} duplikater
                 </button>
               )}
               {dedupPanel.dry === false && (
-                <div style={{ color: '#16a34a', fontWeight: 600 }}>✅ Slettet {dedupPanel.slettet} duplikater · {dedupPanel.gjenværende} befaringer igjen</div>
+                <div style={{ color: '#15803d', fontWeight: 500 }}>✅ Slettet {dedupPanel.slettet} duplikater · {dedupPanel.gjenværende} befaringer igjen</div>
               )}
             </>
           )}
@@ -1015,16 +1015,16 @@ export default function BefaringPlan() {
                   {/* Fane-veksler */}
                   <div style={{ display: 'flex', gap: 2, background: '#f1f5f9', padding: 2, borderRadius: 6 }}>
                     <button onClick={() => setModalFane('detaljer')}
-                      style={{ fontSize: 12, padding: '3px 10px', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: modalFane === 'detaljer' ? 700 : 400, background: modalFane === 'detaljer' ? '#fff' : 'transparent', color: modalFane === 'detaljer' ? '#1e293b' : '#64748b' }}>
+                      style={{ fontSize: 12, padding: '3px 10px', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: modalFane === 'detaljer' ? 500 : 400, background: modalFane === 'detaljer' ? '#fff' : 'transparent', color: modalFane === 'detaljer' ? '#1e293b' : '#5d6b80' }}>
                       Detaljer
                     </button>
                     <button onClick={() => setModalFane('aktivitet')}
-                      style={{ fontSize: 12, padding: '3px 10px', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: modalFane === 'aktivitet' ? 700 : 400, background: modalFane === 'aktivitet' ? '#fff' : 'transparent', color: modalFane === 'aktivitet' ? '#1e293b' : '#64748b' }}>
+                      style={{ fontSize: 12, padding: '3px 10px', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: modalFane === 'aktivitet' ? 500 : 400, background: modalFane === 'aktivitet' ? '#fff' : 'transparent', color: modalFane === 'aktivitet' ? '#1e293b' : '#5d6b80' }}>
                       📜 Aktivitet {aktivitetLog.length > 0 ? `(${aktivitetLog.length})` : ''}
                     </button>
                   </div>
                   {/* Auto-save indikator */}
-                  <span style={{ fontSize: 12, color: autoSaveSts === 'saved' ? '#16a34a' : autoSaveSts === 'saving' ? '#f59e0b' : '#94a3b8', display: 'flex', alignItems: 'center', gap: 4, transition: 'color 0.3s' }}>
+                  <span style={{ fontSize: 12, color: autoSaveSts === 'saved' ? '#15803d' : autoSaveSts === 'saving' ? '#b45309' : '#5d6b80', display: 'flex', alignItems: 'center', gap: 4, transition: 'color 0.3s' }}>
                     {autoSaveSts === 'saving' && <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⏳</span>}
                     {autoSaveSts === 'saved' && '✓'}
                     {autoSaveSts === 'saving' ? 'Lagrer…' : autoSaveSts === 'saved' ? 'Lagret' : ''}
@@ -1037,10 +1037,10 @@ export default function BefaringPlan() {
             {/* Aktivitet-fane */}
             {modalFane === 'aktivitet' && redigerer && (
               <div style={{ padding: '16px 20px', maxHeight: 420, overflowY: 'auto' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', marginBottom: 12 }}>📜 Endringshistorikk</div>
-                {aktivitetLaster && <div style={{ color: '#94a3b8', fontSize: 13 }}>Laster historikk…</div>}
+                <div style={{ fontSize: 13, fontWeight: 500, color: '#1e293b', marginBottom: 12 }}>📜 Endringshistorikk</div>
+                {aktivitetLaster && <div style={{ color: '#5d6b80', fontSize: 13 }}>Laster historikk…</div>}
                 {!aktivitetLaster && aktivitetLog.length === 0 && (
-                  <div style={{ color: '#94a3b8', fontSize: 13 }}>Ingen loggede endringer ennå.</div>
+                  <div style={{ color: '#5d6b80', fontSize: 13 }}>Ingen loggede endringer ennå.</div>
                 )}
                 {aktivitetLog.map((entry, i) => {
                   const dato = new Date(entry.endretDato || entry.endring?.tilDato)
@@ -1049,15 +1049,15 @@ export default function BefaringPlan() {
                     <div key={entry.id || i} style={{ display: 'flex', gap: 10, marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #f1f5f9' }}>
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#6366f1', marginTop: 5, flexShrink: 0 }} />
                       <div>
-                        <div style={{ fontSize: 12, color: '#64748b' }}>📅 {datoVis}</div>
+                        <div style={{ fontSize: 12, color: '#5d6b80' }}>📅 {datoVis}</div>
                         <div style={{ fontSize: 13, color: '#1e293b', marginTop: 2 }}>
                           <strong>{entry.endring?.felt || 'ukjent felt'}</strong>:
                           {entry.endring?.fraVerdi && <span style={{ color: '#dc2626' }}> {entry.endring.fraVerdi}</span>}
                           {entry.endring?.fraVerdi && ' → '}
-                          <span style={{ color: '#16a34a' }}>{entry.endring?.tilVerdi || '–'}</span>
+                          <span style={{ color: '#15803d' }}>{entry.endring?.tilVerdi || '–'}</span>
                         </div>
-                        {entry.begrunnelse && <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>💬 {entry.begrunnelse}</div>}
-                        <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>Kilde: {entry.kilde || '–'}</div>
+                        {entry.begrunnelse && <div style={{ fontSize: 11, color: '#5d6b80', marginTop: 2 }}>💬 {entry.begrunnelse}</div>}
+                        <div style={{ fontSize: 11, color: '#5d6b80', marginTop: 2 }}>Kilde: {entry.kilde || '–'}</div>
                       </div>
                     </div>
                   )
@@ -1154,12 +1154,12 @@ export default function BefaringPlan() {
               {/* Fra tilbuds-appen (read-only) */}
               {redigerer && (redigerer.poster?.length > 0 || redigerer.tilbudLink || redigerer.estimertSum > 0 || redigerer.fag?.length > 0) && (
                 <div className="bef-modal-seksjon" style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '10px 14px' }}>
-                  <div className="bef-modal-seksjon-tittel" style={{ color: '#16a34a', marginBottom: 8 }}>📄 Fra tilbuds-appen</div>
+                  <div className="bef-modal-seksjon-tittel" style={{ color: '#15803d', marginBottom: 8 }}>📄 Fra tilbuds-appen</div>
                   <div style={{ fontSize: 13, display: 'grid', gap: 5 }}>
                     {redigerer.estimertSum > 0 && (
                       <div>
                         💰 <strong>{fmtKr(redigerer.estimertSum)}</strong>
-                        {redigerer.pristype && <span style={{ marginLeft: 8, color: '#64748b' }}>({redigerer.pristype})</span>}
+                        {redigerer.pristype && <span style={{ marginLeft: 8, color: '#5d6b80' }}>({redigerer.pristype})</span>}
                       </div>
                     )}
                     {Array.isArray(redigerer.fag) && redigerer.fag.length > 0 && (
@@ -1169,15 +1169,15 @@ export default function BefaringPlan() {
                     {redigerer.oppstartTekst && <div>🚀 Oppstart: {redigerer.oppstartTekst}</div>}
                     {Array.isArray(redigerer.poster) && redigerer.poster.length > 0 && (
                       <div style={{ marginTop: 4 }}>
-                        <div style={{ fontWeight: 600, marginBottom: 3, color: '#374151' }}>Tilbudsposter ({redigerer.poster.length}):</div>
+                        <div style={{ fontWeight: 500, marginBottom: 3, color: '#374151' }}>Tilbudsposter ({redigerer.poster.length}):</div>
                         {redigerer.poster.slice(0, 6).map((p, i) => (
                           <div key={i} style={{ paddingLeft: 8, color: '#374151', fontSize: 12, lineHeight: '1.6' }}>
                             • {p.navn || p.beskrivelse || `Post ${i + 1}`}
-                            {p.kalkyle?.totalPris > 0 && <span style={{ color: '#64748b' }}> — {fmtKr(p.kalkyle.totalPris)}</span>}
+                            {p.kalkyle?.totalPris > 0 && <span style={{ color: '#5d6b80' }}> — {fmtKr(p.kalkyle.totalPris)}</span>}
                           </div>
                         ))}
                         {redigerer.poster.length > 6 && (
-                          <div style={{ paddingLeft: 8, color: '#94a3b8', fontSize: 12 }}>… og {redigerer.poster.length - 6} til</div>
+                          <div style={{ paddingLeft: 8, color: '#5d6b80', fontSize: 12 }}>… og {redigerer.poster.length - 6} til</div>
                         )}
                       </div>
                     )}
@@ -1197,13 +1197,13 @@ export default function BefaringPlan() {
                           )}
                           {p.byggInfo && (
                             <div style={{ marginTop: 4 }}>
-                              <span style={{ fontWeight: 600 }}>🏗 Byggeinfo:</span>
+                              <span style={{ fontWeight: 500 }}>🏗 Byggeinfo:</span>
                               <div style={{ paddingLeft: 8, color: '#374151', fontSize: 12, whiteSpace: 'pre-wrap' }}>{p.byggInfo}</div>
                             </div>
                           )}
                           {Array.isArray(p.soner) && p.soner.length > 0 && (
                             <div style={{ marginTop: 4 }}>
-                              <span style={{ fontWeight: 600 }}>📍 Soner ({p.soner.length}):</span>
+                              <span style={{ fontWeight: 500 }}>📍 Soner ({p.soner.length}):</span>
                               {p.soner.map((s, i) => (
                                 <div key={i} style={{ paddingLeft: 8, color: '#374151', fontSize: 12 }}>
                                   • {s.navn || s.name || `Sone ${i + 1}`}{s.areal ? ` — ${s.areal} m²` : ''}
@@ -1213,7 +1213,7 @@ export default function BefaringPlan() {
                           )}
                           {p.kundeKommentar && (
                             <div style={{ marginTop: 4 }}>
-                              <span style={{ fontWeight: 600 }}>💬 Kundekommentar:</span>
+                              <span style={{ fontWeight: 500 }}>💬 Kundekommentar:</span>
                               <div style={{ paddingLeft: 8, color: '#374151', fontSize: 12, fontStyle: 'italic' }}>"{p.kundeKommentar}"</div>
                             </div>
                           )}
@@ -1264,7 +1264,7 @@ export default function BefaringPlan() {
               <div className="modal-actions">
                 {redigerer && <button className="btn btn-danger" onClick={slett}>Slett</button>}
                 {redigerer && redigerer.status !== 'godkjent' && (
-                  <button className="btn" style={{ background: '#16a34a', color: '#fff' }} onClick={() => godkjenn(redigerer)}>
+                  <button className="btn" style={{ background: '#15803d', color: '#fff' }} onClick={() => godkjenn(redigerer)}>
                     ✅ Godkjenn tilbud
                   </button>
                 )}
@@ -1297,18 +1297,18 @@ export default function BefaringPlan() {
               <h3>Ledig kapasitet – neste 16 uker</h3>
               <button className="btn-icon" onClick={() => setVisKapasitet(null)}>✕</button>
             </div>
-            <p style={{ margin: '0 0 16px', color: '#64748b', fontSize: 14 }}>
+            <p style={{ margin: '0 0 16px', color: '#5d6b80', fontSize: 14 }}>
               Tilbud godkjent for <strong>{visKapasitet.kontaktNavn}</strong> – {visKapasitet.adresse}.
             </p>
             <div className="bef-kap-liste">
               {uker.map((u, i) => {
                 const pst = Math.round((u.ledige / u.totalt) * 100);
-                const farge = pst >= 50 ? '#16a34a' : pst >= 25 ? '#f59e0b' : '#dc2626';
+                const farge = pst >= 50 ? '#15803d' : pst >= 25 ? '#b45309' : '#dc2626';
                 return (
                   <div key={i} className="bef-kap-rad">
                     <div className="bef-kap-uke">
                       Uke {i + 1} &nbsp;
-                      <span style={{ color: '#94a3b8', fontSize: 12 }}>
+                      <span style={{ color: '#5d6b80', fontSize: 12 }}>
                         {new Date(u.ukeStart + 'T00:00:00').toLocaleDateString('nb-NO', { day: '2-digit', month: 'short' })}
                       </span>
                     </div>
@@ -1340,11 +1340,11 @@ export default function BefaringPlan() {
               {/* Forhåndsvisning av befaringsdata */}
               {visKapasitet && (
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13 }}>
-                  <div style={{ fontWeight: 600, color: '#1e293b', marginBottom: 4 }}>Fra befaring:</div>
-                  <div style={{ color: '#64748b' }}>📍 {visKapasitet.adresse}</div>
-                  {visKapasitet.jobbType && <div style={{ color: '#64748b' }}>🔨 {visKapasitet.jobbType}</div>}
+                  <div style={{ fontWeight: 500, color: '#1e293b', marginBottom: 4 }}>Fra befaring:</div>
+                  <div style={{ color: '#5d6b80' }}>📍 {visKapasitet.adresse}</div>
+                  {visKapasitet.jobbType && <div style={{ color: '#5d6b80' }}>🔨 {visKapasitet.jobbType}</div>}
                   {visKapasitet.estimertBelop && (
-                    <div style={{ color: '#64748b' }}>
+                    <div style={{ color: '#5d6b80' }}>
                       💰 {new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(Number(visKapasitet.estimertBelop))}
                     </div>
                   )}
@@ -1405,7 +1405,7 @@ export default function BefaringPlan() {
                         <span>
                           Tildel <strong>{ansatt.navn}</strong> til prosjektet automatisk
                           {prosjektForm.startDato && (
-                            <span style={{ color: '#64748b' }}>
+                            <span style={{ color: '#5d6b80' }}>
                               {' '}(fra {new Date(prosjektForm.startDato + 'T00:00:00').toLocaleDateString('nb-NO', { day: '2-digit', month: 'short' })}
                               {prosjektForm.sluttDato
                                 ? ` til ${new Date(prosjektForm.sluttDato + 'T00:00:00').toLocaleDateString('nb-NO', { day: '2-digit', month: 'short' })}`

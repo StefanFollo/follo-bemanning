@@ -10,13 +10,13 @@ const REKL_TYPER = [
 ];
 
 const FAG_COLORS = {
-  'Bas Tømrer': '#f59e0b', 'Montør': '#3b82f6', 'Lærling Tømrer': '#16a34a',
-  'Maler': '#ec4899', 'Rørlegger': '#06b6d4', 'Tømrer': '#8b5cf6',
+  'Bas Tømrer': '#b45309', 'Montør': '#3b82f6', 'Lærling Tømrer': '#15803d',
+  'Maler': '#ec4899', 'Rørlegger': '#0e7490', 'Tømrer': '#8b5cf6',
   'Flislegger': '#f97316', 'Prosjektleder': '#0ea5e9',
 };
 function fagColor(fag) { return FAG_COLORS[fag] || '#6b7280'; }
 
-const PL_FARGER = ['#2563eb','#16a34a','#9333ea','#ea580c','#0891b2','#be185d','#854d0e','#0f766e'];
+const PL_FARGER = ['#2563eb','#15803d','#9333ea','#ea580c','#0891b2','#be185d','#854d0e','#0f766e'];
 
 function datoKort(iso) {
   if (!iso) return '';
@@ -249,7 +249,7 @@ export default function Reklamasjon() {
     const prosjekt = r.prosjektId ? state.prosjekter.find(p => p.id === r.prosjektId) : null;
     const fristDager = dagerTil(r.frist);
     const fristFarge = fristDager !== null
-      ? (fristDager < 0 ? '#dc2626' : fristDager <= 5 ? '#f59e0b' : '#16a34a')
+      ? (fristDager < 0 ? '#dc2626' : fristDager <= 5 ? '#b45309' : '#15803d')
       : null;
 
     return (

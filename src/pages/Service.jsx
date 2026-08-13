@@ -9,7 +9,7 @@ const SERV_TYPER = [
   'Elektro', 'Fasade / Tak', 'Bad', 'Dør / Vindu', 'Grunnmur', 'Annet',
 ];
 
-const PL_FARGER = ['#2563eb','#16a34a','#9333ea','#ea580c','#0891b2','#be185d','#854d0e','#0f766e'];
+const PL_FARGER = ['#2563eb','#15803d','#9333ea','#ea580c','#0891b2','#be185d','#854d0e','#0f766e'];
 
 function datoKort(iso) {
   if (!iso) return '';
@@ -241,7 +241,7 @@ export default function Service() {
     const ansatt = j.ansvarligId ? state.ansatte.find(a => a.id === j.ansvarligId) : null;
     const fristDager = dagerTil(j.oensketDato);
     const fristFarge = fristDager !== null
-      ? (fristDager < 0 ? '#dc2626' : fristDager <= 3 ? '#f59e0b' : '#16a34a')
+      ? (fristDager < 0 ? '#dc2626' : fristDager <= 3 ? '#b45309' : '#15803d')
       : null;
 
     return (
@@ -332,7 +332,7 @@ export default function Service() {
       <div className="page-header">
         <div>
           <h2>⚡ Service</h2>
-          <div style={{ fontSize: 13, color: '#64748b', marginTop: 2 }}>Små jobber under 1 uke</div>
+          <div style={{ fontSize: 13, color: '#5d6b80', marginTop: 2 }}>Små jobber under 1 uke</div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <div className="bef-view-tabs">

@@ -193,19 +193,17 @@ function SaveButton() {
   }
 
   const visning = synk === 'feil'
-    ? { label: '⚠️ Ikke lagret', bg: '#dc2626', tittel: 'Får ikke kontakt med skyen — endringene dine ligger trygt lokalt og sendes automatisk når nettet er tilbake. Klikk for å prøve nå.' }
+    ? { label: '⚠️ Ikke lagret', stil: { background: 'var(--danger-bg)', color: 'var(--danger)', border: '1px solid var(--danger-border)' }, tittel: 'Får ikke kontakt med skyen — endringene dine ligger trygt lokalt og sendes automatisk når nettet er tilbake. Klikk for å prøve nå.' }
     : synk === 'lagrer' || klikkLagrer
-    ? { label: '⏳ Lagrer…', bg: '#f59e0b', tittel: 'Lagrer til skyen…' }
-    : { label: '✓ Alt lagret', bg: '#16a34a', tittel: 'Alle endringer lagres automatisk til skyen. Klikk for å tvinge en lagring nå.' };
+    ? { label: '⏳ Lagrer…', stil: { background: 'var(--warning-bg)', color: 'var(--warning)', border: '1px solid var(--warning-border)' }, tittel: 'Lagrer til skyen…' }
+    : { label: '✓ Alt lagret', stil: { background: 'transparent', color: 'var(--text-muted)', border: '1px solid transparent' }, tittel: 'Alle endringer lagres automatisk til skyen. Klikk for å tvinge en lagring nå.' };
 
   return (
     <button
       className="nav-btn"
       style={{
-        background: visning.bg,
-        color: '#fff',
-        borderColor: 'transparent',
-        fontWeight: 600,
+        ...visning.stil,
+        fontWeight: 500,
         transition: 'background .3s',
       }}
       onClick={handleSave}

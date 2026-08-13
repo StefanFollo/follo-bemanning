@@ -8,9 +8,9 @@ const MAANED_NAVN = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt'
 
 const BEF_STATUS = {
   planlagt:      { label: 'Planlagt befaring',   farge: '#3b82f6', bg: '#eff6ff', ikon: '📋' },
-  tilbud_arbeid: { label: 'Tilbud under arbeid', farge: '#f59e0b', bg: '#fffbeb', ikon: '✏️' },
-  tilbud_sendt:  { label: 'Tilbud sendt',        farge: '#8b5cf6', bg: '#f5f3ff', ikon: '📤' },
-  godkjent:      { label: 'Godkjent',            farge: '#16a34a', bg: '#f0fdf4', ikon: '✅' },
+  tilbud_arbeid: { label: 'Tilbud under arbeid', farge: '#b45309', bg: '#fffbeb', ikon: '✏️' },
+  tilbud_sendt:  { label: 'Tilbud sendt',        farge: '#6d28d9', bg: '#f5f3ff', ikon: '📤' },
+  godkjent:      { label: 'Godkjent',            farge: '#15803d', bg: '#f0fdf4', ikon: '✅' },
   tapt:          { label: 'Tapt',                farge: '#6b7280', bg: '#f9fafb', ikon: '❌' },
 };
 function datoKort(iso) {
@@ -23,10 +23,10 @@ function dagerTil(iso) {
 }
 const BEF_FARGE = {
   planlagt:      '#3b82f6',
-  tilbud_arbeid: '#f59e0b',
-  tilbud_sendt:  '#8b5cf6',
-  godkjent:      '#16a34a',
-  tapt:          '#9ca3af',
+  tilbud_arbeid: '#b45309',
+  tilbud_sendt:  '#6d28d9',
+  godkjent:      '#15803d',
+  tapt:          '#5d6b80',
 };
 function befaringFarge(status) { return BEF_FARGE[status] || '#3b82f6'; }
 function tidPluss1t(tid) {
@@ -37,7 +37,7 @@ function tidPluss1t(tid) {
 const DAY_START_H = 7;
 const DAY_END_H   = 17;
 const DAY_HOURS   = DAY_END_H - DAY_START_H;
-const FALLBACK_COLORS = ['#2563eb','#16a34a','#dc2626','#9333ea','#ea580c','#0891b2','#be185d','#854d0e'];
+const FALLBACK_COLORS = ['#2563eb','#15803d','#dc2626','#9333ea','#ea580c','#0891b2','#be185d','#854d0e'];
 
 function getWeekNumber(dateStr) {
   const d = isoToDate(dateStr);
@@ -311,7 +311,7 @@ export default function RorleggerPlan() {
             <div key={m}
               className={`uke-header-cell${m.slice(0, 7) === today.slice(0, 7) ? ' today' : ''}`}
               style={{ fontSize: 11, padding: '4px 2px', textAlign: 'center' }}>
-              <div style={{ fontWeight: 700 }}>{monthLabel(m)}</div>
+              <div style={{ fontWeight: 500 }}>{monthLabel(m)}</div>
             </div>
           ))}
         </>
@@ -334,11 +334,11 @@ export default function RorleggerPlan() {
               style={{ fontSize: 11, padding: '4px 2px', textAlign: 'center' }}
               title={hol || undefined}>
               {isMonday && (
-                <div style={{ fontSize: 10, fontWeight: 700, color: isCurWeek ? '#2563eb' : '#94a3b8', lineHeight: 1.2 }}>
+                <div style={{ fontSize: 10, fontWeight: 500, color: isCurWeek ? '#2563eb' : '#5d6b80', lineHeight: 1.2 }}>
                   U{weekNum}
                 </div>
               )}
-              <div style={{ fontWeight: isMonday ? 700 : 400 }}>{DAG_NAVN[dow - 1]}</div>
+              <div style={{ fontWeight: isMonday ? 500 : 400 }}>{DAG_NAVN[dow - 1]}</div>
               <div className="dag-dato" style={{ fontSize: 10 }}>{dag.slice(8)}.{dag.slice(5, 7)}</div>
               {hol && <div className="holiday-label">{hol.split(' ')[0]}</div>}
             </div>
@@ -369,10 +369,10 @@ export default function RorleggerPlan() {
         </div>
 
         <button className="btn no-print"
-          style={{ marginLeft: 8, background: '#06b6d4', color: 'white' }}
+          style={{ marginLeft: 8, background: '#0e7490', color: 'white' }}
           onClick={() => openNewPlan()}>+ Plan</button>
         <button className="btn no-print"
-          style={{ background: '#8b5cf6', color: 'white' }}
+          style={{ background: '#6d28d9', color: 'white' }}
           onClick={() => openNew()}>+ Oppdrag</button>
       </div>
 
@@ -411,12 +411,12 @@ export default function RorleggerPlan() {
             return (
               <React.Fragment key={ansatt.id}>
                 <div className="uke-row-label">
-                  <div className="mini-avatar" style={{ background: '#06b6d4' }}>
+                  <div className="mini-avatar" style={{ background: '#0e7490' }}>
                     {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                   </div>
                   <div>
                     <div className="row-navn">{ansatt.navn}</div>
-                    <div className="row-fag" style={{ color: '#06b6d4' }}>Rørlegger</div>
+                    <div className="row-fag" style={{ color: '#0e7490' }}>Rørlegger</div>
                   </div>
                 </div>
 
@@ -483,7 +483,7 @@ export default function RorleggerPlan() {
                           background:   prosjektColor(t.prosjektId),
                           opacity:      0.85,
                           borderRadius: 3,
-                          fontSize: 9, color: 'white', fontWeight: 600,
+                          fontSize: 9, color: 'white', fontWeight: 500,
                           display: 'flex', alignItems: 'center', padding: '0 4px',
                           overflow: 'hidden', whiteSpace: 'nowrap',
                           zIndex: 2, cursor: 'pointer',
@@ -517,7 +517,7 @@ export default function RorleggerPlan() {
                           top: 3, height: 16,
                           background:   farge,
                           borderRadius: 3,
-                          fontSize: 9, color: 'white', fontWeight: 600,
+                          fontSize: 9, color: 'white', fontWeight: 500,
                           display: 'flex', alignItems: 'center', gap: 2, padding: '0 4px',
                           overflow: 'hidden', whiteSpace: 'nowrap',
                           zIndex: 3, cursor: 'default',
@@ -536,7 +536,7 @@ export default function RorleggerPlan() {
         </div>
       </div>
 
-      <div style={{ fontSize: 12, color: '#94a3b8', margin: '4px 0 20px' }}>
+      <div style={{ fontSize: 12, color: '#5d6b80', margin: '4px 0 20px' }}>
         Klikk i gantten for å legge til plan. Klikk på bar for å redigere.
         {ukeMode === 'dag' && ' Timeoppgaver vises som chips nederst.'}
       </div>
@@ -545,8 +545,8 @@ export default function RorleggerPlan() {
           TIMEPLAN  —  daglig timefordeling 07–17
           (alltid gjeldende uke, synkronisert)
           ══════════════════════════════════════════ */}
-      <h3 style={{ margin: '0 0 10px', fontSize: 14, color: '#475569', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ background: '#8b5cf6', color: 'white', borderRadius: 4, padding: '2px 8px', fontSize: 11 }}>TIMEPLAN</span>
+      <h3 style={{ margin: '0 0 10px', fontSize: 14, color: '#475569', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ background: '#6d28d9', color: 'white', borderRadius: 4, padding: '2px 8px', fontSize: 11 }}>TIMEPLAN</span>
         Daglig timefordeling 07–17 — Uke {getWeekNumber(currentWeek)}
       </h3>
 
@@ -559,8 +559,8 @@ export default function RorleggerPlan() {
                 const hol = HOLIDAYS[d];
                 return (
                   <th key={d} className={`ror-th-day${d === today ? ' ror-today' : ''}${hol ? ' holiday-header' : ''}`}>
-                    <div style={{ fontWeight: 700 }}>{DAG_NAVN[i]}</div>
-                    <div style={{ fontSize: 11, color: '#64748b' }}>{d.slice(8)}.{d.slice(5, 7)}</div>
+                    <div style={{ fontWeight: 500 }}>{DAG_NAVN[i]}</div>
+                    <div style={{ fontSize: 11, color: '#5d6b80' }}>{d.slice(8)}.{d.slice(5, 7)}</div>
                     {hol && <div style={{ fontSize: 10, color: '#dc2626' }}>{hol}</div>}
                   </th>
                 );
@@ -568,7 +568,7 @@ export default function RorleggerPlan() {
             </tr>
             <tr>
               <td className="ror-ruler-label">
-                <span style={{ fontSize: 10, color: '#94a3b8' }}>07 – 17</span>
+                <span style={{ fontSize: 10, color: '#5d6b80' }}>07 – 17</span>
               </td>
               {weekDays.map(d => (
                 <td key={d} className="ror-ruler-cell">
@@ -587,7 +587,7 @@ export default function RorleggerPlan() {
             {rorleggere.map(ansatt => (
               <tr key={ansatt.id} className="ror-tr">
                 <td className="ror-td-name">
-                  <div className="mini-avatar" style={{ background: '#06b6d4', width: 28, height: 28, fontSize: 11, flexShrink: 0 }}>
+                  <div className="mini-avatar" style={{ background: '#0e7490', width: 28, height: 28, fontSize: 11, flexShrink: 0 }}>
                     {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                   </div>
                   <div style={{ marginLeft: 6 }}>
@@ -652,7 +652,7 @@ export default function RorleggerPlan() {
         </table>
       </div>
 
-      <div style={{ marginTop: 8, fontSize: 12, color: '#94a3b8' }}>
+      <div style={{ marginTop: 8, fontSize: 12, color: '#5d6b80' }}>
         Klikk på en celle for å legge til timeoppgave. Klikk på bar for å redigere.
         <span style={{ marginLeft: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
           <span style={{ display: 'inline-block', width: 14, height: 10, background: '#3b82f6', borderRadius: 2, backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,0.25) 3px,rgba(255,255,255,0.25) 6px)' }} />
@@ -671,7 +671,7 @@ export default function RorleggerPlan() {
 
         return (
           <div style={{ marginTop: 28 }}>
-            <h3 style={{ margin: '0 0 14px', fontSize: 14, color: '#475569', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <h3 style={{ margin: '0 0 14px', fontSize: 14, color: '#475569', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ background: '#3b82f6', color: 'white', borderRadius: 4, padding: '2px 8px', fontSize: 11 }}>BEFARINGER</span>
               Befaringsoversikt for rørleggere
             </h3>
@@ -690,20 +690,20 @@ export default function RorleggerPlan() {
                     marginBottom: 10, paddingBottom: 6,
                     borderBottom: '2px solid #e2e8f0',
                   }}>
-                    <div className="mini-avatar" style={{ background: '#06b6d4', width: 26, height: 26, fontSize: 10, flexShrink: 0 }}>
+                    <div className="mini-avatar" style={{ background: '#0e7490', width: 26, height: 26, fontSize: 10, flexShrink: 0 }}>
                       {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                     </div>
-                    <span style={{ fontWeight: 700, fontSize: 14, color: '#0f172a' }}>{ansatt.navn}</span>
-                    <span style={{ fontSize: 12, color: '#94a3b8' }}>{bef.length} befaring{bef.length !== 1 ? 'er' : ''}</span>
+                    <span style={{ fontWeight: 500, fontSize: 14, color: '#0f172a' }}>{ansatt.navn}</span>
+                    <span style={{ fontSize: 12, color: '#5d6b80' }}>{bef.length} befaring{bef.length !== 1 ? 'er' : ''}</span>
                   </div>
 
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 10 }}>
                     {bef.map(b => {
                       const s           = BEF_STATUS[b.status] || BEF_STATUS.planlagt;
                       const fristDager  = dagerTil(b.tilbudFrist);
-                      const fristFarge  = fristDager !== null ? (fristDager < 0 ? '#dc2626' : fristDager <= 3 ? '#f59e0b' : '#16a34a') : null;
+                      const fristFarge  = fristDager !== null ? (fristDager < 0 ? '#dc2626' : fristDager <= 3 ? '#b45309' : '#15803d') : null;
                       const kontDager   = dagerTil(b.nesteKontakt);
-                      const kontFarge   = kontDager  !== null ? (kontDager  < 0 ? '#dc2626' : kontDager  <= 2 ? '#f59e0b' : '#64748b') : '#64748b';
+                      const kontFarge   = kontDager  !== null ? (kontDager  < 0 ? '#dc2626' : kontDager  <= 2 ? '#b45309' : '#5d6b80') : '#5d6b80';
                       const belopVis    = b.estimertBelop
                         ? new Intl.NumberFormat('nb-NO', { maximumFractionDigits: 0 }).format(Number(b.estimertBelop)) + ' kr'
                         : null;
@@ -747,7 +747,7 @@ export default function RorleggerPlan() {
                               </span>
                             )}
                             {b.nesteKontakt && (
-                              <span className="bef-k-dato-rad" style={{ color: kontFarge, fontWeight: kontDager !== null && kontDager <= 2 ? 600 : 400 }}>
+                              <span className="bef-k-dato-rad" style={{ color: kontFarge, fontWeight: kontDager !== null && kontDager <= 2 ? 500 : 400 }}>
                                 📞 Neste kontakt: {datoKort(b.nesteKontakt)}
                                 {kontDager !== null && kontDager <= 2 && (
                                   <em> ({kontDager < 0 ? `${Math.abs(kontDager)}d over` : kontDager === 0 ? 'i dag!' : `${kontDager}d`})</em>

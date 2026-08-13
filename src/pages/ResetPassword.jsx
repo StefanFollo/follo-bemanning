@@ -8,7 +8,7 @@ function strength(pw) {
   if (/[0-9]/.test(pw)) s++;
   if (/[!@#$%^&*()\-_=+{};:,<.>?/|[\]\\~`"']/.test(pw)) s++;
   const labels = ['', 'Svakt', 'Middels', 'Bra', 'Sterkt'];
-  const colors = ['', '#ef4444', '#f59e0b', '#3b82f6', '#16a34a'];
+  const colors = ['', '#ef4444', '#b45309', '#3b82f6', '#15803d'];
   return { score: s, label: labels[s], color: colors[s] };
 }
 
@@ -50,7 +50,7 @@ export default function ResetPassword({ token, onDone }) {
     return (
       <div className="login-bg">
         <div className="login-card">
-          <div className="login-logo" style={{ background: '#16a34a' }}>✓</div>
+          <div className="login-logo" style={{ background: '#15803d' }}>✓</div>
           <h1 className="login-title">Passord satt!</h1>
           <p className="login-sub" style={{ textAlign: 'center' }}>
             Passordet ditt er oppdatert. Du kan nå logge inn.
@@ -85,7 +85,7 @@ export default function ResetPassword({ token, onDone }) {
               <button
                 type="button"
                 onClick={() => setShowPw(v => !v)}
-                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#6b7280' }}
+                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#5d6b80' }}
               >
                 {showPw ? '🙈' : '👁'}
               </button>
@@ -98,11 +98,11 @@ export default function ResetPassword({ token, onDone }) {
                   ))}
                 </div>
                 <div style={{ fontSize: 12, color: st.color, marginTop: 4 }}>{st.label}</div>
-                <ul style={{ fontSize: 12, color: '#6b7280', margin: '6px 0 0', paddingLeft: 16, lineHeight: 1.8 }}>
-                  <li style={{ color: pw.length >= 8 ? '#16a34a' : '#6b7280' }}>Minst 8 tegn</li>
-                  <li style={{ color: /[A-Z]/.test(pw) ? '#16a34a' : '#6b7280' }}>Minst én stor bokstav</li>
-                  <li style={{ color: /[0-9]/.test(pw) ? '#16a34a' : '#6b7280' }}>Minst ett tall</li>
-                  <li style={{ color: /[!@#$%^&*()\-_=+{};:,<.>?/|[\]\\~`"']/.test(pw) ? '#16a34a' : '#6b7280' }}>Minst ett spesialtegn (! @ # $ …)</li>
+                <ul style={{ fontSize: 12, color: '#5d6b80', margin: '6px 0 0', paddingLeft: 16, lineHeight: 1.8 }}>
+                  <li style={{ color: pw.length >= 8 ? '#15803d' : '#5d6b80' }}>Minst 8 tegn</li>
+                  <li style={{ color: /[A-Z]/.test(pw) ? '#15803d' : '#5d6b80' }}>Minst én stor bokstav</li>
+                  <li style={{ color: /[0-9]/.test(pw) ? '#15803d' : '#5d6b80' }}>Minst ett tall</li>
+                  <li style={{ color: /[!@#$%^&*()\-_=+{};:,<.>?/|[\]\\~`"']/.test(pw) ? '#15803d' : '#5d6b80' }}>Minst ett spesialtegn (! @ # $ …)</li>
                 </ul>
               </div>
             )}

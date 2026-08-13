@@ -2,12 +2,12 @@ import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 
 const FAG_COLORS = {
-  'Anleggsleder': '#f59e0b',
-  'Bas Tømrer': '#f59e0b', // bakoverkompatibilitet
+  'Anleggsleder': '#b45309',
+  'Bas Tømrer': '#b45309', // bakoverkompatibilitet
   'Montør': '#3b82f6',
-  'Lærling Tømrer': '#16a34a',
+  'Lærling Tømrer': '#15803d',
   'Maler': '#ec4899',
-  'Rørlegger': '#06b6d4',
+  'Rørlegger': '#0e7490',
   'Tømrer': '#8b5cf6',
   'Flislegger': '#f97316',
   'Prosjektleder': '#0ea5e9',
@@ -181,26 +181,26 @@ export default function Ansatte() {
           {ansatte.map(a => (
             <div className="ct-row" key={a.id} style={a.sykmeldt ? { opacity: 0.55, background: '#f8fafc' } : {}}>
               <div className="ct-col ct-ansatt-navn">
-                <div className="ct-avatar" style={{ background: a.sykmeldt ? '#94a3b8' : a.innleie ? '#f97316' : fagColor(a.fag) }}>
+                <div className="ct-avatar" style={{ background: a.sykmeldt ? '#5d6b80' : a.innleie ? '#f97316' : fagColor(a.fag) }}>
                   {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
                   <span className="ct-prosjekt-navn">{a.navn}</span>
                   {a.sykmeldt && (
-                    <span style={{ fontSize: 10, color: '#64748b', fontWeight: 600, letterSpacing: '0.03em' }}>
+                    <span style={{ fontSize: 10, color: '#5d6b80', fontWeight: 500, letterSpacing: '0.03em' }}>
                       🤒 SYKMELDT{a.sykmeldtTil ? ` t.o.m. ${bursdagLabel ? new Date(a.sykmeldtTil + 'T00:00:00').toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' }) : a.sykmeldtTil}` : ''}
                     </span>
                   )}
                   {!a.sykmeldt && a.innleie && (
-                    <span style={{ fontSize: 10, color: '#f97316', fontWeight: 600, letterSpacing: '0.03em' }}>INNLEIE</span>
+                    <span style={{ fontSize: 10, color: '#f97316', fontWeight: 500, letterSpacing: '0.03em' }}>INNLEIE</span>
                   )}
                   {!a.sykmeldt && a.utenforBemanningsplan && (
-                    <span style={{ fontSize: 10, color: '#b45309', fontWeight: 600, letterSpacing: '0.03em' }}>KONTOR / ADMIN</span>
+                    <span style={{ fontSize: 10, color: '#b45309', fontWeight: 500, letterSpacing: '0.03em' }}>KONTOR / ADMIN</span>
                   )}
                 </div>
               </div>
               <div className="ct-col ct-fag">
-                <span className="fag-tag" style={{ background: a.sykmeldt ? '#e2e8f022' : fagColor(a.fag) + '22', color: a.sykmeldt ? '#94a3b8' : fagColor(a.fag), borderColor: a.sykmeldt ? '#e2e8f0' : fagColor(a.fag) + '55' }}>
+                <span className="fag-tag" style={{ background: a.sykmeldt ? '#e2e8f022' : fagColor(a.fag) + '22', color: a.sykmeldt ? '#5d6b80' : fagColor(a.fag), borderColor: a.sykmeldt ? '#e2e8f0' : fagColor(a.fag) + '55' }}>
                   {a.fag || '–'}
                 </span>
               </div>
@@ -215,13 +215,13 @@ export default function Ansatte() {
                 {a.sykmeldt ? (
                   <button
                     className="btn btn-sm"
-                    style={{ background: '#f0fdf4', color: '#16a34a', borderColor: '#bbf7d0' }}
+                    style={{ background: '#f0fdf4', color: '#15803d', borderColor: '#bbf7d0' }}
                     onClick={() => dispatch({ type: 'UPDATE_ANSATT', payload: { ...a, sykmeldt: false, sykmeldtFra: '', sykmeldtTil: '' } })}
                   >✅ Friskmeldt</button>
                 ) : (
                   <button
                     className="btn btn-sm"
-                    style={{ background: '#f8fafc', color: '#64748b', borderColor: '#e2e8f0' }}
+                    style={{ background: '#f8fafc', color: '#5d6b80', borderColor: '#e2e8f0' }}
                     onClick={() => { setSykmeldtForm({ fra: new Date().toISOString().slice(0, 10), til: '' }); setSykmeldtModal(a); }}
                   >🤒 Syk</button>
                 )}
@@ -321,7 +321,7 @@ export default function Ansatte() {
             >
               <div style={{
                 width: 36, height: 20, borderRadius: 10,
-                background: form.utenforBemanningsplan ? '#f59e0b' : '#16a34a',
+                background: form.utenforBemanningsplan ? '#b45309' : '#15803d',
                 position: 'relative', transition: 'background .2s',
               }}>
                 <div style={{
@@ -349,7 +349,7 @@ export default function Ansatte() {
           <div className="form">
             <label>Fra dato</label>
             <input type="date" value={sykmeldtForm.fra} onChange={e => setSykmeldtForm(f => ({ ...f, fra: e.target.value }))} />
-            <label>Til dato <span style={{ color: '#94a3b8', fontWeight: 400 }}>(valgfritt – la stå tom hvis ukjent)</span></label>
+            <label>Til dato <span style={{ color: '#5d6b80', fontWeight: 400 }}>(valgfritt – la stå tom hvis ukjent)</span></label>
             <input type="date" value={sykmeldtForm.til} min={sykmeldtForm.fra} onChange={e => setSykmeldtForm(f => ({ ...f, til: e.target.value }))} />
             {sykmeldtForm.til && sykmeldtForm.fra && (
               <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#475569' }}>

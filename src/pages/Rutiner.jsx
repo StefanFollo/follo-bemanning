@@ -7,10 +7,10 @@ import { RUTINER_DATA } from '../data/rutiner-holte';
 
 const TYPE_INFO = {
   rutine:     { label: 'Rutiner',     ikon: '📋', farge: '#2563eb' },
-  instruks:   { label: 'Instrukser',  ikon: '⚠️', farge: '#ea580c' },
-  sjekkliste: { label: 'Sjekklister', ikon: '✅', farge: '#16a34a' },
+  instruks:   { label: 'Instrukser',  ikon: '⚠️', farge: '#c2410c' },
+  sjekkliste: { label: 'Sjekklister', ikon: '✅', farge: '#15803d' },
   skjema:     { label: 'Skjemaer',    ikon: '📝', farge: '#9333ea' },
-  dokument:   { label: 'Dokumenter',  ikon: '📄', farge: '#64748b' },
+  dokument:   { label: 'Dokumenter',  ikon: '📄', farge: '#5d6b80' },
 };
 
 function skrivUtDokument(dok) {
@@ -89,7 +89,7 @@ export default function Rutiner() {
           </div>
           <button className="btn" onClick={() => skrivUtDokument(valgt)} title="Skriv ut / lagre som PDF">🖨 PDF</button>
         </div>
-        <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12 }}>
+        <div style={{ fontSize: 12, color: '#5d6b80', marginBottom: 12 }}>
           {valgt.kapittel}{valgt.underkapittel ? ` · ${valgt.underkapittel}` : ''} · side {valgt.side} i håndboken
         </div>
         <div style={{
@@ -109,7 +109,7 @@ export default function Rutiner() {
       <div className="page-header">
         <h2>📘 Rutiner &amp; HMS/KS-håndbok <span className="count-badge">{data.dokumenter.length}</span></h2>
       </div>
-      <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 12 }}>
+      <div style={{ fontSize: 12, color: '#5d6b80', marginBottom: 12 }}>
         {data.meta.kilde} · eksportert {data.meta.eksportert}
       </div>
 
@@ -153,7 +153,7 @@ export default function Rutiner() {
               style={{
                 width: '100%', textAlign: 'left', marginBottom: 4, fontSize: 12,
                 ...(kapFilter === kap ? { background: '#1e3a5f', color: '#fff' } : {}),
-                ...(kap.includes('Miljøfyrtårn') ? { borderColor: '#16a34a', fontWeight: 700 } : {}),
+                ...(kap.includes('Miljøfyrtårn') ? { borderColor: '#15803d', fontWeight: 500 } : {}),
               }}
               onClick={() => setKapFilter(k => k === kap ? null : kap)}
             >
@@ -165,7 +165,7 @@ export default function Rutiner() {
         {/* Dokumentliste */}
         <div style={{ flex: 1, minWidth: 0 }}>
           {filtrert.length === 0 && (
-            <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10 }}>
+            <div style={{ padding: 32, textAlign: 'center', color: '#5d6b80', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10 }}>
               Ingen dokumenter matcher søket.
             </div>
           )}
@@ -178,7 +178,7 @@ export default function Rutiner() {
               return (
                 <div key={d.id}>
                   {visUnderkap && d.underkapittel && (
-                    <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 6px 4px' }}>
+                    <div style={{ fontSize: 11, fontWeight: 500, color: '#5d6b80', textTransform: 'uppercase', letterSpacing: '0.05em', margin: '14px 0 6px 4px' }}>
                       {d.underkapittel}
                     </div>
                   )}
@@ -193,8 +193,8 @@ export default function Rutiner() {
                     }}
                   >
                     <span style={{ flexShrink: 0 }}>{ti.ikon}</span>
-                    <span style={{ flex: 1, fontWeight: 600, color: '#1e293b' }}>{d.tittel}</span>
-                    <span style={{ fontSize: 11, color: '#94a3b8', flexShrink: 0 }}>{d.kapittel.slice(0, 2)}</span>
+                    <span style={{ flex: 1, fontWeight: 500, color: '#1e293b' }}>{d.tittel}</span>
+                    <span style={{ fontSize: 11, color: '#5d6b80', flexShrink: 0 }}>{d.kapittel.slice(0, 2)}</span>
                   </button>
                 </div>
               );

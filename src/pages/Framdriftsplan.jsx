@@ -71,10 +71,10 @@ const fc = k => FAG[k]?.color ?? '#888780';
 
 const STATUS_OPTIONS = ['Ikke startet', 'Pågående', 'Forsinket', 'Ferdig'];
 const STATUS_COLORS  = {
-  'Ikke startet': '#64748b',
+  'Ikke startet': '#5d6b80',
   'Pågående':     '#2563eb',
   'Forsinket':    '#dc2626',
-  'Ferdig':       '#16a34a',
+  'Ferdig':       '#15803d',
 };
 
 const STANDARD_FASER = [
@@ -139,7 +139,7 @@ function openPrintWindow(project, status, pct) {
 <div style="display:flex;height:26px;background:${rowBg};border-bottom:1px solid #f1f5f9;">
   <div style="width:190px;flex-shrink:0;display:flex;align-items:center;padding:0 8px;border-right:2px solid #e2e8f0;gap:6px;overflow:hidden;">
     <div style="width:8px;height:8px;border-radius:50%;background:${col};flex-shrink:0;opacity:${done ? 0.35 : 1};"></div>
-    <span style="font-size:10px;color:${done ? '#94a3b8' : '#1e293b'};${done ? 'text-decoration:line-through;' : ''}white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</span>
+    <span style="font-size:10px;color:${done ? '#5d6b80' : '#1e293b'};${done ? 'text-decoration:line-through;' : ''}white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${t.name}</span>
   </div>
   <div style="flex:1;position:relative;overflow:hidden;">
     ${wkBg}
@@ -158,11 +158,11 @@ function openPrintWindow(project, status, pct) {
     const bg    = i % 2 === 0 ? '#fff' : '#f8fafc';
     return `<tr style="background:${bg};">
       <td style="padding:3px 6px;border-bottom:1px solid #e2e8f0;">${i + 1}</td>
-      <td style="padding:3px 6px;border-bottom:1px solid #e2e8f0;${done ? 'text-decoration:line-through;color:#94a3b8;' : ''}">${t.name}</td>
+      <td style="padding:3px 6px;border-bottom:1px solid #e2e8f0;${done ? 'text-decoration:line-through;color:#5d6b80;' : ''}">${t.name}</td>
       <td style="padding:3px 6px;border-bottom:1px solid #e2e8f0;color:${col};">${label}</td>
       <td style="padding:3px 6px;border-bottom:1px solid #e2e8f0;">Dag ${t.start}</td>
       <td style="padding:3px 6px;border-bottom:1px solid #e2e8f0;">${t.dur} d</td>
-      <td style="padding:3px 6px;border-bottom:1px solid #e2e8f0;color:${done ? '#16a34a' : '#64748b'};">${done ? '✓ Ferdig' : t.pct > 0 ? `${t.pct}%` : '–'}</td>
+      <td style="padding:3px 6px;border-bottom:1px solid #e2e8f0;color:${done ? '#15803d' : '#5d6b80'};">${done ? '✓ Ferdig' : t.pct > 0 ? `${t.pct}%` : '–'}</td>
     </tr>`;
   }).join('');
 
@@ -190,12 +190,12 @@ function openPrintWindow(project, status, pct) {
 <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:10px;border-bottom:2px solid #1e293b;margin-bottom:12px;">
   <div>
     <div style="font-size:20px;font-weight:800;color:#1e293b;line-height:1.2;">${project.navn}</div>
-    ${project.adresse ? `<div style="font-size:11px;color:#64748b;margin-top:3px;">📍 ${project.adresse}</div>` : ''}
-    <div style="font-size:10px;color:#64748b;margin-top:5px;">
+    ${project.adresse ? `<div style="font-size:11px;color:#5d6b80;margin-top:3px;">📍 ${project.adresse}</div>` : ''}
+    <div style="font-size:10px;color:#5d6b80;margin-top:5px;">
       ${project.fdStartWeek ? `Startuke: U${project.fdStartWeek}/${project.fdStartYear || ''} · ` : ''}${totalWks} uker · ${ferdig}/${tasks.length} faser fullført
     </div>
   </div>
-  <div style="text-align:right;font-size:10px;color:#64748b;line-height:1.8;">
+  <div style="text-align:right;font-size:10px;color:#5d6b80;line-height:1.8;">
     <div>Skrevet ut: <strong>${printDato}</strong></div>
     <div>Status: <strong>${status}</strong></div>
     <div>Fremdrift: <strong>${pct}%</strong></div>
@@ -203,7 +203,7 @@ function openPrintWindow(project, status, pct) {
 </div>
 
 <div style="-webkit-print-color-adjust:exact;print-color-adjust:exact;">
-  <div style="display:flex;height:22px;background:#1e293b;color:#94a3b8;font-weight:700;letter-spacing:0.04em;">
+  <div style="display:flex;height:22px;background:#1e293b;color:#5d6b80;font-weight:700;letter-spacing:0.04em;">
     <div style="width:190px;flex-shrink:0;border-right:1px solid #334155;display:flex;align-items:center;padding:0 8px;font-size:10px;color:#fff;">FASE</div>
     <div style="flex:1;display:flex;overflow:hidden;">${wkCells}</div>
   </div>
@@ -298,8 +298,8 @@ function GenererModal({ project, onClose, onApply }) {
     <button onClick={() => setTab(key)} style={{
       padding: '10px 18px', background: 'none', border: 'none',
       borderBottom: tab === key ? '2px solid #2563eb' : '2px solid transparent',
-      color: tab === key ? '#2563eb' : '#64748b',
-      fontWeight: tab === key ? 700 : 500, cursor: 'pointer', fontSize: 13, marginBottom: -1,
+      color: tab === key ? '#2563eb' : '#5d6b80',
+      fontWeight: tab === key ? 500 : 500, cursor: 'pointer', fontSize: 13, marginBottom: -1,
     }}>{label}</button>
   );
 
@@ -320,7 +320,7 @@ function GenererModal({ project, onClose, onApply }) {
 
             <div style={{ padding: '20px 24px 24px', display: 'grid', gap: 16 }}>
               {tab === 'tilbud' && (alleMedData.length === 0 ? (
-                <div style={{ color: '#64748b', fontSize: 13, textAlign: 'center', padding: 20 }}>
+                <div style={{ color: '#5d6b80', fontSize: 13, textAlign: 'center', padding: 20 }}>
                   Ingen prosjekter med tilbudsdata funnet.<br />Bruk «Fri beskrivelse»-fanen i stedet.
                 </div>
               ) : (
@@ -337,7 +337,7 @@ function GenererModal({ project, onClose, onApply }) {
                   </div>
                   {valgtProj && (
                     <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '10px 14px', fontSize: 13, display: 'grid', gap: 3 }}>
-                      <div style={{ fontWeight: 600, color: '#15803d', marginBottom: 2 }}>📦 Tilbudsdata</div>
+                      <div style={{ fontWeight: 500, color: '#15803d', marginBottom: 2 }}>📦 Tilbudsdata</div>
                       {valgtProj.adresse && <div>📍 {valgtProj.adresse}</div>}
                       {valgtProj.estimertSum > 0 && <div>💰 {Math.round(valgtProj.estimertSum).toLocaleString('nb-NO')} kr</div>}
                       {valgtProj.fag?.length > 0 && <div>🔨 Fag: {valgtProj.fag.join(', ')}</div>}
@@ -392,7 +392,7 @@ function GenererModal({ project, onClose, onApply }) {
         ) : (
           <div style={{ padding: '20px 24px 24px', display: 'grid', gap: 16 }}>
             <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '12px 16px' }}>
-              <div style={{ fontWeight: 700, color: '#15803d', marginBottom: 6 }}>✅ Plan generert!</div>
+              <div style={{ fontWeight: 500, color: '#15803d', marginBottom: 6 }}>✅ Plan generert!</div>
               <div style={{ fontSize: 13, color: '#374151', display: 'grid', gap: 3 }}>
                 <div>📊 <strong>{preview.fdTasks?.length} faser</strong></div>
                 <div>🗓 Startuke: <strong>U{preview.fdStartWeek}/{preview.fdStartYear}</strong></div>
@@ -409,7 +409,7 @@ function GenererModal({ project, onClose, onApply }) {
                 }}>
                   <span style={{ width: 10, height: 10, borderRadius: '50%', background: fc(t.fag), flexShrink: 0 }} />
                   <span style={{ flex: 1, fontWeight: 500, color: '#1e293b' }}>{t.name}</span>
-                  <span style={{ color: '#64748b', whiteSpace: 'nowrap' }}>{t.dur}d · dag {t.start}</span>
+                  <span style={{ color: '#5d6b80', whiteSpace: 'nowrap' }}>{t.dur}d · dag {t.start}</span>
                   <span style={{ color: FAG[t.fag]?.color || '#888', fontSize: 10, minWidth: 60, textAlign: 'right' }}>{FAG[t.fag]?.label || t.fag}</span>
                 </div>
               ))}
@@ -419,7 +419,7 @@ function GenererModal({ project, onClose, onApply }) {
               <button className="btn" onClick={() => { setPreview(null); setFeil(''); }}>← Tilbake</button>
               <button className="btn" onClick={onClose}>Avbryt</button>
               {harEksisterende && (
-                <button className="btn" style={{ borderColor: '#f59e0b', color: '#b45309' }}
+                <button className="btn" style={{ borderColor: '#b45309', color: '#b45309' }}
                   onClick={() => onApply({ ...preview, replace: false })}>
                   ➕ Legg til i eksisterende
                 </button>
@@ -504,7 +504,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
   }, [tasks]);
 
   const COL_CYCLE = ['rgba(250,204,21,.28)', 'rgba(134,239,172,.28)', 'rgba(147,197,253,.28)', 'rgba(249,168,212,.28)'];
-  const SWATCH_COLORS = ['#185FA5','#E24B4A','#0F6E56','#D4537E','#7F77DD','#BA7517','#16a34a','#64748b','#ea580c','#0891b2'];
+  const SWATCH_COLORS = ['#185FA5','#E24B4A','#0F6E56','#D4537E','#7F77DD','#BA7517','#15803d','#5d6b80','#ea580c','#0891b2'];
 
   useEffect(() => {
     setTasks(project.fdTasks || []);
@@ -627,12 +627,12 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
     <div style={storskjerm ? { position: 'fixed', inset: 0, zIndex: 300, background: '#fff', overflow: 'auto', padding: '8px 12px' } : undefined}>
       {storskjerm && (
         <div style={{ position: 'fixed', top: 8, right: 14, zIndex: 400, display: 'flex', gap: 4, alignItems: 'center', background: '#1e293b', color: '#fff', borderRadius: 10, padding: '5px 10px', opacity: 0.92 }}>
-          <span style={{ fontSize: 13, fontWeight: 600, marginRight: 8 }}>📺 {project.navn || 'Framdriftsplan'}</span>
+          <span style={{ fontSize: 13, fontWeight: 500, marginRight: 8 }}>📺 {project.navn || 'Framdriftsplan'}</span>
           <button onClick={() => setZoom(z => Math.max(0.3, +(z - 0.2).toFixed(1)))}
-            style={{ background: 'none', border: '1px solid rgba(255,255,255,.3)', borderRadius: 6, color: '#fff', fontSize: 16, fontWeight: 700, cursor: 'pointer', padding: '1px 9px' }}>−</button>
-          <span style={{ fontSize: 12, fontWeight: 600, minWidth: 40, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
+            style={{ background: 'none', border: '1px solid rgba(255,255,255,.3)', borderRadius: 6, color: '#fff', fontSize: 16, fontWeight: 500, cursor: 'pointer', padding: '1px 9px' }}>−</button>
+          <span style={{ fontSize: 12, fontWeight: 500, minWidth: 40, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
           <button onClick={() => setZoom(z => Math.min(4, +(z + 0.2).toFixed(1)))}
-            style={{ background: 'none', border: '1px solid rgba(255,255,255,.3)', borderRadius: 6, color: '#fff', fontSize: 16, fontWeight: 700, cursor: 'pointer', padding: '1px 9px' }}>＋</button>
+            style={{ background: 'none', border: '1px solid rgba(255,255,255,.3)', borderRadius: 6, color: '#fff', fontSize: 16, fontWeight: 500, cursor: 'pointer', padding: '1px 9px' }}>＋</button>
           <div className="ukemode-toggle" style={{ marginLeft: 6 }}>
             <button className={`ukemode-btn ${timeMode === 'uke' ? 'active' : ''}`} onClick={() => setTimeMode('uke')}>Uker</button>
             <button className={`ukemode-btn ${timeMode === 'dag' ? 'active' : ''}`} onClick={() => setTimeMode('dag')}>Dager</button>
@@ -651,7 +651,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
       )}
 
       <div className="fd2-gantt-toolbar" style={storskjerm ? { display: 'none' } : undefined}>
-        <span style={{ fontSize: 12, color: '#64748b', fontWeight: 500 }}>Zoom:</span>
+        <span style={{ fontSize: 12, color: '#5d6b80', fontWeight: 500 }}>Zoom:</span>
         <button className="fd2-zoom-btn" onClick={() => setZoom(z => Math.max(0.3, +(z - 0.2).toFixed(1)))}>−</button>
         <span className="fd2-zoom-pct">{Math.round(zoom * 100)}%</span>
         <button className="fd2-zoom-btn" onClick={() => setZoom(z => Math.min(4, +(z + 0.2).toFixed(1)))}>+</button>
@@ -682,10 +682,10 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
         <div className="fd2-gantt-left" style={{ width: PAD }}>
           <svg width={PAD} height={svgH} viewBox={`0 0 ${PAD} ${svgH}`} style={{ display: 'block' }}>
             <rect x={0} y={0} width={PAD} height={40} fill="#f8fafc" />
-            <text x={10} y={26} fontSize={11} fontWeight="600" fill="#64748b">Fase</text>
-            <text x={PAD - 132} y={26} fontSize={10} fill="#94a3b8" textAnchor="middle">Lengde</text>
-            <text x={PAD - 91} y={26} fontSize={10} fill="#94a3b8" textAnchor="middle">Ferdig</text>
-            <text x={PAD - 34} y={26} fontSize={10} fill="#94a3b8" textAnchor="middle">✓</text>
+            <text x={10} y={26} fontSize={11} fontWeight="500" fill="#5d6b80">Fase</text>
+            <text x={PAD - 132} y={26} fontSize={10} fill="#5d6b80" textAnchor="middle">Lengde</text>
+            <text x={PAD - 91} y={26} fontSize={10} fill="#5d6b80" textAnchor="middle">Ferdig</text>
+            <text x={PAD - 34} y={26} fontSize={10} fill="#5d6b80" textAnchor="middle">✓</text>
             {MILE_H > 0 && (
               <rect x={0} y={40} width={PAD} height={MILE_H} fill="#faf5ff" />
             )}
@@ -733,7 +733,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                       />
                     </foreignObject>
                   ) : (
-                    <text x={26} y={y + ROW / 2 + 5} fontSize={12} fill={done ? '#94a3b8' : '#1e293b'}
+                    <text x={26} y={y + ROW / 2 + 5} fontSize={12} fill={done ? '#5d6b80' : '#1e293b'}
                       style={{ userSelect: 'none', textDecoration: done ? 'line-through' : 'none', cursor: 'text' }}
                       clipPath={`url(#nc${t.id})`}
                       onDoubleClick={e => { e.stopPropagation(); setEditingTaskId(t.id); }}>
@@ -745,7 +745,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                     onClick={e => { e.stopPropagation(); setPickerMode('lengde'); setPickerTaskId(pickerTaskId === t.id ? null : t.id); }}>
                     <rect x={PAD - 152} y={y + ROW / 2 - 9} width={40} height={18} rx={5}
                       fill="#f1f5f9" stroke="#e2e8f0" strokeWidth={1} />
-                    <text x={PAD - 132} y={y + ROW / 2 + 4} fontSize={10} fontWeight="600" textAnchor="middle"
+                    <text x={PAD - 132} y={y + ROW / 2 + 4} fontSize={10} fontWeight="500" textAnchor="middle"
                       fill="#475569" style={{ userSelect: 'none', pointerEvents: 'none' }}>
                       {t.dur}d
                     </text>
@@ -754,9 +754,9 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                   <g className="fd2-g-ctrl" style={{ cursor: 'pointer' }}
                     onClick={e => { e.stopPropagation(); setPickerMode('pct'); setPickerTaskId(pickerTaskId === t.id ? null : t.id); }}>
                     <rect x={PAD - 110} y={y + ROW / 2 - 9} width={38} height={18} rx={9}
-                      fill={done ? '#16a34a' : (t.pct ?? 0) > 0 ? '#dbeafe' : '#f1f5f9'} />
-                    <text x={PAD - 91} y={y + ROW / 2 + 4} fontSize={10} fontWeight="700" textAnchor="middle"
-                      fill={done ? '#fff' : (t.pct ?? 0) > 0 ? '#1d4ed8' : '#94a3b8'}
+                      fill={done ? '#15803d' : (t.pct ?? 0) > 0 ? '#dbeafe' : '#f1f5f9'} />
+                    <text x={PAD - 91} y={y + ROW / 2 + 4} fontSize={10} fontWeight="500" textAnchor="middle"
+                      fill={done ? '#fff' : (t.pct ?? 0) > 0 ? '#1d4ed8' : '#5d6b80'}
                       style={{ userSelect: 'none', pointerEvents: 'none' }}>
                       {t.pct ?? 0}%
                     </text>
@@ -767,7 +767,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                     title="Slå sammen med raden over"
                     onClick={e => { e.stopPropagation(); save(tasks.map((tt, ii) => ii === i ? { ...tt, lane: laneOf[i - 1] } : tt)); }}>⇑</text>}
                   {laneOf[i] === laneOf[i] && tasks.some((tt, ii) => ii !== i && laneOf[ii] === laneOf[i]) && (
-                    <text x={PAD - 70} y={y + ROW / 2 + 14} fontSize={10} fill="#f59e0b"
+                    <text x={PAD - 70} y={y + ROW / 2 + 14} fontSize={10} fill="#b45309"
                       className="fd2-g-ctrl" style={{ cursor: 'pointer', userSelect: 'none' }}
                       title="Skill ut på egen rad"
                       onClick={e => { e.stopPropagation(); save(tasks.map((tt, ii) => ii === i ? { ...tt, lane: Date.now() + ii } : tt)); }}>⇓</text>
@@ -776,7 +776,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                     className="fd2-g-ctrl" style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => deleteTask(t.id)}>✕</text>
                   <rect x={PAD - 36} y={y + ROW / 2 - 9} width={18} height={18} rx={4}
                     className="fd2-g-ctrl"
-                    fill={done ? '#16a34a' : '#fff'} stroke={done ? '#16a34a' : '#e2e8f0'} strokeWidth={1.5}
+                    fill={done ? '#15803d' : '#fff'} stroke={done ? '#15803d' : '#e2e8f0'} strokeWidth={1.5}
                     style={{ cursor: 'pointer' }} onClick={e => toggleDone(e, t.id)} />
                   {done && (
                     <text x={PAD - 27} y={y + ROW / 2 + 5} fontSize={13} fill="#fff" textAnchor="middle"
@@ -794,7 +794,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
             {yearBands.map(b => (
               <g key={b.y}>
                 <rect x={b.s * dw} y={0} width={(b.e - b.s) * dw} height={20} fill={b.y % 2 === 0 ? '#f1f5f9' : '#e9eef5'} />
-                <text x={b.s * dw + 6} y={14} fontSize={11} fontWeight="600" fill="#475569">{b.y}</text>
+                <text x={b.s * dw + 6} y={14} fontSize={11} fontWeight="500" fill="#475569">{b.y}</text>
               </g>
             ))}
             {MILE_H > 0 && (
@@ -822,14 +822,14 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                     stroke={erManved ? '#cbd5e1' : erHelg ? '#cbd5e1' : '#f1f5f9'}
                     strokeWidth={erManved ? 1 : 0.5} />
                   {erManved && (
-                    <text x={d * dw + 3} y={20 + 11} fontSize={storskjerm ? 11 : 9} fontWeight="700" fill="#2563eb">U{w}</text>
+                    <text x={d * dw + 3} y={20 + 11} fontSize={storskjerm ? 11 : 9} fontWeight="500" fill="#2563eb">U{w}</text>
                   )}
                   <text x={d * dw + dw / 2} y={TASK_TOP - 12} fontSize={storskjerm ? 12 : 10}
-                    fontWeight={erHelg ? 400 : 600} fill={erHelg ? '#94a3b8' : '#475569'} textAnchor="middle">
+                    fontWeight={erHelg ? 400 : 500} fill={erHelg ? '#5d6b80' : '#475569'} textAnchor="middle">
                     {DAG_BOKSTAV[realDow]}
                   </text>
                   <text x={d * dw + dw / 2} y={TASK_TOP - 2} fontSize={storskjerm ? 10 : 8}
-                    fill={erHelg ? '#cbd5e1' : '#94a3b8'} textAnchor="middle">
+                    fill={erHelg ? '#cbd5e1' : '#5d6b80'} textAnchor="middle">
                     {datoTxt}
                   </text>
                 </g>
@@ -842,7 +842,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                   <rect x={d * dw} y={TASK_TOP} width={7 * dw} height={svgH - TASK_TOP}
                     fill={cc || (i % 2 === 0 ? 'rgba(0,0,0,0.01)' : 'rgba(0,0,0,0.03)')} />
                   <line x1={d * dw} y1={20} x2={d * dw} y2={svgH} stroke="#e2e8f0" strokeWidth={0.5} />
-                  <text x={d * dw + 4} y={33} fontSize={10} fill="#94a3b8"
+                  <text x={d * dw + 4} y={33} fontSize={10} fill="#5d6b80"
                     style={{ cursor: 'pointer' }}
                     title="Klikk for å farge kolonnen"
                     onClick={() => {
@@ -878,7 +878,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                       style={{ pointerEvents: 'none' }} />
                   )}
                   <clipPath id={`bc${t.id}`}><rect x={x + 4} y={y + 6} width={Math.max(w - 22, 0)} height={22} /></clipPath>
-                  <text x={x + 6} y={y + 21} fontSize={10} fill="white" fontWeight="600"
+                  <text x={x + 6} y={y + 21} fontSize={10} fill="white" fontWeight="500"
                     style={{ pointerEvents: 'none' }} clipPath={`url(#bc${t.id})`}>{FAG_IKON[t.fag] || '■'} {t.dur}d</text>
                   {done && w > 24 && (
                     <text x={x + w / 2} y={y + 21} fontSize={12} fill="white" textAnchor="middle"
@@ -898,7 +898,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
               <g>
                 <line x1={nowX} y1={20} x2={nowX} y2={svgH} stroke="#dc2626" strokeWidth={2} strokeDasharray="4 3" />
                 <rect x={nowX - 16} y={21} width={32} height={16} rx={4} fill="#dc2626" />
-                <text x={nowX} y={33} fontSize={10} fontWeight="600" fill="white" textAnchor="middle">U{nowWk}</text>
+                <text x={nowX} y={33} fontSize={10} fontWeight="500" fill="white" textAnchor="middle">U{nowWk}</text>
               </g>
             )}
             {MILE_H > 0 && (project.fdMilepaler || []).map((m, mi) => {
@@ -907,7 +907,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                 <g key={mi}>
                   <line x1={mx} y1={40} x2={mx} y2={svgH} stroke="#7c3aed" strokeWidth={1} strokeDasharray="3 3" opacity={0.4} />
                   <polygon points={`${mx},${40+MILE_H-2} ${mx-4},${40+4} ${mx+4},${40+4}`} fill="#7c3aed" opacity={0.8} />
-                  <text x={mx + 5} y={40 + MILE_H - 5} fontSize={8} fill="#7c3aed" fontWeight="700"
+                  <text x={mx + 5} y={40 + MILE_H - 5} fontSize={8} fill="#7c3aed" fontWeight="500"
                     style={{ userSelect: 'none', pointerEvents: 'none' }}>
                     d{m.dagFraStart}
                   </text>
@@ -935,12 +935,12 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
           const setDur   = v => save(tasks.map(tt => tt.id === t.id ? { ...tt, dur: Math.max(1, Math.round(v)) } : tt))
           const Knapp = ({ onClick, children }) => (
             <button onClick={onClick}
-              style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid rgba(255,255,255,.3)', background: 'rgba(255,255,255,.08)', color: '#fff', fontSize: 18, fontWeight: 700, cursor: 'pointer' }}>{children}</button>
+              style={{ width: 34, height: 34, borderRadius: 8, border: '1px solid rgba(255,255,255,.3)', background: 'rgba(255,255,255,.08)', color: '#fff', fontSize: 18, fontWeight: 500, cursor: 'pointer' }}>{children}</button>
           )
           return (
             <div style={{ position: 'relative', zIndex: 50, margin: '4px 0' }} onClick={e => e.stopPropagation()}>
               <div style={{ background: '#1e293b', borderRadius: 12, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <div style={{ fontSize: 12, color: '#94a3b8' }}>
+                <div style={{ fontSize: 12, color: '#5d6b80' }}>
                   📏 Lengde: <strong style={{ color: '#e2e8f0' }}>{t.name.slice(0, 28)}</strong>
                 </div>
                 {/* Varighet */}
@@ -949,10 +949,10 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                   <Knapp onClick={() => setDur(dur - 1)}>−</Knapp>
                   <input type="number" min={1} value={dur}
                     onChange={e => setDur(parseInt(e.target.value || '1', 10))}
-                    style={{ width: 64, height: 34, textAlign: 'center', fontSize: 15, fontWeight: 700, border: 'none', borderRadius: 8 }} />
-                  <span style={{ fontSize: 13, color: '#94a3b8' }}>dager</span>
+                    style={{ width: 64, height: 34, textAlign: 'center', fontSize: 15, fontWeight: 500, border: 'none', borderRadius: 8 }} />
+                  <span style={{ fontSize: 13, color: '#5d6b80' }}>dager</span>
                   <Knapp onClick={() => setDur(dur + 1)}>+</Knapp>
-                  <span style={{ fontSize: 11, color: '#64748b', marginLeft: 4 }}>({(dur / 7).toFixed(1)} uker)</span>
+                  <span style={{ fontSize: 11, color: '#5d6b80', marginLeft: 4 }}>({(dur / 7).toFixed(1)} uker)</span>
                   <Knapp onClick={() => setDur(dur + 7)}>+uke</Knapp>
                 </div>
                 {/* Startdag */}
@@ -961,12 +961,12 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                   <Knapp onClick={() => setStart(start - 1)}>−</Knapp>
                   <input type="number" min={0} value={start}
                     onChange={e => setStart(parseInt(e.target.value || '0', 10))}
-                    style={{ width: 64, height: 34, textAlign: 'center', fontSize: 15, fontWeight: 700, border: 'none', borderRadius: 8 }} />
+                    style={{ width: 64, height: 34, textAlign: 'center', fontSize: 15, fontWeight: 500, border: 'none', borderRadius: 8 }} />
                   <Knapp onClick={() => setStart(start + 1)}>+</Knapp>
-                  <span style={{ fontSize: 11, color: '#64748b', marginLeft: 4 }}>{datoForDag(start).getDate()}.{datoForDag(start).getMonth() + 1}</span>
+                  <span style={{ fontSize: 11, color: '#5d6b80', marginLeft: 4 }}>{datoForDag(start).getDate()}.{datoForDag(start).getMonth() + 1}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <button style={{ background: '#2563eb', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: '7px 16px' }}
+                  <button style={{ background: '#2563eb', border: 'none', borderRadius: 8, color: '#fff', fontSize: 13, fontWeight: 500, cursor: 'pointer', padding: '7px 16px' }}
                     onClick={() => setPickerTaskId(null)}>Ferdig</button>
                 </div>
               </div>
@@ -980,12 +980,12 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
           return (
             <div style={{ position: 'relative', zIndex: 50, margin: '4px 0' }} onClick={e => e.stopPropagation()}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1e293b', borderRadius: 10, padding: '8px 12px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: 11, color: '#5d6b80', whiteSpace: 'nowrap' }}>
                   📊 Ferdig: <strong style={{ color: '#e2e8f0' }}>{t.name.slice(0, 20)}</strong>
                 </span>
                 {[0, 10, 25, 50, 75, 90, 100].map(p => (
                   <button key={p}
-                    style={{ background: curPct === p ? '#16a34a' : 'rgba(255,255,255,.1)', border: '1px solid ' + (curPct === p ? '#16a34a' : 'rgba(255,255,255,.25)'), borderRadius: 6, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: '4px 9px' }}
+                    style={{ background: curPct === p ? '#15803d' : 'rgba(255,255,255,.1)', border: '1px solid ' + (curPct === p ? '#15803d' : 'rgba(255,255,255,.25)'), borderRadius: 6, color: '#fff', fontSize: 12, fontWeight: 500, cursor: 'pointer', padding: '4px 9px' }}
                     onClick={() => setPct(t.id, p)}>{p}%</button>
                 ))}
                 <input type="number" min={0} max={100} defaultValue={curPct}
@@ -993,8 +993,8 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                   onClick={e => e.stopPropagation()}
                   onChange={e => setPct(t.id, parseInt(e.target.value || '0', 10))}
                   title="Skriv inn egen prosent" />
-                <span style={{ fontSize: 12, color: '#94a3b8' }}>%</span>
-                <button style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 14, padding: '0 4px' }}
+                <span style={{ fontSize: 12, color: '#5d6b80' }}>%</span>
+                <button style={{ background: 'none', border: 'none', color: '#5d6b80', cursor: 'pointer', fontSize: 14, padding: '0 4px' }}
                   onClick={() => setPickerTaskId(null)}>✕ Lukk</button>
               </div>
             </div>
@@ -1008,7 +1008,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
           <div style={{ position: 'relative', zIndex: 50, margin: '4px 0 4px 0' }}
             onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1e293b', borderRadius: 10, padding: '8px 12px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: 11, color: '#5d6b80', whiteSpace: 'nowrap' }}>
                 {isModeRow ? '🎨 Radfarge:' : '🎨 Velg farge:'} <strong style={{ color: '#e2e8f0' }}>{t.name.slice(0, 20)}</strong>
               </span>
               {/* Standard (fag-farge) — kun for bar-modus */}
@@ -1036,7 +1036,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                 <button style={{ background: 'none', border: '1px solid #475569', borderRadius: 6, color: '#cbd5e1', cursor: 'pointer', fontSize: 11, padding: '2px 8px' }}
                   onClick={() => { save(tasks.map(tt => tt.id === t.id ? { ...tt, rowColor: undefined } : tt)); setPickerTaskId(null); }}>Fjern</button>
               )}
-              <button style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 14, padding: '0 4px' }}
+              <button style={{ background: 'none', border: 'none', color: '#5d6b80', cursor: 'pointer', fontSize: 14, padding: '0 4px' }}
                 onClick={() => setPickerTaskId(null)}>✕ Lukk</button>
             </div>
           </div>
@@ -1212,7 +1212,7 @@ function ProjectDetail({ project, onBack, onUpdate, readOnly = false }) {
             ✨ Generer med AI
           </button>
           {project.kildeTilbudData && (
-            <button className="btn btn-sm" style={{ fontSize: 11, padding: '4px 8px', color: '#64748b' }}
+            <button className="btn btn-sm" style={{ fontSize: 11, padding: '4px 8px', color: '#5d6b80' }}
               onClick={regenererMedAI} disabled={aiLaster}
               title="Regenerer fra eksisterende tilbudsdata">
               {aiLaster ? <span className="fd2-spinner" /> : '🔄'}
@@ -1536,7 +1536,7 @@ export default function Framdriftsplan({ readOnly = false, ansattId = null }) {
         {[
           { tall: aktive.length, label: 'Aktive prosjekter', color: '#1e293b' },
           { tall: medAIPlan,     label: '✨ AI-plan',          color: '#7c3aed' },
-          { tall: utenPlan,      label: 'Mangler plan',        color: '#f59e0b' },
+          { tall: utenPlan,      label: 'Mangler plan',        color: '#b45309' },
           ...(antForsinket > 0 ? [{ tall: antForsinket, label: '🔴 Forsinket', color: '#dc2626' }] : []),
         ].map((s, i) => (
           <div key={i} className="fd2-stat-boks" style={{ borderTop: `3px solid ${s.color}` }}>
@@ -1570,7 +1570,7 @@ export default function Framdriftsplan({ readOnly = false, ansattId = null }) {
           return sa !== sb ? sa - sb : a.navn.localeCompare(b.navn, 'nb');
         }).map(p => {
           const tasks = p.fdTasks || [];
-          const sc = STATUS_COLORS[p.fdStatus || 'Ikke startet'] ?? '#64748b';
+          const sc = STATUS_COLORS[p.fdStatus || 'Ikke startet'] ?? '#5d6b80';
           const harAI = p.fdGenAv === 'AI' && p.kildeTilbudData;
           return (
             <div key={p.id} className="fd2-prosjekt-rad" onClick={() => setSelectedId(p.id)}>
@@ -1580,7 +1580,7 @@ export default function Framdriftsplan({ readOnly = false, ansattId = null }) {
                 {harAI && <span className="fd2-kilde-badge fd2-kilde-ai" style={{ fontSize: 10 }}>✨</span>}
                 {tasks.length > 0
                   ? <span className="fd2-rad-info">{tasks.filter(t=>(t.pct??0)>=100).length}/{tasks.length} faser</span>
-                  : <span className="fd2-rad-info" style={{ color: '#f59e0b' }}>Ingen plan</span>
+                  : <span className="fd2-rad-info" style={{ color: '#b45309' }}>Ingen plan</span>
                 }
               </div>
               <span className="fd2-rad-status" style={{ color: sc }}>{p.fdStatus || 'Ikke startet'}</span>

@@ -15,11 +15,11 @@ function fmtSum(kr) {
 }
 
 // ── 1.1 KPI-kort (klikkbart, varsel-variant) ──
-export function KpiKort({ tall, label, sum, ikon, farge = '#2563eb', varsel = false, aktiv = false, onClick }) {
+export function KpiKort({ tall, label, sum, ikon, farge = 'var(--accent)', varsel = false, aktiv = false, onClick }) {
   return (
     <button
       className={`ds-kpi${varsel ? ' ds-kpi--varsel' : ''}${aktiv ? ' ds-kpi--aktiv' : ''}`}
-      style={aktiv ? { background: farge, borderColor: farge } : { borderTopColor: farge }}
+      style={aktiv ? { background: farge, borderColor: farge } : { borderLeftColor: farge }}
       onClick={onClick}
     >
       <span className="ds-kpi-tall" style={aktiv ? {} : { color: farge }}>{ikon} {tall}</span>
@@ -98,14 +98,14 @@ export function KompaktRad({
   return (
     <div
       className={`ds-rad${onClick ? ' ds-rad--klikkbar' : ''}`}
-      style={varselFarge ? { borderLeft: `4px solid ${varselFarge}` } : {}}
+      style={varselFarge ? { borderLeft: `3px solid ${varselFarge}` } : {}}
       onClick={onClick}
     >
       <div className="ds-rad-venstre">
         <div className="ds-rad-tittel-linje">
           <span className="ds-rad-tittel">{tittel}</span>
           {undertittel && <span className="ds-rad-undertittel">{undertittel}</span>}
-          {varsel && <span className="ds-rad-varsel" style={{ color: varselFarge || '#dc2626' }}>{varsel}</span>}
+          {varsel && <span className="ds-rad-varsel" style={{ color: varselFarge || 'var(--danger)' }}>{varsel}</span>}
         </div>
         <div className="ds-rad-meta">
           {meta.filter(Boolean).map((m, i) => <span key={i}>{m}</span>)}

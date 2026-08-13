@@ -94,7 +94,7 @@ export default function LoginPage({ onLogin }) {
     return (
       <div className="login-bg">
         <div className="login-card">
-          <div className="login-logo" style={{ background: '#16a34a' }}>✓</div>
+          <div className="login-logo" style={{ background: '#15803d' }}>✓</div>
           <h1 className="login-title">Sjekk e-posten</h1>
           <p className="login-sub" style={{ textAlign: 'center', lineHeight: 1.6 }}>
             Hvis det finnes en konto med <strong>{forgotEmail}</strong>, har vi sendt en lenke for å sette nytt passord.
@@ -145,7 +145,7 @@ export default function LoginPage({ onLogin }) {
               <button
                 type="button"
                 onClick={() => setShowPass(v => !v)}
-                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#6b7280' }}
+                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#5d6b80' }}
               >
                 {showPass ? '🙈' : '👁'}
               </button>
