@@ -817,7 +817,7 @@ export default function BefaringPlan() {
             <div
               key={key}
               className={`bef-pipeline-kort${aktiv ? ' bef-pipeline-kort--aktiv' : ''}`}
-              style={{ borderTop: `4px solid ${s.farge}`, background: aktiv ? s.farge : s.bg, cursor: 'pointer' }}
+              style={{ borderLeft: `3px solid ${s.farge}`, background: aktiv ? s.farge : '#fff', cursor: 'pointer' }}
               onClick={() => setPipelineFilter(f => f === key ? null : key)}
               title={aktiv ? 'Klikk for å fjerne filter' : `Filtrer på: ${s.label}`}
             >

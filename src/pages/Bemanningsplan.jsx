@@ -2514,7 +2514,7 @@ function RessursVisning({ state, planAnsatte, currentWeek, prevWeek, nextWeek, t
           const bg = ingen ? '#fef2f2' : faa ? '#fffbeb' : '#f0fdf4';
           return (
             <div key={s.weekStr}
-              style={{ background: bg, border: `1px solid ${farge}33`, borderTop: `3px solid ${farge}`, borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}
+              style={{ background: bg, border: `1px solid ${farge}33`, borderLeft: `3px solid ${farge}`, borderRadius: 10, padding: '10px 8px', textAlign: 'center' }}
               title={`Uke ${getWeekNumber(s.weekStr)}: ${s.ledige} ledige av ${s.total}${s.ferie ? ` · ${s.ferie} på ferie` : ''}${s.sykmeldte ? ` · ${s.sykmeldte} sykmeldt` : ''}`}>
               <div style={{ fontSize: 11, fontWeight: 500, color: '#475569' }}>
                 Uke {getWeekNumber(s.weekStr)}

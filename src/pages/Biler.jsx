@@ -251,7 +251,7 @@ export default function Biler() {
             <div
               key={i}
               className="proj-summary-card"
-              style={{ borderTop: `3px solid ${c.color}`, background: aktiv ? c.color : c.bg, cursor: c.key !== 'alle' ? 'pointer' : 'default' }}
+              style={{ borderLeft: `3px solid ${c.color}`, background: aktiv ? c.color : '#fff', cursor: c.key !== 'alle' ? 'pointer' : 'default' }}
               onClick={() => c.key !== 'alle' && setFilter(f => f === c.key ? 'alle' : c.key)}
             >
               <div className="proj-summary-icon">{c.icon}</div>

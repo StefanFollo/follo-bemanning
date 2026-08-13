@@ -1539,7 +1539,7 @@ export default function Framdriftsplan({ readOnly = false, ansattId = null }) {
           { tall: utenPlan,      label: 'Mangler plan',        color: '#b45309' },
           ...(antForsinket > 0 ? [{ tall: antForsinket, label: '🔴 Forsinket', color: '#dc2626' }] : []),
         ].map((s, i) => (
-          <div key={i} className="fd2-stat-boks" style={{ borderTop: `3px solid ${s.color}` }}>
+          <div key={i} className="fd2-stat-boks" style={{ borderLeft: `3px solid ${s.color}` }}>
             <div className="fd2-stat-tall" style={{ color: s.color }}>{s.tall}</div>
             <div className="fd2-stat-label">{s.label}</div>
           </div>

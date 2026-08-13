@@ -165,7 +165,7 @@ export default function Dashboard({ onNavigate }) {
           <div className="dash-stat-label">Planlagte befaringer</div>
           <div className="dash-stat-sub">{tilbudArbeid} tilbud under arbeid</div>
         </div>
-        <div className="dash-stat-kort dash-stat-kort--rekl" style={{ borderTop: aktiveRekl > 0 ? '4px solid #b45309' : undefined }}>
+        <div className="dash-stat-kort dash-stat-kort--rekl" style={{ borderLeftColor: aktiveRekl > 0 ? '#b45309' : undefined }}>
           <div className="dash-stat-tall" style={{ color: aktiveRekl > 0 ? '#b45309' : undefined }}>{aktiveRekl}</div>
           <div className="dash-stat-label">Aktive reklamasjoner</div>
           <div className="dash-stat-sub">{reklamasjonerUtenFrist > 0 ? `${reklamasjonerUtenFrist} uten frist` : 'Alle har frist'}</div>
