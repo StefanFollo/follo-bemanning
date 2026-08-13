@@ -749,6 +749,9 @@ export default function Prosjekter({ onNavigate = null }) {
     return new Set(
       alleProsjekter
         .filter(p => !p.arkivert && normStatus(p.status) === 'aktiv')
+        // Prosjekter som allerede har passert sluttdato hører til frist-varselet,
+        // ikke bemanning-varselet — ellers dobbelttelles de og tallet blåses opp
+        .filter(p => !(p.sluttDato && p.sluttDato < iDag))
         .filter(p => !(tildelingerByProsjekt[p.id] || []).some(t =>
           t.startDato && t.sluttDato && t.startDato <= omEnUke && t.sluttDato >= iDag))
         .map(p => p.id)
@@ -1064,30 +1067,41 @@ export default function Prosjekter({ onNavigate = null }) {
                 <span key={i} style={{ position: 'absolute', left: m.pct + '%', fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>{m.label}</span>
               ))}
             </div>
-            {faneProsjekter.map(p => {
-              const visAdr = p.adresse || p.navn || 'Uten navn';
-              const harDatoer = p.startDato && p.sluttDato && p.startDato <= sluttIso && p.sluttDato >= startIso;
-              const v = pct(p.startDato || startIso);
-              const b = Math.max(1.5, pct(p.sluttDato || sluttIso) - v);
+            {(() => {
+              // Rader uten datoer i vinduet samles i ÉN oppsummeringslinje nederst
+              // i stedet for å fylle listen med tomme rader
+              const harDatoerI = p => p.startDato && p.sluttDato && p.startDato <= sluttIso && p.sluttDato >= startIso;
+              const medDatoer = faneProsjekter.filter(harDatoerI);
+              const utenDatoer = faneProsjekter.filter(p => !harDatoerI(p));
               return (
-                <div key={p.id} style={{ display: 'flex', alignItems: 'center', height: 34, borderBottom: '1px solid #f8fafc', cursor: 'pointer' }}
-                  onClick={() => aapnePanel(p)}>
-                  <div style={{ width: 180, flexShrink: 0, fontSize: 12.5, fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 8 }}>
-                    {visAdr}
-                  </div>
-                  <div style={{ flex: 1, position: 'relative', height: '100%' }}>
-                    <div style={{ position: 'absolute', left: iDagPct + '%', top: 0, bottom: 0, width: 2, background: '#dc2626', opacity: .6 }} />
-                    {harDatoer ? (
-                      <div title={`${formatDate(p.startDato)} – ${formatDate(p.sluttDato)}`}
-                        style={{ position: 'absolute', left: v + '%', width: b + '%', top: 7, height: 20, background: p.farge || '#2563eb', borderRadius: 5, opacity: .9 }} />
-                    ) : (
-                      <span style={{ fontSize: 11, color: '#cbd5e1', position: 'absolute', top: 9 }}>ingen datoer i vinduet</span>
-                    )}
-                  </div>
-                </div>
+                <>
+                  {medDatoer.map(p => {
+                    const visAdr = p.adresse || p.navn || 'Uten navn';
+                    const v = pct(p.startDato);
+                    const b = Math.max(1.5, pct(p.sluttDato) - v);
+                    return (
+                      <div key={p.id} style={{ display: 'flex', alignItems: 'center', height: 34, borderBottom: '1px solid #f8fafc', cursor: 'pointer' }}
+                        onClick={() => aapnePanel(p)}>
+                        <div style={{ width: 180, flexShrink: 0, fontSize: 12.5, fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 8 }}>
+                          {visAdr}
+                        </div>
+                        <div style={{ flex: 1, position: 'relative', height: '100%' }}>
+                          <div style={{ position: 'absolute', left: iDagPct + '%', top: 0, bottom: 0, width: 2, background: '#dc2626', opacity: .6 }} />
+                          <div title={`${formatDate(p.startDato)} – ${formatDate(p.sluttDato)}`}
+                            style={{ position: 'absolute', left: v + '%', width: b + '%', top: 7, height: 20, background: p.farge || '#2563eb', borderRadius: 5, opacity: .9 }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {medDatoer.length === 0 && <div style={{ padding: 20, color: '#94a3b8', textAlign: 'center' }}>Ingen prosjekter med datoer i vinduet.</div>}
+                  {utenDatoer.length > 0 && (
+                    <div style={{ padding: '10px 0 4px', fontSize: 12, color: '#94a3b8' }}>
+                      🗓 {utenDatoer.length} prosjekt{utenDatoer.length !== 1 ? 'er' : ''} uten datoer i vinduet — sett start-/sluttdato via Rediger, eller bytt til Liste-visningen
+                    </div>
+                  )}
+                </>
               );
-            })}
-            {faneProsjekter.length === 0 && <div style={{ padding: 20, color: '#94a3b8', textAlign: 'center' }}>Ingen prosjekter i denne fanen.</div>}
+            })()}
           </div>
         );
       })()}
