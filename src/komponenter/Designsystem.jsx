@@ -133,6 +133,43 @@ export function KompaktRad({
   );
 }
 
+// ── 1.5 Detaljpanel — skyver inn fra høyre, mini-faner, Esc/utenfor lukker ──
+export function DetaljPanel({ tittel, undertittel, faner = [], aktivFane, onFane, handlinger = null, onLukk, children }) {
+  useEffect(() => {
+    const esc = e => { if (e.key === 'Escape') onLukk(); };
+    document.addEventListener('keydown', esc);
+    return () => document.removeEventListener('keydown', esc);
+  }, [onLukk]);
+  return (
+    <div className="ds-panel-bakteppe" onClick={onLukk}>
+      <div className="ds-panel" onClick={e => e.stopPropagation()}>
+        <div className="ds-panel-topp">
+          <div style={{ minWidth: 0 }}>
+            <div className="ds-panel-tittel">{tittel}</div>
+            {undertittel && <div className="ds-panel-undertittel">{undertittel}</div>}
+          </div>
+          <button className="ds-panel-lukk" onClick={onLukk} title="Lukk (Esc)">✕</button>
+        </div>
+        {faner.length > 0 && (
+          <div className="ds-panel-faner">
+            {faner.map(f => (
+              <button
+                key={f.key}
+                className={`ds-panel-fane${aktivFane === f.key ? ' ds-panel-fane--aktiv' : ''}`}
+                onClick={() => onFane(f.key)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="ds-panel-innhold">{children}</div>
+        {handlinger && <div className="ds-panel-handlinger">{handlinger}</div>}
+      </div>
+    </div>
+  );
+}
+
 // ── 1.6 Varsel-banner (klikk = filtrer) ──
 export function VarselBanner({ ikon = '⚠', tekst, tone = 'roed', aktiv = false, onClick }) {
   return (

@@ -355,7 +355,7 @@ function App() {
           {activeTab === 'befaring' && (isAdmin || isKontor || isBefaring) && <BefaringPlan />}
           {activeTab === 'reklamasjon' && (isAdmin || isKontor || isBefaring) && <Reklamasjon />}
           {activeTab === 'service' && (isAdmin || isKontor || isBefaring) && <Service />}
-          {activeTab === 'prosjekter' && (isAdmin || isKontor) && <Prosjekter />}
+          {activeTab === 'prosjekter' && (isAdmin || isKontor) && <Prosjekter onNavigate={setActiveTab} />}
           {activeTab === 'ansatte' && (isAdmin || isKontor) && <Ansatte />}
           {activeTab === 'bemanningsplan' && (isAdmin || role === 'ansatt') && <Bemanningsplan readOnly={!isAdmin} />}
           {activeTab === 'rorlegger' && (isAdmin || isKontor || isRorlegger) && <RorleggerPlan />}

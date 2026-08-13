@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatDate, PROSJEKT_PALETTE, isoToDate, dateToIso, daysBetween } from '../store';
-import { StatusFaner, KompaktRad } from '../komponenter/Designsystem';
+import { StatusFaner, KompaktRad, DetaljPanel, VarselBanner } from '../komponenter/Designsystem';
 
 function formaterBelop(belop) {
   if (!belop && belop !== 0) return null;
@@ -569,7 +569,7 @@ function ProsjektKSPlanKnapp({ project, onOppdater }) {
   )
 }
 
-export default function Prosjekter() {
+export default function Prosjekter({ onNavigate = null }) {
   const { state, dispatch } = useApp();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -583,7 +583,18 @@ export default function Prosjekter() {
   const isAdmin = localStorage.getItem('fbs_role') === 'admin';
   // Ny liste (designsystem PR1): aktiv status-fane + sorteringsvalg
   const [aktivFane, setAktivFane] = useState('aktiv');
-  const [sortValg, setSortValg] = useState('tittel'); // 'tittel' | 'frist' | 'sum' (PR2: 'handling')
+  const [sortValg, setSortValg] = useState('handling'); // 'handling' (default) | 'tittel' | 'frist' | 'sum'
+  // PR2: detaljpanel, varselfilter, visning, gantt-zoom, forleng frist
+  const [valgtId, setValgtId] = useState(null);
+  const [panelFane, setPanelFane] = useState('framdrift');
+  const [varselFilter, setVarselFilter] = useState(null); // null | 'frist' | 'bemanning'
+  const [visning, setVisning] = useState('liste');        // 'liste' | 'gantt'
+  const [ganttMnd, setGanttMnd] = useState(6);            // 3 | 6 | 12
+  const [forlengFristId, setForlengFristId] = useState(null);
+  const [forlengDato, setForlengDato] = useState('');
+  const [fdLaster, setFdLaster] = useState(false);
+  const [fdFeil, setFdFeil] = useState('');
+  const [loggEntries, setLoggEntries] = useState(null);   // null = ikke lastet
 
   // Sorter på det som VISES som tittel (adressen når den finnes) — ikke det
   // skjulte navnet. Ellers havner «Angelica K. – Bøhlerveien 41A» under A.
@@ -724,13 +735,129 @@ export default function Prosjekter() {
     ];
   }, [alleProsjekter]);
 
+  // ── PR2: varsler (over frist / uten bemanning neste 7 dager) ──
+  const overFristIds = useMemo(() => new Set(
+    alleProsjekter
+      .filter(p => !p.arkivert && normStatus(p.status) !== 'fullfort' && p.sluttDato &&
+        new Date(p.sluttDato + 'T00:00:00') < new Date(dateToIso(new Date()) + 'T00:00:00'))
+      .map(p => p.id)
+  ), [alleProsjekter]);
+
+  const utenBemanningIds = useMemo(() => {
+    const iDag = dateToIso(new Date());
+    const omEnUke = dateToIso(new Date(Date.now() + 7 * 86400000));
+    return new Set(
+      alleProsjekter
+        .filter(p => !p.arkivert && normStatus(p.status) === 'aktiv')
+        .filter(p => !(tildelingerByProsjekt[p.id] || []).some(t =>
+          t.startDato && t.sluttDato && t.startDato <= omEnUke && t.sluttDato >= iDag))
+        .map(p => p.id)
+    );
+  }, [alleProsjekter, tildelingerByProsjekt]);
+
+  // ── PR2: duplikat-hint — normalisert adresse-sammenligning, KUN visning ──
+  const duplikatHint = useMemo(() => {
+    const norm = s => (s || '').toLowerCase().replace(/[^a-zæøå0-9]/g, '');
+    const perAdresse = new Map();
+    for (const p of alleProsjekter) {
+      const n = norm(p.adresse || p.navn);
+      if (n.length < 4) continue;
+      (perAdresse.get(n) || perAdresse.set(n, []).get(n)).push(p);
+    }
+    const hint = {};
+    for (const gruppe of perAdresse.values()) {
+      if (gruppe.length < 2) continue;
+      for (const p of gruppe) {
+        const andre = gruppe.find(x => x.id !== p.id);
+        if (andre) hint[p.id] = andre.adresse || andre.navn;
+      }
+    }
+    return hint;
+  }, [alleProsjekter]);
+
   const faneProsjekter = useMemo(() => {
-    const arr = aktivFane === 'arkivert'
+    let arr = aktivFane === 'arkivert'
       ? alleProsjekter.filter(p => p.arkivert)
       : alleProsjekter.filter(p => !p.arkivert && normStatus(p.status) === aktivFane);
+    if (varselFilter === 'frist') arr = arr.filter(p => overFristIds.has(p.id));
+    if (varselFilter === 'bemanning') arr = arr.filter(p => utenBemanningIds.has(p.id));
+    if (sortValg === 'handling' && aktivFane !== 'arkivert') {
+      // «Trenger handling først»: over frist øverst, deretter uten bemanning,
+      // deretter resten — alfabetisk innen hver gruppe
+      const vekt = p => (overFristIds.has(p.id) ? 0 : utenBemanningIds.has(p.id) ? 1 : 2);
+      return [...arr].sort((a, b) => vekt(a) - vekt(b) || visTittel(a).localeCompare(visTittel(b), 'nb'));
+    }
     return sorterFane(arr);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [alleProsjekter, aktivFane, sortValg]);
+  }, [alleProsjekter, aktivFane, sortValg, varselFilter, overFristIds, utenBemanningIds]);
+
+  // ── PR2: detaljpanel-hjelpere ──
+  const valgtProsjekt = valgtId ? state.prosjekter.find(p => p.id === valgtId) : null;
+
+  function aapnePanel(p) {
+    setValgtId(p.id);
+    setPanelFane('framdrift');
+    setLoggEntries(null);
+    setFdFeil('');
+  }
+
+  async function genererFramdrift(prosjektId) {
+    setFdLaster(true);
+    setFdFeil('');
+    try {
+      const token = localStorage.getItem('fbs_token') || '';
+      const r = await fetch('/api/prosjekter/framdrift', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ prosjektId }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data?.error || `Feil ${r.status}`);
+      const prosjekt = state.prosjekter.find(p => p.id === prosjektId);
+      if (prosjekt) dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...prosjekt, framdriftsplan: data.framdriftsplan } });
+    } catch (e) {
+      setFdFeil(e.message);
+    } finally {
+      setFdLaster(false);
+    }
+  }
+
+  async function hentLogg(p) {
+    setLoggEntries([]);
+    try {
+      const token = localStorage.getItem('fbs_token') || '';
+      const r = await fetch('/api/befaringer/audit', { headers: { Authorization: `Bearer ${token}` } });
+      const data = await r.json().catch(() => ({}));
+      const relevante = (data.entries || []).filter(e =>
+        [p.id, p.befaringId, p.kildeBefaringId].filter(Boolean).includes(e.objektId)
+      );
+      setLoggEntries(relevante.reverse());
+    } catch {
+      setLoggEntries([]);
+    }
+  }
+
+  function lagreForlengFrist(p) {
+    if (!forlengDato) return;
+    dispatch({
+      type: 'UPDATE_PROSJEKT',
+      payload: {
+        ...p,
+        sluttDato: forlengDato,
+        fristUtvidelser: [
+          ...(p.fristUtvidelser || []),
+          {
+            fraDato: p.sluttDato || null,
+            tilDato: forlengDato,
+            endretAv: localStorage.getItem('fbs_user_navn') || 'ukjent',
+            endretDato: new Date().toISOString(),
+          },
+        ],
+      },
+    });
+    setForlengFristId(null);
+    setForlengDato('');
+  }
 
   // ---- Admin: dedup prosjekter ----
   async function kjorDedup(dry) {
@@ -833,8 +960,26 @@ export default function Prosjekter() {
 
       {/* ═══ Ny liste (designsystem, SPEC layout C — PR1) ═══ */}
 
+      {/* Varsel-bannere — klikk filtrerer listen (PR2) */}
+      <div>
+        {overFristIds.size > 0 && (
+          <VarselBanner
+            ikon="⚠" tone="roed" aktiv={varselFilter === 'frist'}
+            tekst={`${overFristIds.size} over frist`}
+            onClick={() => setVarselFilter(f => f === 'frist' ? null : 'frist')}
+          />
+        )}
+        {utenBemanningIds.size > 0 && (
+          <VarselBanner
+            ikon="👷" tone="gul" aktiv={varselFilter === 'bemanning'}
+            tekst={`${utenBemanningIds.size} uten bemanning neste uke`}
+            onClick={() => setVarselFilter(f => f === 'bemanning' ? null : 'bemanning')}
+          />
+        )}
+      </div>
+
       {/* Status-faner med teller + sum (erstatter KPI-kort + grupper) */}
-      <StatusFaner faner={faneListe} aktiv={aktivFane} onVelg={setAktivFane} />
+      <StatusFaner faner={faneListe} aktiv={aktivFane} onVelg={k => { setAktivFane(k); setVarselFilter(null); }} />
 
       {/* Søk + PL-filter + sortering */}
       <div className="toolbar" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
@@ -864,7 +1009,7 @@ export default function Prosjekter() {
           );
         })()}
         <span style={{ fontSize: 12, color: '#94a3b8' }}>Sorter:</span>
-        {[['tittel', 'A–Å'], ['frist', 'Frist'], ['sum', 'Sum']].map(([key, label]) => (
+        {[['handling', '⚠ Trenger handling'], ['tittel', 'A–Å'], ['frist', 'Frist'], ['sum', 'Sum']].map(([key, label]) => (
           <button
             key={key}
             className="btn btn-sm"
@@ -874,18 +1019,86 @@ export default function Prosjekter() {
             {label}
           </button>
         ))}
+        <span style={{ fontSize: 12, color: '#94a3b8', marginLeft: 8 }}>Visning:</span>
+        {[['liste', '☰ Liste'], ['gantt', '📊 Gantt']].map(([key, label]) => (
+          <button
+            key={key}
+            className="btn btn-sm"
+            style={visning === key ? { background: '#1e3a5f', color: '#fff', borderColor: '#1e3a5f' } : {}}
+            onClick={() => setVisning(key)}
+          >
+            {label}
+          </button>
+        ))}
+        {visning === 'gantt' && [3, 6, 12].map(m => (
+          <button
+            key={m}
+            className="btn btn-sm"
+            style={ganttMnd === m ? { background: '#0891b2', color: '#fff', borderColor: '#0891b2' } : {}}
+            onClick={() => setGanttMnd(m)}
+          >
+            {m} mnd
+          </button>
+        ))}
         <span style={{ fontSize: 12, color: '#94a3b8', marginLeft: 'auto' }}>
           {faneProsjekter.length} prosjekter
         </span>
       </div>
 
+      {/* ── Gantt-visning (PR2): kun aktiv fanes prosjekter, -1/+N mnd ── */}
+      {visning === 'gantt' && aktivFane !== 'arkivert' && (() => {
+        const start = new Date(); start.setMonth(start.getMonth() - 1); start.setDate(1);
+        const slutt = new Date(); slutt.setMonth(slutt.getMonth() + ganttMnd);
+        const startIso = dateToIso(start), sluttIso = dateToIso(slutt);
+        const totDager = Math.max(1, daysBetween(startIso, sluttIso));
+        const pct = iso => Math.max(0, Math.min(100, (daysBetween(startIso, iso) / totDager) * 100));
+        const iDagPct = pct(dateToIso(new Date()));
+        const mnder = [];
+        for (let d = new Date(start); d < slutt; d.setMonth(d.getMonth() + 1)) {
+          mnder.push({ label: d.toLocaleDateString('nb-NO', { month: 'short' }), pct: pct(dateToIso(d)) });
+        }
+        return (
+          <div style={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 16px', position: 'relative' }}>
+            <div style={{ position: 'relative', height: 20, borderBottom: '1px solid #e2e8f0', marginBottom: 8, marginLeft: 180 }}>
+              {mnder.map((m, i) => (
+                <span key={i} style={{ position: 'absolute', left: m.pct + '%', fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>{m.label}</span>
+              ))}
+            </div>
+            {faneProsjekter.map(p => {
+              const visAdr = p.adresse || p.navn || 'Uten navn';
+              const harDatoer = p.startDato && p.sluttDato && p.startDato <= sluttIso && p.sluttDato >= startIso;
+              const v = pct(p.startDato || startIso);
+              const b = Math.max(1.5, pct(p.sluttDato || sluttIso) - v);
+              return (
+                <div key={p.id} style={{ display: 'flex', alignItems: 'center', height: 34, borderBottom: '1px solid #f8fafc', cursor: 'pointer' }}
+                  onClick={() => aapnePanel(p)}>
+                  <div style={{ width: 180, flexShrink: 0, fontSize: 12.5, fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 8 }}>
+                    {visAdr}
+                  </div>
+                  <div style={{ flex: 1, position: 'relative', height: '100%' }}>
+                    <div style={{ position: 'absolute', left: iDagPct + '%', top: 0, bottom: 0, width: 2, background: '#dc2626', opacity: .6 }} />
+                    {harDatoer ? (
+                      <div title={`${formatDate(p.startDato)} – ${formatDate(p.sluttDato)}`}
+                        style={{ position: 'absolute', left: v + '%', width: b + '%', top: 7, height: 20, background: p.farge || '#2563eb', borderRadius: 5, opacity: .9 }} />
+                    ) : (
+                      <span style={{ fontSize: 11, color: '#cbd5e1', position: 'absolute', top: 9 }}>ingen datoer i vinduet</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            {faneProsjekter.length === 0 && <div style={{ padding: 20, color: '#94a3b8', textAlign: 'center' }}>Ingen prosjekter i denne fanen.</div>}
+          </div>
+        );
+      })()}
+
       {/* Kompakte rader */}
-      {faneProsjekter.length === 0 && (
+      {visning === 'liste' && faneProsjekter.length === 0 && (
         <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10 }}>
           {aktivFane === 'arkivert' ? 'Ingen arkiverte prosjekter.' : 'Ingen prosjekter i denne fanen.'}
         </div>
       )}
-      {faneProsjekter.map(p => {
+      {visning === 'liste' && faneProsjekter.map(p => {
         const visAdresse = p.adresse || ((p.navn || '').includes(' — ') ? (p.navn || '').split(' — ').slice(1).join(' — ').trim() : (p.navn || 'Uten navn'));
         const kundeNavn = p.kunde?.navn || ((p.navn || '').includes(' — ') ? (p.navn || '').split(' — ')[0].trim() : null);
         const pl = p.prosjektlederId ? ansatteById[p.prosjektlederId] : null;
@@ -921,13 +1134,21 @@ export default function Prosjekter() {
           );
         }
 
+        const manglerBemanning = utenBemanningIds.has(p.id);
+        const hurtigknapp = overFristIds.has(p.id)
+          ? { label: '📅 Forleng frist', onClick: () => { setForlengFristId(p.id); setForlengDato(p.sluttDato || dateToIso(new Date())); } }
+          : manglerBemanning && onNavigate
+            ? { label: '👷 + Bemann', onClick: () => onNavigate('bemanningsplan') }
+            : null;
+
         return (
+          <div key={p.id}>
           <KompaktRad
-            key={p.id}
             tittel={visAdresse}
             undertittel={kundeNavn ? `👤 ${kundeNavn}` : null}
-            varsel={varsel ? `⚠ ${varsel.label}` : null}
-            varselFarge={varsel ? varsel.farge : null}
+            varsel={varsel ? `⚠ ${varsel.label}` : manglerBemanning ? '👷 ingen bemanning neste uke' : null}
+            varselFarge={varsel ? varsel.farge : manglerBemanning ? '#f59e0b' : null}
+            hint={duplikatHint[p.id] ? `🔗 ligner på ${duplikatHint[p.id]}` : null}
             meta={[
               p.startDato ? `📅 ${formatDate(p.startDato)}${p.sluttDato ? ` – ${formatDate(p.sluttDato)}` : ''}` : null,
               varighetUker(p.startDato, p.sluttDato),
@@ -940,6 +1161,7 @@ export default function Prosjekter() {
               ks ? `✅ ${ks}` : null,
             ]}
             fremdrift={fremgang}
+            hurtigknapp={hurtigknapp}
             meny={[
               { ikon: '✏️', label: 'Rediger', onClick: () => openEdit(p) },
               { skille: true },
@@ -950,10 +1172,129 @@ export default function Prosjekter() {
               { skille: true },
               { ikon: '🗄', label: 'Arkiver', farlig: true, onClick: () => arkiverProsjekt(p) },
             ]}
-            onClick={() => openEdit(p)}
+            onClick={() => aapnePanel(p)}
           />
+          {forlengFristId === p.id && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 14px', margin: '-4px 0 8px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: '#92400e' }}>Ny sluttdato:</span>
+              <input type="date" className="input" style={{ width: 160, height: 32 }} value={forlengDato} onChange={e => setForlengDato(e.target.value)} />
+              <button className="btn btn-sm btn-primary" onClick={() => lagreForlengFrist(p)}>Lagre</button>
+              <button className="btn btn-sm" onClick={() => setForlengFristId(null)}>Avbryt</button>
+              {(p.fristUtvidelser || []).length > 0 && (
+                <span style={{ fontSize: 11, color: '#92400e' }}>Forlenget {(p.fristUtvidelser || []).length} gang(er) før</span>
+              )}
+            </div>
+          )}
+          </div>
         );
       })}
+
+      {/* ── Detaljpanel (PR2): skyver inn fra høyre ved rad-klikk ── */}
+      {valgtProsjekt && (() => {
+        const p = valgtProsjekt;
+        const tild = tildelingerByProsjekt[p.id] || [];
+        const panelTittel = p.adresse || p.navn || 'Uten navn';
+        return (
+          <DetaljPanel
+            tittel={panelTittel}
+            undertittel={[p.kunde?.navn && `👤 ${p.kunde.navn}`, p.kunde?.telefon && `📱 ${p.kunde.telefon}`, formaterBelop(p.belop)].filter(Boolean).join(' · ')}
+            faner={[
+              { key: 'framdrift', label: '📊 Framdrift' },
+              { key: 'bemanning', label: '👷 Bemanning' },
+              { key: 'ks', label: '✅ KS' },
+              ...(p.tilbudPayload || p.kildeTilbudData ? [{ key: 'tilbud', label: '📦 Tilbudsdata' }] : []),
+              { key: 'logg', label: '📜 Logg' },
+            ]}
+            aktivFane={panelFane}
+            onFane={f => { setPanelFane(f); if (f === 'logg' && loggEntries === null) hentLogg(p); }}
+            onLukk={() => setValgtId(null)}
+            handlinger={<>
+              <select
+                className="input" style={{ height: 34, fontSize: 13, width: 160 }}
+                value={normStatus(p.status)}
+                onChange={e => settProsjektStatus(p, e.target.value)}
+              >
+                {Object.entries(SAVE_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+              </select>
+              <button className="btn btn-sm" onClick={() => { setValgtId(null); openEdit(p); }}>✏️ Rediger</button>
+              {normStatus(p.status) !== 'fullfort' && (
+                <button className="btn btn-sm" onClick={() => settProsjektStatus(p, 'fullfort')}>🏁 Fullfør</button>
+              )}
+              <button className="btn btn-sm" style={{ color: '#b45309' }} onClick={() => { setValgtId(null); arkiverProsjekt(p); }}>🗄 Arkiver</button>
+            </>}
+          >
+            {panelFane === 'framdrift' && (
+              <ProsjektFramdrift project={p} laster={fdLaster} feil={fdFeil} onGenerer={() => genererFramdrift(p.id)} />
+            )}
+            {panelFane === 'bemanning' && (
+              <div>
+                {tild.length === 0 && <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 12 }}>Ingen tildelinger på prosjektet.</div>}
+                {tild.map(t => {
+                  const a = ansatteById[t.ansattId];
+                  return (
+                    <div key={t.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
+                      <span style={{ fontWeight: 600 }}>{a?.navn || 'Ukjent'}</span>
+                      <span style={{ color: '#64748b' }}>{t.startDato ? formatDate(t.startDato) : '?'} – {t.sluttDato ? formatDate(t.sluttDato) : '?'}</span>
+                    </div>
+                  );
+                })}
+                {onNavigate && (
+                  <button className="btn btn-sm" style={{ marginTop: 12 }} onClick={() => onNavigate('bemanningsplan')}>👷 + Bemann i bemanningsplanen</button>
+                )}
+              </div>
+            )}
+            {panelFane === 'ks' && (
+              <div>
+                {!(p.ksSjekklister || []).length && <div style={{ color: '#94a3b8', fontSize: 13 }}>Ingen KS-sjekklister tildelt. Gå til KS / HMS-fanen for å legge til.</div>}
+                {(p.ksSjekklister || []).map((ks, i) => (
+                  <div key={ks.id || i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
+                    <span>{ks.ikon || '✅'} {ks.navn || ks.malNavn || 'Sjekkliste'}</span>
+                    <span style={{ color: '#64748b' }}>{ks.status || 'ikke startet'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {panelFane === 'tilbud' && (() => {
+              const tp = p.tilbudPayload || {};
+              const kd = p.kildeTilbudData || {};
+              const poster = tp.poster || kd.poster || p.poster || [];
+              return (
+                <div style={{ fontSize: 13 }}>
+                  {p.tilbudLink && (
+                    <a href={p.tilbudLink} target="_blank" rel="noopener noreferrer" style={{ color: '#2874a6', fontWeight: 600 }}>🔗 Åpne kundens tilbudside ↗</a>
+                  )}
+                  <div style={{ margin: '10px 0', color: '#64748b' }}>
+                    {[p.pristype && `Pristype: ${p.pristype}`, (p.estimertSum || tp.estimertSum) && `Estimert: ${formaterBelop(p.estimertSum || tp.estimertSum)}`,
+                      (p.oppstartTekst || kd.oppstart) && `Oppstart: ${p.oppstartTekst || kd.oppstart}`, (p.varighetTekst || kd.varighet) && `Varighet: ${p.varighetTekst || kd.varighet}`,
+                    ].filter(Boolean).map((r, i) => <div key={i}>{r}</div>)}
+                  </div>
+                  {poster.length > 0 && <>
+                    <div style={{ fontWeight: 700, margin: '10px 0 6px' }}>Poster ({poster.length})</div>
+                    {poster.map((post, i) => (
+                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #f8fafc' }}>
+                        <span>{post.navn || post.tittel || `Post ${i + 1}`}</span>
+                        {post.sum != null && <span style={{ color: '#64748b' }}>{formaterBelop(post.sum)}</span>}
+                      </div>
+                    ))}
+                  </>}
+                </div>
+              );
+            })()}
+            {panelFane === 'logg' && (
+              <div style={{ fontSize: 12.5 }}>
+                {loggEntries === null && <div style={{ color: '#94a3b8' }}>⏳ Henter logg…</div>}
+                {Array.isArray(loggEntries) && loggEntries.length === 0 && <div style={{ color: '#94a3b8' }}>Ingen logg-innslag funnet for dette prosjektet.</div>}
+                {(loggEntries || []).map((e, i) => (
+                  <div key={i} style={{ padding: '7px 0', borderBottom: '1px solid #f1f5f9' }}>
+                    <div style={{ fontWeight: 600 }}>{e.felt}: {String(e.fraVerdi ?? '–')} → {String(e.tilVerdi ?? '–')}</div>
+                    <div style={{ color: '#94a3b8', fontSize: 11 }}>{e.endretAv || '?'} · {e.tidspunkt ? new Date(e.tidspunkt).toLocaleString('nb-NO') : ''} · {e.kilde || ''}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </DetaljPanel>
+        );
+      })()}
 
       {/* Modal */}
       {showModal && (
