@@ -1,0 +1,108 @@
+/* ═══ FBS Designsystem (SPEC-prosjektside-C) ═══
+   Én kilde til utseende for KPI-kort, status-faner, kompakte rader,
+   ⋯-menyer og varsel-bannere — gjenbrukes på alle sider. */
+
+/* ── 1.1 KPI-kort ── */
+.ds-kpi {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  background: #fff; border: 1px solid #e2e8f0; border-top: 3px solid #2563eb;
+  border-radius: 10px; padding: 10px 16px; cursor: pointer; min-width: 120px;
+  transition: box-shadow .15s;
+}
+.ds-kpi:hover { box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.ds-kpi--aktiv { color: #fff; }
+.ds-kpi--aktiv .ds-kpi-label { color: rgba(255,255,255,.85); }
+.ds-kpi--aktiv .ds-kpi-tall { color: #fff; }
+.ds-kpi--varsel { background: #fef2f2; border-color: #fca5a5; }
+.ds-kpi-tall { font-size: 20px; font-weight: 800; }
+.ds-kpi-label { font-size: 12px; color: #64748b; font-weight: 600; }
+
+/* ── 1.2 Status-faner ── */
+.ds-faner {
+  display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px;
+}
+.ds-fane {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 999px;
+  padding: 7px 14px; cursor: pointer; font-size: 13px; font-weight: 600;
+  color: #334155; transition: box-shadow .12s, background .12s;
+  min-height: 38px;
+}
+.ds-fane:hover { box-shadow: 0 1px 5px rgba(0,0,0,.1); }
+.ds-fane--aktiv { color: #fff; }
+.ds-fane--aktiv .ds-fane-teller,
+.ds-fane--aktiv .ds-fane-sum { color: rgba(255,255,255,.9) !important; }
+.ds-fane--dempet { color: #94a3b8; background: #f8fafc; }
+.ds-fane-teller { font-weight: 800; }
+.ds-fane-sum { font-size: 12px; color: #94a3b8; font-weight: 600; }
+
+/* ── 1.3 Kompakt rad ── */
+.ds-rad {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+  padding: 10px 14px; margin-bottom: 6px; min-height: 52px;
+}
+.ds-rad--klikkbar { cursor: pointer; transition: box-shadow .12s; }
+.ds-rad--klikkbar:hover { box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.ds-rad-venstre { flex: 1; min-width: 0; }
+.ds-rad-tittel-linje { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.ds-rad-tittel { font-weight: 700; font-size: 14px; color: #1e293b; }
+.ds-rad-undertittel { font-size: 12px; color: #64748b; }
+.ds-rad-varsel { font-size: 12px; font-weight: 700; }
+.ds-rad-meta {
+  display: flex; gap: 10px; flex-wrap: wrap; margin-top: 2px;
+  font-size: 12px; color: #64748b;
+}
+.ds-rad-hint { color: #94a3b8; font-style: italic; }
+.ds-rad-hoyre { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.ds-rad-tall { font-size: 12.5px; font-weight: 600; color: #334155; white-space: nowrap; }
+.ds-rad-bar-wrap {
+  width: 64px; height: 7px; background: #e2e8f0; border-radius: 4px;
+  overflow: hidden; display: inline-block;
+}
+.ds-rad-bar { display: block; height: 100%; background: #16a34a; border-radius: 4px; }
+.ds-rad-hurtigknapp {
+  font-size: 12px; font-weight: 700; padding: 5px 11px; border-radius: 7px;
+  border: 1px solid #f59e0b; background: #fffbeb; color: #92400e; cursor: pointer;
+  white-space: nowrap;
+}
+.ds-rad-hurtigknapp:hover { background: #fef3c7; }
+
+/* ── 1.4 ⋯-meny ── */
+.ds-radmeny { position: relative; }
+.ds-radmeny-knapp {
+  width: 34px; height: 34px; border-radius: 8px; border: 1px solid #e2e8f0;
+  background: #fff; cursor: pointer; font-size: 17px; font-weight: 700;
+  color: #64748b; line-height: 1;
+}
+.ds-radmeny-knapp:hover { background: #f1f5f9; }
+.ds-radmeny-liste {
+  position: absolute; right: 0; top: 38px; z-index: 50;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.14); padding: 4px; min-width: 190px;
+}
+.ds-radmeny-valg {
+  display: block; width: 100%; text-align: left; background: none; border: none;
+  padding: 9px 12px; font-size: 13px; color: #1e293b; cursor: pointer;
+  border-radius: 7px; white-space: nowrap;
+}
+.ds-radmeny-valg:hover { background: #f1f5f9; }
+.ds-radmeny-valg--farlig { color: #b45309; }
+.ds-radmeny-skille { height: 1px; background: #f1f5f9; margin: 4px 6px; }
+
+/* ── 1.6 Varsel-banner ── */
+.ds-banner {
+  display: inline-flex; align-items: center; gap: 6px;
+  border-radius: 9px; padding: 7px 14px; font-size: 13px; font-weight: 700;
+  cursor: pointer; border: 1px solid transparent; margin-right: 8px; margin-bottom: 10px;
+}
+.ds-banner--roed { background: #fef2f2; color: #991b1b; border-color: #fca5a5; }
+.ds-banner--gul { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+.ds-banner--aktiv { outline: 2px solid currentColor; }
+
+/* Mobil */
+@media (max-width: 768px) {
+  .ds-rad { flex-direction: column; align-items: stretch; gap: 6px; }
+  .ds-rad-hoyre { justify-content: space-between; }
+  .ds-fane { min-height: 44px; }
+}

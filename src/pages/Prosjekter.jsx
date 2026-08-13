@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatDate, PROSJEKT_PALETTE, isoToDate, dateToIso, daysBetween } from '../store';
+import { StatusFaner, KompaktRad } from '../komponenter/Designsystem';
 
 function formaterBelop(belop) {
   if (!belop && belop !== 0) return null;
@@ -574,66 +575,26 @@ export default function Prosjekter() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
   const [search, setSearch] = useState('');
-  const [collapsed, setCollapsed] = useState({});
   const [fullscreen, setFullscreen] = useState(false);
-  const [tlMode, setTlMode] = useState('maaned');
-  const [statusFilter, setStatusFilter] = useState(null);
-  const [plFilter, setPlFilter] = useState('');
+  // PL-filter huskes per bruker (spec 2.1)
+  const [plFilter, setPlFilterState] = useState(() => localStorage.getItem('fbs_proj_plfilter') || '');
+  const setPlFilter = v => { localStorage.setItem('fbs_proj_plfilter', v); setPlFilterState(v); };
   const [dedupPanel, setDedupPanel] = useState(null); // null | {loading} | {dry, plan, ...}
   const isAdmin = localStorage.getItem('fbs_role') === 'admin';
-  const [expandedId, setExpandedId] = useState(null);
-  const [sortKey, setSortKey] = useState('navn');
-  const [sortDir, setSortDir] = useState('asc');
-  const [detailFane, setDetailFane] = useState({});       // { prosjektId: 'info' | 'framdrift' }
-  const [framdriftLaster, setFramdriftLaster] = useState({});
-  const [framdriftFeil, setFramdriftFeil] = useState({});
-  const tl = buildTimeline(tlMode);
+  // Ny liste (designsystem PR1): aktiv status-fane + sorteringsvalg
+  const [aktivFane, setAktivFane] = useState('aktiv');
+  const [sortValg, setSortValg] = useState('tittel'); // 'tittel' | 'frist' | 'sum' (PR2: 'handling')
 
-  function sumKr(arr) {
-    const total = arr.reduce((s, p) => s + (Number(p.belop) || 0), 0);
-    return total > 0
-      ? new Intl.NumberFormat('nb-NO', { maximumFractionDigits: 0 }).format(total) + ' kr'
-      : null;
+  // Sorter på det som VISES som tittel (adressen når den finnes) — ikke det
+  // skjulte navnet. Ellers havner «Angelica K. – Bøhlerveien 41A» under A.
+  function visTittel(p) {
+    return (p.adresse || ((p.navn || '').includes(' — ') ? (p.navn || '').split(' — ').slice(1).join(' — ') : (p.navn || ''))).trim().toLowerCase();
   }
-
-  function toggleSort(key) {
-    if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
-    else { setSortKey(key); setSortDir('asc'); }
-  }
-
-  function sortIcon(key) {
-    if (sortKey !== key) return <span className="ct-sort-icon">↕</span>;
-    return <span className="ct-sort-icon ct-sort-icon--active">{sortDir === 'asc' ? '↑' : '↓'}</span>;
-  }
-
-  function sortProsjekter(arr) {
-    if (!sortKey) return arr;
+  function sorterFane(arr) {
     return [...arr].sort((a, b) => {
-      let va, vb;
-      switch (sortKey) {
-        // Sorter på det som VISES som tittel (adressen når den finnes) — ikke
-        // det skjulte navnet. Ellers havner «Angelica K. – Bøhlerveien 41A»
-        // under A mens raden viser «Bøhlerveien 41A», og ingen finner den.
-        case 'navn': {
-          const visA = a.adresse || ((a.navn || '').includes(' — ') ? (a.navn || '').split(' — ').slice(1).join(' — ') : (a.navn || ''));
-          const visB = b.adresse || ((b.navn || '').includes(' — ') ? (b.navn || '').split(' — ').slice(1).join(' — ') : (b.navn || ''));
-          va = visA.trim().toLowerCase(); vb = visB.trim().toLowerCase(); break;
-        }
-        case 'startDato': va = a.startDato || ''; vb = b.startDato || ''; break;
-        case 'sluttDato': va = a.sluttDato || ''; vb = b.sluttDato || ''; break;
-        case 'belop':     va = Number(a.belop) || 0; vb = Number(b.belop) || 0; break;
-        case 'fremgang': {
-          const oppA = state.oppgaver.filter(o => o.prosjektId === a.id);
-          va = oppA.length ? oppA.reduce((s, o) => s + (o.fremgang || 0), 0) / oppA.length : -1;
-          const oppB = state.oppgaver.filter(o => o.prosjektId === b.id);
-          vb = oppB.length ? oppB.reduce((s, o) => s + (o.fremgang || 0), 0) / oppB.length : -1;
-          break;
-        }
-        default: return 0;
-      }
-      if (va < vb) return sortDir === 'asc' ? -1 : 1;
-      if (va > vb) return sortDir === 'asc' ? 1 : -1;
-      return 0;
+      if (sortValg === 'frist') return (a.sluttDato || '9999').localeCompare(b.sluttDato || '9999');
+      if (sortValg === 'sum') return (Number(b.belop) || 0) - (Number(a.belop) || 0);
+      return visTittel(a).localeCompare(visTittel(b), 'nb');
     });
   }
 
@@ -681,40 +642,28 @@ export default function Prosjekter() {
     setShowModal(false);
   }
 
-  function handleDelete(id) {
-    if (confirm('Slett prosjekt og alle tilknyttede tildelinger og oppgaver?')) {
-      dispatch({ type: 'DELETE_PROSJEKT', id });
-    }
+  // ── Arkivering (erstatter fysisk sletting — SPEC absolutt krav) ──
+  // Setter kun arkivert-flagg + dato + hvem. ALDRI DELETE_PROSJEKT fra UI.
+  function arkiverProsjekt(p) {
+    if (!confirm(`Arkivere «${p.navn || p.adresse}»?\n\nProsjektet skjules fra listene men slettes IKKE. Gjenopprett når som helst fra Arkivert-fanen.`)) return;
+    dispatch({
+      type: 'UPDATE_PROSJEKT',
+      payload: {
+        ...p,
+        arkivert: true,
+        arkivertDato: new Date().toISOString(),
+        arkivertAv: localStorage.getItem('fbs_user_navn') || localStorage.getItem('fbs_role') || 'ukjent',
+      },
+    });
   }
 
-  function handleFullfor(id) {
-    dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...state.prosjekter.find(p => p.id === id), status: 'fullfort' } });
+  function gjenopprettProsjekt(p) {
+    dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...p, arkivert: false } });
+    setAktivFane(normStatus(p.status) || 'aktiv');
   }
 
-  function toggleCollapse(key) {
-    setCollapsed(c => ({ ...c, [key]: !c[key] }));
-  }
-
-  async function genererFramdrift(prosjektId) {
-    setFramdriftLaster(l => ({ ...l, [prosjektId]: true }))
-    setFramdriftFeil(f => ({ ...f, [prosjektId]: '' }))
-    setDetailFane(f => ({ ...f, [prosjektId]: 'framdrift' }))
-    try {
-      const token = localStorage.getItem('fbs_token') || ''
-      const r = await fetch('/api/prosjekter/framdrift', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ prosjektId }),
-      })
-      const data = await r.json().catch(() => ({}))
-      if (!r.ok) throw new Error(data?.error || `Feil ${r.status}`)
-      const prosjekt = state.prosjekter.find(p => p.id === prosjektId)
-      if (prosjekt) dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...prosjekt, framdriftsplan: data.framdriftsplan } })
-    } catch (e) {
-      setFramdriftFeil(f => ({ ...f, [prosjektId]: e.message }))
-    } finally {
-      setFramdriftLaster(l => ({ ...l, [prosjektId]: false }))
-    }
+  function settProsjektStatus(p, nyStatus) {
+    dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...p, status: nyStatus } });
   }
 
   // Oppslags-indekser (unngå O(n) skann per prosjekt i render-loopen)
@@ -753,27 +702,35 @@ export default function Prosjekter() {
     return true;
   }), [state.prosjekter, ansatteById, search, plFilter]);
 
-  // Summary counts (normalized)
-  const counts = useMemo(() => {
-    const c = { jobber_med: 0, godkjent: 0, aktiv: 0, fullfort: 0 };
-    for (const p of state.prosjekter) c[normStatus(p.status)] = (c[normStatus(p.status)] || 0) + 1;
-    return c;
-  }, [state.prosjekter]);
+  // ── Status-faner (designsystem PR1): teller + sum per fane ──
+  // Arkiverte er utelatt fra status-fanene og har egen dempet fane.
+  const faneListe = useMemo(() => {
+    const aktive = alleProsjekter.filter(p => !p.arkivert);
+    const perFane = key => aktive.filter(p => normStatus(p.status) === key);
+    const sum = arr => arr.reduce((s, p) => s + (Number(p.belop) || 0), 0);
+    const lag = (key, label, ikon, farge, dempet = false) => {
+      const arr = perFane(key);
+      return { key, label, ikon, farge, dempet, teller: arr.length, sum: dempet ? 0 : sum(arr) };
+    };
+    return [
+      lag('aktiv', 'Pågående', '🔨', STATUS_COLORS.aktiv),
+      lag('godkjent', 'Godkjent', '✅', STATUS_COLORS.godkjent),
+      lag('jobber_med', 'Vi jobber med', '📋', STATUS_COLORS.jobber_med),
+      lag('fullfort', 'Fullført', '🏁', '#64748b', true),
+      {
+        key: 'arkivert', label: 'Arkivert', ikon: '🗄', farge: '#94a3b8', dempet: true,
+        teller: alleProsjekter.filter(p => p.arkivert).length, sum: 0,
+      },
+    ];
+  }, [alleProsjekter]);
 
-  // Group projects
-  const groups = [
-    { key: 'aktiv',      label: 'Pågående prosjekter',       statuses: ['aktiv', 'pagaende'],    icon: '🔨' },
-    { key: 'godkjent',   label: 'Godkjente prosjekter',      statuses: ['godkjent'],              icon: '✅' },
-    { key: 'jobber_med', label: 'Vi jobber med',             statuses: ['jobber_med', 'planlagt'], icon: '📋' },
-    { key: 'fullfort',   label: 'Fullførte prosjekter',      statuses: ['fullfort'],              icon: '🏁' },
-  ];
-
-  const summaryCards = [
-    { key: 'aktiv',      label: 'Pågående',       icon: '🔨', count: counts.aktiv      || 0, color: STATUS_COLORS.aktiv,      bg: STATUS_BG.aktiv },
-    { key: 'godkjent',   label: 'Godkjent',       icon: '✅', count: counts.godkjent   || 0, color: STATUS_COLORS.godkjent,   bg: STATUS_BG.godkjent },
-    { key: 'jobber_med', label: 'Vi jobber med',  icon: '📋', count: counts.jobber_med || 0, color: STATUS_COLORS.jobber_med, bg: STATUS_BG.jobber_med },
-    { key: 'fullfort',   label: 'Fullført',       icon: '🏁', count: counts.fullfort   || 0, color: STATUS_COLORS.fullfort,   bg: STATUS_BG.fullfort },
-  ];
+  const faneProsjekter = useMemo(() => {
+    const arr = aktivFane === 'arkivert'
+      ? alleProsjekter.filter(p => p.arkivert)
+      : alleProsjekter.filter(p => !p.arkivert && normStatus(p.status) === aktivFane);
+    return sorterFane(arr);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alleProsjekter, aktivFane, sortValg]);
 
   // ---- Admin: dedup prosjekter ----
   async function kjorDedup(dry) {
@@ -802,7 +759,9 @@ export default function Prosjekter() {
           <button className="btn" onClick={() => setFullscreen(f => !f)} title={fullscreen ? 'Avslutt fullskjerm' : 'Fullskjerm'}>
             {fullscreen ? '✕ Lukk' : '⛶ Fullskjerm'}
           </button>
-          {isAdmin && (
+          {/* Dedup-knappen er SKJULT per SPEC (sletter fysisk = farlig).
+              Koden beholdes — endre `false` til `isAdmin` for å vise igjen. */}
+          {false && isAdmin && (
             <button
               className="btn"
               onClick={() => dedupPanel ? setDedupPanel(null) : kjorDedup(true)}
@@ -872,49 +831,19 @@ export default function Prosjekter() {
         </div>
       )}
 
-      {/* Summary cards */}
-      <div className="proj-summary-cards">
-        {summaryCards.map(card => {
-          const aktiv = statusFilter === card.key;
-          const gruppe = groups.find(g => g.key === card.key);
-          const gruppeProsjekter = gruppe ? state.prosjekter.filter(p => gruppe.statuses.includes(p.status)) : [];
-          const krSum = sumKr(gruppeProsjekter);
-          return (
-            <div
-              key={card.key}
-              className={`proj-summary-card${aktiv ? ' proj-summary-card--aktiv' : ''}`}
-              style={{
-                borderTop: `3px solid ${card.color}`,
-                background: aktiv ? card.color : card.bg,
-                cursor: 'pointer',
-                transition: 'box-shadow .15s, transform .1s',
-              }}
-              onClick={() => setStatusFilter(f => f === card.key ? null : card.key)}
-              title={aktiv ? 'Klikk for å fjerne filter' : `Filtrer på: ${card.label}`}
-            >
-              <div className="proj-summary-icon">{card.icon}</div>
-              <div className="proj-summary-count" style={{ color: aktiv ? '#fff' : card.color }}>{card.count}</div>
-              <div className="proj-summary-label" style={{ color: aktiv ? 'rgba(255,255,255,.85)' : undefined }}>{card.label}</div>
-              {krSum && <div className="proj-summary-kr" style={{ color: aktiv ? 'rgba(255,255,255,.8)' : '#16a34a' }}>{krSum}</div>}
-            </div>
-          );
-        })}
-      </div>
-      {statusFilter && (
-        <div className="bef-filter-banner" style={{ marginBottom: 12 }}>
-          Viser kun: <strong>{summaryCards.find(c => c.key === statusFilter)?.label}</strong>
-          <button className="bef-filter-fjern" onClick={() => setStatusFilter(null)}>✕ Fjern filter</button>
-        </div>
-      )}
+      {/* ═══ Ny liste (designsystem, SPEC layout C — PR1) ═══ */}
 
-      {/* Search + filters */}
-      <div className="toolbar" style={{ marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+      {/* Status-faner med teller + sum (erstatter KPI-kort + grupper) */}
+      <StatusFaner faner={faneListe} aktiv={aktivFane} onVelg={setAktivFane} />
+
+      {/* Søk + PL-filter + sortering */}
+      <div className="toolbar" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
         <input
           className="search-input"
           placeholder="🔍 Søk navn, adresse, type, leder..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          style={{ maxWidth: 300 }}
+          style={{ maxWidth: 280 }}
         />
         {(() => {
           const plIds = [...new Set(state.prosjekter.map(p => p.prosjektlederId).filter(Boolean))];
@@ -922,342 +851,109 @@ export default function Prosjekter() {
           return (
             <select
               className="input"
-              style={{ width: 200, height: 36, fontSize: 13 }}
+              style={{ width: 190, height: 36, fontSize: 13 }}
               value={plFilter}
               onChange={e => setPlFilter(e.target.value)}
             >
               <option value="">Alle prosjektledere</option>
               {plIds.map(id => {
-                const a = state.ansatte.find(x => x.id === id);
+                const a = ansatteById[id];
                 return a ? <option key={id} value={id}>{a.navn}</option> : null;
               })}
             </select>
           );
         })()}
-        {(search || plFilter) && (
-          <button className="btn btn-sm" onClick={() => { setSearch(''); setPlFilter(''); }}>✕ Tøm filter</button>
-        )}
+        <span style={{ fontSize: 12, color: '#94a3b8' }}>Sorter:</span>
+        {[['tittel', 'A–Å'], ['frist', 'Frist'], ['sum', 'Sum']].map(([key, label]) => (
+          <button
+            key={key}
+            className="btn btn-sm"
+            style={sortValg === key ? { background: '#1e3a5f', color: '#fff', borderColor: '#1e3a5f' } : {}}
+            onClick={() => setSortValg(key)}
+          >
+            {label}
+          </button>
+        ))}
+        <span style={{ fontSize: 12, color: '#94a3b8', marginLeft: 'auto' }}>
+          {faneProsjekter.length} prosjekter
+        </span>
       </div>
 
-      {/* Grouped sections */}
-      {groups.map(group => {
-        if (statusFilter && statusFilter !== group.key) return null;
-        const prosjekter = alleProsjekter.filter(p => group.statuses.includes(p.status));
-        if (prosjekter.length === 0 && !search && !plFilter && !statusFilter) return null;
-        const isCollapsed = collapsed[group.key];
-        const color = STATUS_COLORS[group.key];
-        const krSum = sumKr(prosjekter);
+      {/* Kompakte rader */}
+      {faneProsjekter.length === 0 && (
+        <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10 }}>
+          {aktivFane === 'arkivert' ? 'Ingen arkiverte prosjekter.' : 'Ingen prosjekter i denne fanen.'}
+        </div>
+      )}
+      {faneProsjekter.map(p => {
+        const visAdresse = p.adresse || ((p.navn || '').includes(' — ') ? (p.navn || '').split(' — ').slice(1).join(' — ').trim() : (p.navn || 'Uten navn'));
+        const kundeNavn = p.kunde?.navn || ((p.navn || '').includes(' — ') ? (p.navn || '').split(' — ')[0].trim() : null);
+        const pl = p.prosjektlederId ? ansatteById[p.prosjektlederId] : null;
+        const tild = tildelingerByProsjekt[p.id] || [];
+        const antallFolk = new Set(tild.map(t => t.ansattId)).size;
+        const opp = oppgaverByProsjekt[p.id] || [];
+        const fremgang = opp.length
+          ? Math.round(opp.reduce((s, o) => s + (o.fremgang || 0), 0) / opp.length)
+          : (Array.isArray(p.fdTasks) && p.fdTasks.length
+            ? Math.round(p.fdTasks.reduce((s, t) => s + (t.progress || 0), 0) / p.fdTasks.length)
+            : null);
+        const belopVis = formaterBelop(p.belop);
+        const varsel = aktivFane !== 'arkivert' ? sluttDatoInfo(p.sluttDato, p.status) : null;
+        const ks = Array.isArray(p.ksSjekklister) && p.ksSjekklister.length > 0 ? p.ksSjekklister.length : null;
+
+        if (aktivFane === 'arkivert') {
+          return (
+            <KompaktRad
+              key={p.id}
+              tittel={visAdresse}
+              undertittel={kundeNavn ? `👤 ${kundeNavn}` : null}
+              meta={[
+                p.arkivertDato ? `🗄 Arkivert ${formatDate(p.arkivertDato.slice(0, 10))}` : '🗄 Arkivert',
+                p.arkivertAv ? `av ${p.arkivertAv}` : null,
+              ]}
+              hoyre={[belopVis]}
+              meny={[
+                { ikon: '↩', label: 'Gjenopprett', onClick: () => gjenopprettProsjekt(p) },
+                { ikon: '✏️', label: 'Rediger', onClick: () => openEdit(p) },
+              ]}
+              onClick={() => openEdit(p)}
+            />
+          );
+        }
 
         return (
-          <div key={group.key} className="proj-gruppe" style={{ marginBottom: 20 }}>
-            {/* Group header */}
-            <button
-              className="proj-gruppe-header"
-              style={{ borderLeft: `4px solid ${color}` }}
-              onClick={() => toggleCollapse(group.key)}
-            >
-              <span className="proj-gruppe-icon">{group.icon}</span>
-              <span className="proj-gruppe-label">{group.label}</span>
-              <span className="proj-gruppe-count" style={{ background: color }}>{prosjekter.length}</span>
-              {krSum && <span className="proj-gruppe-kr">{krSum}</span>}
-              <span className="proj-gruppe-chevron">{isCollapsed ? '▸' : '▾'}</span>
-            </button>
-
-            {/* Table */}
-            {!isCollapsed && (
-              prosjekter.length === 0 ? (
-                <div style={{ padding: '10px 16px', color: '#94a3b8', fontSize: 13 }}>
-                  Ingen prosjekter{search ? ' som matcher søket' : ''}.
-                </div>
-              ) : (
-                <div className="compact-table">
-                  <div className="ct-header">
-                    <div className="ct-col ct-name">
-                      <button className="ct-sort-btn" onClick={() => toggleSort('navn')}>
-                        Prosjektnavn {sortIcon('navn')}
-                      </button>
-                    </div>
-                    <div className="ct-col ct-gantt" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <button className="ct-sort-btn" onClick={() => toggleSort('startDato')}>
-                        {tl.label} {sortIcon('startDato')}
-                      </button>
-                      <div className="ukemode-toggle" style={{ marginLeft: 'auto' }}>
-                        <button className={`ukemode-btn ${tlMode==='dag'?'active':''}`} onClick={() => setTlMode('dag')}>Dag</button>
-                        <button className={`ukemode-btn ${tlMode==='uke'?'active':''}`} onClick={() => setTlMode('uke')}>Uke</button>
-                        <button className={`ukemode-btn ${tlMode==='maaned'?'active':''}`} onClick={() => setTlMode('maaned')}>Måned</button>
-                      </div>
-                    </div>
-                    <div className="ct-col ct-progress">
-                      <button className="ct-sort-btn" onClick={() => toggleSort('fremgang')}>
-                        Fremdrift {sortIcon('fremgang')}
-                      </button>
-                    </div>
-                    <div className="ct-col ct-actions">
-                      <button className="ct-sort-btn" onClick={() => toggleSort('belop')}>
-                        💰 Beløp {sortIcon('belop')}
-                      </button>
-                    </div>
-                  </div>
-                  {sortProsjekter(prosjekter).map(p => {
-                    const opp = oppgaverByProsjekt[p.id] || [];
-                    const fremgang = opp.length
-                      ? Math.round(opp.reduce((s, o) => s + (o.fremgang || 0), 0) / opp.length)
-                      : null;
-                    const tildelinger = tildelingerByProsjekt[p.id] || [];
-                    const ansatteIds = [...new Set(tildelinger.map(t => t.ansattId))];
-                    const ansatteCount = ansatteIds.length;
-                    const ansatteNavn = ansatteIds.map(id => ansatteById[id]).filter(Boolean);
-                    const barColor = p.farge || color;
-                    const belopVis = formaterBelop(p.belop);
-                    const varighetVis = varighetUker(p.startDato, p.sluttDato);
-                    const prosjektleder = p.prosjektlederId
-                      ? ansatteById[p.prosjektlederId]
-                      : null;
-                    const varsel = sluttDatoInfo(p.sluttDato, p.status);
-                    const isExpanded = expandedId === p.id;
-
-                    // Vis adresse som tittel; trekk kundeinfo fra p.kunde eller fra p.navn ("Navn — Adresse")
-                    const visAdresse = p.adresse || ((p.navn || '').includes(' — ') ? (p.navn || '').split(' — ').slice(1).join(' — ').trim() : (p.navn || 'Uten navn'));
-                    const kundeNavn   = p.kunde?.navn || ((p.navn || '').includes(' — ') ? (p.navn || '').split(' — ')[0].trim() : null);
-                    const kundeTlf    = p.kunde?.telefon || '';
-                    const kundeEpost  = p.kunde?.epost || '';
-
-                    return (
-                      <div key={p.id} className="ct-row-wrap">
-                        <div
-                          className={`ct-row${varsel ? ' ct-row--varsel' : ''}${isExpanded ? ' ct-row--expanded' : ''}`}
-                          style={{ background: varsel?.bg, cursor: 'pointer' }}
-                          onClick={() => setExpandedId(id => id === p.id ? null : p.id)}
-                        >
-                          <div className="ct-col ct-name" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span className="prosjekt-farge-dot" style={{ background: barColor }} />
-                            <div style={{ minWidth: 0 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                <span className="ct-prosjekt-navn">{visAdresse}</span>
-                                <span className="ct-expand-chevron">{isExpanded ? '▾' : '▸'}</span>
-                              </div>
-                              {/* Kunde: navn, telefon, e-post */}
-                              {(kundeNavn || kundeTlf || kundeEpost) && (
-                                <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginTop: 1, flexWrap: 'wrap' }}>
-                                  {kundeNavn && (
-                                    <span style={{ fontSize: 12, color: '#475569', fontWeight: 500 }}>
-                                      👤 {kundeNavn}
-                                    </span>
-                                  )}
-                                  {kundeTlf && (
-                                    <a
-                                      href={`tel:${kundeTlf}`}
-                                      onClick={e => e.stopPropagation()}
-                                      style={{ fontSize: 12, color: '#0369a1', textDecoration: 'none' }}
-                                    >
-                                      📱 {kundeTlf}
-                                    </a>
-                                  )}
-                                  {kundeEpost && (
-                                    <a
-                                      href={`mailto:${kundeEpost}`}
-                                      onClick={e => e.stopPropagation()}
-                                      style={{ fontSize: 12, color: '#0369a1', textDecoration: 'none' }}
-                                    >
-                                      ✉️ {kundeEpost}
-                                    </a>
-                                  )}
-                                </div>
-                              )}
-                              <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
-                                {ansatteCount > 0 && (
-                                  <span className="ansatte-tooltip-wrap">
-                                    <span className="ansatte-badge">👷 {ansatteCount}</span>
-                                    <div className="ansatte-tooltip">
-                                      <div className="ansatte-tooltip-tittel">Tildelte ansatte</div>
-                                      {ansatteNavn.map(a => (
-                                        <div key={a.id} className="ansatte-tooltip-rad">
-                                          <span className="ansatte-tooltip-dot" style={{ background: FAG_COLORS[a.fag] || '#6b7280' }} />
-                                          {a.navn}
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </span>
-                                )}
-                                {p.startDato && (
-                                  <span style={{ fontSize: 11, color: varsel ? varsel.farge : '#94a3b8', fontWeight: varsel ? 600 : 400 }}>
-                                    {formatDate(p.startDato)}{p.sluttDato ? ` – ${formatDate(p.sluttDato)}` : ''}
-                                    {varsel && <em style={{ marginLeft: 4 }}>({varsel.label})</em>}
-                                  </span>
-                                )}
-                                {varighetVis && <span className="proj-meta-pill">⏱ {varighetVis}</span>}
-                                {belopVis && <span className="proj-meta-pill proj-meta-belop">💰 {belopVis}</span>}
-                                {p.manskapAntall && <span className="proj-meta-pill">👷 {p.manskapAntall} mann</span>}
-                                {prosjektleder && (
-                                  <span className="proj-meta-pill proj-meta-pl">
-                                    🧑‍💼 {prosjektleder.navn.split(' ')[0]}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="ct-col ct-gantt">
-                            <MiniGantt prosjekt={p} color={barColor} tlStart={tl.tlStart} tlDays={tl.tlDays} ticks={tl.ticks} />
-                          </div>
-                          <div className="ct-col ct-progress">
-                            {fremgang !== null ? (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <div className="progress-bar" style={{ flex: 1 }}>
-                                  <div className="progress-fill" style={{ width: fremgang + '%', background: barColor }} />
-                                </div>
-                                <span style={{ fontSize: 12, fontWeight: 600, minWidth: 30 }}>{fremgang}%</span>
-                              </div>
-                            ) : <span style={{ color: '#cbd5e1', fontSize: 12 }}>–</span>}
-                          </div>
-                          <div className="ct-col ct-actions" onClick={e => e.stopPropagation()}>
-                            <select
-                              className="proj-status-select"
-                              value={normStatus(p.status)}
-                              title="Endre status"
-                              onChange={e => dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...p, status: e.target.value } })}
-                            >
-                              {SAVE_STATUSES.map(s => (
-                                <option key={s} value={s}>{SAVE_LABELS[s]}</option>
-                              ))}
-                            </select>
-                            <button className="btn btn-sm" onClick={() => openEdit(p)}>Rediger</button>
-                            {(p.status === 'aktiv' || !p.status) && (
-                              <button
-                                className="btn btn-sm"
-                                style={{ background: '#f0fdf4', color: '#16a34a', borderColor: '#bbf7d0' }}
-                                onClick={e => { e.stopPropagation(); handleFullfor(p.id); }}
-                                title="Merk som fullført"
-                              >
-                                ✓ Fullfør
-                              </button>
-                            )}
-                            <button className="btn btn-sm btn-danger" onClick={() => handleDelete(p.id)}>Slett</button>
-                          </div>
-                        </div>
-
-                        {/* Utvidet detaljpanel */}
-                        {isExpanded && (
-                          <div className="ct-row-detail" style={{ borderLeft: `4px solid ${barColor}` }}>
-                            {/* Fane-nav */}
-                            <div className="ct-detail-faner">
-                              <button
-                                className={`ct-detail-fane${(detailFane[p.id] ?? 'info') === 'info' ? ' active' : ''}`}
-                                onClick={() => setDetailFane(f => ({ ...f, [p.id]: 'info' }))}
-                              >
-                                📋 Info
-                              </button>
-                              <button
-                                className={`ct-detail-fane${detailFane[p.id] === 'framdrift' ? ' active' : ''}`}
-                                onClick={() => setDetailFane(f => ({ ...f, [p.id]: 'framdrift' }))}
-                              >
-                                🗓 Framdriftsplan{p.framdriftsplan ? ' ✓' : ''}
-                              </button>
-                            </div>
-
-                            {/* KS-plan-knapp — alltid synlig i Info-fanen */}
-                            {(detailFane[p.id] ?? 'info') === 'info' && (
-                              <ProsjektKSPlanKnapp
-                                project={p}
-                                onOppdater={oppdatert => dispatch({ type: 'UPDATE_PROSJEKT', payload: oppdatert })}
-                              />
-                            )}
-
-                            {/* Framdriftsplan-fane */}
-                            {detailFane[p.id] === 'framdrift' ? (
-                              <ProsjektFramdrift
-                                project={p}
-                                laster={!!framdriftLaster[p.id]}
-                                feil={framdriftFeil[p.id] || ''}
-                                onGenerer={() => genererFramdrift(p.id)}
-                              />
-                            ) : (
-                              <>
-                                {/* Fra befaring */}
-                                {p.befaringId && (() => {
-                                  const bef = (state.befaringer || []).find(b => b.id === p.befaringId);
-                                  if (!bef) return null;
-                                  return (
-                                    <div className="ct-detail-seksjon ct-detail-fra-befaring">
-                                      <div className="ct-detail-tittel">📋 Fra befaring</div>
-                                      <div className="ct-detail-rad">
-                                        <span className="ct-detail-navn">{bef.kontaktNavn}</span>
-                                        {bef.adresse && <span className="ct-detail-fag">📍 {bef.adresse}</span>}
-                                        {bef.jobbType && <span className="ct-detail-fag">{bef.jobbType}</span>}
-                                        {bef.estimertBelop && (
-                                          <span className="ct-detail-fag" style={{ color: '#16a34a' }}>
-                                            💰 {new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(Number(bef.estimertBelop))}
-                                          </span>
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })()}
-                                {p.beskrivelse && (
-                                  <div className="ct-detail-seksjon">
-                                    <div className="ct-detail-tittel">📝 Beskrivelse</div>
-                                    <div className="ct-detail-tekst">{p.beskrivelse}</div>
-                                  </div>
-                                )}
-                                <div className="ct-detail-grid">
-                                  {/* Tildelinger */}
-                                  <div className="ct-detail-seksjon">
-                                    <div className="ct-detail-tittel">👷 Tildelinger ({tildelinger.length})</div>
-                                    {tildelinger.length === 0 ? (
-                                      <div className="ct-detail-tom">Ingen tildelinger registrert</div>
-                                    ) : (
-                                      tildelinger.map(t => {
-                                        const ansatt = state.ansatte.find(a => a.id === t.ansattId);
-                                        if (!ansatt) return null;
-                                        return (
-                                          <div key={t.id} className="ct-detail-rad">
-                                            <span className="ct-detail-dot" style={{ background: FAG_COLORS[ansatt.fag] || barColor }} />
-                                            <span className="ct-detail-navn">{ansatt.navn}</span>
-                                            {ansatt.fag && <span className="ct-detail-fag">{ansatt.fag}</span>}
-                                            <span className="ct-detail-dato">
-                                              {t.startDato ? formatDate(t.startDato) : '?'}
-                                              {t.sluttDato ? ` – ${formatDate(t.sluttDato)}` : ''}
-                                            </span>
-                                          </div>
-                                        );
-                                      })
-                                    )}
-                                  </div>
-
-                                  {/* Oppgaver */}
-                                  {opp.length > 0 && (
-                                    <div className="ct-detail-seksjon">
-                                      <div className="ct-detail-tittel">✅ Oppgaver ({opp.length})</div>
-                                      {opp.map(o => (
-                                        <div key={o.id} className="ct-detail-opp">
-                                          <span className="ct-detail-navn">{o.navn || o.name || o.tittel || 'Oppgave'}</span>
-                                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 100 }}>
-                                            <div className="progress-bar" style={{ flex: 1, height: 4 }}>
-                                              <div className="progress-fill" style={{ width: (o.fremgang || 0) + '%', background: barColor }} />
-                                            </div>
-                                            <span style={{ fontSize: 11, fontWeight: 600, color: '#475569', minWidth: 28 }}>{o.fremgang || 0}%</span>
-                                          </div>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )
-            )}
-          </div>
+          <KompaktRad
+            key={p.id}
+            tittel={visAdresse}
+            undertittel={kundeNavn ? `👤 ${kundeNavn}` : null}
+            varsel={varsel ? `⚠ ${varsel.label}` : null}
+            varselFarge={varsel ? varsel.farge : null}
+            meta={[
+              p.startDato ? `📅 ${formatDate(p.startDato)}${p.sluttDato ? ` – ${formatDate(p.sluttDato)}` : ''}` : null,
+              varighetUker(p.startDato, p.sluttDato),
+              pl ? `🧑‍💼 ${(pl.navn || '').split(' ')[0]}` : null,
+              p.jobbType || null,
+            ]}
+            hoyre={[
+              antallFolk > 0 ? `👷 ${antallFolk}` : null,
+              belopVis,
+              ks ? `✅ ${ks}` : null,
+            ]}
+            fremdrift={fremgang}
+            meny={[
+              { ikon: '✏️', label: 'Rediger', onClick: () => openEdit(p) },
+              { skille: true },
+              ...['jobber_med', 'godkjent', 'aktiv'].filter(s => normStatus(p.status) !== s).map(s => ({
+                ikon: '→', label: SAVE_LABELS[s], onClick: () => settProsjektStatus(p, s),
+              })),
+              normStatus(p.status) !== 'fullfort' && { ikon: '🏁', label: 'Fullfør', onClick: () => settProsjektStatus(p, 'fullfort') },
+              { skille: true },
+              { ikon: '🗄', label: 'Arkiver', farlig: true, onClick: () => arkiverProsjekt(p) },
+            ]}
+            onClick={() => openEdit(p)}
+          />
         );
       })}
-
-      {alleProsjekter.length === 0 && search && (
-        <div className="empty">Ingen prosjekter matcher «{search}».</div>
-      )}
 
       {/* Modal */}
       {showModal && (
