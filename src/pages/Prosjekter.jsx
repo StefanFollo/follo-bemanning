@@ -1068,17 +1068,24 @@ export default function Prosjekter({ onNavigate = null }) {
               ))}
             </div>
             {(() => {
-              // Rader uten datoer i vinduet samles i ÉN oppsummeringslinje nederst
-              // i stedet for å fylle listen med tomme rader
-              const harDatoerI = p => p.startDato && p.sluttDato && p.startDato <= sluttIso && p.sluttDato >= startIso;
-              const medDatoer = faneProsjekter.filter(harDatoerI);
-              const utenDatoer = faneProsjekter.filter(p => !harDatoerI(p));
+              // ALLE prosjekter i fanen vises — samme utvalg som Liste-visningen.
+              // Datoer utenfor vinduet klemmes til kanten med ◂/▸-markør;
+              // mangler én av datoene brukes den andre for begge.
               return (
                 <>
-                  {medDatoer.map(p => {
+                  {faneProsjekter.map(p => {
                     const visAdr = p.adresse || p.navn || 'Uten navn';
-                    const v = pct(p.startDato);
-                    const b = Math.max(1.5, pct(p.sluttDato) - v);
+                    const s = p.startDato || p.sluttDato;
+                    const e = p.sluttDato || p.startDato;
+                    const utenDato = !s;
+                    const heltFoer = !utenDato && e < startIso;
+                    const heltEtter = !utenDato && s > sluttIso;
+                    const datoTittel = utenDato ? '' : `${formatDate(s)} – ${formatDate(e)}`;
+                    let v = 0, b = 0;
+                    if (!utenDato && !heltFoer && !heltEtter) {
+                      v = pct(s < startIso ? startIso : s);
+                      b = Math.max(1.5, pct(e > sluttIso ? sluttIso : e) - v);
+                    }
                     return (
                       <div key={p.id} style={{ display: 'flex', alignItems: 'center', height: 34, borderBottom: '1px solid #f8fafc', cursor: 'pointer' }}
                         onClick={() => aapnePanel(p)}>
@@ -1087,18 +1094,33 @@ export default function Prosjekter({ onNavigate = null }) {
                         </div>
                         <div style={{ flex: 1, position: 'relative', height: '100%' }}>
                           <div style={{ position: 'absolute', left: iDagPct + '%', top: 0, bottom: 0, width: 2, background: '#dc2626', opacity: .6 }} />
-                          <div title={`${formatDate(p.startDato)} – ${formatDate(p.sluttDato)}`}
-                            style={{ position: 'absolute', left: v + '%', width: b + '%', top: 7, height: 20, background: p.farge || '#2563eb', borderRadius: 5, opacity: .9 }} />
+                          {utenDato && (
+                            <span style={{ position: 'absolute', left: 8, top: 9, fontSize: 11, color: '#5d6b80', fontStyle: 'italic' }}>
+                              🗓 ingen datoer — sett via Rediger
+                            </span>
+                          )}
+                          {heltFoer && (
+                            <span title={datoTittel} style={{ position: 'absolute', left: 4, top: 8, fontSize: 12, fontWeight: 500, color: p.farge || '#1d4ed8' }}>
+                              ◂ {formatDate(e)}
+                            </span>
+                          )}
+                          {heltEtter && (
+                            <span title={datoTittel} style={{ position: 'absolute', right: 4, top: 8, fontSize: 12, fontWeight: 500, color: p.farge || '#1d4ed8' }}>
+                              {formatDate(s)} ▸
+                            </span>
+                          )}
+                          {!utenDato && !heltFoer && !heltEtter && (
+                            <div title={datoTittel}
+                              style={{ position: 'absolute', left: v + '%', width: b + '%', top: 7, height: 20, background: p.farge || '#2563eb', borderRadius: 5, opacity: .9 }}>
+                              {s < startIso && <span style={{ position: 'absolute', left: 3, top: 2, fontSize: 11, color: '#fff' }}>◂</span>}
+                              {e > sluttIso && <span style={{ position: 'absolute', right: 3, top: 2, fontSize: 11, color: '#fff' }}>▸</span>}
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
                   })}
-                  {medDatoer.length === 0 && <div style={{ padding: 20, color: '#5d6b80', textAlign: 'center' }}>Ingen prosjekter med datoer i vinduet.</div>}
-                  {utenDatoer.length > 0 && (
-                    <div style={{ padding: '10px 0 4px', fontSize: 12, color: '#5d6b80' }}>
-                      🗓 {utenDatoer.length} prosjekt{utenDatoer.length !== 1 ? 'er' : ''} uten datoer i vinduet — sett start-/sluttdato via Rediger, eller bytt til Liste-visningen
-                    </div>
-                  )}
+                  {faneProsjekter.length === 0 && <div style={{ padding: 20, color: '#5d6b80', textAlign: 'center' }}>Ingen prosjekter i denne fanen.</div>}
                 </>
               );
             })()}
