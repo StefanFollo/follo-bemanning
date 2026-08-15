@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { Ikon } from '../komponenter/Ikon';
 import TilbudsdataVisning from '../komponenter/Tilbudsdata';
+import { StatusFaner } from '../komponenter/Designsystem';
 import {
   klassifiserKoblinger, forslagForSpokelse, beregnKobleTilbud, beregnStatusFix,
   beregnAngreSak, hentReparasjonHistorikk, leggTilReparasjonHistorikk, mapSalgsStatus,
@@ -1105,26 +1106,20 @@ export default function BefaringPlan() {
         </div>
       )}
 
-      {/* Pipeline */}
-      <div className="bef-pipeline">
-        {Object.entries(STATUS).map(([key, s]) => {
-          const aktiv = pipelineFilter === key;
-          return (
-            <div
-              key={key}
-              className={`bef-pipeline-kort${aktiv ? ' bef-pipeline-kort--aktiv' : ''}`}
-              style={{ borderLeft: `3px solid ${s.farge}`, background: aktiv ? s.farge : '#fff', cursor: 'pointer' }}
-              onClick={() => setPipelineFilter(f => f === key ? null : key)}
-              title={aktiv ? 'Klikk for å fjerne filter' : `Filtrer på: ${s.label}`}
-            >
-              <div className="bef-pipeline-ikon"><Ikon ikon={s.ikon} size={20} farge={aktiv ? '#fff' : s.farge} /></div>
-              <div className="bef-pipeline-antall" style={{ color: aktiv ? '#fff' : s.farge }}>{teller[key] || 0}</div>
-              <div className="bef-pipeline-label" style={{ color: aktiv ? '#fff' : undefined }}>{s.label}</div>
-              {aktiv && <div className="bef-pipeline-aktiv-pill"><Ikon ikon={X} size={11} /> fjern</div>}
-            </div>
-          );
-        })}
-      </div>
+      {/* Kompakt status-fane-linje (Stefans småfix 15.08) — samme komponent
+          som Prosjekter-siden. Kanban-kolonnene beholder egne tellere. */}
+      <StatusFaner
+        faner={Object.entries(STATUS).map(([key, s]) => ({
+          key,
+          label: s.label,
+          ikon: <Ikon ikon={s.ikon} size={14} />,
+          farge: s.farge,
+          teller: teller[key] || 0,
+          sum: aktive.filter(b => b.status === key).reduce((sum, b) => sum + (Number(b.estimertBelop) || 0), 0),
+        }))}
+        aktiv={pipelineFilter}
+        onVelg={key => setPipelineFilter(f => f === key ? null : key)}
+      />
       {pipelineFilter && (
         <div className="bef-filter-banner">
           Viser kun: <strong>{STATUS[pipelineFilter]?.label}</strong>

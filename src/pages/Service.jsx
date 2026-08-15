@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { StatusFaner } from '../komponenter/Designsystem';
 import { dateToIso } from '../store';
 import ServiceReklKalender from '../components/ServiceReklKalender';
 import { SERV_STATUS } from '../statuses';
@@ -358,25 +359,14 @@ export default function Service() {
       {visning === 'kalender' && <ServiceReklKalender />}
 
       {visning === 'liste' && <>
-      {/* Pipeline */}
-      <div className="bef-pipeline">
-        {Object.entries(SERV_STATUS).map(([key, s]) => {
-          const aktiv = statusFilter === key;
-          return (
-            <div key={key}
-              className={`bef-pipeline-kort${aktiv ? ' bef-pipeline-kort--aktiv' : ''}`}
-              style={{ borderTop: `4px solid ${s.farge}`, background: aktiv ? s.farge : s.bg, cursor: 'pointer' }}
-              onClick={() => setStatusFilter(f => f === key ? null : key)}
-              title={aktiv ? 'Klikk for å fjerne filter' : `Filtrer: ${s.label}`}
-            >
-              <div className="bef-pipeline-ikon"><Ikon ikon={s.ikon} size={20} farge={aktiv ? '#fff' : s.farge} /></div>
-              <div className="bef-pipeline-antall" style={{ color: aktiv ? '#fff' : s.farge }}>{teller[key] || 0}</div>
-              <div className="bef-pipeline-label" style={{ color: aktiv ? '#fff' : undefined }}>{s.label}</div>
-              {aktiv && <div className="bef-pipeline-aktiv-pill"><Ikon ikon={X} size={11} /> fjern</div>}
-            </div>
-          );
-        })}
-      </div>
+      {/* Kompakt status-fane-linje (Stefans småfix 15.08) */}
+      <StatusFaner
+        faner={Object.entries(SERV_STATUS).map(([key, s]) => ({
+          key, label: s.label, ikon: <Ikon ikon={s.ikon} size={14} />, farge: s.farge, teller: teller[key] || 0, sum: 0,
+        }))}
+        aktiv={statusFilter}
+        onVelg={key => setStatusFilter(f => f === key ? null : key)}
+      />
       {statusFilter && (
         <div className="bef-filter-banner">
           Viser kun: <strong>{SERV_STATUS[statusFilter]?.label}</strong>
