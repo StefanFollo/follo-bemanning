@@ -1,6 +1,8 @@
 import { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { dateToIso, addDays, weekStart } from '../store';
+import { Wrench, TriangleAlert, Download, X } from 'lucide-react';
+import { Ikon } from '../komponenter/Ikon';
 
 // Felles kalender for Service + Reklamasjon.
 // Samme komponent vises på begge sider, så bildet er identisk.
@@ -10,8 +12,8 @@ const DAG_KORT = ['Man', 'Tir', 'Ons', 'Tor', 'Fre', 'Lør', 'Søn'];
 const MND = ['jan', 'feb', 'mar', 'apr', 'mai', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'des'];
 
 const TYPE_INFO = {
-  service:    { label: 'Service',    farge: '#0891b2', bg: '#ecfeff', ikon: '🔧' },
-  reklamasjon:{ label: 'Reklamasjon', farge: '#ea580c', bg: '#fff7ed', ikon: '⚠️' },
+  service:    { label: 'Service',    farge: '#0891b2', bg: '#ecfeff', ikon: Wrench },
+  reklamasjon:{ label: 'Reklamasjon', farge: '#ea580c', bg: '#fff7ed', ikon: TriangleAlert },
 };
 
 function fmtDag(iso) {
@@ -102,10 +104,10 @@ export default function ServiceReklKalender() {
         {erStart ? (
           <>
             <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600, color: '#1e293b' }}>
-              <span>{info.ikon}</span>
+              <Ikon ikon={info.ikon} size={12} farge={info.farge} />
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{sak.tittel}</span>
             </div>
-            {navn && <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>👤 {navn}{flereDager ? ` · ${dagerMellom(sak.planlagtDato, slutt) + 1} dager` : ''}</div>}
+            {navn && <div style={{ fontSize: 10, color: '#64748b', marginTop: 1 }}>{navn}{flereDager ? ` · ${dagerMellom(sak.planlagtDato, slutt) + 1} dager` : ''}</div>}
           </>
         ) : (
           <div style={{ fontSize: 10, color: info.farge, fontStyle: 'italic', whiteSpace: 'nowrap', overflow: 'hidden' }}>↳ {sak.tittel}</div>
@@ -125,12 +127,12 @@ export default function ServiceReklKalender() {
           Uke {fmtDag(ukeStart)} – {fmtDag(addDays(ukeStart, 6))}
         </span>
         <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 11, color: '#0891b2' }}>🔧 Service</span>
-        <span style={{ fontSize: 11, color: '#ea580c' }}>⚠️ Reklamasjon</span>
+        <span style={{ fontSize: 11, color: '#0891b2', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Ikon ikon={Wrench} size={12} /> Service</span>
+        <span style={{ fontSize: 11, color: '#ea580c', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Ikon ikon={TriangleAlert} size={12} /> Reklamasjon</span>
         {ansvarligIds.length > 0 && (
           <select className="input" style={{ height: 32, fontSize: 12, minWidth: 140 }}
             value={ansvarligFilter} onChange={e => setAnsvarligFilter(e.target.value)}>
-            <option value="">👤 Alle ansvarlige</option>
+            <option value="">Alle ansvarlige</option>
             {ansvarligIds.map(id => <option key={id} value={id}>{ansvarligNavn(id)}</option>)}
           </select>
         )}
@@ -167,7 +169,7 @@ export default function ServiceReklKalender() {
       {uplanlagte.length > 0 && (
         <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #f1f5f9' }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginBottom: 8 }}>
-            📥 Ikke planlagt ({uplanlagte.length}) — dra inn på en dag, eller klikk for å sette dato
+            <Ikon ikon={Download} size={13} /> Ikke planlagt ({uplanlagte.length}) — dra inn på en dag, eller klikk for å sette dato
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {uplanlagte.map(sak => (
@@ -194,11 +196,11 @@ export default function ServiceReklKalender() {
             onClick={() => setValgtSak(null)}>
             <div style={{ background: '#fff', borderRadius: 14, padding: '20px 22px', maxWidth: 400, width: '100%' }} onClick={e => e.stopPropagation()}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: 16, marginBottom: 4 }}>
-                {TYPE_INFO[valgtSak.type].ikon} {valgtSak.tittel}
+                <Ikon ikon={TYPE_INFO[valgtSak.type].ikon} size={16} farge={TYPE_INFO[valgtSak.type].farge} /> {valgtSak.tittel}
               </div>
               <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
                 {TYPE_INFO[valgtSak.type].label}{valgtSak.undertittel ? ` · ${valgtSak.undertittel}` : ''}
-                {ansvarligNavn(valgtSak.ansvarligId) && ` · 👤 ${ansvarligNavn(valgtSak.ansvarligId)}`}
+                {ansvarligNavn(valgtSak.ansvarligId) && ` · ${ansvarligNavn(valgtSak.ansvarligId)}`}
               </div>
 
               <label style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'block', marginBottom: 4 }}>Startdato</label>
@@ -230,7 +232,7 @@ export default function ServiceReklKalender() {
               <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center' }}>
                 {valgtSak.planlagtDato && (
                   <button className="btn btn-sm" style={{ color: '#dc2626' }}
-                    onClick={() => { lagre(valgtSak, { planlagtDato: '', planlagtSluttDato: '' }); setValgtSak(null); }}>✕ Fjern fra kalender</button>
+                    onClick={() => { lagre(valgtSak, { planlagtDato: '', planlagtSluttDato: '' }); setValgtSak(null); }} ><Ikon ikon={X} size={12} /> Fjern fra kalender</button>
                 )}
                 <div style={{ flex: 1 }} />
                 <button className="btn btn-sm" onClick={() => setValgtSak(null)}>Lukk</button>

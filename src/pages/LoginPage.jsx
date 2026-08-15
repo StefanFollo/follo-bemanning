@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Check, Wrench, Eye, EyeOff } from 'lucide-react';
+import { Ikon, IkonTekst } from '../komponenter/Ikon';
 
 export default function LoginPage({ onLogin }) {
   const [view, setView] = useState('login'); // 'login' | 'forgot' | 'forgot-sent'
@@ -94,14 +96,14 @@ export default function LoginPage({ onLogin }) {
     return (
       <div className="login-bg">
         <div className="login-card">
-          <div className="login-logo" style={{ background: '#15803d' }}>✓</div>
+          <div className="login-logo" style={{ background: '#15803d' }}><Ikon ikon={Check} size={28} /></div>
           <h1 className="login-title">Sjekk e-posten</h1>
           <p className="login-sub" style={{ textAlign: 'center', lineHeight: 1.6 }}>
             Hvis det finnes en konto med <strong>{forgotEmail}</strong>, har vi sendt en lenke for å sette nytt passord.
           </p>
           {devResetUrl && (
             <div style={{ background: '#fef9c3', border: '1px solid #fbbf24', borderRadius: 8, padding: '12px 16px', marginTop: 16, fontSize: 13 }}>
-              <strong>🛠 Dev-modus</strong> (ingen e-posttjeneste konfigurert)<br />
+              <strong><IkonTekst ikon={Wrench} size={14} gap={4}>Dev-modus</IkonTekst></strong> (ingen e-posttjeneste konfigurert)<br />
               <a href={devResetUrl} style={{ color: '#1e3a5f', wordBreak: 'break-all' }}>{devResetUrl}</a>
             </div>
           )}
@@ -145,9 +147,9 @@ export default function LoginPage({ onLogin }) {
               <button
                 type="button"
                 onClick={() => setShowPass(v => !v)}
-                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#5d6b80' }}
+                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#5d6b80', display: 'inline-flex', alignItems: 'center' }}
               >
-                {showPass ? '🙈' : '👁'}
+                <Ikon ikon={showPass ? EyeOff : Eye} size={18} />
               </button>
             </div>
           </div>

@@ -1,4 +1,9 @@
 import React, { useState, useRef, useLayoutEffect, useEffect, useMemo } from 'react';
+import {
+  X, Tv, Maximize, Printer, Palmtree, ClipboardList, Cake, HardHat, Scissors,
+  Info, Wrench, Hammer, CircleCheck, CircleAlert, Thermometer, CalendarDays, PartyPopper,
+} from 'lucide-react';
+import { Ikon, IkonTekst } from '../komponenter/Ikon';
 import { useApp } from '../context/AppContext';
 import { weekStart, addDays, isoToDate, dateToIso, formatDate, overlaps } from '../store';
 import { getHolidayMap } from '../holidays';
@@ -47,7 +52,7 @@ function Modal({ title, onClose, children }) {
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{title}</h3>
-          <button className="btn-icon" onClick={onClose}>✕</button>
+          <button className="btn-icon" onClick={onClose}><Ikon ikon={X} size={16} /></button>
         </div>
         {children}
       </div>
@@ -381,7 +386,7 @@ export default function Bemanningsplan({ readOnly = false }) {
             setStorskjermZoom(z);
             if (storskjermContentRef.current) storskjermContentRef.current.style.zoom = String(z);
           }}>－</button>
-          <button className="bplan-storskjerm-close" onClick={() => setStorskjerm(false)}>✕ Lukk</button>
+          <button className="bplan-storskjerm-close" onClick={() => setStorskjerm(false)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Ikon ikon={X} size={14} /> Lukk</button>
         </div>
       )}
 
@@ -389,13 +394,13 @@ export default function Bemanningsplan({ readOnly = false }) {
         <h2>Bemanningsplan</h2>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn no-print" onClick={() => setStorskjerm(s => !s)} title="Storskjerm – skalert oversikt for TV/projektor">
-            {storskjerm ? '✕ Lukk' : '📺 Storskjerm'}
+            {storskjerm ? <IkonTekst ikon={X} size={14} gap={4}>Lukk</IkonTekst> : <IkonTekst ikon={Tv} size={14} gap={4}>Storskjerm</IkonTekst>}
           </button>
           <button className="btn no-print" onClick={() => setFullscreen(f => !f)} title={fullscreen ? 'Avslutt fullskjerm' : 'Fullskjerm – se alle ansatte'}>
-            {fullscreen ? '✕ Lukk' : '⛶ Fullskjerm'}
+            {fullscreen ? <IkonTekst ikon={X} size={14} gap={4}>Lukk</IkonTekst> : <IkonTekst ikon={Maximize} size={14} gap={4}>Fullskjerm</IkonTekst>}
           </button>
-          <button className="btn no-print" onClick={() => window.print()} title="Skriv ut / Lagre som PDF">🖨 PDF</button>
-          {!readOnly && <button className="btn no-print" onClick={() => openAddFerie()} title="Registrer ferie eller fri">🏖 Ferie</button>}
+          <button className="btn no-print" onClick={() => window.print()} title="Skriv ut / Lagre som PDF" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={Printer} size={16} /> PDF</button>
+          {!readOnly && <button className="btn no-print" onClick={() => openAddFerie()} title="Registrer ferie eller fri" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={Palmtree} size={16} /> Ferie</button>}
           {!readOnly && <button className="btn btn-primary no-print" onClick={() => openAddTildeling()}>+ Ny tildeling</button>}
         </div>
       </div>
@@ -405,7 +410,7 @@ export default function Bemanningsplan({ readOnly = false }) {
           Ukeoversikt
         </button>
         <button className={`tab-btn ${tab === 'oversikt' ? 'active' : ''}`} onClick={() => setTab('oversikt')}>
-          📋 Oversikt
+          <IkonTekst ikon={ClipboardList} size={15}>Oversikt</IkonTekst>
         </button>
         <button className={`tab-btn ${tab === 'ressurs' ? 'active' : ''}`} onClick={() => setTab('ressurs')}>
           Ressursallokering
@@ -414,13 +419,13 @@ export default function Bemanningsplan({ readOnly = false }) {
           Prosjektoversikt
         </button>
         <button className={`tab-btn ${tab === 'ferie' ? 'active' : ''}`} onClick={() => setTab('ferie')}>
-          🏖 Ferie
+          <IkonTekst ikon={Palmtree} size={15}>Ferie</IkonTekst>
         </button>
         <button className={`tab-btn ${tab === 'bursdag' ? 'active' : ''}`} onClick={() => setTab('bursdag')}>
-          🎂 Bursdag
+          <IkonTekst ikon={Cake} size={15}>Bursdag</IkonTekst>
         </button>
         <button className={`tab-btn ${tab === 'teams' ? 'active' : ''}`} onClick={() => setTab('teams')}>
-          👷 Team {(state.teams || []).length > 0 && <span className="count-badge" style={{ marginLeft: 4 }}>{(state.teams || []).length}</span>}
+          <IkonTekst ikon={HardHat} size={15}>Team</IkonTekst> {(state.teams || []).length > 0 && <span className="count-badge" style={{ marginLeft: 4 }}>{(state.teams || []).length}</span>}
         </button>
       </div>
 
@@ -539,7 +544,7 @@ export default function Bemanningsplan({ readOnly = false }) {
           }} onClick={e => e.stopPropagation()}>
             <div style={{ fontWeight: 500, fontSize: 13, marginBottom: 2 }}>
               {barMenu.t.prosjektId === FERIE_ID
-                ? '🏖 Ferie / Fri'
+                ? <IkonTekst ikon={Palmtree} size={13} gap={4}>Ferie / Fri</IkonTekst>
                 : state.prosjekter.find(p => p.id === barMenu.t.prosjektId)?.navn || '–'}
             </div>
             <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 10 }}>
@@ -548,7 +553,7 @@ export default function Bemanningsplan({ readOnly = false }) {
             </div>
 
             <div style={{ borderTop: '1px solid #f1f5f9', paddingTop: 10, marginBottom: 10 }}>
-              <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4 }}>✂ Del fra dato</label>
+              <label style={{ fontSize: 11, color: '#6b7280', display: 'block', marginBottom: 4 }}><Ikon ikon={Scissors} size={11} style={{ marginRight: 3 }} />Del fra dato</label>
               <input type="date"
                 value={barMenu.splitDay}
                 min={addDays(barMenu.t.startDato, 1)}
@@ -567,7 +572,7 @@ export default function Bemanningsplan({ readOnly = false }) {
                 onClick={() => { handleSplitAtDay(barMenu.t, barMenu.splitDay); setBarMenu(null); }}
                 style={{ width: '100%', padding: '7px', borderRadius: 6, border: 'none', background: '#185FA5', color: '#fff', fontSize: 13, cursor: 'pointer', fontWeight: 500, marginBottom: 6, opacity: (!barMenu.splitDay || barMenu.splitDay <= barMenu.t.startDato) ? 0.4 : 1 }}
               >
-                ✂ Del opp
+                <Ikon ikon={Scissors} size={13} style={{ marginRight: 4 }} />Del opp
               </button>
             </div>
 
@@ -600,27 +605,27 @@ export default function Bemanningsplan({ readOnly = false }) {
               onClick={() => { deleteTildeling(barMenu.t.id); setBarMenu(null); }}
               style={{ width: '100%', padding: '6px', borderRadius: 6, border: '1px solid #fca5a5', background: '#fff', color: '#dc2626', fontSize: 12, cursor: 'pointer' }}
             >
-              ✕ Slett tildeling
+              <Ikon ikon={X} size={13} style={{ marginRight: 4 }} />Slett tildeling
             </button>
           </div>
         </>
       )}
 
       {showModal && (
-        <Modal title={tilForm.prosjektId === FERIE_ID ? '🏖 Legg til ferie / fri' : 'Legg til tildeling'} onClose={() => setShowModal(false)}>
+        <Modal title={tilForm.prosjektId === FERIE_ID ? <IkonTekst ikon={Palmtree} size={16}>Legg til ferie / fri</IkonTekst> : 'Legg til tildeling'} onClose={() => setShowModal(false)}>
           <div className="form">
             <label>Ansatt *</label>
             <select value={tilForm.ansattId} onChange={e => setTilForm(f => ({ ...f, ansattId: e.target.value }))}>
               {[...state.ansatte].sort((a, b) => a.navn.localeCompare(b.navn, 'nb')).map(a => (
                 <option key={a.id} value={a.id}>
-                  {a.innleie ? '🔧 ' : ''}{a.navn} ({a.fag})
+                  {a.navn} ({a.fag}{a.innleie ? ' – innleie' : ''})
                 </option>
               ))}
             </select>
 
             <label>{tilForm.prosjektId === FERIE_ID ? 'Type' : 'Prosjekt *'}</label>
             <select value={tilForm.prosjektId} onChange={e => setTilForm(f => ({ ...f, prosjektId: e.target.value }))}>
-              <option value={FERIE_ID}>🏖 Ferie / Fri</option>
+              <option value={FERIE_ID}>Ferie / Fri</option>
               {[...state.prosjekter].sort((a, b) => a.navn.localeCompare(b.navn, 'nb')).map(p => <option key={p.id} value={p.id}>{p.navn}</option>)}
             </select>
 
@@ -640,7 +645,7 @@ export default function Bemanningsplan({ readOnly = false }) {
             {tilForm.prosjektId !== FERIE_ID && tilForm.ansattId && tilForm.startDato && tilForm.sluttDato &&
               harKonflikt(tilForm.ansattId, tilForm.startDato, tilForm.sluttDato) && (
               <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 12px', fontSize: 13, color: '#92400e' }}>
-                ℹ️ {state.ansatte.find(a => a.id === tilForm.ansattId)?.navn} er allerede tildelt et prosjekt i denne perioden — dette legges inn som <strong>parallelt prosjekt</strong> (vises på egen linje i oversikten).
+                <Ikon ikon={Info} size={14} style={{ marginRight: 4 }} />{state.ansatte.find(a => a.id === tilForm.ansattId)?.navn} er allerede tildelt et prosjekt i denne perioden — dette legges inn som <strong>parallelt prosjekt</strong> (vises på egen linje i oversikten).
               </div>
             )}
 
@@ -826,7 +831,7 @@ function UkeVisning({
           <React.Fragment>
             <div className="uke-prosjekt-header" style={{ gridColumn: '1 / -1', borderLeft: '4px solid #b45309' }}>
               <span className="uke-prosjekt-farge" style={{ background: '#b45309' }} />
-              <span className="uke-prosjekt-navn">🏖 Ferie / Fri</span>
+              <span className="uke-prosjekt-navn"><Ikon ikon={Palmtree} size={13} style={{ marginRight: 4 }} />Ferie / Fri</span>
               <span className="uke-prosjekt-antall">{ferieKun.length} ansatt{ferieKun.length !== 1 ? 'e' : ''}</span>
             </div>
             {ferieKun.map(a => <AnsattRad key={a.id} ansatt={a} prosjektId={null} {...radExtra} />)}
@@ -875,10 +880,10 @@ function UkeVisning({
       {ukeMode === 'dag' && kapTotal > 0 && (
         <div className="bplan-kap-banner">
           <span className="bplan-kap-tittel">Uke {getWeekNumber(currentWeek)}</span>
-          <span className="bplan-kap-chip bplan-kap-chip--opptatt">🔨 {kapOpptatt} opptatt</span>
-          {kapFerie > 0 && <span className="bplan-kap-chip bplan-kap-chip--ferie">🏖 {kapFerie} ferie</span>}
+          <span className="bplan-kap-chip bplan-kap-chip--opptatt"><Ikon ikon={Hammer} size={12} style={{ marginRight: 3 }} />{kapOpptatt} opptatt</span>
+          {kapFerie > 0 && <span className="bplan-kap-chip bplan-kap-chip--ferie"><Ikon ikon={Palmtree} size={12} style={{ marginRight: 3 }} />{kapFerie} ferie</span>}
           <span className="bplan-kap-chip" style={{ background: kapLedig > 0 ? '#f0fdf4' : '#fef2f2', color: kapLedig > 0 ? '#15803d' : '#dc2626' }}>
-            {kapLedig > 0 ? '✅' : '🔴'} {kapLedig} ledig
+            <Ikon ikon={kapLedig > 0 ? CircleCheck : CircleAlert} size={12} style={{ marginRight: 3 }} />{kapLedig} ledig
           </span>
           <div className="bplan-kap-bar-outer">
             <div className="bplan-kap-bar-seg bplan-kap-bar-opptatt" style={{ width: kapPst + '%' }} />
@@ -1068,7 +1073,7 @@ function GanttRowContainer({
               : <div className="gantt-handle-spacer" />}
             <span className="gantt-label">{barLabel}</span>
             <div className="gantt-actions">
-              <button onClick={e => { e.stopPropagation(); deleteTildeling(t.id); }} title="Slett">✕</button>
+              <button onClick={e => { e.stopPropagation(); deleteTildeling(t.id); }} title="Slett"><Ikon ikon={X} size={12} /></button>
             </div>
             {pos.isLast
               ? <div className="gantt-handle gantt-handle-r" draggable onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'end' }; }}>▸</div>
@@ -1090,7 +1095,7 @@ function DagAnsattRad({ ansatt, prosjektId, days, gantt }) {
         <div>
           <div className="row-navn">{ansatt.navn}</div>
           <div className="row-fag" style={{ color: fagColor(ansatt.fag) }}>
-            {ansatt.innleie && <span style={{ color: '#f97316', fontWeight: 500, marginRight: 3 }}>🔧</span>}
+            {ansatt.innleie && <Ikon ikon={Wrench} size={11} farge="#f97316" style={{ marginRight: 3 }} />}
             {ansatt.fag}
           </div>
         </div>
@@ -1158,7 +1163,7 @@ function UkeAnsattRad({ ansatt, prosjektId, days, gantt }) {
         <div>
           <div className="row-navn">{ansatt.navn}</div>
           <div className="row-fag" style={{ color: ansatt.sykmeldt ? '#5d6b80' : fagColor(ansatt.fag) }}>
-            {ansatt.sykmeldt ? '🤒 Sykmeldt' : ansatt.innleie ? <><span style={{ color: '#f97316', fontWeight: 500, marginRight: 3 }}>🔧</span>{ansatt.fag}</> : ansatt.fag}
+            {ansatt.sykmeldt ? <><Ikon ikon={Thermometer} size={11} style={{ marginRight: 3 }} />Sykmeldt</> : ansatt.innleie ? <><Ikon ikon={Wrench} size={11} farge="#f97316" style={{ marginRight: 3 }} />{ansatt.fag}</> : ansatt.fag}
           </div>
         </div>
       </div>
@@ -1207,7 +1212,7 @@ function MaanedAnsattRad({ ansatt, prosjektId, days, gantt }) {
         <div>
           <div className="row-navn">{ansatt.navn}</div>
           <div className="row-fag" style={{ color: ansatt.sykmeldt ? '#5d6b80' : fagColor(ansatt.fag) }}>
-            {ansatt.sykmeldt ? '🤒 Sykmeldt' : ansatt.innleie ? <><span style={{ color: '#f97316', fontWeight: 500, marginRight: 3 }}>🔧</span>{ansatt.fag}</> : ansatt.fag}
+            {ansatt.sykmeldt ? <><Ikon ikon={Thermometer} size={11} style={{ marginRight: 3 }} />Sykmeldt</> : ansatt.innleie ? <><Ikon ikon={Wrench} size={11} farge="#f97316" style={{ marginRight: 3 }} />{ansatt.fag}</> : ansatt.fag}
           </div>
         </div>
       </div>
@@ -1249,7 +1254,7 @@ function hentRorItems(state, ansattId, viewStart, viewEnd, medEnkeltdager) {
     }
     for (const b of (state.befaringer || [])) {
       if (b.prosjektlederId !== ansattId || !b.dato || b.dato < viewStart || b.dato > viewEnd) continue;
-      items.push({ id: 'bf-' + b.id, startDato: b.dato, sluttDato: b.dato, navn: '🔍 ' + (b.adresse || b.navn || 'Befaring'), farge: '#6d28d9' });
+      items.push({ id: 'bf-' + b.id, startDato: b.dato, sluttDato: b.dato, navn: 'Befaring: ' + (b.adresse || b.navn || ''), farge: '#6d28d9' });
     }
   }
   return items;
@@ -1291,7 +1296,7 @@ function RorleggerRader({ state, days, unit, viewStart, viewEnd }) {
   return (
     <>
       <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: '#ecfeff', borderTop: '2px solid #0e7490', borderBottom: '1px solid #a5f3fc', fontSize: 11, fontWeight: 500, color: '#0e7490', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        🔧 Rørlegger — synket fra Rørlegger-fanen
+        <Ikon ikon={Wrench} size={12} /> Rørlegger — synket fra Rørlegger-fanen
       </div>
       {rorleggere.map(ansatt => {
         const items = hentRorItems(state, ansatt.id, viewStart, viewEnd, unit !== 'month');
@@ -1452,11 +1457,11 @@ function OversiktVisning({
       if (ansatt.sykmeldt) {
         const fra = ansatt.sykmeldtFra || kol.start;
         const til = ansatt.sykmeldtTil || kol.end;
-        if (overlaps(fra, til, kol.start, kol.end)) deler.push('<span class="syk">🤒 Sykmeldt</span>');
+        if (overlaps(fra, til, kol.start, kol.end)) deler.push('<span class="syk">Sykmeldt</span>');
       }
       for (const t of state.tildelinger) {
         if (t.ansattId !== ansatt.id || !overlaps(t.startDato, t.sluttDato, kol.start, kol.end)) continue;
-        if (t.prosjektId === FERIE_ID) { deler.push('<span class="ferie">🏖 Ferie</span>'); continue; }
+        if (t.prosjektId === FERIE_ID) { deler.push('<span class="ferie">Ferie</span>'); continue; }
         const p = state.prosjekter.find(pr => pr.id === t.prosjektId);
         deler.push(`<span class="prosj" style="border-left-color:${p?.farge || '#6b7280'}">${p?.navn || '?'}</span>`);
       }
@@ -1558,13 +1563,13 @@ function OversiktVisning({
           {kompakt ? '▥ Full visning' : '▤ Kompakt'}
         </button>
         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-          <button className="btn" onClick={() => skrivUtPlanPdf(1)} title="PDF for inneværende uke (per dag) — velg «Lagre som PDF» i utskriftsdialogen">🖨 Uke-PDF</button>
+          <button className="btn" onClick={() => skrivUtPlanPdf(1)} title="PDF for inneværende uke (per dag) — velg «Lagre som PDF» i utskriftsdialogen" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={Printer} size={16} /> Uke-PDF</button>
           <select
             className="input" defaultValue="" style={{ width: 120, height: 30, fontSize: 12 }}
             onChange={e => { const v = parseInt(e.target.value, 10); if (v) skrivUtPlanPdf(v); e.target.value = ''; }}
             title="PDF for en lengre periode (per uke)"
           >
-            <option value="" disabled>🖨 Periode…</option>
+            <option value="" disabled>Periode…</option>
             <option value="2">2 uker</option>
             <option value="4">4 uker</option>
             <option value="8">8 uker</option>
@@ -1765,8 +1770,8 @@ function OversiktVisning({
                     {ansatt.navn}
                   </span>
                   {ansatt.sykmeldt
-                    ? <span style={{ fontSize: 9, color: '#5d6b80', flexShrink: 0 }}>🤒</span>
-                    : ansatt.innleie && <span style={{ fontSize: 9, color: '#f97316', flexShrink: 0 }}>🔧</span>
+                    ? <Ikon ikon={Thermometer} size={10} farge="#5d6b80" />
+                    : ansatt.innleie && <Ikon ikon={Wrench} size={10} farge="#f97316" />
                   }
                 </div>
 
@@ -1812,7 +1817,7 @@ function OversiktVisning({
                         fontSize: 10, color: '#5d6b80', fontWeight: 500, gap: 4,
                         pointerEvents: 'none',
                       }}>
-                        🤒 Sykmeldt{ansatt.sykmeldtTil ? ` t.o.m. ${new Date(ansatt.sykmeldtTil + 'T00:00:00').toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })}` : ''}
+                        <Ikon ikon={Thermometer} size={11} />Sykmeldt{ansatt.sykmeldtTil ? ` t.o.m. ${new Date(ansatt.sykmeldtTil + 'T00:00:00').toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' })}` : ''}
                       </div>
                     );
                   })()}
@@ -1824,7 +1829,7 @@ function OversiktVisning({
                     const isFerie = t.prosjektId === FERIE_ID;
                     const proj  = isFerie ? null : state.prosjekter.find(p => p.id === t.prosjektId);
                     const color = proj?.farge || '#6b7280';
-                    const label = isFerie ? '🏖 Ferie' : (proj?.navn || '?');
+                    const label = isFerie ? 'Ferie' : (proj?.navn || '?');
 
                     return (
                       <div key={t.id}
@@ -1930,7 +1935,7 @@ function OversiktVisning({
             const rows = [
               <div key="ror-header" style={{ display: 'flex', height: kompakt ? 22 : 26, alignItems: 'stretch', background: '#ecfeff', borderTop: '2px solid #0e7490', borderBottom: '1px solid #a5f3fc', minWidth: LABEL_W + totalW }}>
                 <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '0 12px', position: 'sticky', left: 0, zIndex: 3, background: '#fff', borderRight: '2px solid #a5f3fc' }}>
-                  <span style={{ fontSize: 11 }}>🔧</span>
+                  <Ikon ikon={Wrench} size={12} farge="#0e7490" />
                   <span style={{ fontWeight: 500, fontSize: 12, color: '#0e7490', whiteSpace: 'nowrap' }}>Rørlegger</span>
                   <span style={{ fontSize: 10, color: '#5d6b80', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>fra Rørlegger-fanen</span>
                 </div>
@@ -1948,7 +1953,7 @@ function OversiktVisning({
                       {ansatt.navn.split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase()}
                     </div>
                     <span className="oversikt-row-navn" style={{ fontSize: kompakt ? 11 : 12 }}>{ansatt.navn}</span>
-                    <span style={{ fontSize: 9, color: '#0e7490', flexShrink: 0 }}>🔧</span>
+                    <Ikon ikon={Wrench} size={10} farge="#0e7490" />
                   </div>
                   <div className="oversikt-bars-area" style={{ width: totalW, height: rowH }}>
                     {allDays.map((d, i) => {
@@ -2036,7 +2041,7 @@ function FerieVisning({ state, readOnly, ferieYearOffset, setFerieYearOffset, op
       {/* Ferie nav */}
       <div className="uke-nav">
         <button className="btn" onClick={() => setFerieYearOffset(o => (o || 0) - 1)}>← Forrige år</button>
-        <span className="uke-label">🏖 Ferieplan {ferieYear}</span>
+        <span className="uke-label"><IkonTekst ikon={Palmtree} size={16}>Ferieplan {ferieYear}</IkonTekst></span>
         <button className="btn" onClick={() => setFerieYearOffset(o => (o || 0) + 1)}>Neste år →</button>
         <button className="btn" onClick={() => setFerieYearOffset(0)}>I år</button>
         {!readOnly && <button className="btn btn-primary no-print" onClick={() => openAddFerie()}>+ Legg til ferie</button>}
@@ -2077,9 +2082,9 @@ function FerieVisning({ state, readOnly, ferieYearOffset, setFerieYearOffset, op
                   <div style={{ minWidth: 0 }}>
                     <div className="row-navn" style={{ fontSize: 12 }}>{ansatt.navn}</div>
                     <div className="row-fag" style={{ color: fagColor(ansatt.fag), fontSize: 10 }}>
-                      {ansatt.innleie && <span style={{ color: '#f97316', marginRight: 2 }}>🔧</span>}
+                      {ansatt.innleie && <Ikon ikon={Wrench} size={10} farge="#f97316" style={{ marginRight: 2 }} />}
                       {totalDager > 0
-                        ? <span style={{ color: '#15803d', fontWeight: 500 }}>🏖 {totalDager} dager</span>
+                        ? <span style={{ color: '#15803d', fontWeight: 500 }}><Ikon ikon={Palmtree} size={11} style={{ marginRight: 3 }} />{totalDager} dager</span>
                         : ansatt.fag}
                     </div>
                   </div>
@@ -2209,7 +2214,7 @@ function TeamsVisning({
         <div style={{ display: 'flex', gap: 8 }}>
           {teams.length > 0 && (
             <button className="btn" onClick={() => { setTeamTildelForm({ teamId: teams[0].id, prosjektId: '', startDato: currentWeek, sluttDato: addDays(currentWeek, 4) }); setVisTeamTildel(true); }}>
-              📅 Tildel team til prosjekt
+              <IkonTekst ikon={CalendarDays} size={15}>Tildel team til prosjekt</IkonTekst>
             </button>
           )}
           <button className="btn btn-primary" onClick={startNyttTeam}>+ Nytt team</button>
@@ -2323,7 +2328,7 @@ function TeamsVisning({
                         memberDragInfo.current = null;
                         setMemberDragOverTeam(null);
                       }}
-                      title={a.sykmeldt ? '🤒 Sykmeldt – ikke i bemanningsplan' : undefined}
+                      title={a.sykmeldt ? 'Sykmeldt – ikke i bemanningsplan' : undefined}
                       style={{
                         display: 'flex', alignItems: 'center', gap: 5,
                         background: a.sykmeldt ? '#f1f5f9' : a.innleie ? '#fff7ed' : '#f8fafc',
@@ -2337,7 +2342,7 @@ function TeamsVisning({
                       </div>
                       <span style={{ color: a.sykmeldt ? '#5d6b80' : 'inherit' }}>{a.navn}</span>
                       <span style={{ color: a.sykmeldt ? '#5d6b80' : a.innleie ? '#f97316' : '#5d6b80', fontSize: 10 }}>
-                        {a.sykmeldt ? '🤒' : a.innleie ? '🔧' : a.fag}
+                        {a.sykmeldt ? <Ikon ikon={Thermometer} size={11} /> : a.innleie ? <Ikon ikon={Wrench} size={11} /> : a.fag}
                       </span>
                     </div>
                   ))}
@@ -2390,7 +2395,7 @@ function TeamsVisning({
                 );
               })}
               {innleieAnsatte.length > 0 && (
-                <div style={{ fontSize: 10, fontWeight: 500, color: '#f97316', letterSpacing: '0.06em', padding: '6px 6px 4px', textTransform: 'uppercase', borderTop: fastAnsatte.length > 0 ? '1px solid #f1f5f9' : 'none', marginTop: fastAnsatte.length > 0 ? 4 : 0 }}>🔧 Innleie</div>
+                <div style={{ fontSize: 10, fontWeight: 500, color: '#f97316', letterSpacing: '0.06em', padding: '6px 6px 4px', textTransform: 'uppercase', borderTop: fastAnsatte.length > 0 ? '1px solid #f1f5f9' : 'none', marginTop: fastAnsatte.length > 0 ? 4 : 0 }}><IkonTekst ikon={Wrench} size={11} gap={4}>Innleie</IkonTekst></div>
               )}
               {innleieAnsatte.map(a => {
                 const tatt = opptattIAnnetTeam.has(a.id);
@@ -2405,7 +2410,7 @@ function TeamsVisning({
                     <span style={{ fontSize: 13, fontWeight: 500 }}>{a.navn}</span>
                     {tatt
                       ? <span style={{ fontSize: 11, color: '#f97316', marginLeft: 'auto' }}>i {annetTeam?.navn || 'annet team'}</span>
-                      : <span style={{ fontSize: 11, color: '#f97316', marginLeft: 'auto' }}>🔧 {a.fag}</span>
+                      : <span style={{ fontSize: 11, color: '#f97316', marginLeft: 'auto' }}><Ikon ikon={Wrench} size={11} style={{ marginRight: 3 }} />{a.fag}</span>
                     }
                   </label>
                 );
@@ -2448,7 +2453,7 @@ function TeamsVisning({
               <button className="btn btn-primary"
                 disabled={!teamTildelForm.teamId || !teamTildelForm.prosjektId || !teamTildelForm.startDato || !teamTildelForm.sluttDato}
                 onClick={() => handleTildelTeam(teamTildelForm.teamId, teamTildelForm.prosjektId, teamTildelForm.startDato, teamTildelForm.sluttDato)}>
-                📅 Tildel team
+                <IkonTekst ikon={CalendarDays} size={15}>Tildel team</IkonTekst>
               </button>
             </div>
           </div>
@@ -2491,7 +2496,7 @@ function BursdagVisning({ state }) {
   return (
     <div>
       <div className="uke-nav">
-        <span className="uke-label">🎂 Bursdagskalender</span>
+        <span className="uke-label"><IkonTekst ikon={Cake} size={16}>Bursdagskalender</IkonTekst></span>
         <span style={{ fontSize: 13, color: '#5d6b80' }}>
           {totalMedBursdag} av {state.ansatte.length} ansatte har registrert bursdag
         </span>
@@ -2505,7 +2510,7 @@ function BursdagVisning({ state }) {
             const dayLabel = isToday ? 'I dag!' : offset === 1 ? 'I morgen' : `Om ${offset} dager`;
             return (
               <div key={ansatt.id + md} className={`bursdag-upcoming-item${isToday ? ' bursdag-today-item' : ''}`}>
-                <span className="bursdag-upcoming-emoji">{isToday ? '🎉' : '🎂'}</span>
+                <span className="bursdag-upcoming-emoji"><Ikon ikon={isToday ? PartyPopper : Cake} size={20} farge="#ec4899" /></span>
                 <div className="mini-avatar" style={{ background: ansatt.innleie ? '#f97316' : fagColor(ansatt.fag), width: 28, height: 28, fontSize: 10, flexShrink: 0 }}>
                   {ansatt.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                 </div>
@@ -2541,7 +2546,7 @@ function BursdagVisning({ state }) {
                         {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                       </div>
                       <span className="bursdag-navn">{a.navn}</span>
-                      {isToday && <span>🎉</span>}
+                      {isToday && <Ikon ikon={PartyPopper} size={12} farge="#ec4899" />}
                     </div>
                   );
                 })
@@ -2683,13 +2688,13 @@ function RessursVisning({ state, planAnsatte, currentWeek, prevWeek, nextWeek, t
                 {s.weekStr.slice(8)}.{s.weekStr.slice(5, 7)} – {s.weekEnd.slice(8)}.{s.weekEnd.slice(5, 7)}
               </div>
               <div style={{ fontSize: 20, fontWeight: 500, color: farge, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
-                👷 {s.ledige}
+                <Ikon ikon={HardHat} size={20} /> {s.ledige}
               </div>
               <div style={{ fontSize: 10, color: farge, fontWeight: 500 }}>ledig{s.ledige !== 1 ? 'e' : ''}</div>
               {(s.ferie > 0 || s.sykmeldte > 0) && (
                 <div style={{ fontSize: 10, marginTop: 2, display: 'flex', gap: 6, justifyContent: 'center' }}>
-                  {s.ferie > 0 && <span style={{ color: '#0891b2' }}>🏖 {s.ferie}</span>}
-                  {s.sykmeldte > 0 && <span style={{ color: '#5d6b80' }}>🤒 {s.sykmeldte}</span>}
+                  {s.ferie > 0 && <span style={{ color: '#0891b2' }}><Ikon ikon={Palmtree} size={11} style={{ marginRight: 2 }} />{s.ferie}</span>}
+                  {s.sykmeldte > 0 && <span style={{ color: '#5d6b80' }}><Ikon ikon={Thermometer} size={11} style={{ marginRight: 2 }} />{s.sykmeldte}</span>}
                 </div>
               )}
             </div>

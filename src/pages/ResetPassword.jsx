@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Check, Eye, EyeOff } from 'lucide-react';
+import { Ikon } from '../komponenter/Ikon';
 
 function strength(pw) {
   if (!pw) return { score: 0, label: '', color: '' };
@@ -50,7 +52,7 @@ export default function ResetPassword({ token, onDone }) {
     return (
       <div className="login-bg">
         <div className="login-card">
-          <div className="login-logo" style={{ background: '#15803d' }}>✓</div>
+          <div className="login-logo" style={{ background: '#15803d' }}><Ikon ikon={Check} size={28} /></div>
           <h1 className="login-title">Passord satt!</h1>
           <p className="login-sub" style={{ textAlign: 'center' }}>
             Passordet ditt er oppdatert. Du kan nå logge inn.
@@ -85,9 +87,9 @@ export default function ResetPassword({ token, onDone }) {
               <button
                 type="button"
                 onClick={() => setShowPw(v => !v)}
-                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#5d6b80' }}
+                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#5d6b80', display: 'inline-flex', alignItems: 'center' }}
               >
-                {showPw ? '🙈' : '👁'}
+                <Ikon ikon={showPw ? EyeOff : Eye} size={18} />
               </button>
             </div>
             {pw && (

@@ -1,6 +1,14 @@
 import { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react'
 import { useApp } from '../context/AppContext'
 import KSFagForslag from '../komponenter/KSFagForslag'
+import {
+  TriangleAlert, CircleCheck, Check, X, ClipboardList, FileText, Sparkles, Package, Loader, Clock,
+  Trash2, Pencil, Shield, Bath, House, Building2, PanelTop, Zap, Droplet, Hammer, Wrench, Lock,
+  HardHat, Sun, CalendarDays, CircleAlert, Download, MessageSquare, Lightbulb, Search, Users, User,
+  PenLine, Camera, BookOpen, Folder, MapPin, Printer, Save, Send, Ruler, Library, GripVertical,
+  Paperclip, CircleHelp, Palette, Upload, Circle, CircleMinus, Square, RotateCcw, Crosshair,
+} from 'lucide-react'
+import { Ikon, IkonTekst, TomIkon } from '../komponenter/Ikon'
 
 // ── Konstanter ────────────────────────────────────────────────────────────────
 
@@ -15,8 +23,8 @@ const KAT_FARGE = {
 const GRUPPE_REKKEFØLGE = ['HMS', 'Sluttkontroll', 'Utførelse bad', 'Utførelse fasade', 'Utførelse tak', 'Utførelse innvendig', 'Maling', 'Rørlegger', 'Elektrisk']
 const PUNKT_STATUS_CFG = {
   'ikke-utfort': { label: 'Ikke utført', farge: '#5d6b80', bg: '#f8fafc' },
-  ok:            { label: 'OK ✓',        farge: '#15803d', bg: '#f0fdf4' },
-  avvik:         { label: 'Avvik ⚠',     farge: '#dc2626', bg: '#fef2f2' },
+  ok:            { label: 'OK',        farge: '#15803d', bg: '#f0fdf4' },
+  avvik:         { label: 'Avvik',     farge: '#dc2626', bg: '#fef2f2' },
   'ikke-aktuelt':{ label: 'N/A',         farge: '#5d6b80', bg: '#f1f5f9' },
 }
 const ALVORLIGHET_CFG = {
@@ -57,9 +65,9 @@ function Fremdriftsbar({ pst, avvik = false, hoyde = 6 }) {
 }
 
 function StatusPill({ status }) {
-  const cfg = { 'ikke-startet': { bg: '#f1f5f9', c: '#5d6b80', t: '⚪ Ikke startet' }, pagar: { bg: '#fef9c3', c: '#ca8a04', t: '🟡 Pågår' }, ferdig: { bg: '#dcfce7', c: '#15803d', t: '🟢 Ferdig' } }
+  const cfg = { 'ikke-startet': { bg: '#f1f5f9', c: '#5d6b80', t: 'Ikke startet', ikon: Circle }, pagar: { bg: '#fef9c3', c: '#ca8a04', t: 'Pågår', ikon: Clock }, ferdig: { bg: '#dcfce7', c: '#15803d', t: 'Ferdig', ikon: CircleCheck } }
   const s = cfg[status] || cfg['ikke-startet']
-  return <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 10, background: s.bg, color: s.c, whiteSpace: 'nowrap' }}>{s.t}</span>
+  return <span style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 10, background: s.bg, color: s.c, whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Ikon ikon={s.ikon} size={12} />{s.t}</span>
 }
 
 // ── Legg-til-sjekkliste modal ─────────────────────────────────────────────────
@@ -103,10 +111,10 @@ function LeggTilModal({ prosjektId, maler, eksisterendeMalIds, onLagre, onLukk }
       <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h3>Legg til sjekklister</h3>
-          <button className="btn-icon" onClick={onLukk}>✕</button>
+          <button className="btn-icon" onClick={onLukk}><Ikon ikon={X} size={16} /></button>
         </div>
         <div className="form">
-          <input className="input" placeholder="🔍 Søk mal eller gruppe..." value={sok} onChange={e => setSok(e.target.value)} style={{ marginBottom: 12 }} />
+          <input className="input" placeholder="Søk mal eller gruppe..." value={sok} onChange={e => setSok(e.target.value)} style={{ marginBottom: 12 }} />
           <div style={{ maxHeight: 380, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
             {grupper.map(g => (
               <div key={g}>
@@ -128,7 +136,7 @@ function LeggTilModal({ prosjektId, maler, eksisterendeMalIds, onLagre, onLukk }
           <div className="modal-actions" style={{ marginTop: 14 }}>
             <button className="btn" onClick={onLukk}>Avbryt</button>
             <button className="btn btn-primary" onClick={leggTil} disabled={!valgte.length || leggerTil}>
-              {leggerTil ? '⏳ Legger til...' : `+ Legg til ${valgte.length > 0 ? `(${valgte.length})` : ''}`}
+              {leggerTil ? 'Legger til...' : `+ Legg til ${valgte.length > 0 ? `(${valgte.length})` : ''}`}
             </button>
           </div>
         </div>
@@ -145,7 +153,7 @@ function SignerModal({ punkt, sjekklisteNavn, onSigner, onLukk }) {
   return (
     <div className="modal-backdrop" onClick={onLukk}>
       <div className="modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
-        <div className="modal-header"><h3>✍️ Signer punkt</h3><button className="btn-icon" onClick={onLukk}>✕</button></div>
+        <div className="modal-header"><h3><IkonTekst ikon={PenLine} size={16}>Signer punkt</IkonTekst></h3><button className="btn-icon" onClick={onLukk}><Ikon ikon={X} size={16} /></button></div>
         <div className="form">
           <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 14px', marginBottom: 16, fontSize: 13, color: '#475569' }}>
             <div style={{ fontWeight: 500, marginBottom: 4 }}>Punkt:</div>
@@ -162,7 +170,7 @@ function SignerModal({ punkt, sjekklisteNavn, onSigner, onLukk }) {
           <div className="modal-actions" style={{ marginTop: 16 }}>
             <button className="btn" onClick={onLukk}>Avbryt</button>
             <button className="btn btn-primary" disabled={!bekreftet} onClick={() => onSigner(navn)}>
-              ✍️ Signer som {navn} — {new Date().toLocaleDateString('nb-NO')}
+              <IkonTekst ikon={PenLine} size={14}>Signer som {navn} — {new Date().toLocaleDateString('nb-NO')}</IkonTekst>
             </button>
           </div>
         </div>
@@ -197,7 +205,7 @@ function AiModal({ modus, mal, onFerdig, onLukk }) {
     setLaster(false)
   }
 
-  const tittel = modus === 'endre' ? '✨ Endre sjekkliste med AI' : modus === 'ny' ? '✨ Lag ny sjekkliste' : '✨ Spør AI om hjelp'
+  const tittel = modus === 'endre' ? 'Endre sjekkliste med AI' : modus === 'ny' ? 'Lag ny sjekkliste' : 'Spør AI om hjelp'
   const placeholder = modus === 'endre' ? `F.eks. "Legg til punkt om branntetting rundt rør" eller "Fjern punktet om SHA-koordinator"`
     : modus === 'ny' ? 'F.eks. "Sjekkliste for montering av kjøkken med ny komfyr og koblinger"'
     : 'F.eks. "Hva betyr fall mot sluk 1:100?"'
@@ -205,7 +213,7 @@ function AiModal({ modus, mal, onFerdig, onLukk }) {
   return (
     <div className="modal-backdrop" onClick={onLukk}>
       <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
-        <div className="modal-header"><h3>{tittel}</h3><button className="btn-icon" onClick={onLukk}>✕</button></div>
+        <div className="modal-header"><h3><IkonTekst ikon={Sparkles} size={16}>{tittel}</IkonTekst></h3><button className="btn-icon" onClick={onLukk}><Ikon ikon={X} size={16} /></button></div>
         <div className="form">
           {mal && <div style={{ fontSize: 12, color: '#5d6b80', marginBottom: 10 }}>Mal: {mal.navn}</div>}
           {!resultat && !diff && (
@@ -215,7 +223,7 @@ function AiModal({ modus, mal, onFerdig, onLukk }) {
               <div className="modal-actions" style={{ marginTop: 12 }}>
                 <button className="btn" onClick={onLukk}>Avbryt</button>
                 <button className="btn btn-primary" onClick={send} disabled={!tekst.trim() || laster}>
-                  {laster ? '⏳ AI tenker...' : 'Send til AI →'}
+                  {laster ? 'AI tenker...' : 'Send til AI →'}
                 </button>
               </div>
             </>
@@ -224,13 +232,13 @@ function AiModal({ modus, mal, onFerdig, onLukk }) {
           {diff && (
             <div>
               <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10, color: '#1e293b' }}>AI foreslår disse endringene:</div>
-              {diff.leggTil?.map((p, i) => <div key={i} style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '8px 12px', marginBottom: 6, fontSize: 13 }}>✚ Nytt punkt: "{p.tekst}"</div>)}
-              {diff.endre?.map((e, i) => <div key={i} style={{ background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 8, padding: '8px 12px', marginBottom: 6, fontSize: 13 }}>✏️ Endrer: "{e.fra}" → "{e.til}"</div>)}
+              {diff.leggTil?.map((p, i) => <div key={i} style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '8px 12px', marginBottom: 6, fontSize: 13 }}>+ Nytt punkt: "{p.tekst}"</div>)}
+              {diff.endre?.map((e, i) => <div key={i} style={{ background: '#eff6ff', border: '1px solid #93c5fd', borderRadius: 8, padding: '8px 12px', marginBottom: 6, fontSize: 13 }}><Ikon ikon={Pencil} size={13} /> Endrer: "{e.fra}" → "{e.til}"</div>)}
               {diff.fjern?.map((f, i) => <div key={i} style={{ background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '8px 12px', marginBottom: 6, fontSize: 13 }}>− Fjerner: "{f.id}" ({f.grunn})</div>)}
-              {diff.forklaring && <div style={{ fontSize: 12, color: '#5d6b80', fontStyle: 'italic', marginTop: 8 }}>💡 {diff.forklaring}</div>}
+              {diff.forklaring && <div style={{ fontSize: 12, color: '#5d6b80', fontStyle: 'italic', marginTop: 8 }}><Ikon ikon={Lightbulb} size={12} /> {diff.forklaring}</div>}
               <div className="modal-actions" style={{ marginTop: 14 }}>
-                <button className="btn" onClick={() => { setDiff(null); setTekst('') }}>🔄 Prøv igjen</button>
-                <button className="btn btn-primary" onClick={() => onFerdig({ type: 'endre', diff, malId: mal?.id })}>💾 Godta endringer</button>
+                <button className="btn" onClick={() => { setDiff(null); setTekst('') }}><IkonTekst ikon={RotateCcw} size={14}>Prøv igjen</IkonTekst></button>
+                <button className="btn btn-primary" onClick={() => onFerdig({ type: 'endre', diff, malId: mal?.id })}><IkonTekst ikon={Save} size={14}>Godta endringer</IkonTekst></button>
               </div>
             </div>
           )}
@@ -248,10 +256,10 @@ function AiModal({ modus, mal, onFerdig, onLukk }) {
             <div>
               <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>AI-forslag: "{resultat.navn}"</div>
               <div style={{ fontSize: 12, color: '#5d6b80', marginBottom: 10 }}>{resultat.punkter?.length} punkter · gruppe: {resultat.gruppe}</div>
-              {resultat.punkter?.map((p, i) => <div key={i} style={{ fontSize: 13, padding: '4px 0', borderBottom: '1px solid #f1f5f9' }}>{i+1}. {p.tekst}{p.krever_signering ? ' ✍️' : ''}{p.krever_bilde ? ' 📷' : ''}</div>)}
+              {resultat.punkter?.map((p, i) => <div key={i} style={{ fontSize: 13, padding: '4px 0', borderBottom: '1px solid #f1f5f9' }}>{i+1}. {p.tekst}{p.krever_signering ? <> <Ikon ikon={PenLine} size={11} /></> : null}{p.krever_bilde ? <> <Ikon ikon={Camera} size={11} /></> : null}</div>)}
               <div className="modal-actions" style={{ marginTop: 14 }}>
-                <button className="btn" onClick={() => { setResultat(null); setTekst('') }}>🔄 Prøv igjen</button>
-                <button className="btn btn-primary" onClick={() => onFerdig({ type: 'ny-mal', mal: resultat })}>💾 Lagre som mal</button>
+                <button className="btn" onClick={() => { setResultat(null); setTekst('') }}><IkonTekst ikon={RotateCcw} size={14}>Prøv igjen</IkonTekst></button>
+                <button className="btn btn-primary" onClick={() => onFerdig({ type: 'ny-mal', mal: resultat })}><IkonTekst ikon={Save} size={14}>Lagre som mal</IkonTekst></button>
               </div>
             </div>
           )}
@@ -279,7 +287,7 @@ function TildelModal({ sl, ansatteIProsj, onLagre, onLukk }) {
   return (
     <div className="modal-backdrop" onClick={onLukk}>
       <div className="modal" style={{ maxWidth: 440 }} onClick={e => e.stopPropagation()}>
-        <div className="modal-header"><h3>👥 Tildel ansvarlig</h3><button className="btn-icon" onClick={onLukk}>✕</button></div>
+        <div className="modal-header"><h3><IkonTekst ikon={Users} size={16}>Tildel ansvarlig</IkonTekst></h3><button className="btn-icon" onClick={onLukk}><Ikon ikon={X} size={16} /></button></div>
         <div className="form">
           <div style={{ fontSize: 13, color: '#5d6b80', marginBottom: 12 }}>Sjekkliste: <strong>{sl.navn}</strong></div>
           <div style={{ marginBottom: 14 }}>
@@ -300,7 +308,7 @@ function TildelModal({ sl, ansatteIProsj, onLagre, onLukk }) {
           <div className="modal-actions">
             <button className="btn" onClick={onLukk}>Avbryt</button>
             <button className="btn btn-primary" onClick={lagre} disabled={lagrer}>
-              {lagrer ? '⏳...' : `📤 Tildel${valgte.length ? ` til ${valgte.join(', ')}` : ''}`}
+              {lagrer ? 'Lagrer...' : <IkonTekst ikon={Send} size={14}>{`Tildel${valgte.length ? ` til ${valgte.join(', ')}` : ''}`}</IkonTekst>}
             </button>
           </div>
         </div>
@@ -327,7 +335,7 @@ function AvvikRegistrerModal({ ansatteIProsj = [], onLagre, onAvbryt }) {
       onClick={onAvbryt}>
       <div style={{ background: '#fff', borderRadius: 16, padding: '22px 20px', maxWidth: 400, width: '100%', boxShadow: '0 20px 48px rgba(0,0,0,.3)' }}
         onClick={e => e.stopPropagation()}>
-        <div style={{ fontWeight: 500, fontSize: 16, color: '#dc2626', marginBottom: 16 }}>⚠ Registrer avvik</div>
+        <div style={{ fontWeight: 500, fontSize: 16, color: '#dc2626', marginBottom: 16 }}><IkonTekst ikon={TriangleAlert} size={16}>Registrer avvik</IkonTekst></div>
 
         <label style={{ fontSize: 12, fontWeight: 500, color: '#475569', display: 'block', marginBottom: 4 }}>Beskrivelse *</label>
         <textarea autoFocus className="input" rows={3} value={besk} onChange={e => setBesk(e.target.value)}
@@ -357,7 +365,7 @@ function AvvikRegistrerModal({ ansatteIProsj = [], onLagre, onAvbryt }) {
           <button className="btn btn-primary" style={{ background: '#dc2626', borderColor: '#dc2626' }}
             disabled={!besk.trim()}
             onClick={() => onLagre({ beskrivelse: besk, ansvarlig, frist })}>
-            ⚠ Lagre avvik
+            <IkonTekst ikon={TriangleAlert} size={14}>Lagre avvik</IkonTekst>
           </button>
         </div>
       </div>
@@ -387,19 +395,19 @@ function PunktRad({ punkt, idx, kanSkrive, onChange, onSigner, onAiHjelp, onLast
         <div className="ks-punkt-innhold">
           <div className="ks-punkt-tittel">
             {punkt.tekst}
-            {punkt.krever_signering && <span className="ks-merke ks-merke-sign">✍️ Signering</span>}
-            {punkt.krever_bilde && <span className="ks-merke ks-merke-bilde">📷 Bilde</span>}
+            {punkt.krever_signering && <span className="ks-merke ks-merke-sign"><Ikon ikon={PenLine} size={11} /> Signering</span>}
+            {punkt.krever_bilde && <span className="ks-merke ks-merke-bilde"><Ikon ikon={Camera} size={11} /> Bilde</span>}
           </div>
           {punkt.veiledning_kort && (
             <div className="ks-punkt-hint">
-              📖 {punkt.veiledning_kort}
+              <Ikon ikon={BookOpen} size={12} /> {punkt.veiledning_kort}
             </div>
           )}
           {harDetaljer && !utvidet && (
             <div style={{ fontSize: 11, color: '#3b82f6', marginTop: 2, cursor: 'pointer' }} onClick={() => setUtvidet(true)}>
-              {punkt.krever_bilde && '📷 '}
-              {punkt.krever_signering && '✍️ '}
-              {(punkt.beskrivelse || punkt.regelverkLenker?.length > 0) && '📖 '}
+              {punkt.krever_bilde && <><Ikon ikon={Camera} size={11} />{' '}</>}
+              {punkt.krever_signering && <><Ikon ikon={PenLine} size={11} />{' '}</>}
+              {(punkt.beskrivelse || punkt.regelverkLenker?.length > 0) && <><Ikon ikon={BookOpen} size={11} />{' '}</>}
               <span style={{ textDecoration: 'underline' }}>Vis detaljer ↓</span>
             </div>
           )}
@@ -411,17 +419,17 @@ function PunktRad({ punkt, idx, kanSkrive, onChange, onSigner, onAiHjelp, onLast
           )}
           {erSignert && (
             <div style={{ fontSize: 11, color: '#15803d', marginTop: 2 }}>
-              ✍️ Signert av {punkt.signert_av} · {new Date(punkt.signert_dato).toLocaleDateString('nb-NO')}
+              <Ikon ikon={PenLine} size={12} /> Signert av {punkt.signert_av} · {new Date(punkt.signert_dato).toLocaleDateString('nb-NO')}
             </div>
           )}
           {punkt.status === 'avvik' && punkt.avvikAnsvarlig && !utvidet && (
             <div style={{ fontSize: 11, color: '#dc2626', marginTop: 3, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <span>👤 {punkt.avvikAnsvarlig}</span>
-              {punkt.avvikFrist && <span>📅 {new Date(punkt.avvikFrist + 'T00:00:00').toLocaleDateString('nb-NO')}</span>}
+              <span><Ikon ikon={User} size={12} /> {punkt.avvikAnsvarlig}</span>
+              {punkt.avvikFrist && <span><Ikon ikon={CalendarDays} size={12} /> {new Date(punkt.avvikFrist + 'T00:00:00').toLocaleDateString('nb-NO')}</span>}
             </div>
           )}
           {punkt.kommentar && !utvidet && (
-            <div style={{ fontSize: 12, color: '#475569', marginTop: 3, fontStyle: 'italic' }}>💬 {punkt.kommentar}</div>
+            <div style={{ fontSize: 12, color: '#475569', marginTop: 3, fontStyle: 'italic' }}><Ikon ikon={MessageSquare} size={12} /> {punkt.kommentar}</div>
           )}
         </div>
         {kanSkrive && (
@@ -455,7 +463,7 @@ function PunktRad({ punkt, idx, kanSkrive, onChange, onSigner, onAiHjelp, onLast
         {!kanSkrive && (
           <StatusPill status={punkt.status === 'ok' ? 'ferdig' : punkt.status === 'ikke-utfort' ? 'ikke-startet' : 'pagar'} />
         )}
-        <button className="ks-lenke" style={{ marginLeft: 8, fontSize: 11 }} onClick={() => onAiHjelp(punkt)} title="Spør AI">✨</button>
+        <button className="ks-lenke" style={{ marginLeft: 8, fontSize: 11 }} onClick={() => onAiHjelp(punkt)} title="Spør AI"><Ikon ikon={Sparkles} size={14} /></button>
       </div>
 
       {utvidet && kanSkrive && (
@@ -463,12 +471,12 @@ function PunktRad({ punkt, idx, kanSkrive, onChange, onSigner, onAiHjelp, onLast
           {/* Beskrivelse + regelverk */}
           {(punkt.beskrivelse || punkt.regelverkLenker?.length > 0) && (
             <div style={{ marginBottom: 14, background: '#f8fafc', borderRadius: 8, padding: '10px 12px' }}>
-              <div style={{ fontSize: 11, fontWeight: 500, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>📖 Beskrivelse</div>
+              <div style={{ fontSize: 11, fontWeight: 500, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}><Ikon ikon={BookOpen} size={12} /> Beskrivelse</div>
               {punkt.beskrivelse && <p style={{ margin: '0 0 8px', fontSize: 13, lineHeight: 1.65, color: '#374151' }}>{punkt.beskrivelse}</p>}
               {punkt.regelverkLenker?.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {punkt.regelverkLenker.map((l, i) => (
-                    <a key={i} href={l.url} target="_blank" rel="noopener noreferrer" className="ks-ref-lenke">📄 {l.tekst}</a>
+                    <a key={i} href={l.url} target="_blank" rel="noopener noreferrer" className="ks-ref-lenke"><Ikon ikon={FileText} size={12} /> {l.tekst}</a>
                   ))}
                 </div>
               )}
@@ -479,7 +487,7 @@ function PunktRad({ punkt, idx, kanSkrive, onChange, onSigner, onAiHjelp, onLast
           {punkt.krever_bilde && (
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 11, fontWeight: 500, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>
-                📷 Bilder {punkt.bilder?.length > 0 ? `(${punkt.bilder.length})` : <span style={{ color: '#dc2626' }}>(krever min. 1)</span>}
+                <Ikon ikon={Camera} size={12} /> Bilder {punkt.bilder?.length > 0 ? `(${punkt.bilder.length})` : <span style={{ color: '#dc2626' }}>(krever min. 1)</span>}
               </div>
               {(punkt.bilder || []).length > 0 && (
                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>
@@ -496,12 +504,12 @@ function PunktRad({ punkt, idx, kanSkrive, onChange, onSigner, onAiHjelp, onLast
                 <button className="btn" style={{ fontSize: 12 }}
                   onClick={() => { filRef.current.removeAttribute('capture'); filRef.current.click() }}
                   disabled={opplaster === punkt.id}>
-                  {opplaster === punkt.id ? '⏳ Laster...' : '📁 Last opp'}
+                  {opplaster === punkt.id ? 'Laster...' : <IkonTekst ikon={Upload} size={13}>Last opp</IkonTekst>}
                 </button>
                 <button className="btn" style={{ fontSize: 12 }}
                   onClick={() => { filRef.current.setAttribute('capture', 'environment'); filRef.current.click() }}
                   disabled={opplaster === punkt.id}>
-                  📷 Ta bilde
+                  <IkonTekst ikon={Camera} size={13}>Ta bilde</IkonTekst>
                 </button>
                 <input ref={filRef} type="file" accept="image/*" style={{ display: 'none' }}
                   onChange={e => { if (e.target.files[0]) onLastOppBilde(punkt.id, e.target.files[0]); e.target.value = '' }} />
@@ -512,7 +520,7 @@ function PunktRad({ punkt, idx, kanSkrive, onChange, onSigner, onAiHjelp, onLast
           {/* Bilder (valgfri opplastning selv om ikke krevd) */}
           {!punkt.krever_bilde && (punkt.bilder || []).length > 0 && (
             <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 500, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>📷 Bilder ({punkt.bilder.length})</div>
+              <div style={{ fontSize: 11, fontWeight: 500, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}><Ikon ikon={Camera} size={12} /> Bilder ({punkt.bilder.length})</div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {punkt.bilder.map((b, i) => (
                   <img key={i} src={b.url} alt={`Bilde ${i+1}`} style={{ width: 64, height: 64, objectFit: 'cover', borderRadius: 6, border: '1px solid #e2e8f0', cursor: 'pointer' }}
@@ -525,14 +533,14 @@ function PunktRad({ punkt, idx, kanSkrive, onChange, onSigner, onAiHjelp, onLast
           {/* Signering */}
           {punkt.krever_signering && (
             <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 500, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>✍️ Signering</div>
+              <div style={{ fontSize: 11, fontWeight: 500, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}><Ikon ikon={PenLine} size={12} /> Signering</div>
               {erSignert ? (
                 <div style={{ fontSize: 12, color: '#15803d', background: '#f0fdf4', borderRadius: 6, padding: '6px 10px' }}>
-                  ✅ Signert av {punkt.signert_av} · {new Date(punkt.signert_dato).toLocaleDateString('nb-NO')}
+                  <Ikon ikon={CircleCheck} size={13} /> Signert av {punkt.signert_av} · {new Date(punkt.signert_dato).toLocaleDateString('nb-NO')}
                 </div>
               ) : (
                 <button className="btn" style={{ fontSize: 12, background: '#1e293b', color: '#fff' }} onClick={() => onSigner(punkt)}>
-                  ✍️ Signer som {brukernavn} — {new Date().toLocaleDateString('nb-NO')}
+                  <IkonTekst ikon={PenLine} size={14}>Signer som {brukernavn} — {new Date().toLocaleDateString('nb-NO')}</IkonTekst>
                 </button>
               )}
             </div>
@@ -541,7 +549,7 @@ function PunktRad({ punkt, idx, kanSkrive, onChange, onSigner, onAiHjelp, onLast
           {/* Kommentar */}
           <div>
             <label style={{ fontSize: 11, fontWeight: 500, color: '#475569', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '.05em' }}>
-              💬 Kommentar{punkt.status === 'avvik' ? ' (krevd ved avvik)' : ''}
+              <Ikon ikon={MessageSquare} size={12} /> Kommentar{punkt.status === 'avvik' ? ' (krevd ved avvik)' : ''}
             </label>
             <textarea className="input" rows={2} value={punkt.kommentar || ''}
               onChange={e => onChange({ ...punkt, kommentar: e.target.value })}
@@ -701,14 +709,14 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
           <h2 style={{ margin: 0, fontSize: 18, color: '#1e293b' }}>{sl.navn}</h2>
           <div style={{ fontSize: 12, color: '#5d6b80', marginTop: 2, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <StatusPill status={sl.status} />
-            {sl.gruppe && <span>📁 {sl.gruppe}</span>}
-            {sl.ansvarlig?.length > 0 && <span>👤 {sl.ansvarlig.join(', ')}</span>}
-            {sl.frist && <span style={{ color: new Date(sl.frist) < new Date() ? '#dc2626' : '#5d6b80' }}>📅 Frist: {new Date(sl.frist).toLocaleDateString('nb-NO')}</span>}
+            {sl.gruppe && <span><Ikon ikon={Folder} size={12} /> {sl.gruppe}</span>}
+            {sl.ansvarlig?.length > 0 && <span><Ikon ikon={User} size={12} /> {sl.ansvarlig.join(', ')}</span>}
+            {sl.frist && <span style={{ color: new Date(sl.frist) < new Date() ? '#dc2626' : '#5d6b80' }}><Ikon ikon={CalendarDays} size={12} /> Frist: {new Date(sl.frist).toLocaleDateString('nb-NO')}</span>}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {kanAdmin && <button className="btn" onClick={() => setVisTildel(true)}>👥 Tildel</button>}
-          {kanSkrive && <button className="btn" onClick={() => setAiModus('endre')} title="Endre med AI">✨ AI</button>}
+          {kanAdmin && <button className="btn" onClick={() => setVisTildel(true)}><IkonTekst ikon={Users} size={14}>Tildel</IkonTekst></button>}
+          {kanSkrive && <button className="btn" onClick={() => setAiModus('endre')} title="Endre med AI"><IkonTekst ikon={Sparkles} size={13}>AI</IkonTekst></button>}
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontWeight: 500, color: pst === 100 ? '#15803d' : '#b45309', fontSize: 18 }}>{pst}%</div>
             <div style={{ color: '#5d6b80', fontSize: 11 }}>{lokale.filter(p => p.status === 'ok' || p.status === 'ikke-aktuelt').length}/{lokale.length}</div>
@@ -716,10 +724,10 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
           {kanSkrive && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 11, fontWeight: 500, color: lagrer ? '#b45309' : '#15803d', whiteSpace: 'nowrap' }}>
-                {lagrer ? '⏳ Lagrer…' : sistLagret ? `✓ Lagret ${sistLagret.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })}` : ''}
+                {lagrer ? 'Lagrer…' : sistLagret ? <><Ikon ikon={Check} size={12} /> {`Lagret ${sistLagret.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })}`}</> : ''}
               </span>
               <button className="btn" onClick={() => lagre(false)} disabled={lagrer} style={{ background: lagret ? '#15803d' : undefined, color: lagret ? '#fff' : undefined }} title="Lagres automatisk — klikk for å lagre nå">
-                {lagret ? '✅ Lagret!' : '💾 Lagre'}
+                {lagret ? <IkonTekst ikon={CircleCheck} size={14}>Lagret!</IkonTekst> : <IkonTekst ikon={Save} size={14}>Lagre</IkonTekst>}
               </button>
             </div>
           )}
@@ -734,11 +742,11 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
       {/* Faner */}
       <div className="ks-faner">
         {[
-          ['punkter',   `✓ Sjekkpunkter (${lokale.length})`],
-          ['rediger',   '✏️ Rediger'],
-          ['detaljer',  '📋 Detaljer'],
-          ['avvik-fane',`⚠️ Avvik${avvik.length ? ` (${avvik.length})` : ''}`],
-          ['vedlegg',   '📎 Vedlegg'],
+          ['punkter',   <IkonTekst key='f-punkter' ikon={Check} size={13} gap={5}>{`Sjekkpunkter (${lokale.length})`}</IkonTekst>],
+          ['rediger',   <IkonTekst key='f-rediger' ikon={Pencil} size={13} gap={5}>Rediger</IkonTekst>],
+          ['detaljer',  <IkonTekst key='f-detaljer' ikon={ClipboardList} size={13} gap={5}>Detaljer</IkonTekst>],
+          ['avvik-fane',<IkonTekst key='f-avvik' ikon={TriangleAlert} size={13} gap={5}>{`Avvik${avvik.length ? ` (${avvik.length})` : ''}`}</IkonTekst>],
+          ['vedlegg',   <IkonTekst key='f-vedlegg' ikon={Paperclip} size={13} gap={5}>Vedlegg</IkonTekst>],
         ].map(([id, label]) => (
           <button key={id} className={`ks-fane-btn ${fane === id ? 'aktiv' : ''}`} onClick={() => setFane(id)}>{label}</button>
         ))}
@@ -760,14 +768,14 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
             <span className="ks-felt-label">Ansvarlig</span>
             <span>{sl.ansvarlig?.length > 0
               ? sl.ansvarlig.join(', ')
-              : <span style={{ color: '#5d6b80', fontStyle: 'italic' }}>Ingen — tildel via «👥 Tildel»-knappen øverst</span>}
+              : <span style={{ color: '#5d6b80', fontStyle: 'italic' }}>Ingen — tildel via «Tildel»-knappen øverst</span>}
             </span>
           </div>
           <div className="ks-detalj-felt">
             <span className="ks-felt-label">Frist</span>
             <span>{sl.frist
-              ? <span style={{ color: new Date(sl.frist) < new Date() ? '#dc2626' : '#1e293b' }}>{new Date(sl.frist).toLocaleDateString('nb-NO')}{new Date(sl.frist) < new Date() ? ' ⚠️ Forfalt' : ''}</span>
-              : <span style={{ color: '#5d6b80', fontStyle: 'italic' }}>Ingen frist — sett via «👥 Tildel»</span>}
+              ? <span style={{ color: new Date(sl.frist) < new Date() ? '#dc2626' : '#1e293b' }}>{new Date(sl.frist).toLocaleDateString('nb-NO')}{new Date(sl.frist) < new Date() ? <> <Ikon ikon={TriangleAlert} size={12} /> Forfalt</> : ''}</span>
+              : <span style={{ color: '#5d6b80', fontStyle: 'italic' }}>Ingen frist — sett via «Tildel»</span>}
             </span>
           </div>
           <div className="ks-detalj-felt"><span className="ks-felt-label">Opprettet</span><span>{new Date(sl.opprettet).toLocaleDateString('nb-NO')}</span></div>
@@ -777,7 +785,7 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
           {/* Beskrivelse fra mal */}
           {sl.beskrivelse && (
             <div style={{ marginTop: 16, padding: '12px 14px', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-              <div style={{ fontSize: 11, fontWeight: 500, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}>📖 Beskrivelse</div>
+              <div style={{ fontSize: 11, fontWeight: 500, color: '#475569', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.05em' }}><Ikon ikon={BookOpen} size={12} /> Beskrivelse</div>
               <p style={{ margin: 0, fontSize: 13, lineHeight: 1.65, color: '#374151' }}>{sl.beskrivelse}</p>
             </div>
           )}
@@ -788,7 +796,7 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
             const unikeRefs = [...new Map(alleRefs.map(r => [r.tekst, r])).values()]
             return unikeRefs.length > 0 ? (
               <div style={{ marginTop: 12, padding: '12px 14px', background: '#f8fafc', borderRadius: 10, border: '1px solid #e2e8f0' }}>
-                <div style={{ fontSize: 11, fontWeight: 500, color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}>📄 Regelverk ({unikeRefs.length})</div>
+                <div style={{ fontSize: 11, fontWeight: 500, color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.05em' }}><Ikon ikon={FileText} size={12} /> Regelverk ({unikeRefs.length})</div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {unikeRefs.map((r, i) => (
                     <a key={i} href={r.url} target="_blank" rel="noopener noreferrer" className="ks-ref-lenke">{r.tekst}</a>
@@ -847,7 +855,7 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
                   onChange={e => setLokale(prev => prev.map((x, idx) => idx === i ? { ...x, veiledning_kort: e.target.value } : x))}
                   placeholder="Kort veiledning / hint..." style={{ marginBottom: 6, fontSize: 12 }} />
                 <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12, color: '#475569' }}>
-                  {[['krever_bilde','📷 Foto-krav'],['krever_signering','✍️ Signatur'],['kommentar_pakrevd','💬 Kommentar']].map(([k, l]) => (
+                  {[['krever_bilde', <IkonTekst key='l-bilde' ikon={Camera} size={12} gap={4}>Foto-krav</IkonTekst>], ['krever_signering', <IkonTekst key='l-sign' ikon={PenLine} size={12} gap={4}>Signatur</IkonTekst>], ['kommentar_pakrevd', <IkonTekst key='l-komm' ikon={MessageSquare} size={12} gap={4}>Kommentar</IkonTekst>]].map(([k, l]) => (
                     <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
                       <input type="checkbox" checked={!!p[k]}
                         onChange={e => setLokale(prev => prev.map((x, idx) => idx === i ? { ...x, [k]: e.target.checked } : x))} />
@@ -859,7 +867,7 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
 
               {/* Slett */}
               <button className="btn" style={{ fontSize: 11, color: '#dc2626', borderColor: '#fca5a5', flexShrink: 0 }}
-                onClick={() => setLokale(prev => prev.filter((_, idx) => idx !== i))}>🗑</button>
+                onClick={() => setLokale(prev => prev.filter((_, idx) => idx !== i))}><Ikon ikon={Trash2} size={14} /></button>
             </div>
           ))}
 
@@ -877,7 +885,7 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
 
       {fane === 'avvik-fane' && (
         <div className="ks-fane-innhold">
-          {avvik.length === 0 && <div style={{ textAlign: 'center', color: '#5d6b80', padding: '40px 0' }}>✅ Ingen avvik registrert</div>}
+          {avvik.length === 0 && <div style={{ textAlign: 'center', color: '#5d6b80', padding: '40px 0' }}><IkonTekst ikon={CircleCheck} size={15}>Ingen avvik registrert</IkonTekst></div>}
           {avvik.map(a => (
             <div key={a.id} className="ks-avvik-kort">
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 6 }}>
@@ -909,7 +917,7 @@ function SjekklisteDetalj({ sl, ansatteIProsj, onOppdater, onTilbake }) {
                   <div key={i} className="ks-bilde-kort">
                     <img src={b.url} alt={b.punktTekst} style={{ width: '100%', borderRadius: 8, aspectRatio: '4/3', objectFit: 'cover' }} />
                     <div style={{ fontSize: 11, color: '#5d6b80', marginTop: 4 }}>{b.punktTekst}</div>
-                    {b.gps && <div style={{ fontSize: 10, color: '#5d6b80' }}>📍 {b.gps.lat.toFixed(4)}, {b.gps.lng.toFixed(4)}</div>}
+                    {b.gps && <div style={{ fontSize: 10, color: '#5d6b80' }}><Ikon ikon={MapPin} size={11} /> {b.gps.lat.toFixed(4)}, {b.gps.lng.toFixed(4)}</div>}
                     <div style={{ fontSize: 10, color: '#5d6b80' }}>{b.tatt_av} · {new Date(b.tatt).toLocaleDateString('nb-NO')}</div>
                   </div>
                 ))}
@@ -1001,7 +1009,7 @@ function ProsjektVisning({ prosjekt, sjekklister, maler, ansatte, alleProsjekter
                   </button>
                 )}
               </div>
-              {prosjekt.adresse && <div style={{ fontSize: 13, color: '#5d6b80', marginTop: 2 }}>📍 {prosjekt.adresse}</div>}
+              {prosjekt.adresse && <div style={{ fontSize: 13, color: '#5d6b80', marginTop: 2 }}><Ikon ikon={MapPin} size={12} /> {prosjekt.adresse}</div>}
               {visBytt && alleProsjekter && (
                 <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 300, width: 360, maxWidth: '90vw' }}>
                   <ProsjektVelger
@@ -1021,9 +1029,9 @@ function ProsjektVisning({ prosjekt, sjekklister, maler, ansatte, alleProsjekter
             <div style={{ fontWeight: 500, color: totalPst === 100 ? '#15803d' : '#b45309', fontSize: 20 }}>{totalPst}%</div>
             <div style={{ color: '#5d6b80', fontSize: 11 }}>{mine.filter(s => s.status === 'ferdig').length}/{mine.length} lister</div>
           </div>
-          {avvikTotalt > 0 && <span style={{ fontSize: 12, background: '#fee2e2', color: '#dc2626', fontWeight: 500, padding: '4px 10px', borderRadius: 10 }}>⚠ {avvikTotalt} avvik</span>}
+          {avvikTotalt > 0 && <span style={{ fontSize: 12, background: '#fee2e2', color: '#dc2626', fontWeight: 500, padding: '4px 10px', borderRadius: 10 }}><IkonTekst ikon={TriangleAlert} size={12} gap={4}>{avvikTotalt} avvik</IkonTekst></span>}
           {kanAdmin && <button className="btn btn-primary" onClick={() => setVisLeggTil(true)}>+ Legg til sjekkliste</button>}
-          <button className="btn" onClick={() => genererRapport(prosjekt, mine)} title="Generer PDF-sluttrapport">📄 Rapport</button>
+          <button className="btn" onClick={() => genererRapport(prosjekt, mine)} title="Generer PDF-sluttrapport"><IkonTekst ikon={FileText} size={14}>Rapport</IkonTekst></button>
         </div>
       </div>
 
@@ -1034,14 +1042,14 @@ function ProsjektVisning({ prosjekt, sjekklister, maler, ansatte, alleProsjekter
 
       {obligManger.length > 0 && (
         <div style={{ background: '#fef3c7', border: '1px solid #b45309', borderRadius: 10, padding: '10px 16px', marginBottom: 16, fontSize: 13, color: '#92400e', display: 'flex', alignItems: 'center', gap: 10 }}>
-          ⚠ {obligManger.length} obligatoriske sjekklister mangler ({obligManger.map(m => m.navn).join(', ')})
+          <Ikon ikon={TriangleAlert} size={15} /> {obligManger.length} obligatoriske sjekklister mangler ({obligManger.map(m => m.navn).join(', ')})
           {kanAdmin && <button className="btn" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => setVisLeggTil(true)}>Legg til</button>}
         </div>
       )}
 
       {mine.length === 0 && (
         <div style={{ textAlign: 'center', padding: '48px 0', color: '#5d6b80' }}>
-          <div style={{ fontSize: 32 }}>📋</div>
+          <TomIkon ikon={ClipboardList} size={36} />
           <div style={{ marginBottom: 12 }}>Ingen sjekklister på dette prosjektet ennå.</div>
           {kanAdmin && <button className="btn btn-primary" onClick={() => setVisLeggTil(true)}>+ Legg til sjekkliste</button>}
         </div>
@@ -1058,7 +1066,7 @@ function ProsjektVisning({ prosjekt, sjekklister, maler, ansatte, alleProsjekter
             <button className="ks-gruppe-hdr" onClick={() => setKollapset(k => ({ ...k, [gruppe]: !k[gruppe] }))}>
               <span className="ks-gruppe-pil">{erKollapset ? '▶' : '▼'}</span>
               <span className="ks-gruppe-navn">{gruppe}</span>
-              <span className="ks-gruppe-meta">{ferdig}/{liste.length} ferdig{avvik > 0 ? ` · ` : ''}{avvik > 0 && <span style={{ color: '#dc2626' }}>⚠ {avvik} avvik</span>}</span>
+              <span className="ks-gruppe-meta">{ferdig}/{liste.length} ferdig{avvik > 0 ? ` · ` : ''}{avvik > 0 && <span style={{ color: '#dc2626' }}><Ikon ikon={TriangleAlert} size={11} /> {avvik} avvik</span>}</span>
             </button>
             {!erKollapset && (
               <div className="ks-gruppe-liste">
@@ -1070,9 +1078,9 @@ function ProsjektVisning({ prosjekt, sjekklister, maler, ansatte, alleProsjekter
                       <div className="ks-sl-rad-info">
                         <div className="ks-sl-rad-navn">{sl.navn}</div>
                         <div className="ks-sl-rad-meta">
-                          {sl.ansvarlig?.length > 0 && <span>👤 {sl.ansvarlig.join(', ')}</span>}
-                          {sl.frist && <span style={{ color: new Date(sl.frist) < new Date() ? '#dc2626' : '#5d6b80' }}>📅 {new Date(sl.frist).toLocaleDateString('nb-NO')}</span>}
-                          {avvikAnt > 0 && <span style={{ color: '#dc2626', fontWeight: 500 }}>⚠ {avvikAnt}</span>}
+                          {sl.ansvarlig?.length > 0 && <span><Ikon ikon={User} size={12} /> {sl.ansvarlig.join(', ')}</span>}
+                          {sl.frist && <span style={{ color: new Date(sl.frist) < new Date() ? '#dc2626' : '#5d6b80' }}><Ikon ikon={CalendarDays} size={12} /> {new Date(sl.frist).toLocaleDateString('nb-NO')}</span>}
+                          {avvikAnt > 0 && <span style={{ color: '#dc2626', fontWeight: 500 }}><Ikon ikon={TriangleAlert} size={11} /> {avvikAnt}</span>}
                         </div>
                       </div>
                       <div style={{ width: 140, flexShrink: 0 }}>
@@ -1143,7 +1151,7 @@ function MalRedigerPanel({ mal, onLagre, onLukk }) {
       <div style={{ background: '#fff', borderRadius: 16, maxWidth: 860, width: '100%', margin: '0 auto', padding: '24px 28px' }} onClick={e => e.stopPropagation()}>
         <div style={{ fontWeight: 500, fontSize: 17, marginBottom: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           Rediger mal
-          <button className="btn-icon" onClick={onLukk}>✕</button>
+          <button className="btn-icon" onClick={onLukk}><Ikon ikon={X} size={16} /></button>
         </div>
 
         {/* Meta */}
@@ -1199,14 +1207,14 @@ function MalRedigerPanel({ mal, onLagre, onLukk }) {
                   <input className="input" value={p.veiledning_kort || ''} onChange={e => oppdaterPunkt(i, 'veiledning_kort', e.target.value)}
                     placeholder="Kort veiledning (mobil-hint)..." style={{ marginBottom: 6, fontSize: 12 }} />
                   <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', fontSize: 12 }}>
-                    {[['krever_bilde','📷 Foto-krav'],['krever_signering','✍️ Signatur'],['kommentar_pakrevd','💬 Kommentar']].map(([k,l]) => (
+                    {[['krever_bilde', <IkonTekst key='l-bilde' ikon={Camera} size={12} gap={4}>Foto-krav</IkonTekst>], ['krever_signering', <IkonTekst key='l-sign' ikon={PenLine} size={12} gap={4}>Signatur</IkonTekst>], ['kommentar_pakrevd', <IkonTekst key='l-komm' ikon={MessageSquare} size={12} gap={4}>Kommentar</IkonTekst>]].map(([k,l]) => (
                       <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', color: '#475569' }}>
                         <input type="checkbox" checked={!!p[k]} onChange={e => oppdaterPunkt(i, k, e.target.checked)} /> {l}
                       </label>
                     ))}
                   </div>
                 </div>
-                <button className="btn" style={{ fontSize: 11, color: '#dc2626', borderColor: '#fca5a5', flexShrink: 0 }} onClick={() => slettPunkt(i)}>🗑</button>
+                <button className="btn" style={{ fontSize: 11, color: '#dc2626', borderColor: '#fca5a5', flexShrink: 0 }} onClick={() => slettPunkt(i)}><Ikon ikon={Trash2} size={14} /></button>
               </div>
             </div>
           ))}
@@ -1216,7 +1224,7 @@ function MalRedigerPanel({ mal, onLagre, onLukk }) {
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           <button className="btn" onClick={onLukk}>Avbryt</button>
           <button className="btn btn-primary" onClick={lagre} disabled={lagrer || !navn.trim()}>
-            {lagrer ? '⏳ Lagrer...' : '💾 Lagre (v' + ((mal.versjon || 1) + 1) + ')'}
+            {lagrer ? 'Lagrer...' : <IkonTekst ikon={Save} size={14}>{'Lagre (v' + ((mal.versjon || 1) + 1) + ')'}</IkonTekst>}
           </button>
         </div>
       </div>
@@ -1309,7 +1317,7 @@ function Bibliotek({ maler, onTilbake, onOppdaterMaler }) {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {kanAdmin && (
-            <button className="btn" onClick={() => { setValgtMal(null); setAiModus('ny') }}>✨ Lag ny mal</button>
+            <button className="btn" onClick={() => { setValgtMal(null); setAiModus('ny') }}><IkonTekst ikon={Sparkles} size={14}>Lag ny mal</IkonTekst></button>
           )}
           <span style={{ fontSize: 13, color: '#5d6b80', alignSelf: 'center' }}>{maler.length} maler</span>
         </div>
@@ -1321,8 +1329,8 @@ function Bibliotek({ maler, onTilbake, onOppdaterMaler }) {
           <div>
             <div style={{ fontWeight: 500, fontSize: 13, color: fyllerAlle ? '#1d4ed8' : '#92400e' }}>
               {fyllerAlle
-                ? `✨ Fyller ${fyllerProgress.gjort + 1} av ${fyllerProgress.total}: ${fyllerProgress.navaerendeMal || ''}...`
-                : `⚠️ ${malerUtenBeskrivelse.length} maler mangler beskrivelser`}
+                ? `Fyller ${fyllerProgress.gjort + 1} av ${fyllerProgress.total}: ${fyllerProgress.navaerendeMal || ''}...`
+                : <><Ikon ikon={TriangleAlert} size={13} /> {malerUtenBeskrivelse.length} maler mangler beskrivelser</>}
             </div>
             {!fyllerAlle && <div style={{ fontSize: 12, color: '#92400e', marginTop: 2 }}>AI fyller regelverk og veiledning på alle sjekkpunkter (~3 min, ~$4)</div>}
             {fyllerAlle && (
@@ -1334,7 +1342,7 @@ function Bibliotek({ maler, onTilbake, onOppdaterMaler }) {
           </div>
           {!fyllerAlle && (
             <button className="btn btn-primary" style={{ whiteSpace: 'nowrap' }} onClick={fyllAlleNaa}>
-              ✨ Fyll beskrivelser på alle {malerUtenBeskrivelse.length} nå
+              <IkonTekst ikon={Sparkles} size={14}>Fyll beskrivelser på alle {malerUtenBeskrivelse.length} nå</IkonTekst>
             </button>
           )}
         </div>
@@ -1372,17 +1380,17 @@ function Bibliotek({ maler, onTilbake, onOppdaterMaler }) {
               </div>
               {m.punkter?.slice(0, 2).map(p => (
                 <div key={p.id} style={{ fontSize: 11, color: '#5d6b80', padding: '2px 0', borderTop: '1px solid #f8fafc' }}>
-                  · {p.tekst}{p.krever_signering ? ' ✍️' : ''}{p.krever_bilde ? ' 📷' : ''}
+                  · {p.tekst}{p.krever_signering ? <> <Ikon ikon={PenLine} size={11} /></> : null}{p.krever_bilde ? <> <Ikon ikon={Camera} size={11} /></> : null}
                 </div>
               ))}
               {(m.punkter?.length || 0) > 2 && <div style={{ fontSize: 11, color: '#5d6b80' }}>+ {m.punkter.length - 2} til...</div>}
               {kanAdmin && (
                 <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
-                  <button className="ks-bib-btn" onClick={() => setRedigerMal(m)}>✏️ Endre</button>
-                  <button className="ks-bib-btn" style={{ color: '#6366f1', fontSize: 10 }} onClick={() => { setValgtMal(m); setAiModus('endre') }}>✨ AI</button>
+                  <button className="ks-bib-btn" onClick={() => setRedigerMal(m)}><IkonTekst ikon={Pencil} size={12} gap={4}>Endre</IkonTekst></button>
+                  <button className="ks-bib-btn" style={{ color: '#6366f1', fontSize: 10 }} onClick={() => { setValgtMal(m); setAiModus('endre') }}><IkonTekst ikon={Sparkles} size={13}>AI</IkonTekst></button>
                   {!harBeskrivelse && (
                     <button className="ks-bib-btn" onClick={() => fyllAIBeskrivelse(m)} disabled={fyller === m.id} style={{ color: '#0891b2' }}>
-                      {fyller === m.id ? '⏳ AI...' : '📖 Fyll beskrivelser'}
+                      {fyller === m.id ? 'AI...' : <IkonTekst ikon={BookOpen} size={12} gap={4}>Fyll beskrivelser</IkonTekst>}
                     </button>
                   )}
                 </div>
@@ -1413,27 +1421,27 @@ function Bibliotek({ maler, onTilbake, onOppdaterMaler }) {
 
         // ── Per fag ────────────────────────────────────────────────────
         if (faneLib === 'fag') return [
-          { key: 'alle',   label: '🦺 HMS / Alle fag', match: m => !m.fag || m.fag.length === 0 },
-          { key: 'tomrer', label: '🔨 Tømrer',          match: m => (m.fag || []).some(f => ['tomrer','flis'].includes(f)) },
-          { key: 'ror',    label: '🚰 Rør',             match: m => (m.fag || []).includes('ror') },
-          { key: 'el',     label: '⚡ El',              match: m => (m.fag || []).includes('el') },
-          { key: 'maler',  label: '🎨 Maler',           match: m => (m.fag || []).includes('maler') },
+          { key: 'alle',   label: <IkonTekst ikon={HardHat} size={14} gap={5}>HMS / Alle fag</IkonTekst>, match: m => !m.fag || m.fag.length === 0 },
+          { key: 'tomrer', label: <IkonTekst ikon={Hammer} size={14} gap={5}>Tømrer</IkonTekst>,          match: m => (m.fag || []).some(f => ['tomrer','flis'].includes(f)) },
+          { key: 'ror',    label: <IkonTekst ikon={Droplet} size={14} gap={5}>Rør</IkonTekst>,            match: m => (m.fag || []).includes('ror') },
+          { key: 'el',     label: <IkonTekst ikon={Zap} size={14} gap={5}>El</IkonTekst>,                 match: m => (m.fag || []).includes('el') },
+          { key: 'maler',  label: <IkonTekst ikon={Palette} size={14} gap={5}>Maler</IkonTekst>,          match: m => (m.fag || []).includes('maler') },
         ].map(fg => <GruppeBlokk key={fg.key} tittel={fg.label} liste={maler.filter(fg.match)} />)
 
         // ── Per fase ───────────────────────────────────────────────────
         if (faneLib === 'fase') return [
-          { key: 'daglig',  label: '☀️ Daglig',          match: m => m.fase === 'daglig' },
-          { key: 'oppstart',label: '📅 Oppstart',         match: m => m.fase === 'oppstart' },
-          { key: 'bygg',    label: '🔧 Bygg-arbeid',      match: m => m.fase === 'bygg' },
-          { key: 'slutt',   label: '✅ Sluttkontroll',    match: m => m.fase === 'slutt' },
-          { key: 'ukjent',  label: '❓ Ukjent fase',      match: m => !m.fase },
+          { key: 'daglig',  label: <IkonTekst ikon={Sun} size={14} gap={5}>Daglig</IkonTekst>,             match: m => m.fase === 'daglig' },
+          { key: 'oppstart',label: <IkonTekst ikon={CalendarDays} size={14} gap={5}>Oppstart</IkonTekst>,     match: m => m.fase === 'oppstart' },
+          { key: 'bygg',    label: <IkonTekst ikon={Wrench} size={14} gap={5}>Bygg-arbeid</IkonTekst>,        match: m => m.fase === 'bygg' },
+          { key: 'slutt',   label: <IkonTekst ikon={CircleCheck} size={14} gap={5}>Sluttkontroll</IkonTekst>, match: m => m.fase === 'slutt' },
+          { key: 'ukjent',  label: <IkonTekst ikon={CircleHelp} size={14} gap={5}>Ukjent fase</IkonTekst>,    match: m => !m.fase },
         ].map(fg => <GruppeBlokk key={fg.key} tittel={fg.label} liste={maler.filter(fg.match)} />)
 
         // ── Obligatorisk ───────────────────────────────────────────────
         if (faneLib === 'oblig') return (
           <div style={{ marginBottom: 24 }}>
             <div style={{ fontSize: 13, fontWeight: 500, color: '#92400e', marginBottom: 10 }}>
-              🔒 Obligatoriske maler ({maler.filter(m => m.obligatorisk).length})
+              <IkonTekst ikon={Lock} size={13}>Obligatoriske maler ({maler.filter(m => m.obligatorisk).length})</IkonTekst>
             </div>
             <div className="ks-bib-grid">
               {maler.filter(m => m.obligatorisk).map(m => <MalKort key={m.id} m={m} />)}
@@ -1480,8 +1488,8 @@ function TegningModal({ tegning, onLagrePinpoints, onLukk }) {
     <div className="modal-backdrop" onClick={onLukk}>
       <div className="modal" style={{ maxWidth: 820, maxHeight: '92vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>📐 {tegning.tittel || tegning.navn}</h3>
-          <button className="btn-icon" onClick={onLukk}>✕</button>
+          <h3><IkonTekst ikon={Ruler} size={16}>{tegning.tittel || tegning.navn}</IkonTekst></h3>
+          <button className="btn-icon" onClick={onLukk}><Ikon ikon={X} size={16} /></button>
         </div>
         <div style={{ padding: '0 20px 20px' }}>
           <div style={{ position: 'relative', cursor: modus === 'plasser' ? 'crosshair' : 'default', userSelect: 'none' }}>
@@ -1492,7 +1500,7 @@ function TegningModal({ tegning, onLagrePinpoints, onLukk }) {
               <div key={pin.id} style={{ position: 'absolute', left: `${pin.x * 100}%`, top: `${pin.y * 100}%`, transform: 'translate(-50%, -100%)', zIndex: 10, lineHeight: 1 }}
                 title={pin.label || `Pinpoint ${i + 1} — klikk for å fjerne`}
                 onClick={e => { e.stopPropagation(); setPins(p => p.filter(x => x.id !== pin.id)) }}>
-                <span style={{ fontSize: 22, cursor: 'pointer', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,.4))' }}>📍</span>
+                <span style={{ cursor: 'pointer', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,.4))', display: 'inline-block' }}><Ikon ikon={MapPin} size={22} farge="#dc2626" /></span>
                 {pin.label && (
                   <span style={{ position: 'absolute', left: 24, top: 0, background: '#1e293b', color: '#fff', fontSize: 10, padding: '2px 6px', borderRadius: 4, whiteSpace: 'nowrap' }}>
                     {pin.label}
@@ -1504,11 +1512,11 @@ function TegningModal({ tegning, onLagrePinpoints, onLukk }) {
 
           <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap', alignItems: 'center' }}>
             <button className={`btn ${modus === 'plasser' ? 'btn-primary' : ''}`} onClick={() => setModus(m => m === 'plasser' ? null : 'plasser')}>
-              {modus === 'plasser' ? '🎯 Klikk på tegning...' : '+ Legg til pinpoint'}
+              {modus === 'plasser' ? <IkonTekst ikon={Crosshair} size={14}>Klikk på tegning...</IkonTekst> : '+ Legg til pinpoint'}
             </button>
             {pins.length > 0 && (
               <span style={{ fontSize: 12, color: '#5d6b80' }}>
-                {pins.length} pinpoints · Klikk 📍 for å fjerne
+                {pins.length} pinpoints · Klikk <Ikon ikon={MapPin} size={12} /> for å fjerne
               </span>
             )}
           </div>
@@ -1516,7 +1524,7 @@ function TegningModal({ tegning, onLagrePinpoints, onLukk }) {
           <div className="modal-actions" style={{ marginTop: 14 }}>
             <button className="btn" onClick={onLukk}>Avbryt</button>
             <button className="btn btn-primary" onClick={lagre} disabled={lagrer}>
-              {lagrer ? '⏳ Lagrer...' : '💾 Lagre pinpoints'}
+              {lagrer ? 'Lagrer...' : <IkonTekst ikon={Save} size={14}>Lagre pinpoints</IkonTekst>}
             </button>
           </div>
         </div>
@@ -1563,13 +1571,13 @@ function TegningPanel({ prosjektId, kanAdmin }) {
   return (
     <div style={{ marginTop: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-        <div style={{ fontWeight: 500, fontSize: 14, color: '#1e293b' }}>📐 Tegninger ({tegninger.length})</div>
+        <div style={{ fontWeight: 500, fontSize: 14, color: '#1e293b' }}><IkonTekst ikon={Ruler} size={14}>Tegninger ({tegninger.length})</IkonTekst></div>
         {kanAdmin && (
           <>
             <input ref={filRef} type="file" accept="image/*,.pdf" style={{ display: 'none' }}
               onChange={e => { if (e.target.files[0]) lastOpp(e.target.files[0]) }} />
             <button className="btn" onClick={() => filRef.current.click()} disabled={lasterOpp}>
-              {lasterOpp ? '⏳ Laster opp...' : '+ Last opp tegning'}
+              {lasterOpp ? 'Laster opp...' : '+ Last opp tegning'}
             </button>
           </>
         )}
@@ -1591,7 +1599,7 @@ function TegningPanel({ prosjektId, kanAdmin }) {
               </div>
               <div style={{ fontSize: 12, fontWeight: 500, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.tittel || t.navn}</div>
               {(t.pinpoints?.length || 0) > 0 && (
-                <div style={{ fontSize: 11, color: '#5d6b80' }}>📍 {t.pinpoints.length} pinpoints</div>
+                <div style={{ fontSize: 11, color: '#5d6b80' }}><Ikon ikon={MapPin} size={11} /> {t.pinpoints.length} pinpoints</div>
               )}
             </div>
           ))}
@@ -1632,28 +1640,28 @@ function AvvikKort({ avvik: a, prosjekter, kanAdmin, onOppdater }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 500, fontSize: 14 }}>{a.tittel}</div>
           <div style={{ fontSize: 12, color: '#5d6b80', marginTop: 2, display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {prosjekt && <span>📁 {prosjekt.navn}</span>}
+            {prosjekt && <span><Ikon ikon={Folder} size={12} /> {prosjekt.navn}</span>}
             {a.registrert_av && <span>· av {a.registrert_av}</span>}
             {a.registrert_dato && <span>· {new Date(a.registrert_dato).toLocaleDateString('nb-NO')}</span>}
             {a.frist && <span style={{ color: erForfalt ? '#dc2626' : '#5d6b80', fontWeight: erForfalt ? 500 : 400 }}>
-              · Frist: {new Date(a.frist).toLocaleDateString('nb-NO')}{erForfalt ? ' ⚠ Forfalt' : ''}
+              · Frist: {new Date(a.frist).toLocaleDateString('nb-NO')}{erForfalt ? <> <Ikon ikon={TriangleAlert} size={12} /> Forfalt</> : ''}
             </span>}
           </div>
           {a.beskrivelse && <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>{a.beskrivelse}</div>}
-          {a.ansvarlig_for_lukking && <div style={{ fontSize: 12, color: '#5d6b80', marginTop: 2 }}>👤 {a.ansvarlig_for_lukking}</div>}
-          {a.tiltak_beskrivelse && <div style={{ fontSize: 12, color: '#475569', marginTop: 2, fontStyle: 'italic' }}>🔧 {a.tiltak_beskrivelse}</div>}
+          {a.ansvarlig_for_lukking && <div style={{ fontSize: 12, color: '#5d6b80', marginTop: 2 }}><Ikon ikon={User} size={12} /> {a.ansvarlig_for_lukking}</div>}
+          {a.tiltak_beskrivelse && <div style={{ fontSize: 12, color: '#475569', marginTop: 2, fontStyle: 'italic' }}><Ikon ikon={Wrench} size={12} /> {a.tiltak_beskrivelse}</div>}
         </div>
         <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <span style={{ fontSize: 11, fontWeight: 500, color: ALVORLIGHET_CFG[a.alvorlighet]?.farge }}>{ALVORLIGHET_CFG[a.alvorlighet]?.label}</span>
           <span style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, fontWeight: 500,
             background: a.status === 'lukket' ? '#dcfce7' : a.status === 'i-arbeid' ? '#fef9c3' : '#fee2e2',
             color: a.status === 'lukket' ? '#15803d' : a.status === 'i-arbeid' ? '#ca8a04' : '#dc2626' }}>
-            {a.status === 'lukket' ? '✓ Lukket' : a.status === 'i-arbeid' ? 'I arbeid' : 'Åpen'}
+            {a.status === 'lukket' ? <><Ikon ikon={Check} size={11} /> Lukket</> : a.status === 'i-arbeid' ? 'I arbeid' : 'Åpen'}
           </span>
           {kanAdmin && a.status !== 'lukket' && (
             <>
               {a.status === 'apen' && <button className="btn" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => onOppdater({ ...a, status: 'i-arbeid' })}>Start →</button>}
-              <button className="btn" style={{ fontSize: 11, padding: '3px 8px', color: '#15803d', borderColor: '#15803d' }} onClick={() => onOppdater({ ...a, status: 'lukket' })}>Lukk ✓</button>
+              <button className="btn" style={{ fontSize: 11, padding: '3px 8px', color: '#15803d', borderColor: '#15803d' }} onClick={() => onOppdater({ ...a, status: 'lukket' })}><IkonTekst ikon={Check} size={13} gap={4}>Lukk</IkonTekst></button>
             </>
           )}
           <button className="btn" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => setUtvidet(v => !v)}>{utvidet ? '▲' : '▼'}</button>
@@ -1670,7 +1678,7 @@ function AvvikKort({ avvik: a, prosjekter, kanAdmin, onOppdater }) {
           </div>
           <textarea className="input" rows={2} placeholder="Beskriv tiltak som er iverksatt..." value={tiltak} onChange={e => setTiltak(e.target.value)} />
           <button className="btn btn-primary" onClick={lagre} disabled={lagrer} style={{ alignSelf: 'flex-start' }}>
-            {lagrer ? '⏳...' : '💾 Lagre'}
+            {lagrer ? 'Lagrer...' : <IkonTekst ikon={Save} size={14}>Lagre</IkonTekst>}
           </button>
         </div>
       )}
@@ -1705,7 +1713,7 @@ function AvvikOversikt({ prosjekter, onTilbake }) {
 
   if (laster) return (
     <div className="ks-side" style={{ textAlign: 'center', paddingTop: 80 }}>
-      <div style={{ fontSize: 32 }}>⏳</div>
+      <TomIkon ikon={Loader} size={36} />
     </div>
   )
 
@@ -1738,7 +1746,7 @@ function AvvikOversikt({ prosjekter, onTilbake }) {
       <div className="page-header">
         <div>
           <button className="btn" style={{ marginRight: 12 }} onClick={onTilbake}>← Oversikt</button>
-          <span style={{ fontSize: 20, fontWeight: 500, color: '#1e293b' }}>⚠️ Avvik-register</span>
+          <span style={{ fontSize: 20, fontWeight: 500, color: '#1e293b' }}><IkonTekst ikon={TriangleAlert} size={18}>Avvik-register</IkonTekst></span>
         </div>
         <div style={{ fontSize: 13, color: '#5d6b80' }}>{avvik.length} avvik totalt</div>
       </div>
@@ -1757,7 +1765,7 @@ function AvvikOversikt({ prosjekter, onTilbake }) {
 
       {avvik.length === 0 ? (
         <div style={{ textAlign: 'center', color: '#5d6b80', padding: '60px 0' }}>
-          ✅ Ingen avvik registrert
+          <IkonTekst ikon={CircleCheck} size={15}>Ingen avvik registrert</IkonTekst>
         </div>
       ) : (
         <>
@@ -1778,7 +1786,7 @@ function AvvikOversikt({ prosjekter, onTilbake }) {
           {/* Åpne */}
           {aapne.length > 0 && (
             <>
-              <SeksjonHeader tittel="🚨 Åpne" antall={aapne.length} farge="#dc2626" />
+              <SeksjonHeader tittel={<IkonTekst ikon={CircleAlert} size={14} gap={5}>Åpne</IkonTekst>} antall={aapne.length} farge="#dc2626" />
               {aapne.map(a => <AvvikKort key={a.id} avvik={a} prosjekter={prosjekter} kanAdmin={kanAdmin} onOppdater={data => oppdater(a.id, data)} />)}
             </>
           )}
@@ -1786,7 +1794,7 @@ function AvvikOversikt({ prosjekter, onTilbake }) {
           {/* Lukket siste 30 dager */}
           {lukket30d.length > 0 && (
             <>
-              <SeksjonHeader tittel="✅ Lukket siste 30 dager" antall={lukket30d.length} farge="#15803d" />
+              <SeksjonHeader tittel={<IkonTekst ikon={CircleCheck} size={14} gap={5}>Lukket siste 30 dager</IkonTekst>} antall={lukket30d.length} farge="#15803d" />
               {lukket30d.map(a => <AvvikKort key={a.id} avvik={a} prosjekter={prosjekter} kanAdmin={kanAdmin} onOppdater={data => oppdater(a.id, data)} />)}
             </>
           )}
@@ -1794,7 +1802,7 @@ function AvvikOversikt({ prosjekter, onTilbake }) {
           {/* Eldre */}
           {eldre.length > 0 && (
             <>
-              <SeksjonHeader tittel="📦 Eldre" antall={eldre.length} farge="#5d6b80" />
+              <SeksjonHeader tittel={<IkonTekst ikon={Package} size={14} gap={5}>Eldre</IkonTekst>} antall={eldre.length} farge="#5d6b80" />
               {eldre.map(a => <AvvikKort key={a.id} avvik={a} prosjekter={prosjekter} kanAdmin={kanAdmin} onOppdater={data => oppdater(a.id, data)} />)}
             </>
           )}
@@ -1815,7 +1823,7 @@ async function genererRapport(prosjekt, sjekklister) {
   const dato = new Date().toLocaleDateString('nb-NO', { dateStyle: 'full' })
 
   const rowFarge = s => s === 'ok' ? '#15803d' : s === 'avvik' ? '#dc2626' : s === 'ikke-aktuelt' ? '#5d6b80' : '#5d6b80'
-  const rowLabel = s => s === 'ok' ? 'OK ✓' : s === 'avvik' ? 'Avvik' : s === 'ikke-aktuelt' ? 'N/A' : 'Ikke utført'
+  const rowLabel = s => s === 'ok' ? 'OK' : s === 'avvik' ? 'Avvik' : s === 'ikke-aktuelt' ? 'N/A' : 'Ikke utført'
 
   const html = `<!DOCTYPE html>
 <html lang="nb">
@@ -1838,7 +1846,7 @@ async function genererRapport(prosjekt, sjekklister) {
 </style></head>
 <body>
 <h1>KS/HMS-sluttrapport: ${prosjekt.navn}</h1>
-<p class="meta">Generert: ${dato}${prosjekt.adresse ? ' · 📍 ' + prosjekt.adresse : ''}</p>
+<p class="meta">Generert: ${dato}${prosjekt.adresse ? ' · ' + prosjekt.adresse : ''}</p>
 <p class="meta">${sjekklister.length} sjekklister · ${avvik.length} avvik registrert · ${avvik.filter(a => a.status === 'lukket').length} avvik lukket</p>
 
 <h2>Sjekklister</h2>
@@ -1846,7 +1854,7 @@ ${sjekklister.map(sl => {
   const pst = prosent(sl.punkter)
   const avvikAnt = (sl.punkter || []).filter(p => p.status === 'avvik').length
   return `
-<h3>${sl.navn} — ${pst}%${sl.status === 'ferdig' ? ' ✓ FERDIG' : avvikAnt > 0 ? ` | ⚠ ${avvikAnt} avvik` : ''}</h3>
+<h3>${sl.navn} — ${pst}%${sl.status === 'ferdig' ? ' — FERDIG' : avvikAnt > 0 ? ` | Avvik: ${avvikAnt}` : ''}</h3>
 ${sl.ansvarlig?.length ? `<p class="meta">Ansvarlig: ${sl.ansvarlig.join(', ')}</p>` : ''}
 ${sl.frist ? `<p class="meta">Frist: ${new Date(sl.frist).toLocaleDateString('nb-NO')}</p>` : ''}
 <table>
@@ -1868,7 +1876,7 @@ ${avvik.length > 0 ? `
 ${avvik.map(a => `<tr>
   <td>${a.tittel}${a.beskrivelse ? '<br><span style="color:#5d6b80">' + a.beskrivelse + '</span>' : ''}</td>
   <td style="color:${ALVORLIGHET_CFG[a.alvorlighet]?.farge}">${ALVORLIGHET_CFG[a.alvorlighet]?.label}</td>
-  <td class="${a.status === 'lukket' ? 'ok' : 'avvik'}">${a.status === 'lukket' ? 'Lukket ✓' : a.status === 'i-arbeid' ? 'I arbeid' : 'Åpen'}</td>
+  <td class="${a.status === 'lukket' ? 'ok' : 'avvik'}">${a.status === 'lukket' ? 'Lukket' : a.status === 'i-arbeid' ? 'I arbeid' : 'Åpen'}</td>
   <td>${a.ansvarlig_for_lukking || '–'}</td>
   <td>${a.frist ? new Date(a.frist).toLocaleDateString('nb-NO') : '–'}</td>
   <td>${a.tiltak_beskrivelse || '–'}</td>
@@ -1910,7 +1918,7 @@ function ProsjektVelger({ prosjekter, sjekklister, onVelg, valgt, autoOpen = fal
       <button
         style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#fff', border: `2px solid ${aapen ? '#3b82f6' : '#e2e8f0'}`, borderRadius: 10, cursor: 'pointer', fontSize: 15, fontWeight: valgt ? 500 : 400, color: valgt ? '#1e293b' : '#5d6b80', transition: 'border-color .15s', textAlign: 'left' }}
         onClick={() => { setAapen(v => !v); setSok('') }}>
-        <span>{valgt ? `📁 ${valgt.navn}` : '🔍 Søk eller velg prosjekt...'}</span>
+        <span>{valgt ? <IkonTekst ikon={Folder} size={14}>{valgt.navn}</IkonTekst> : <IkonTekst ikon={Search} size={14}>Søk eller velg prosjekt...</IkonTekst>}</span>
         <span style={{ color: '#5d6b80', fontSize: 12, marginLeft: 8, flexShrink: 0 }}>{aapen ? '▲' : '▼'}</span>
       </button>
 
@@ -1938,12 +1946,12 @@ function ProsjektVelger({ prosjekter, sjekklister, onVelg, valgt, autoOpen = fal
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div style={{ fontWeight: 500, fontSize: 14, color: '#1e293b' }}>{p.navn}</div>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 }}>
-                      {avvikAnt > 0 && <span style={{ fontSize: 11, background: '#fee2e2', color: '#dc2626', borderRadius: 6, padding: '1px 6px', fontWeight: 500 }}>⚠ {avvikAnt}</span>}
+                      {avvikAnt > 0 && <span style={{ fontSize: 11, background: '#fee2e2', color: '#dc2626', borderRadius: 6, padding: '1px 6px', fontWeight: 500 }}><Ikon ikon={TriangleAlert} size={11} /> {avvikAnt}</span>}
                       {mine.length > 0 && <span style={{ fontSize: 11, color: pst === 100 ? '#15803d' : '#5d6b80', fontWeight: 500 }}>{pst}%</span>}
                     </div>
                   </div>
                   <div style={{ fontSize: 12, color: '#5d6b80', marginTop: 2, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-                    {p.adresse && <span>📍 {p.adresse}</span>}
+                    {p.adresse && <span><Ikon ikon={MapPin} size={12} /> {p.adresse}</span>}
                     <span>{mine.length} sjekklister</span>
                   </div>
                   {mine.length > 0 && <div style={{ marginTop: 5 }}><Fremdriftsbar pst={pst} avvik={avvikAnt > 0} hoyde={3} /></div>}
@@ -1991,7 +1999,7 @@ function KSProsjektVelger({ prosjekter, sjekklister, onVelg }) {
       {aapen && (
         <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, zIndex: 200, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, boxShadow: '0 12px 32px rgba(0,0,0,.14)', overflow: 'hidden' }}>
           <div style={{ padding: '10px 12px', borderBottom: '1px solid #f1f5f9' }}>
-            <input className="input" autoFocus placeholder="🔍 Søk adresse eller kundenavn..."
+            <input className="input" autoFocus placeholder="Søk adresse eller kundenavn..."
               value={sok} onChange={e => setSok(e.target.value)} style={{ fontSize: 13 }} />
           </div>
           <div style={{ overflow: 'auto', maxHeight: 360 }}>
@@ -2018,7 +2026,7 @@ function KSProsjektVelger({ prosjekter, sjekklister, onVelg }) {
                           : <span style={{ color: '#cbd5e1' }}>Ingen sjekklister ennå</span>}
                     </div>
                   </div>
-                  {avvikTot > 0 && <span style={{ fontSize: 11, fontWeight: 500, color: '#dc2626', background: '#fee2e2', padding: '2px 8px', borderRadius: 8 }}>⚠ {avvikTot}</span>}
+                  {avvikTot > 0 && <span style={{ fontSize: 11, fontWeight: 500, color: '#dc2626', background: '#fee2e2', padding: '2px 8px', borderRadius: 8 }}><Ikon ikon={TriangleAlert} size={11} /> {avvikTot}</span>}
                   <span style={{ color: '#5d6b80', fontSize: 16 }}>›</span>
                 </div>
               )
@@ -2101,12 +2109,12 @@ function ProsjektSjekklisteUtfylling({ sjekkliste, prosjekt, onTilbake, onOppdat
           onClick={e => e.stopPropagation()}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
             <div>
-              <div style={{ fontWeight: 500, fontSize: 18, color: '#1e293b' }}>📄 Sluttrapport</div>
+              <div style={{ fontWeight: 500, fontSize: 18, color: '#1e293b' }}><IkonTekst ikon={FileText} size={16}>Sluttrapport</IkonTekst></div>
               <div style={{ fontSize: 13, color: '#5d6b80', marginTop: 2 }}>{sjekkliste.navn} — {prosjekt.navn}</div>
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn" onClick={() => window.print()}>🖨 Skriv ut</button>
-              <button className="btn-icon" onClick={() => setVisSluttrapport(false)}>✕</button>
+              <button className="btn" onClick={() => window.print()}><IkonTekst ikon={Printer} size={14}>Skriv ut</IkonTekst></button>
+              <button className="btn-icon" onClick={() => setVisSluttrapport(false)}><Ikon ikon={X} size={16} /></button>
             </div>
           </div>
 
@@ -2125,12 +2133,12 @@ function ProsjektSjekklisteUtfylling({ sjekkliste, prosjekt, onTilbake, onOppdat
 
           {avvikPunkter.length > 0 && (
             <div style={{ marginBottom: 16 }}>
-              <div style={{ fontWeight: 500, fontSize: 14, color: '#dc2626', marginBottom: 8 }}>⚠ Avvik</div>
+              <div style={{ fontWeight: 500, fontSize: 14, color: '#dc2626', marginBottom: 8 }}><IkonTekst ikon={TriangleAlert} size={14} gap={5}>Avvik</IkonTekst></div>
               {avvikPunkter.map(p => (
                 <div key={p.id} style={{ padding: '8px 12px', border: '1px solid #fca5a5', borderRadius: 8, marginBottom: 6, background: p.kritisk ? '#fef2f2' : '#fff' }}>
-                  <div style={{ fontWeight: 500, fontSize: 13 }}>{p.kritisk ? '🔴' : '🟡'} {p.tekst}</div>
-                  {p.kommentar && <div style={{ fontSize: 12, color: '#475569', marginTop: 3 }}>💬 {p.kommentar}</div>}
-                  {p.regelverk && <div style={{ fontSize: 11, color: '#5d6b80', marginTop: 2 }}>📄 {p.regelverk}</div>}
+                  <div style={{ fontWeight: 500, fontSize: 13 }}><Ikon ikon={CircleAlert} size={13} farge={p.kritisk ? '#dc2626' : '#ca8a04'} /> {p.tekst}</div>
+                  {p.kommentar && <div style={{ fontSize: 12, color: '#475569', marginTop: 3 }}><Ikon ikon={MessageSquare} size={12} /> {p.kommentar}</div>}
+                  {p.regelverk && <div style={{ fontSize: 11, color: '#5d6b80', marginTop: 2 }}><Ikon ikon={FileText} size={11} /> {p.regelverk}</div>}
                   <div style={{ fontSize: 11, color: '#5d6b80', marginTop: 2 }}>Registrert av {p.utfortAv} · {p.utfortDato ? new Date(p.utfortDato).toLocaleDateString('nb-NO') : ''}</div>
                 </div>
               ))}
@@ -2138,10 +2146,10 @@ function ProsjektSjekklisteUtfylling({ sjekkliste, prosjekt, onTilbake, onOppdat
           )}
 
           <div style={{ marginBottom: 4 }}>
-            <div style={{ fontWeight: 500, fontSize: 14, color: '#15803d', marginBottom: 8 }}>✅ Godkjente punkter ({okPunkter.length})</div>
+            <div style={{ fontWeight: 500, fontSize: 14, color: '#15803d', marginBottom: 8 }}><IkonTekst ikon={CircleCheck} size={14} gap={5}>Godkjente punkter ({okPunkter.length})</IkonTekst></div>
             {okPunkter.map(p => (
               <div key={p.id} style={{ display: 'flex', gap: 8, padding: '5px 0', borderBottom: '1px solid #f8fafc', fontSize: 13 }}>
-                <span>✓</span>
+                <span><Ikon ikon={Check} size={13} farge="#15803d" /></span>
                 <span style={{ flex: 1, color: '#374151' }}>{p.tekst}</span>
                 <span style={{ fontSize: 11, color: '#5d6b80' }}>{p.utfortAv}</span>
               </div>
@@ -2163,16 +2171,16 @@ function ProsjektSjekklisteUtfylling({ sjekkliste, prosjekt, onTilbake, onOppdat
       <div style={{ padding: '12px 16px', borderBottom: '2px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 10, background: '#fff', flexShrink: 0 }}>
         <button className="btn" onClick={onTilbake}>← Tilbake</button>
         <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 500, fontSize: 15 }}>{sjekkliste.ikon || '📋'} {sjekkliste.navn}</div>
+          <div style={{ fontWeight: 500, fontSize: 15 }}><IkonTekst ikon={ClipboardList} size={15}>{sjekkliste.navn}</IkonTekst></div>
           <div style={{ fontSize: 11, color: '#5d6b80' }}>{prosjekt.navn}</div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          {lagrer && <span style={{ fontSize: 11, color: '#5d6b80' }}>💾 Lagrer...</span>}
-          {harAvvik && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500 }}>⚠ {punkter.filter(p => p.status === 'avvik').length} avvik</span>}
+          {lagrer && <span style={{ fontSize: 11, color: '#5d6b80' }}>Lagrer...</span>}
+          {harAvvik && <span style={{ fontSize: 12, color: '#dc2626', fontWeight: 500 }}><Ikon ikon={TriangleAlert} size={12} /> {punkter.filter(p => p.status === 'avvik').length} avvik</span>}
           <span style={{ fontSize: 13, fontWeight: 500, color: pst === 100 ? '#15803d' : '#b45309' }}>{pst}%</span>
           {alleBehandlet && (
             <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => setVisSluttrapport(true)}>
-              📄 Sluttrapport
+              <IkonTekst ikon={FileText} size={13}>Sluttrapport</IkonTekst>
             </button>
           )}
         </div>
@@ -2206,27 +2214,27 @@ function ProsjektSjekklisteUtfylling({ sjekkliste, prosjekt, onTilbake, onOppdat
         </div>
         {vistePunkter.length === 0 && (
           <div style={{ textAlign: 'center', color: '#5d6b80', padding: '32px 0', fontSize: 13 }}>
-            {punktFilter === 'gjenstar' ? '✅ Ingen punkter gjenstår' : punktFilter === 'avvik' ? 'Ingen avvik registrert' : 'Ingen punkter'}
+            {punktFilter === 'gjenstar' ? <IkonTekst ikon={CircleCheck} size={14}>Ingen punkter gjenstår</IkonTekst> : punktFilter === 'avvik' ? 'Ingen avvik registrert' : 'Ingen punkter'}
           </div>
         )}
         {vistePunkter.map(p => (
           <div key={p.id} ref={el => { punktRefs.current[p.id] = el }} style={{ border: '1px solid ' + (p.status === 'avvik' ? '#fca5a5' : p.status === 'ok' ? '#bbf7d0' : '#e2e8f0'), borderRadius: 10, padding: '12px 14px', marginBottom: 10, background: p.status === 'avvik' ? '#fff5f5' : p.status === 'ok' ? '#f0fdf4' : p.status === 'ikke-aktuelt' ? '#f1f5f9' : '#fff' }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
               <div style={{ fontSize: 18, flexShrink: 0, marginTop: 1 }}>
-                {p.status === 'ok' ? '✅' : p.status === 'avvik' ? '⚠️' : p.status === 'ikke-aktuelt' ? '➖' : '⬜'}
+                {p.status === 'ok' ? <Ikon ikon={CircleCheck} size={18} farge="#15803d" /> : p.status === 'avvik' ? <Ikon ikon={TriangleAlert} size={18} farge="#dc2626" /> : p.status === 'ikke-aktuelt' ? <Ikon ikon={CircleMinus} size={18} farge="#5d6b80" /> : <Ikon ikon={Square} size={18} farge="#cbd5e1" />}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: p.kritisk ? 500 : 500, fontSize: 14, color: '#1e293b', display: 'flex', alignItems: 'center', gap: 6 }}>
                   {p.kritisk && <span style={{ fontSize: 10, background: '#dc2626', color: '#fff', borderRadius: 4, padding: '1px 5px' }}>Kritisk</span>}
                   {p.tekst}
                 </div>
-                {p.regelverk && <div style={{ fontSize: 11, color: '#5d6b80', marginTop: 2 }}>📄 {p.regelverk}</div>}
+                {p.regelverk && <div style={{ fontSize: 11, color: '#5d6b80', marginTop: 2 }}><Ikon ikon={FileText} size={11} /> {p.regelverk}</div>}
                 {p.status !== 'ikke-utfort' && (
                   <div style={{ fontSize: 11, color: '#5d6b80', marginTop: 3 }}>
                     {p.utfortAv} · {p.utfortDato ? new Date(p.utfortDato).toLocaleString('nb-NO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
                   </div>
                 )}
-                {p.kommentar && <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4, fontStyle: 'italic' }}>💬 {p.kommentar}</div>}
+                {p.kommentar && <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4, fontStyle: 'italic' }}><Ikon ikon={MessageSquare} size={12} /> {p.kommentar}</div>}
 
                 {/* Avvik-kommentar input */}
                 {avvikPunktId === p.id && (
@@ -2238,7 +2246,7 @@ function ProsjektSjekklisteUtfylling({ sjekkliste, prosjekt, onTilbake, onOppdat
                     <div style={{ display: 'flex', gap: 6 }}>
                       <button className="btn btn-primary" style={{ background: '#dc2626', borderColor: '#dc2626', fontSize: 12 }}
                         onClick={() => { settPunktStatus(p.id, 'avvik', avvikKommentar); setAvvikPunktId(null); setAvvikKommentar(''); }}>
-                        ⚠ Lagre avvik
+                        <IkonTekst ikon={TriangleAlert} size={14}>Lagre avvik</IkonTekst>
                       </button>
                       <button className="btn" style={{ fontSize: 12 }} onClick={() => setAvvikPunktId(null)}>Avbryt</button>
                     </div>
@@ -2251,11 +2259,11 @@ function ProsjektSjekklisteUtfylling({ sjekkliste, prosjekt, onTilbake, onOppdat
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                   <button style={{ padding: '6px 12px', minHeight: 44, minWidth: 72, borderRadius: 8, border: '1.5px solid ' + (p.status === 'ok' ? '#15803d' : '#e2e8f0'), background: p.status === 'ok' ? '#15803d' : '#fff', color: p.status === 'ok' ? '#fff' : '#374151', cursor: 'pointer', fontSize: 14, fontWeight: 500 }}
                     onClick={() => settPunktStatus(p.id, p.status === 'ok' ? 'ikke-utfort' : 'ok')}>
-                    ✓ OK
+                    <IkonTekst ikon={Check} size={14} gap={4}>OK</IkonTekst>
                   </button>
                   <button style={{ padding: '6px 12px', minHeight: 44, minWidth: 72, borderRadius: 8, border: '1.5px solid ' + (p.status === 'avvik' ? '#dc2626' : '#e2e8f0'), background: p.status === 'avvik' ? '#dc2626' : '#fff', color: p.status === 'avvik' ? '#fff' : '#374151', cursor: 'pointer', fontSize: 14, fontWeight: 500 }}
                     onClick={() => { if (p.status === 'avvik') { settPunktStatus(p.id, 'ikke-utfort', ''); } else { setAvvikPunktId(p.id); setAvvikKommentar(p.kommentar || ''); } }}>
-                    ⚠ Avvik
+                    <IkonTekst ikon={TriangleAlert} size={14} gap={4}>Avvik</IkonTekst>
                   </button>
                   <button style={{ padding: '6px 12px', minHeight: 44, minWidth: 72, borderRadius: 8, border: '1.5px solid ' + (p.status === 'ikke-aktuelt' ? '#5d6b80' : '#e2e8f0'), background: p.status === 'ikke-aktuelt' ? '#5d6b80' : '#fff', color: p.status === 'ikke-aktuelt' ? '#fff' : '#374151', cursor: 'pointer', fontSize: 14, fontWeight: 500 }}
                     onClick={() => settPunktStatus(p.id, p.status === 'ikke-aktuelt' ? 'ikke-utfort' : 'ikke-aktuelt')}>
@@ -2266,7 +2274,7 @@ function ProsjektSjekklisteUtfylling({ sjekkliste, prosjekt, onTilbake, onOppdat
               {/* Status-indikator ved lesetilgang */}
               {!kanSkrive && avvikPunktId !== p.id && (
                 <span style={{ flexShrink: 0, fontSize: 13, fontWeight: 500, color: p.status === 'ok' ? '#15803d' : p.status === 'avvik' ? '#dc2626' : p.status === 'ikke-aktuelt' ? '#5d6b80' : '#5d6b80' }}>
-                  {p.status === 'ok' ? '✓ OK' : p.status === 'avvik' ? '⚠ Avvik' : p.status === 'ikke-aktuelt' ? 'N/A' : '⬜ Ikke utført'}
+                  {p.status === 'ok' ? <IkonTekst ikon={Check} size={13} gap={4}>OK</IkonTekst> : p.status === 'avvik' ? <IkonTekst ikon={TriangleAlert} size={13} gap={4}>Avvik</IkonTekst> : p.status === 'ikke-aktuelt' ? 'N/A' : <IkonTekst ikon={Square} size={13} gap={4}>Ikke utført</IkonTekst>}
                 </span>
               )}
             </div>
@@ -2283,20 +2291,20 @@ function ProsjektSjekklisteUtfylling({ sjekkliste, prosjekt, onTilbake, onOppdat
 
 // Fase-basert strukturering
 const FASE_INFO_KS = {
-  oppstart: { label: '📅 Oppstart', farge: '#3b82f6' },
-  bygg:     { label: '🔨 Bygg-fase', farge: '#b45309' },
-  slutt:    { label: '✅ Sluttkontroll', farge: '#15803d' },
+  oppstart: { label: 'Oppstart', ikon: CalendarDays, farge: '#3b82f6' },
+  bygg:     { label: 'Bygg-fase', ikon: Hammer, farge: '#b45309' },
+  slutt:    { label: 'Sluttkontroll', ikon: CircleCheck, farge: '#15803d' },
 }
 const FASE_ORDEN_KS = ['oppstart', 'bygg', 'slutt']
 
 const BYGGRUPPE_INFO = {
-  bad:       { label: '🛁 Bad',       farge: '#0891b2' },
-  yttervegg: { label: '🏠 Yttervegg', farge: '#ea580c' },
-  tak:       { label: '🏗 Tak',       farge: '#7c3aed' },
-  innvendig: { label: '🪟 Innvendig', farge: '#854d0e' },
-  ror:       { label: '💧 Rør',       farge: '#1d4ed8' },
-  el:        { label: '⚡ El',        farge: '#b45309' },
-  annet:     { label: '📦 Annet',     farge: '#5d6b80' },
+  bad:       { label: 'Bad',       ikon: Bath,      farge: '#0891b2' },
+  yttervegg: { label: 'Yttervegg', ikon: House,     farge: '#ea580c' },
+  tak:       { label: 'Tak',       ikon: Building2, farge: '#7c3aed' },
+  innvendig: { label: 'Innvendig', ikon: PanelTop,  farge: '#854d0e' },
+  ror:       { label: 'Rør',       ikon: Droplet,   farge: '#1d4ed8' },
+  el:        { label: 'El',        ikon: Zap,       farge: '#b45309' },
+  annet:     { label: 'Annet',     ikon: Package,   farge: '#5d6b80' },
 }
 const BYGGRUPPE_ORDEN = ['bad', 'yttervegg', 'tak', 'innvendig', 'ror', 'el', 'annet']
 
@@ -2308,13 +2316,13 @@ function getFase(m) {
 }
 
 const KAT_INFO_KS = {
-  hms:       { label: '🛡 HMS',       farge: '#dc2626' },
-  bad:       { label: '🛁 Bad',       farge: '#0891b2' },
-  yttervegg: { label: '🏠 Yttervegg', farge: '#ea580c' },
-  tak:       { label: '🏗 Tak',       farge: '#7c3aed' },
-  innvendig: { label: '🪟 Innvendig', farge: '#854d0e' },
-  teknisk:   { label: '⚡ Teknisk',   farge: '#b45309' },
-  annet:     { label: '📦 Annet',     farge: '#5d6b80' },
+  hms:       { label: 'HMS',       ikon: Shield,    farge: '#dc2626' },
+  bad:       { label: 'Bad',       ikon: Bath,      farge: '#0891b2' },
+  yttervegg: { label: 'Yttervegg', ikon: House,     farge: '#ea580c' },
+  tak:       { label: 'Tak',       ikon: Building2, farge: '#7c3aed' },
+  innvendig: { label: 'Innvendig', ikon: PanelTop,  farge: '#854d0e' },
+  teknisk:   { label: 'Teknisk',   ikon: Zap,       farge: '#b45309' },
+  annet:     { label: 'Annet',     ikon: Package,   farge: '#5d6b80' },
 }
 const KAT_ORDEN_KS = ['hms', 'bad', 'yttervegg', 'tak', 'innvendig', 'teknisk', 'annet']
 
@@ -2373,8 +2381,8 @@ function ForslagModal({ prosjekt, maler, tildelteMalIds, onBekreft, onLukk }) {
       <div style={{ background: '#fff', borderRadius: 16, maxWidth: 520, width: '100%', padding: '22px 20px', maxHeight: '88vh', overflow: 'auto', boxShadow: '0 20px 48px rgba(0,0,0,.25)' }}
         onClick={e => e.stopPropagation()}>
         <div style={{ fontWeight: 500, fontSize: 17, marginBottom: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          ✨ Foreslått sjekkliste-plan
-          <button className="btn-icon" onClick={onLukk}>✕</button>
+          <IkonTekst ikon={Sparkles} size={16}>Foreslått sjekkliste-plan</IkonTekst>
+          <button className="btn-icon" onClick={onLukk}><Ikon ikon={X} size={16} /></button>
         </div>
         <div style={{ fontSize: 13, color: '#5d6b80', marginBottom: 4 }}>
           Basert på prosjekttype <strong>"{prosjekt.jobbType || prosjekt.navn || 'ukjent'}"</strong>
@@ -2401,7 +2409,7 @@ function ForslagModal({ prosjekt, maler, tildelteMalIds, onBekreft, onLukk }) {
           const info = FASE_INFO_KS[fase]
           return (
             <div key={fase} style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 500, color: info.farge, marginBottom: 6 }}>{info.label}</div>
+              <div style={{ fontSize: 12, fontWeight: 500, color: info.farge, marginBottom: 6 }}><IkonTekst ikon={info.ikon} size={13} gap={5}>{info.label}</IkonTekst></div>
               {faseMaler.map(m => {
                 const erTildelt = tildelteMalIds.has(m.id)
                 return (
@@ -2418,7 +2426,7 @@ function ForslagModal({ prosjekt, maler, tildelteMalIds, onBekreft, onLukk }) {
                       {m.navn}
                     </span>
                     {erTildelt
-                      ? <span style={{ fontSize: 10, color: '#5d6b80' }}>✓ tildelt</span>
+                      ? <span style={{ fontSize: 10, color: '#5d6b80' }}><Ikon ikon={Check} size={10} /> tildelt</span>
                       : <span style={{ fontSize: 10, color: '#5d6b80' }}>{m.punkter?.length || 0} pkt</span>}
                   </label>
                 )
@@ -2437,7 +2445,7 @@ function ForslagModal({ prosjekt, maler, tildelteMalIds, onBekreft, onLukk }) {
           <button className="btn" onClick={onLukk}>Avbryt</button>
           <button className="btn btn-primary" disabled={valgte.size === 0}
             onClick={() => onBekreft(maler.filter(m => valgte.has(m.id)))}>
-            ✅ Legg til {valgte.size} sjekklister
+            <IkonTekst ikon={CircleCheck} size={14}>Legg til {valgte.size} sjekklister</IkonTekst>
           </button>
         </div>
       </div>
@@ -2562,13 +2570,13 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
               <span style={{ fontSize: 10, color: '#5d6b80' }}>{ut}/{totVis}</span>
             </div>
           </div>
-          {harAvvik && <span style={{ fontSize: 11, fontWeight: 500, color: '#dc2626', background: '#fee2e2', borderRadius: 8, padding: '1px 7px', flexShrink: 0 }}>⚠ {avvikAntall}</span>}
-          {pst === 100 && !harAvvik && <span style={{ fontSize: 11, color: '#15803d' }}>✓</span>}
+          {harAvvik && <span style={{ fontSize: 11, fontWeight: 500, color: '#dc2626', background: '#fee2e2', borderRadius: 8, padding: '1px 7px', flexShrink: 0 }}><Ikon ikon={TriangleAlert} size={11} /> {avvikAntall}</span>}
+          {pst === 100 && !harAvvik && <span style={{ fontSize: 11, color: '#15803d' }}><Ikon ikon={Check} size={12} /></span>}
           <button title="Fjern fra prosjektet"
             onClick={e => { e.stopPropagation(); fjernTildeling(ks) }}
             style={{ flexShrink: 0, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'transparent', color: '#5d6b80', cursor: 'pointer', fontSize: 13, borderRadius: 6 }}
             onMouseEnter={e => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.color = '#dc2626' }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#5d6b80' }}>✕</button>
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#5d6b80' }}><Ikon ikon={X} size={16} /></button>
           <span style={{ color: '#cbd5e1', fontSize: 14 }}>›</span>
         </div>
       )
@@ -2587,7 +2595,7 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
           style={{ padding: '6px 10px', border: '1px solid ' + (erTildelt ? '#f1f5f9' : '#e2e8f0'), borderRadius: 7, marginBottom: 3, fontSize: 12, cursor: erTildelt ? 'default' : 'grab', background: erTildelt ? 'transparent' : '#fff', color: erTildelt ? '#cbd5e1' : '#374151', display: 'flex', alignItems: 'center', gap: 5 }}
           onMouseEnter={erTildelt ? undefined : e => e.currentTarget.style.background = '#eff6ff'}
           onMouseLeave={erTildelt ? undefined : e => e.currentTarget.style.background = '#fff'}>
-          <span style={{ fontSize: 10, color: erTildelt ? '#cbd5e1' : '#5d6b80', flexShrink: 0 }}>{erTildelt ? '✓' : '⠿'}</span>
+          <span style={{ fontSize: 10, color: erTildelt ? '#cbd5e1' : '#5d6b80', flexShrink: 0 }}>{erTildelt ? <Ikon ikon={Check} size={11} /> : '⠿'}</span>
           <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.navn}</span>
           <span style={{ fontSize: 10, color: '#5d6b80', flexShrink: 0 }}>{m.punkter?.length || 0} pkt</span>
         </div>
@@ -2615,11 +2623,11 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
           <button className="btn" style={{ fontSize: 12, padding: '5px 12px' }}
             onClick={() => genererRapport(prosjekt, sjekklister.filter(s => s.prosjektId === prosjekt.id))}
             title="Generer KS-rapport med dagens status (PDF)">
-            📄 Rapport
+            <IkonTekst ikon={FileText} size={14}>Rapport</IkonTekst>
           </button>
           <button className="btn btn-primary" style={{ fontSize: 12, padding: '5px 12px' }}
             onClick={() => setVisForslagsModal(true)} title="Foreslå sjekkliste-plan basert på prosjektinfo">
-            ✨ Foreslå plan
+            <IkonTekst ikon={Sparkles} size={13}>Foreslå plan</IkonTekst>
           </button>
         </div>
       </div>
@@ -2657,7 +2665,7 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
         {/* VENSTRE: Tildelte — grupprt etter fase */}
         <div style={{ flex: 1, overflow: 'auto', padding: 16, borderRight: '2px solid #e2e8f0', minWidth: 0 }}>
           <div style={{ fontWeight: 500, fontSize: 13, color: '#475569', marginBottom: 12 }}>
-            📋 Tildelte ({ksSjekklister.length + (prosjekt.sjekklister?.length || 0)})
+            <IkonTekst ikon={ClipboardList} size={14}>Tildelte ({ksSjekklister.length + (prosjekt.sjekklister?.length || 0)})</IkonTekst>
           </div>
 
           {/* 4a: Forslag fra tilbudets fag — samme komponent som prosjektpanelet */}
@@ -2674,7 +2682,7 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
           {(prosjekt.sjekklister || []).length > 0 && (
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 11, fontWeight: 500, color: '#7c3aed', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
-                <span style={{ background: '#f5f3ff', borderRadius: 4, padding: '1px 6px' }}>📋 Prosjektsjekklister</span>
+                <span style={{ background: '#f5f3ff', borderRadius: 4, padding: '1px 6px' }}><IkonTekst ikon={ClipboardList} size={12} gap={4}>Prosjektsjekklister</IkonTekst></span>
               </div>
               {(prosjekt.sjekklister || []).map(sl => {
                 const utfylt = (sl.punkter || []).filter(p => p.status !== 'ikke-utfort').length
@@ -2687,7 +2695,7 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
                     onMouseEnter={e => e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,.08)'}
                     onMouseLeave={e => e.currentTarget.style.boxShadow = 'none'}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 500, fontSize: 13 }}>{sl.ikon || '📋'} {sl.navn}</div>
+                      <div style={{ fontWeight: 500, fontSize: 13 }}><IkonTekst ikon={ClipboardList} size={13}>{sl.navn}</IkonTekst></div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
                         <div style={{ flex: 1, maxWidth: 80, height: 3, background: '#e2e8f0', borderRadius: 2 }}>
                           <div style={{ width: pst + '%', height: '100%', background: pst === 100 ? '#15803d' : harAvvik ? '#dc2626' : '#7c3aed', borderRadius: 2 }} />
@@ -2695,8 +2703,8 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
                         <span style={{ fontSize: 10, color: '#5d6b80' }}>{utfylt}/{tot}</span>
                       </div>
                     </div>
-                    {harAvvik && <span style={{ fontSize: 11, color: '#dc2626' }}>⚠</span>}
-                    {pst === 100 && !harAvvik && <span style={{ fontSize: 11, color: '#15803d' }}>✓</span>}
+                    {harAvvik && <span style={{ fontSize: 11, color: '#dc2626' }}><Ikon ikon={TriangleAlert} size={12} /></span>}
+                    {pst === 100 && !harAvvik && <span style={{ fontSize: 11, color: '#15803d' }}><Ikon ikon={Check} size={12} /></span>}
                     <span style={{ color: '#cbd5e1', fontSize: 14 }}>›</span>
                   </div>
                 )
@@ -2707,10 +2715,10 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
 
           {ksSjekklister.length === 0 && (
             <div style={{ border: '2px dashed #e2e8f0', borderRadius: 12, padding: '28px 20px', textAlign: 'center', color: '#5d6b80', fontSize: 13, margin: '8px 0' }}>
-              <div style={{ fontSize: 26, marginBottom: 8 }}>📋</div>
+              <TomIkon ikon={ClipboardList} size={32} />
               <div style={{ fontWeight: 500, marginBottom: 6, color: '#5d6b80' }}>Ingen sjekklister tildelt ennå</div>
               <button className="btn btn-primary" style={{ marginBottom: 10 }} onClick={() => setVisForslagsModal(true)}>
-                ✨ Foreslå sjekkliste-plan
+                <IkonTekst ikon={Sparkles} size={14}>Foreslå sjekkliste-plan</IkonTekst>
               </button>
               <div style={{ fontSize: 12 }}>— eller dra fra biblioteket til høyre</div>
             </div>
@@ -2727,7 +2735,7 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
                 <div onClick={() => toggleKollaps('t-' + fase)}
                   style={{ fontSize: 13, fontWeight: 500, color: info.farge, marginBottom: erk ? 0 : 8, display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer', userSelect: 'none', padding: '4px 0' }}>
                   <span style={{ fontSize: 11, width: 24, height: 24, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{erk ? '▶' : '▼'}</span>
-                  {info.label} <span style={{ fontSize: 11, fontWeight: 400, color: '#5d6b80' }}>({faseMaler.length})</span>
+                  <Ikon ikon={info.ikon} size={13} /> {info.label} <span style={{ fontSize: 11, fontWeight: 400, color: '#5d6b80' }}>({faseMaler.length})</span>
                 </div>
                 {!erk && (fase === 'bygg'
                   ? BYGGRUPPE_ORDEN.map(subkat => {
@@ -2740,7 +2748,7 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
                           <div onClick={() => toggleKollaps('t-bygg-' + subkat)}
                             style={{ fontSize: 12, fontWeight: 500, color: sInfo.farge, marginBottom: sk ? 0 : 5, display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
                             <span style={{ fontSize: 10, width: 24, height: 24, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{sk ? '▶' : '▼'}</span>
-                            {sInfo.label} <span style={{ fontSize: 10, fontWeight: 400, color: '#5d6b80' }}>({sub.length})</span>
+                            <Ikon ikon={sInfo.ikon} size={12} /> {sInfo.label} <span style={{ fontSize: 10, fontWeight: 400, color: '#5d6b80' }}>({sub.length})</span>
                           </div>
                           {!sk && renderTildeltListe(sub)}
                         </div>
@@ -2755,14 +2763,14 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
           <div onDragOver={e => { e.preventDefault(); setDragOver(true) }}
             onDragLeave={() => setDragOver(false)} onDrop={onDrop}
             style={{ border: '2px dashed ' + (dragOver ? '#3b82f6' : '#cbd5e1'), borderRadius: 10, padding: '16px', textAlign: 'center', color: dragOver ? '#3b82f6' : '#5d6b80', fontSize: 13, marginTop: 8, background: dragOver ? '#eff6ff' : 'transparent', transition: 'all .15s' }}>
-            {dragOver ? '📥 Slipp for å tildele' : '+ Slipp fase, gruppe eller enkelt mal'}
+            {dragOver ? <IkonTekst ikon={Download} size={14}>Slipp for å tildele</IkonTekst> : '+ Slipp fase, gruppe eller enkelt mal'}
           </div>
         </div>
 
         {/* HØYRE: Bibliotek — fase-basert */}
         <div style={{ width: 310, flexShrink: 0, overflow: 'auto', padding: 16, background: '#f8fafc' }}>
-          <div style={{ fontWeight: 500, fontSize: 13, color: '#475569', marginBottom: 10 }}>📚 Bibliotek ({maler.length})</div>
-          <input className="input" placeholder="🔍 Søk mal..." value={soekBibliotek} onChange={e => setSoekBibliotek(e.target.value)} style={{ marginBottom: 12, fontSize: 12 }} />
+          <div style={{ fontWeight: 500, fontSize: 13, color: '#475569', marginBottom: 10 }}><IkonTekst ikon={Library} size={14}>Bibliotek ({maler.length})</IkonTekst></div>
+          <input className="input" placeholder="Søk mal..." value={soekBibliotek} onChange={e => setSoekBibliotek(e.target.value)} style={{ marginBottom: 12, fontSize: 12 }} />
 
           {FASE_ORDEN_KS.map(fase => {
             const faseMaler = biblFiltrert.filter(m => getFase(m) === fase)
@@ -2775,10 +2783,10 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
                 <div style={{ fontSize: 13, fontWeight: 500, color: info.farge, marginBottom: erk ? 0 : 8, display: 'flex', alignItems: 'center', gap: 5 }}>
                   <span draggable onDragStart={e => { setDragType('fase'); setDragData(fase); e.dataTransfer.effectAllowed = 'copy' }}
                     title={'Dra hele ' + info.label}
-                    style={{ cursor: 'grab', padding: '2px 4px', borderRadius: 3, background: 'rgba(0,0,0,.06)', fontSize: 10 }}>☰</span>
+                    style={{ cursor: 'grab', padding: '2px 4px', borderRadius: 3, background: 'rgba(0,0,0,.06)', fontSize: 10 }}><Ikon ikon={GripVertical} size={10} /></span>
                   <span onClick={() => toggleKollaps('b-' + fase)} style={{ cursor: 'pointer', flex: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
                     <span style={{ fontSize: 11, width: 24, height: 24, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{erk ? '▶' : '▼'}</span>
-                    {info.label} <span style={{ fontSize: 10, fontWeight: 400, color: '#5d6b80' }}>({faseMaler.length})</span>
+                    <Ikon ikon={info.ikon} size={12} /> {info.label} <span style={{ fontSize: 10, fontWeight: 400, color: '#5d6b80' }}>({faseMaler.length})</span>
                   </span>
                   {faseNye.length > 0 && (
                     <button onClick={() => leggTilListe(faseNye, 'klikk:fase-' + fase)}
@@ -2800,10 +2808,10 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
                           <div style={{ fontSize: 11, fontWeight: 500, color: sInfo.farge, marginBottom: sk ? 0 : 4, display: 'flex', alignItems: 'center', gap: 4 }}>
                             <span draggable onDragStart={e => { setDragType('subgruppe'); setDragData(subkat); e.dataTransfer.effectAllowed = 'copy' }}
                               title={'Dra ' + sInfo.label}
-                              style={{ cursor: 'grab', padding: '1px 3px', borderRadius: 3, background: 'rgba(0,0,0,.06)', fontSize: 9 }}>☰</span>
+                              style={{ cursor: 'grab', padding: '1px 3px', borderRadius: 3, background: 'rgba(0,0,0,.06)', fontSize: 9 }}><Ikon ikon={GripVertical} size={10} /></span>
                             <span onClick={() => toggleKollaps('b-bygg-' + subkat)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3, flex: 1 }}>
                               <span style={{ fontSize: 10, width: 24, height: 24, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{sk ? '▶' : '▼'}</span>
-                              {sInfo.label} <span style={{ fontWeight: 400, color: '#5d6b80' }}>({subMaler.length})</span>
+                              <Ikon ikon={sInfo.ikon} size={11} /> {sInfo.label} <span style={{ fontWeight: 400, color: '#5d6b80' }}>({subMaler.length})</span>
                             </span>
                             {subNye.length > 0 && (
                               <button onClick={() => leggTilListe(subNye, 'klikk:sub-' + subkat)}
@@ -2886,9 +2894,9 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
             return (
               <button key={p.id} onClick={() => velgOgHusk(p)}
                 style={{ fontSize: 12, padding: '4px 12px', border: '1px solid #e2e8f0', borderRadius: 20, background: '#f8fafc', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, color: '#475569' }}>
-                🕐 {p.navn.length > 22 ? p.navn.slice(0, 20) + '…' : p.navn}
+                <Ikon ikon={Clock} size={12} /> {p.navn.length > 22 ? p.navn.slice(0, 20) + '…' : p.navn}
                 {ksItems.length > 0 && <span style={{ color: '#5d6b80', fontSize: 10 }}>{ferdig}/{ksItems.length}</span>}
-                {avvik > 0 && <span style={{ color: '#dc2626', fontSize: 10 }}>⚠</span>}
+                {avvik > 0 && <span style={{ color: '#dc2626', fontSize: 10 }}><Ikon ikon={TriangleAlert} size={11} /></span>}
               </button>
             )
           })}
@@ -2914,17 +2922,17 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
       {/* ── Trenger oppmerksomhet (kun admin) ────────────────────── */}
       {ROLLE() === 'admin' && (malerUtenBeskrivelse.length > 0 || harMismatch) && (
         <div style={{ background: '#fef3c7', border: '1px solid #b45309', borderRadius: 12, padding: '12px 16px', marginBottom: 16 }}>
-          <div style={{ fontWeight: 500, fontSize: 13, color: '#92400e', marginBottom: 6 }}>🚨 Trenger oppmerksomhet</div>
+          <div style={{ fontWeight: 500, fontSize: 13, color: '#92400e', marginBottom: 6 }}><IkonTekst ikon={TriangleAlert} size={14} gap={5}>Trenger oppmerksomhet</IkonTekst></div>
           {malerUtenBeskrivelse.length > 0 && (
             <div style={{ fontSize: 13, color: '#92400e', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
-              ⚠️ {malerUtenBeskrivelse.length} maler mangler regelverk-beskrivelse
-              <button className="btn" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => setAiModal(true)}>✨ Fyll med AI</button>
+              <Ikon ikon={TriangleAlert} size={14} /> {malerUtenBeskrivelse.length} maler mangler regelverk-beskrivelse
+              <button className="btn" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => setAiModal(true)}><IkonTekst ikon={Sparkles} size={12} gap={4}>Fyll med AI</IkonTekst></button>
             </div>
           )}
           {harMismatch && (
             <div style={{ fontSize: 13, color: '#92400e', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setVisdiag(v => !v)}>
-              <span>⚠️ {ugyldigeSl.length} sjekklister koblet til ukjente prosjekter {visdiag ? '▲' : '▼'}</span>
-              {onRensTestData && <button className="btn" style={{ fontSize: 11, padding: '2px 8px', background: '#dc2626', color: '#fff', border: 'none' }} onClick={e => { e.stopPropagation(); onRensTestData(ugyldigeSl.map(s => s.id)) }}>🗑 Slett</button>}
+              <span><Ikon ikon={TriangleAlert} size={13} /> {ugyldigeSl.length} sjekklister koblet til ukjente prosjekter {visdiag ? '▲' : '▼'}</span>
+              {onRensTestData && <button className="btn" style={{ fontSize: 11, padding: '2px 8px', background: '#dc2626', color: '#fff', border: 'none' }} onClick={e => { e.stopPropagation(); onRensTestData(ugyldigeSl.map(s => s.id)) }}><IkonTekst ikon={Trash2} size={12} gap={4}>Slett</IkonTekst></button>}
             </div>
           )}
           {visdiag && harMismatch && (
@@ -2941,11 +2949,11 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 4 }}>
         <button onClick={onVisBibliotek}
           style={{ padding: '13px 16px', border: '2px solid #15803d', borderRadius: 12, background: '#fff', color: '#15803d', cursor: 'pointer', fontWeight: 500, fontSize: 14 }}>
-          📚 Mal-bibliotek <span style={{ fontSize: 12, background: '#dcfce7', borderRadius: 6, padding: '1px 7px', marginLeft: 4 }}>{maler.length}</span>
+          <IkonTekst ikon={Library} size={15}>Mal-bibliotek</IkonTekst> <span style={{ fontSize: 12, background: '#dcfce7', borderRadius: 6, padding: '1px 7px', marginLeft: 4 }}>{maler.length}</span>
         </button>
         <button onClick={onVisAvvik}
           style={{ padding: '13px 16px', border: '2px solid #fee2e2', borderRadius: 12, background: '#fff', color: '#dc2626', cursor: 'pointer', fontWeight: 500, fontSize: 14 }}>
-          ⚠️ Avvik-register {avvikAapne > 0 && <span style={{ fontSize: 12, background: '#fee2e2', borderRadius: 6, padding: '1px 7px', marginLeft: 4 }}>{avvikAapne}</span>}
+          <IkonTekst ikon={TriangleAlert} size={15}>Avvik-register</IkonTekst> {avvikAapne > 0 && <span style={{ fontSize: 12, background: '#fee2e2', borderRadius: 6, padding: '1px 7px', marginLeft: 4 }}>{avvikAapne}</span>}
         </button>
       </div>
 
@@ -3040,7 +3048,7 @@ export default function KS({ readOnly = false, ansattId = null }) {
 
   if (laster) return (
     <div className="ks-side" style={{ textAlign: 'center', paddingTop: 80 }}>
-      <div style={{ fontSize: 32 }}>⏳</div>
+      <TomIkon ikon={Loader} size={36} />
       <div style={{ color: '#5d6b80', marginTop: 12 }}>Laster KS-data...</div>
     </div>
   )
@@ -3074,7 +3082,7 @@ export default function KS({ readOnly = false, ansattId = null }) {
   if (view === 'prosjekt' && valgtProsjekt) {
     if (lasterProsjekt) return (
       <div className="ks-side" style={{ textAlign: 'center', paddingTop: 80 }}>
-        <div style={{ fontSize: 32 }}>⏳</div>
+        <TomIkon ikon={Loader} size={36} />
         <div style={{ color: '#5d6b80', marginTop: 12 }}>Laster prosjekt...</div>
       </div>
     )
@@ -3172,7 +3180,7 @@ export default function KS({ readOnly = false, ansattId = null }) {
         onOppdaterMaler={setMaler}
       />
       {/* AI-floating-button */}
-      <button className="ks-fab" onClick={() => setAiFlyt(true)} title="Spør AI">✨</button>
+      <button className="ks-fab" onClick={() => setAiFlyt(true)} title="Spør AI"><Ikon ikon={Sparkles} size={20} /></button>
       {aiFlyt && <AiModal modus="hjelp" onFerdig={() => setAiFlyt(false)} onLukk={() => setAiFlyt(false)} />}
     </>
   )

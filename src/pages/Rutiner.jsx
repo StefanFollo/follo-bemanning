@@ -1,4 +1,6 @@
 import { useState, useMemo } from 'react';
+import { ClipboardList, TriangleAlert, ClipboardCheck, FilePen, FileText, BookOpen, Printer, Sprout } from 'lucide-react';
+import { Ikon, IkonTekst } from '../komponenter/Ikon';
 import { RUTINER_DATA } from '../data/rutiner-holte';
 
 // Rutiner: hele HMS/KS-håndboken (Mestergruppen/Holte) — søkbar og lesbar
@@ -6,11 +8,11 @@ import { RUTINER_DATA } from '../data/rutiner-holte';
 // lastes kun når denne fanen åpnes (lazy chunk).
 
 const TYPE_INFO = {
-  rutine:     { label: 'Rutiner',     ikon: '📋', farge: '#2563eb' },
-  instruks:   { label: 'Instrukser',  ikon: '⚠️', farge: '#c2410c' },
-  sjekkliste: { label: 'Sjekklister', ikon: '✅', farge: '#15803d' },
-  skjema:     { label: 'Skjemaer',    ikon: '📝', farge: '#9333ea' },
-  dokument:   { label: 'Dokumenter',  ikon: '📄', farge: '#5d6b80' },
+  rutine:     { label: 'Rutiner',     ikon: ClipboardList,  farge: '#2563eb' },
+  instruks:   { label: 'Instrukser',  ikon: TriangleAlert,  farge: '#c2410c' },
+  sjekkliste: { label: 'Sjekklister', ikon: ClipboardCheck, farge: '#15803d' },
+  skjema:     { label: 'Skjemaer',    ikon: FilePen,        farge: '#9333ea' },
+  dokument:   { label: 'Dokumenter',  ikon: FileText,       farge: '#5d6b80' },
 };
 
 function skrivUtDokument(dok) {
@@ -84,10 +86,10 @@ export default function Rutiner() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
             <button className="btn" onClick={() => setValgt(null)}>← Tilbake</button>
             <h2 style={{ fontSize: 17, margin: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {ti.ikon} {valgt.tittel}
+              <Ikon ikon={ti.ikon} size={16} farge={ti.farge} style={{ marginRight: 6 }} />{valgt.tittel}
             </h2>
           </div>
-          <button className="btn" onClick={() => skrivUtDokument(valgt)} title="Skriv ut / lagre som PDF">🖨 PDF</button>
+          <button className="btn" onClick={() => skrivUtDokument(valgt)} title="Skriv ut / lagre som PDF" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={Printer} size={16} /> PDF</button>
         </div>
         <div style={{ fontSize: 12, color: '#5d6b80', marginBottom: 12 }}>
           {valgt.kapittel}{valgt.underkapittel ? ` · ${valgt.underkapittel}` : ''} · side {valgt.side} i håndboken
@@ -107,7 +109,7 @@ export default function Rutiner() {
   return (
     <div className="page">
       <div className="page-header">
-        <h2>📘 Rutiner &amp; HMS/KS-håndbok <span className="count-badge">{data.dokumenter.length}</span></h2>
+        <h2><IkonTekst ikon={BookOpen} size={18}>Rutiner &amp; HMS/KS-håndbok</IkonTekst> <span className="count-badge">{data.dokumenter.length}</span></h2>
       </div>
       <div style={{ fontSize: 12, color: '#5d6b80', marginBottom: 12 }}>
         {data.meta.kilde} · eksportert {data.meta.eksportert}
@@ -117,7 +119,7 @@ export default function Rutiner() {
       <div className="toolbar" style={{ marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
         <input
           className="search-input"
-          placeholder="🔍 Søk i tittel og innhold…"
+          placeholder="Søk i tittel og innhold…"
           value={sok}
           onChange={e => setSok(e.target.value)}
           style={{ maxWidth: 320 }}
@@ -131,7 +133,7 @@ export default function Rutiner() {
               : { color: ti.farge, borderColor: ti.farge + '66' }}
             onClick={() => setTypeFilter(t => t === key ? null : key)}
           >
-            {ti.ikon} {ti.label} ({typeTeller[key]})
+            <IkonTekst ikon={ti.ikon} size={14} gap={4}>{ti.label} ({typeTeller[key]})</IkonTekst>
           </button>
         ) : null)}
       </div>
@@ -157,7 +159,7 @@ export default function Rutiner() {
               }}
               onClick={() => setKapFilter(k => k === kap ? null : kap)}
             >
-              {kap.includes('Miljøfyrtårn') ? '🌱 ' : ''}{kap} ({antall})
+              {kap.includes('Miljøfyrtårn') && <Ikon ikon={Sprout} size={13} farge="#15803d" style={{ marginRight: 4 }} />}{kap} ({antall})
             </button>
           ))}
         </div>
@@ -192,7 +194,7 @@ export default function Rutiner() {
                       minHeight: 44,
                     }}
                   >
-                    <span style={{ flexShrink: 0 }}>{ti.ikon}</span>
+                    <Ikon ikon={ti.ikon} size={16} farge={ti.farge} />
                     <span style={{ flex: 1, fontWeight: 500, color: '#1e293b' }}>{d.tittel}</span>
                     <span style={{ fontSize: 11, color: '#5d6b80', flexShrink: 0 }}>{d.kapittel.slice(0, 2)}</span>
                   </button>

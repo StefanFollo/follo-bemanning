@@ -1,5 +1,11 @@
 import { useApp } from '../context/AppContext';
 import { dateToIso, addDays, weekStart, overlaps } from '../store';
+import {
+  Target, Clock, Link2, MapPin, Palmtree, CircleCheck, Search, Pin, PhoneCall,
+  Phone, Pencil, CircleX, TriangleAlert, ChartGantt, Rocket, CalendarDays,
+  Building2, ShieldAlert, MessageSquare, Eye,
+} from 'lucide-react';
+import { Ikon } from '../komponenter/Ikon';
 
 const FAG_COLORS = {
   'Bas Tømrer': '#b45309', 'Montør': '#3b82f6', 'Lærling Tømrer': '#15803d',
@@ -125,10 +131,10 @@ export default function Dashboard({ onNavigate }) {
 
   function aktivitetTekst(b) {
     const akt = b.kundeAktivitet || [];
-    if (akt.some(a => a.handling === 'klikket-aksepter')) return '✅ Klikket Aksepter'
-    if (akt.some(a => a.handling === 'klikket-sporsmal')) return '💬 Klikket Spørsmål'
-    if (b.kundeHarSettTilbud) return `👁 Åpnet tilbudet ${b.antallKundeAapninger || 1}x`
-    return '👁 Sett tilbudet'
+    if (akt.some(a => a.handling === 'klikket-aksepter')) return <><Ikon ikon={CircleCheck} size={11} /> Klikket Aksepter</>
+    if (akt.some(a => a.handling === 'klikket-sporsmal')) return <><Ikon ikon={MessageSquare} size={11} /> Klikket Spørsmål</>
+    if (b.kundeHarSettTilbud) return <><Ikon ikon={Eye} size={11} /> Åpnet tilbudet {b.antallKundeAapninger || 1}x</>
+    return <><Ikon ikon={Eye} size={11} /> Sett tilbudet</>
   }
   function tidRelativt(iso) {
     if (!iso) return ''
@@ -143,7 +149,7 @@ export default function Dashboard({ onNavigate }) {
       {/* ── Topplinje ── */}
       <div className="dash-header">
         <div>
-          <h2 className="dash-tittel">God dag! 👋</h2>
+          <h2 className="dash-tittel">God dag!</h2>
           <p className="dash-dato">{ukedagNavn.charAt(0).toUpperCase() + ukedagNavn.slice(1)}, {datoLabel(today)}</p>
         </div>
       </div>
@@ -175,7 +181,7 @@ export default function Dashboard({ onNavigate }) {
       {/* ── Kunde-aktivitet siste 24t ── */}
       <div className="dash-seksjon" style={{ marginBottom: 16 }}>
         <div className="dash-seksjon-header">
-          <span>🎯 Kunde-aktivitet siste 24 timer</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={Target} size={15} /> Kunde-aktivitet siste 24 timer</span>
           {kundeAktivitet24t.length > 0 && <span className="dash-seksjon-teller">{kundeAktivitet24t.length}</span>}
         </div>
         {kundeAktivitet24t.length === 0 ? (
@@ -200,7 +206,7 @@ export default function Dashboard({ onNavigate }) {
                       {aktivitetTekst(b)}
                       {fristDgr !== null && fristDgr <= 3 && (
                         <span style={{ marginLeft: 8, color: fristDgr < 0 ? '#dc2626' : '#b45309', fontWeight: 500 }}>
-                          ⏰ Frist: {datoKort(b.tilbudFrist)}{fristDgr === 0 ? ' (i dag!)' : fristDgr < 0 ? ` (${Math.abs(fristDgr)}d over)` : ` (${fristDgr}d)`}
+                          <Ikon ikon={Clock} size={11} /> Frist: {datoKort(b.tilbudFrist)}{fristDgr === 0 ? ' (i dag!)' : fristDgr < 0 ? ` (${Math.abs(fristDgr)}d over)` : ` (${fristDgr}d)`}
                         </span>
                       )}
                     </div>
@@ -214,7 +220,7 @@ export default function Dashboard({ onNavigate }) {
                       onClick={e => e.stopPropagation()}
                       title="Åpne kundens tilbudside"
                       style={{ color: '#2874a6', fontSize: 15, flexShrink: 0, textDecoration: 'none' }}
-                    >🔗</a>
+                    ><Ikon ikon={Link2} size={15} /></a>
                   )}
                 </div>
               );
@@ -230,7 +236,7 @@ export default function Dashboard({ onNavigate }) {
           {/* Dagens bemanning */}
           <div className="dash-seksjon">
             <div className="dash-seksjon-header">
-              <span>📍 Dagens bemanning</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={MapPin} size={15} /> Dagens bemanning</span>
               <span className="dash-seksjon-teller">{opptattIds.size - ferieIdag.length} på prosjekt</span>
             </div>
 
@@ -261,7 +267,7 @@ export default function Dashboard({ onNavigate }) {
             {ferieIdag.length > 0 && (
               <div className="dash-prosjekt-rad dash-ferie-rad">
                 <div className="dash-prosjekt-topp">
-                  <span>🏖</span>
+                  <Ikon ikon={Palmtree} size={15} farge="#b45309" />
                   <span className="dash-proj-navn" style={{ color: '#b45309' }}>Ferie / Fri</span>
                   <span className="dash-proj-antall">{ferieIdag.length} person{ferieIdag.length !== 1 ? 'er' : ''}</span>
                 </div>
@@ -282,7 +288,7 @@ export default function Dashboard({ onNavigate }) {
             {ledigeIdag.length > 0 && (
               <div className="dash-prosjekt-rad dash-ledige-rad">
                 <div className="dash-prosjekt-topp">
-                  <span>✅</span>
+                  <Ikon ikon={CircleCheck} size={15} farge="#15803d" />
                   <span className="dash-proj-navn" style={{ color: '#15803d' }}>Ledig / ikke tildelt</span>
                   <span className="dash-proj-antall">{ledigeIdag.length} person{ledigeIdag.length !== 1 ? 'er' : ''}</span>
                 </div>
@@ -310,7 +316,7 @@ export default function Dashboard({ onNavigate }) {
           {/* Befaringer denne uka */}
           <div className="dash-seksjon">
             <div className="dash-seksjon-header">
-              <span>🔍 Befaringer denne uka</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={Search} size={15} /> Befaringer denne uka</span>
               <span className="dash-seksjon-teller">{ukasBef.length}</span>
             </div>
             {ukasBef.length === 0 && <div className="dash-tom">Ingen befaringer denne uka.</div>}
@@ -320,15 +326,15 @@ export default function Dashboard({ onNavigate }) {
               return (
                 <div key={b.id} className={`dash-bef-rad${erIdag ? ' dash-bef-idag' : ''}`}>
                   <div className="dash-bef-dato" style={{ color: erIdag ? '#2563eb' : '#5d6b80' }}>
-                    {erIdag ? '📌 I dag' : datoKort(b.dato)}
+                    {erIdag ? <><Ikon ikon={Pin} size={12} /> I dag</> : datoKort(b.dato)}
                     {b.tid && <span style={{ marginLeft: 4, fontSize: 11 }}>kl. {b.tid}</span>}
                   </div>
                   <div className="dash-bef-info">
                     <div className="dash-bef-navn">{b.kontaktNavn}</div>
                     <div className="dash-bef-adresse">{b.adresse}</div>
                   </div>
-                  <span className="dash-bef-pill" style={{ background: s.ikon === '📋' ? '#eff6ff' : '#fffbeb', color: s.farge }}>
-                    {s.ikon}
+                  <span className="dash-bef-pill" style={{ background: b.status === 'planlagt' ? '#eff6ff' : '#fffbeb', color: s.farge }}>
+                    <Ikon ikon={s.ikon} size={14} />
                   </span>
                 </div>
               );
@@ -343,7 +349,7 @@ export default function Dashboard({ onNavigate }) {
           {oppfolginger.length > 0 && (
             <div className="dash-seksjon">
               <div className="dash-seksjon-header">
-                <span>📞 Oppfølging — neste kontakt</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={PhoneCall} size={15} /> Oppfølging — neste kontakt</span>
                 <span className="dash-seksjon-teller" style={{ color: oppfolginger.some(b => b.dager <= 0) ? '#dc2626' : undefined }}>
                   {oppfolginger.length}
                 </span>
@@ -360,8 +366,8 @@ export default function Dashboard({ onNavigate }) {
                     title="Gå til Befaring"
                   >
                     <div className="dash-frist-info">
-                      <div className="dash-frist-navn">{s.ikon} {b.kontaktNavn || b.adresse}</div>
-                      <div className="dash-frist-adresse">{b.adresse}{b.telefon ? ` · 📱 ${b.telefon}` : ''}</div>
+                      <div className="dash-frist-navn"><Ikon ikon={s.ikon} size={13} /> {b.kontaktNavn || b.adresse}</div>
+                      <div className="dash-frist-adresse">{b.adresse}{b.telefon ? <> · <Ikon ikon={Phone} size={11} /> {b.telefon}</> : ''}</div>
                       <div style={{ fontSize: 11, color: s.farge, marginTop: 2 }}>{s.label}</div>
                     </div>
                     <div className="dash-frist-badge" style={{ background: farge + '1a', color: farge }}>
@@ -379,7 +385,7 @@ export default function Dashboard({ onNavigate }) {
           {tilbudFrister.length > 0 && (
             <div className="dash-seksjon">
               <div className="dash-seksjon-header">
-                <span>✏️ Tilbudsfrister</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={Pencil} size={15} /> Tilbudsfrister</span>
                 <span className="dash-seksjon-teller">{tilbudFrister.length}</span>
               </div>
               {tilbudFrister.map(b => {
@@ -395,14 +401,14 @@ export default function Dashboard({ onNavigate }) {
                           style={{ fontSize: 11, padding: '2px 8px', background: '#f0fdf4', color: '#15803d', borderColor: '#bbf7d0' }}
                           onClick={() => dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, status: 'godkjent' } })}
                         >
-                          ✅ Godkjent
+                          <Ikon ikon={CircleCheck} size={12} /> Godkjent
                         </button>
                         <button
                           className="btn btn-sm"
                           style={{ fontSize: 11, padding: '2px 8px', background: '#f9fafb', color: '#6b7280', borderColor: '#e2e8f0' }}
                           onClick={() => dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, status: 'tapt' } })}
                         >
-                          ❌ Tapt
+                          <Ikon ikon={CircleX} size={12} /> Tapt
                         </button>
                       </div>
                     </div>
@@ -421,17 +427,17 @@ export default function Dashboard({ onNavigate }) {
           {/* Reklamasjoner å følge opp */}
           <div className="dash-seksjon">
             <div className="dash-seksjon-header">
-              <span>⚠️ Reklamasjoner å følge opp</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={TriangleAlert} size={15} /> Reklamasjoner å følge opp</span>
               <span className="dash-seksjon-teller" style={{ color: aktiveRekl > 0 ? '#b45309' : undefined }}>{aktiveRekl}</span>
             </div>
-            {aktiveRekl === 0 && <div className="dash-tom">Ingen aktive reklamasjoner. 🎉</div>}
+            {aktiveRekl === 0 && <div className="dash-tom">Ingen aktive reklamasjoner.</div>}
             {reklamasjonerFrist.map(r => {
               const s = REKL_STATUS[r.status] || REKL_STATUS.ny;
               const farge = r.dager < 0 ? '#dc2626' : r.dager <= 5 ? '#b45309' : '#15803d';
               const prosjekt = r.prosjektId ? state.prosjekter.find(p => p.id === r.prosjektId) : null;
               return (
                 <div key={r.id} className="dash-frist-rad">
-                  <div style={{ fontSize: 18 }}>{s.ikon}</div>
+                  <div><Ikon ikon={s.ikon} size={18} farge={s.farge} /></div>
                   <div className="dash-frist-info">
                     <div className="dash-frist-navn">{prosjekt ? prosjekt.navn : r.adresse}</div>
                     <div className="dash-frist-adresse">{r.type} · {r.kontaktNavn}</div>
@@ -470,7 +476,7 @@ export default function Dashboard({ onNavigate }) {
             return (
               <div className="dash-seksjon">
                 <div className="dash-seksjon-header">
-                  <span>📊 Tilbudsstatistikk</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={ChartGantt} size={15} /> Tilbudsstatistikk</span>
                   {vinnRate !== null && (
                     <span className="dash-seksjon-teller" style={{ color: vinnRate >= 50 ? '#15803d' : '#b45309' }}>
                       {vinnRate}% vinnrate
@@ -499,16 +505,16 @@ export default function Dashboard({ onNavigate }) {
 
           {/* Rask navigasjon */}
           <div className="dash-seksjon">
-            <div className="dash-seksjon-header"><span>🚀 Hurtiglenker</span></div>
+            <div className="dash-seksjon-header"><span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={Rocket} size={15} /> Hurtiglenker</span></div>
             <div className="dash-hurtig-grid">
               {[
-                { tab: 'befaring',       ikon: '🔍', label: 'Ny befaring',       sub: 'Planlegg befaring' },
-                { tab: 'reklamasjon',    ikon: '⚠️',  label: 'Reklamasjon',       sub: 'Registrer klage' },
-                { tab: 'bemanningsplan', ikon: '📅',  label: 'Bemanningsplan',    sub: 'Tildel ansatte' },
-                { tab: 'prosjekter',     ikon: '🏗',  label: 'Prosjekter',        sub: 'Se alle prosjekter' },
+                { tab: 'befaring',       ikon: Search,       label: 'Ny befaring',       sub: 'Planlegg befaring' },
+                { tab: 'reklamasjon',    ikon: ShieldAlert,  label: 'Reklamasjon',       sub: 'Registrer klage' },
+                { tab: 'bemanningsplan', ikon: CalendarDays, label: 'Bemanningsplan',    sub: 'Tildel ansatte' },
+                { tab: 'prosjekter',     ikon: Building2,    label: 'Prosjekter',        sub: 'Se alle prosjekter' },
               ].map(({ tab, ikon, label, sub }) => (
                 <button key={tab} className="dash-hurtig-knapp" onClick={() => onNavigate(tab)}>
-                  <span className="dash-hurtig-ikon">{ikon}</span>
+                  <span className="dash-hurtig-ikon"><Ikon ikon={ikon} size={20} /></span>
                   <div>
                     <div className="dash-hurtig-label">{label}</div>
                     <div className="dash-hurtig-sub">{sub}</div>

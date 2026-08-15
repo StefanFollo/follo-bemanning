@@ -1,4 +1,11 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import {
+  Sparkles, X, ClipboardList, Pencil, Package, MapPin, Hammer, Rocket, Clock,
+  CircleX, CircleCheck, Check, ChartGantt, CalendarDays, Pin, Plus, RefreshCw,
+  Tv, Eye, Printer, Settings, FilePen, Ruler, Palette, Rainbow, HardHat,
+  CircleAlert, Flame, Loader, TriangleAlert,
+} from 'lucide-react';
+import { Ikon, IkonTekst } from '../komponenter/Ikon';
 import { useApp } from '../context/AppContext';
 import { uid, mergeWithCloud } from '../store';
 
@@ -62,11 +69,6 @@ const FAG = {
   ferdig:      { label: 'Ferdig',      color: '#3B6D11' },
   annet:       { label: 'Annet',       color: '#888780' },
 };
-const FAG_IKON = {
-  tomrer: '🔨', flis: '🔲', elektriker: '⚡', rorlegger: '🔵',
-  ventilasjon: '💨', maling: '🎨', ferdig: '✓', annet: '📋',
-};
-
 const fc = k => FAG[k]?.color ?? '#888780';
 
 const STATUS_OPTIONS = ['Ikke startet', 'Pågående', 'Forsinket', 'Ferdig'];
@@ -144,7 +146,7 @@ function openPrintWindow(project, status, pct) {
   <div style="flex:1;position:relative;overflow:hidden;">
     ${wkBg}
     <div style="position:absolute;top:3px;bottom:3px;left:${lPct}%;width:${wPct}%;background:${col};opacity:${done ? 0.3 : 0.82};border-radius:3px;display:flex;align-items:center;padding:0 5px;overflow:hidden;">
-      <span style="font-size:8px;color:white;font-weight:700;white-space:nowrap;">${done ? '✓' : ''} ${t.dur}d</span>
+      <span style="font-size:8px;color:white;font-weight:700;white-space:nowrap;">${done ? '&#10003;' : ''} ${t.dur}d</span>
     </div>
   </div>
 </div>`;
@@ -162,7 +164,7 @@ function openPrintWindow(project, status, pct) {
       <td style="padding:3px 6px;border-bottom:1px solid #e2e8f0;color:${col};">${label}</td>
       <td style="padding:3px 6px;border-bottom:1px solid #e2e8f0;">Dag ${t.start}</td>
       <td style="padding:3px 6px;border-bottom:1px solid #e2e8f0;">${t.dur} d</td>
-      <td style="padding:3px 6px;border-bottom:1px solid #e2e8f0;color:${done ? '#15803d' : '#5d6b80'};">${done ? '✓ Ferdig' : t.pct > 0 ? `${t.pct}%` : '–'}</td>
+      <td style="padding:3px 6px;border-bottom:1px solid #e2e8f0;color:${done ? '#15803d' : '#5d6b80'};">${done ? '&#10003; Ferdig' : t.pct > 0 ? `${t.pct}%` : '–'}</td>
     </tr>`;
   }).join('');
 
@@ -190,7 +192,7 @@ function openPrintWindow(project, status, pct) {
 <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:10px;border-bottom:2px solid #1e293b;margin-bottom:12px;">
   <div>
     <div style="font-size:20px;font-weight:800;color:#1e293b;line-height:1.2;">${project.navn}</div>
-    ${project.adresse ? `<div style="font-size:11px;color:#5d6b80;margin-top:3px;">📍 ${project.adresse}</div>` : ''}
+    ${project.adresse ? `<div style="font-size:11px;color:#5d6b80;margin-top:3px;">${project.adresse}</div>` : ''}
     <div style="font-size:10px;color:#5d6b80;margin-top:5px;">
       ${project.fdStartWeek ? `Startuke: U${project.fdStartWeek}/${project.fdStartYear || ''} · ` : ''}${totalWks} uker · ${ferdig}/${tasks.length} faser fullført
     </div>
@@ -307,15 +309,15 @@ function GenererModal({ project, onClose, onApply }) {
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" style={{ maxWidth: 560, maxHeight: '90vh', overflow: 'auto' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>✨ Generer framdriftsplan med AI</h3>
-          <button className="btn-icon" onClick={onClose}>✕</button>
+          <h3><IkonTekst ikon={Sparkles} size={16}>Generer framdriftsplan med AI</IkonTekst></h3>
+          <button className="btn-icon" onClick={onClose}><Ikon ikon={X} size={16} /></button>
         </div>
 
         {!preview ? (
           <>
             <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', padding: '0 24px' }}>
-              {tabBtn('tilbud', `📋 Fra tilbudsdata${alleMedData.length === 0 ? ' (ingen)' : ''}`)}
-              {tabBtn('fritekst', '✏️ Fri beskrivelse')}
+              {tabBtn('tilbud', <IkonTekst ikon={ClipboardList} size={14} gap={5}>Fra tilbudsdata{alleMedData.length === 0 ? ' (ingen)' : ''}</IkonTekst>)}
+              {tabBtn('fritekst', <IkonTekst ikon={Pencil} size={14} gap={5}>Fri beskrivelse</IkonTekst>)}
             </div>
 
             <div style={{ padding: '20px 24px 24px', display: 'grid', gap: 16 }}>
@@ -337,15 +339,15 @@ function GenererModal({ project, onClose, onApply }) {
                   </div>
                   {valgtProj && (
                     <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '10px 14px', fontSize: 13, display: 'grid', gap: 3 }}>
-                      <div style={{ fontWeight: 500, color: '#15803d', marginBottom: 2 }}>📦 Tilbudsdata</div>
-                      {valgtProj.adresse && <div>📍 {valgtProj.adresse}</div>}
-                      {valgtProj.estimertSum > 0 && <div>💰 {Math.round(valgtProj.estimertSum).toLocaleString('nb-NO')} kr</div>}
-                      {valgtProj.fag?.length > 0 && <div>🔨 Fag: {valgtProj.fag.join(', ')}</div>}
-                      {(() => { const ant = (valgtProj.kildeTilbudData?.poster || valgtProj.poster || []).length; return ant > 0 ? <div>📋 {ant} tilbudsposter</div> : null; })()}
+                      <div style={{ fontWeight: 500, color: '#15803d', marginBottom: 2 }}><IkonTekst ikon={Package} size={14} gap={5}>Tilbudsdata</IkonTekst></div>
+                      {valgtProj.adresse && <div><Ikon ikon={MapPin} size={13} style={{ marginRight: 4 }} />{valgtProj.adresse}</div>}
+                      {valgtProj.estimertSum > 0 && <div>{Math.round(valgtProj.estimertSum).toLocaleString('nb-NO')} kr</div>}
+                      {valgtProj.fag?.length > 0 && <div><Ikon ikon={Hammer} size={13} style={{ marginRight: 4 }} />Fag: {valgtProj.fag.join(', ')}</div>}
+                      {(() => { const ant = (valgtProj.kildeTilbudData?.poster || valgtProj.poster || []).length; return ant > 0 ? <div><Ikon ikon={ClipboardList} size={13} style={{ marginRight: 4 }} />{ant} tilbudsposter</div> : null; })()}
                       {(valgtProj.kildeTilbudData?.oppstart || valgtProj.oppstartTekst) &&
-                        <div>🚀 {valgtProj.kildeTilbudData?.oppstart || valgtProj.oppstartTekst}</div>}
+                        <div><Ikon ikon={Rocket} size={13} style={{ marginRight: 4 }} />{valgtProj.kildeTilbudData?.oppstart || valgtProj.oppstartTekst}</div>}
                       {(valgtProj.kildeTilbudData?.varighet || valgtProj.varighetTekst) &&
-                        <div>⏱ {valgtProj.kildeTilbudData?.varighet || valgtProj.varighetTekst}</div>}
+                        <div><Ikon ikon={Clock} size={13} style={{ marginRight: 4 }} />{valgtProj.kildeTilbudData?.varighet || valgtProj.varighetTekst}</div>}
                     </div>
                   )}
                 </>
@@ -377,14 +379,14 @@ function GenererModal({ project, onClose, onApply }) {
               )}
 
               {feil && (
-                <div style={{ color: '#dc2626', fontSize: 13, padding: '8px 12px', background: '#fef2f2', borderRadius: 6 }}>❌ {feil}</div>
+                <div style={{ color: '#dc2626', fontSize: 13, padding: '8px 12px', background: '#fef2f2', borderRadius: 6 }}><Ikon ikon={CircleX} size={14} style={{ marginRight: 4 }} />{feil}</div>
               )}
 
               <div className="modal-actions">
                 <button className="btn" onClick={onClose}>Avbryt</button>
                 <button className="btn btn-primary" onClick={generer}
                   disabled={laster || (tab === 'tilbud' && !valgtProj) || (tab === 'fritekst' && !beskrivelse.trim())}>
-                  {laster ? <><span className="fd2-spinner" /> Genererer…</> : '✨ Generer →'}
+                  {laster ? <><span className="fd2-spinner" /> Genererer…</> : <IkonTekst ikon={Sparkles} size={14} gap={5}>Generer →</IkonTekst>}
                 </button>
               </div>
             </div>
@@ -392,12 +394,12 @@ function GenererModal({ project, onClose, onApply }) {
         ) : (
           <div style={{ padding: '20px 24px 24px', display: 'grid', gap: 16 }}>
             <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '12px 16px' }}>
-              <div style={{ fontWeight: 500, color: '#15803d', marginBottom: 6 }}>✅ Plan generert!</div>
+              <div style={{ fontWeight: 500, color: '#15803d', marginBottom: 6 }}><IkonTekst ikon={CircleCheck} size={15} gap={5}>Plan generert!</IkonTekst></div>
               <div style={{ fontSize: 13, color: '#374151', display: 'grid', gap: 3 }}>
-                <div>📊 <strong>{preview.fdTasks?.length} faser</strong></div>
-                <div>🗓 Startuke: <strong>U{preview.fdStartWeek}/{preview.fdStartYear}</strong></div>
-                <div>⏱ Varighet: <strong>{preview.fdTotalWeeks} uker</strong></div>
-                {preview.milepaler?.length > 0 && <div>📌 {preview.milepaler.length} milepæler</div>}
+                <div><Ikon ikon={ChartGantt} size={13} style={{ marginRight: 4 }} /><strong>{preview.fdTasks?.length} faser</strong></div>
+                <div><Ikon ikon={CalendarDays} size={13} style={{ marginRight: 4 }} />Startuke: <strong>U{preview.fdStartWeek}/{preview.fdStartYear}</strong></div>
+                <div><Ikon ikon={Clock} size={13} style={{ marginRight: 4 }} />Varighet: <strong>{preview.fdTotalWeeks} uker</strong></div>
+                {preview.milepaler?.length > 0 && <div><Ikon ikon={Pin} size={13} style={{ marginRight: 4 }} />{preview.milepaler.length} milepæler</div>}
               </div>
             </div>
 
@@ -421,7 +423,7 @@ function GenererModal({ project, onClose, onApply }) {
               {harEksisterende && (
                 <button className="btn" style={{ borderColor: '#b45309', color: '#b45309' }}
                   onClick={() => onApply({ ...preview, replace: false })}>
-                  ➕ Legg til i eksisterende
+                  <IkonTekst ikon={Plus} size={14} gap={4}>Legg til i eksisterende</IkonTekst>
                 </button>
               )}
               <button className="btn btn-primary"
@@ -429,7 +431,7 @@ function GenererModal({ project, onClose, onApply }) {
                   if (harEksisterende && !window.confirm('Erstatte eksisterende framdriftsplan?')) return;
                   onApply({ ...preview, replace: true });
                 }}>
-                {harEksisterende ? '🔄 Erstatt plan' : '✅ Bruk denne planen'}
+                {harEksisterende ? <IkonTekst ikon={RefreshCw} size={14} gap={4}>Erstatt plan</IkonTekst> : <IkonTekst ikon={CircleCheck} size={14} gap={4}>Bruk denne planen</IkonTekst>}
               </button>
             </div>
           </div>
@@ -627,7 +629,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
     <div style={storskjerm ? { position: 'fixed', inset: 0, zIndex: 300, background: '#fff', overflow: 'auto', padding: '8px 12px' } : undefined}>
       {storskjerm && (
         <div style={{ position: 'fixed', top: 8, right: 14, zIndex: 400, display: 'flex', gap: 4, alignItems: 'center', background: '#1e293b', color: '#fff', borderRadius: 10, padding: '5px 10px', opacity: 0.92 }}>
-          <span style={{ fontSize: 13, fontWeight: 500, marginRight: 8 }}>📺 {project.navn || 'Framdriftsplan'}</span>
+          <span style={{ fontSize: 13, fontWeight: 500, marginRight: 8 }}><IkonTekst ikon={Tv} size={14} gap={5}>{project.navn || 'Framdriftsplan'}</IkonTekst></span>
           <button onClick={() => setZoom(z => Math.max(0.3, +(z - 0.2).toFixed(1)))}
             style={{ background: 'none', border: '1px solid rgba(255,255,255,.3)', borderRadius: 6, color: '#fff', fontSize: 16, fontWeight: 500, cursor: 'pointer', padding: '1px 9px' }}>−</button>
           <span style={{ fontSize: 12, fontWeight: 500, minWidth: 40, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
@@ -638,14 +640,14 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
             <button className={`ukemode-btn ${timeMode === 'dag' ? 'active' : ''}`} onClick={() => setTimeMode('dag')}>Dager</button>
           </div>
           <button onClick={() => setStorskjerm(false)}
-            style={{ background: 'none', border: '1px solid rgba(255,255,255,.4)', borderRadius: 6, color: '#fff', fontSize: 13, cursor: 'pointer', padding: '3px 12px', marginLeft: 6 }}>✕ Lukk</button>
+            style={{ background: 'none', border: '1px solid rgba(255,255,255,.4)', borderRadius: 6, color: '#fff', fontSize: 13, cursor: 'pointer', padding: '3px 12px', marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Ikon ikon={X} size={13} /> Lukk</button>
         </div>
       )}
       {tasks.length === 0 && (
         <div className="fd2-tom-gantt">
           <span>Ingen faser lagt til ennå.</span>
           <button className="btn btn-primary btn-sm" onClick={addStandardFaser}>
-            ➕ Legg til standard byggefaser
+            <IkonTekst ikon={Plus} size={14} gap={4}>Legg til standard byggefaser</IkonTekst>
           </button>
         </div>
       )}
@@ -662,7 +664,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
         </div>
         <button className="btn btn-sm" style={{ marginLeft: 4 }} onClick={() => setStorskjerm(true)}
           title="Storskjerm – stor visning for TV/projektor">
-          📺 Storskjerm
+          <IkonTekst ikon={Tv} size={14} gap={5}>Storskjerm</IkonTekst>
         </button>
         {tasks.length > 0 && !readOnly && (
           <button className="btn btn-sm" style={{ marginLeft: 8 }} onClick={addStandardFaser}>
@@ -685,7 +687,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
             <text x={10} y={26} fontSize={11} fontWeight="500" fill="#5d6b80">Fase</text>
             <text x={PAD - 132} y={26} fontSize={10} fill="#5d6b80" textAnchor="middle">Lengde</text>
             <text x={PAD - 91} y={26} fontSize={10} fill="#5d6b80" textAnchor="middle">Ferdig</text>
-            <text x={PAD - 34} y={26} fontSize={10} fill="#5d6b80" textAnchor="middle">✓</text>
+            <text x={PAD - 34} y={26} fontSize={10} fill="#5d6b80" textAnchor="middle">{'\u2713'}</text>
             {MILE_H > 0 && (
               <rect x={0} y={40} width={PAD} height={MILE_H} fill="#faf5ff" />
             )}
@@ -773,14 +775,14 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                       onClick={e => { e.stopPropagation(); save(tasks.map((tt, ii) => ii === i ? { ...tt, lane: Date.now() + ii } : tt)); }}>⇓</text>
                   )}
                   <text x={PAD - 54} y={y + ROW / 2 + 5} fontSize={11} fill="#cbd5e1"
-                    className="fd2-g-ctrl" style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => deleteTask(t.id)}>✕</text>
+                    className="fd2-g-ctrl" style={{ cursor: 'pointer', userSelect: 'none' }} onClick={() => deleteTask(t.id)}>{'\u2715'}</text>
                   <rect x={PAD - 36} y={y + ROW / 2 - 9} width={18} height={18} rx={4}
                     className="fd2-g-ctrl"
                     fill={done ? '#15803d' : '#fff'} stroke={done ? '#15803d' : '#e2e8f0'} strokeWidth={1.5}
                     style={{ cursor: 'pointer' }} onClick={e => toggleDone(e, t.id)} />
                   {done && (
                     <text x={PAD - 27} y={y + ROW / 2 + 5} fontSize={13} fill="#fff" textAnchor="middle"
-                      className="fd2-g-ctrl" style={{ pointerEvents: 'none', userSelect: 'none' }}>✓</text>
+                      className="fd2-g-ctrl" style={{ pointerEvents: 'none', userSelect: 'none' }}>{'\u2713'}</text>
                   )}
                 </g>
               );
@@ -879,10 +881,10 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                   )}
                   <clipPath id={`bc${t.id}`}><rect x={x + 4} y={y + 6} width={Math.max(w - 22, 0)} height={22} /></clipPath>
                   <text x={x + 6} y={y + 21} fontSize={10} fill="white" fontWeight="500"
-                    style={{ pointerEvents: 'none' }} clipPath={`url(#bc${t.id})`}>{FAG_IKON[t.fag] || '■'} {t.dur}d</text>
+                    style={{ pointerEvents: 'none' }} clipPath={`url(#bc${t.id})`}>{t.dur}d</text>
                   {done && w > 24 && (
                     <text x={x + w / 2} y={y + 21} fontSize={12} fill="white" textAnchor="middle"
-                      style={{ pointerEvents: 'none' }}>✓</text>
+                      style={{ pointerEvents: 'none' }}>{'\u2713'}</text>
                   )}
                   {/* Resize-håndtak — bredere tap-target for iPad */}
                   <rect x={x + w - 12} y={y + 6} width={14} height={22} fill="rgba(0,0,0,0.15)" rx={3}
@@ -941,7 +943,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
             <div style={{ position: 'relative', zIndex: 50, margin: '4px 0' }} onClick={e => e.stopPropagation()}>
               <div style={{ background: '#1e293b', borderRadius: 12, padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ fontSize: 12, color: '#5d6b80' }}>
-                  📏 Lengde: <strong style={{ color: '#e2e8f0' }}>{t.name.slice(0, 28)}</strong>
+                  <Ikon ikon={Ruler} size={13} style={{ marginRight: 4 }} />Lengde: <strong style={{ color: '#e2e8f0' }}>{t.name.slice(0, 28)}</strong>
                 </div>
                 {/* Varighet */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -981,7 +983,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
             <div style={{ position: 'relative', zIndex: 50, margin: '4px 0' }} onClick={e => e.stopPropagation()}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1e293b', borderRadius: 10, padding: '8px 12px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 11, color: '#5d6b80', whiteSpace: 'nowrap' }}>
-                  📊 Ferdig: <strong style={{ color: '#e2e8f0' }}>{t.name.slice(0, 20)}</strong>
+                  <Ikon ikon={ChartGantt} size={13} style={{ marginRight: 4 }} />Ferdig: <strong style={{ color: '#e2e8f0' }}>{t.name.slice(0, 20)}</strong>
                 </span>
                 {[0, 10, 25, 50, 75, 90, 100].map(p => (
                   <button key={p}
@@ -994,8 +996,8 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                   onChange={e => setPct(t.id, parseInt(e.target.value || '0', 10))}
                   title="Skriv inn egen prosent" />
                 <span style={{ fontSize: 12, color: '#5d6b80' }}>%</span>
-                <button style={{ background: 'none', border: 'none', color: '#5d6b80', cursor: 'pointer', fontSize: 14, padding: '0 4px' }}
-                  onClick={() => setPickerTaskId(null)}>✕ Lukk</button>
+                <button style={{ background: 'none', border: 'none', color: '#5d6b80', cursor: 'pointer', fontSize: 14, padding: '0 4px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                  onClick={() => setPickerTaskId(null)}><Ikon ikon={X} size={13} /> Lukk</button>
               </div>
             </div>
           )
@@ -1009,7 +1011,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
             onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1e293b', borderRadius: 10, padding: '8px 12px', flexWrap: 'wrap' }}>
               <span style={{ fontSize: 11, color: '#5d6b80', whiteSpace: 'nowrap' }}>
-                {isModeRow ? '🎨 Radfarge:' : '🎨 Velg farge:'} <strong style={{ color: '#e2e8f0' }}>{t.name.slice(0, 20)}</strong>
+                <Ikon ikon={Palette} size={13} style={{ marginRight: 4 }} />{isModeRow ? 'Radfarge:' : 'Velg farge:'} <strong style={{ color: '#e2e8f0' }}>{t.name.slice(0, 20)}</strong>
               </span>
               {/* Standard (fag-farge) — kun for bar-modus */}
               {!isModeRow && (
@@ -1027,7 +1029,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
               ))}
               <label title="Egendefinert farge"
                 style={{ display: 'flex', alignItems: 'center', gap: 3, cursor: 'pointer', fontSize: 10, color: '#cbd5e1' }}>
-                🌈
+                <Ikon ikon={Rainbow} size={14} />
                 <input type="color" value={aktivFarge || standardFarge}
                   style={{ width: 26, height: 22, padding: 0, border: 'none', borderRadius: 4, cursor: 'pointer', background: 'none' }}
                   onChange={e => save(tasks.map(tt => tt.id === t.id ? { ...tt, [isModeRow ? 'rowColor' : 'customColor']: e.target.value } : tt))} />
@@ -1036,8 +1038,8 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                 <button style={{ background: 'none', border: '1px solid #475569', borderRadius: 6, color: '#cbd5e1', cursor: 'pointer', fontSize: 11, padding: '2px 8px' }}
                   onClick={() => { save(tasks.map(tt => tt.id === t.id ? { ...tt, rowColor: undefined } : tt)); setPickerTaskId(null); }}>Fjern</button>
               )}
-              <button style={{ background: 'none', border: 'none', color: '#5d6b80', cursor: 'pointer', fontSize: 14, padding: '0 4px' }}
-                onClick={() => setPickerTaskId(null)}>✕ Lukk</button>
+              <button style={{ background: 'none', border: 'none', color: '#5d6b80', cursor: 'pointer', fontSize: 14, padding: '0 4px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                onClick={() => setPickerTaskId(null)}><Ikon ikon={X} size={13} /> Lukk</button>
             </div>
           </div>
         )
@@ -1129,7 +1131,7 @@ function ProjectDetail({ project, onBack, onUpdate, readOnly = false }) {
         <div className="fd2-print-tittel-rad">
           <div>
             <div className="fd2-print-prosjektnavn">{project.navn}</div>
-            {project.adresse && <div className="fd2-print-adr">📍 {project.adresse}</div>}
+            {project.adresse && <div className="fd2-print-adr">{project.adresse}</div>}
           </div>
           <div className="fd2-print-meta">
             <div>Skrevet ut: {new Date().toLocaleDateString('nb-NO', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>
@@ -1152,7 +1154,7 @@ function ProjectDetail({ project, onBack, onUpdate, readOnly = false }) {
 
       {readOnly && (
         <div className="no-print" style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '8px 14px', margin: '0 0 10px', fontSize: 13, color: '#1e40af', display: 'flex', alignItems: 'center', gap: 8 }}>
-          👁 Lesetilgang — du kan se framdriften men ikke endre den.
+          <Ikon ikon={Eye} size={15} />Lesetilgang — du kan se framdriften men ikke endre den.
         </div>
       )}
 
@@ -1161,14 +1163,14 @@ function ProjectDetail({ project, onBack, onUpdate, readOnly = false }) {
         <button className="btn btn-sm" onClick={onBack}>← Tilbake</button>
         <div className="fd2-detail-tittel-wrap">
           <h3 className="fd2-detail-tittel">{project.navn}</h3>
-          {project.adresse && <span className="fd2-detail-adr">📍 {project.adresse}</span>}
+          {project.adresse && <span className="fd2-detail-adr"><Ikon ikon={MapPin} size={12} style={{ marginRight: 3 }} />{project.adresse}</span>}
         </div>
         <div className="fd2-detail-badges">
           {harAI && (
-            <span className="fd2-kilde-badge fd2-kilde-ai">✨ AI fra tilbuds-appen</span>
+            <span className="fd2-kilde-badge fd2-kilde-ai"><Ikon ikon={Sparkles} size={11} style={{ marginRight: 3 }} />AI fra tilbuds-appen</span>
           )}
           {!harAI && harData && (
-            <span className="fd2-kilde-badge fd2-kilde-manuell">📋 Manuell framdrift</span>
+            <span className="fd2-kilde-badge fd2-kilde-manuell"><Ikon ikon={ClipboardList} size={11} style={{ marginRight: 3 }} />Manuell framdrift</span>
           )}
           {project.fdGenDato && (
             <span className="fd2-kilde-badge fd2-kilde-dato">
@@ -1177,8 +1179,8 @@ function ProjectDetail({ project, onBack, onUpdate, readOnly = false }) {
           )}
           <button className="btn btn-sm" title="Skriv ut / Lagre som PDF"
             onClick={() => openPrintWindow(project, status, pct)}
-            style={{ marginLeft: 4 }}>
-            🖨 PDF
+            style={{ marginLeft: 4, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <Ikon ikon={Printer} size={14} /> PDF
           </button>
         </div>
       </div>
@@ -1209,19 +1211,19 @@ function ProjectDetail({ project, onBack, onUpdate, readOnly = false }) {
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <button className="btn btn-sm fd2-ai-btn"
             onClick={() => setVisGenModal(true)}>
-            ✨ Generer med AI
+            <IkonTekst ikon={Sparkles} size={14} gap={5}>Generer med AI</IkonTekst>
           </button>
           {project.kildeTilbudData && (
             <button className="btn btn-sm" style={{ fontSize: 11, padding: '4px 8px', color: '#5d6b80' }}
               onClick={regenererMedAI} disabled={aiLaster}
               title="Regenerer fra eksisterende tilbudsdata">
-              {aiLaster ? <span className="fd2-spinner" /> : '🔄'}
+              {aiLaster ? <span className="fd2-spinner" /> : <Ikon ikon={RefreshCw} size={14} />}
             </button>
           )}
         </div>
       </div>
 
-      {aiFeil && <div className="fd2-feil-banner">❌ {aiFeil}</div>}
+      {aiFeil && <div className="fd2-feil-banner"><Ikon ikon={CircleX} size={14} style={{ marginRight: 4 }} />{aiFeil}</div>}
 
       {visGenModal && (
         <GenererModal
@@ -1234,9 +1236,9 @@ function ProjectDetail({ project, onBack, onUpdate, readOnly = false }) {
       {/* Tabs */}
       <div className="fd2-tabs">
         {[
-          { key: 'gantt',       label: '📊 Gantt' },
-          { key: 'innstilling', label: '⚙️ Innstillinger' },
-          { key: 'notater',     label: '📝 Notater' },
+          { key: 'gantt',       label: <IkonTekst ikon={ChartGantt} size={14} gap={5}>Gantt</IkonTekst> },
+          { key: 'innstilling', label: <IkonTekst ikon={Settings} size={14} gap={5}>Innstillinger</IkonTekst> },
+          { key: 'notater',     label: <IkonTekst ikon={FilePen} size={14} gap={5}>Notater</IkonTekst> },
         ].map(tab => (
           <button key={tab.key}
             className={`fd2-tab${aktTab === tab.key ? ' active' : ''}`}
@@ -1273,7 +1275,7 @@ function ProjectDetail({ project, onBack, onUpdate, readOnly = false }) {
                       <td style={{ color: fc(t.fag) }}>{FAG[t.fag]?.label || t.fag}</td>
                       <td>Dag {t.start}</td>
                       <td>{t.dur} d</td>
-                      <td>{(t.pct ?? 0) >= 100 ? '✓ Ferdig' : t.pct > 0 ? `${t.pct}%` : '–'}</td>
+                      <td>{(t.pct ?? 0) >= 100 ? <><Ikon ikon={Check} size={12} style={{ marginRight: 2 }} />Ferdig</> : t.pct > 0 ? `${t.pct}%` : '–'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1283,7 +1285,7 @@ function ProjectDetail({ project, onBack, onUpdate, readOnly = false }) {
 
           {Array.isArray(project.fdMilepaler) && project.fdMilepaler.length > 0 && (
             <div className="fd2-milepaler">
-              <div className="fd2-milepaler-tittel">📌 Milepæler</div>
+              <div className="fd2-milepaler-tittel"><IkonTekst ikon={Pin} size={14} gap={5}>Milepæler</IkonTekst></div>
               <div className="fd2-milepaler-chips">
                 {project.fdMilepaler.map((m, i) => (
                   <span key={i} className="fd2-milepael-chip">
@@ -1324,7 +1326,7 @@ function ProjectDetail({ project, onBack, onUpdate, readOnly = false }) {
           </div>
           {harAI && (
             <div className="fd2-kilde-info">
-              <div className="fd2-kilde-info-tittel">📦 Data fra tilbuds-appen</div>
+              <div className="fd2-kilde-info-tittel"><IkonTekst ikon={Package} size={14} gap={5}>Data fra tilbuds-appen</IkonTekst></div>
               <div className="fd2-kilde-info-rad">
                 <span>Generert:</span>
                 <strong>{project.fdGenDato ? new Date(project.fdGenDato).toLocaleString('nb-NO') : '–'}</strong>
@@ -1369,8 +1371,8 @@ function ProjectDetail({ project, onBack, onUpdate, readOnly = false }) {
                 onBlur={() => onUpdate({ fdNote: note })} />
             </div>
             {[
-              { key: 'fdNoteOrders', label: '📦 Bestillinger & leveranser', ph: 'Vinduer bestilt 10.04…' },
-              { key: 'fdNoteSubs',   label: '👷 Underentreprenører',        ph: 'Rørlegger – Ola Hansen…' },
+              { key: 'fdNoteOrders', label: <IkonTekst ikon={Package} size={13} gap={4}>Bestillinger & leveranser</IkonTekst>, ph: 'Vinduer bestilt 10.04…' },
+              { key: 'fdNoteSubs',   label: <IkonTekst ikon={HardHat} size={13} gap={4}>Underentreprenører</IkonTekst>,        ph: 'Rørlegger – Ola Hansen…' },
             ].map(({ key, label, ph }) => (
               <div key={key}>
                 <label className="fd2-label">{label}</label>
@@ -1465,14 +1467,14 @@ export default function Framdriftsplan({ readOnly = false, ansattId = null }) {
     const utenPlan   = aktive.filter(p => !(p.fdTasks || []).length).length;
     const antForsinket = aktive.filter(p => p.fdStatus === 'Forsinket').length;
     const krevOppmerksomhet = [
-      ...aktive.filter(p => p.fdStatus === 'Forsinket').map(p => ({ p, ikon: '🔴', info: 'Forsinket' })),
+      ...aktive.filter(p => p.fdStatus === 'Forsinket').map(p => ({ p, ikon: CircleAlert, ikonFarge: '#dc2626', info: 'Forsinket' })),
       ...aktive.filter(p => {
         if ((p.fdTasks || []).length > 0 || !p.fdStartWeek) return false;
         const diff = (p.fdStartYear || ny) * 52 + p.fdStartWeek - ny * 52 - nw;
         return diff >= 0 && diff <= 8;
       }).map(p => {
         const diff = (p.fdStartYear || ny) * 52 + p.fdStartWeek - ny * 52 - nw;
-        return { p, ikon: '🚀', info: `Starter om ${diff} uker — mangler plan` };
+        return { p, ikon: Rocket, ikonFarge: '#b45309', info: `Starter om ${diff} uker — mangler plan` };
       }),
     ];
     return { medAIPlan, utenPlan, antForsinket, krevOppmerksomhet };
@@ -1505,14 +1507,14 @@ export default function Framdriftsplan({ readOnly = false, ansattId = null }) {
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
           <button className="btn btn-sm fd2-sync-btn" onClick={syncFraCloud} disabled={synker}
             title="Hent siste data fra sky">
-            {synker ? '⏳ Synker…' : '🔄 Synk'}
+            {synker ? <IkonTekst ikon={Loader} size={13} gap={4}>Synker…</IkonTekst> : <IkonTekst ikon={RefreshCw} size={13} gap={4}>Synk</IkonTekst>}
             {sistSynk && !synker && (
               <span className="fd2-sync-tid">
                 {sistSynk.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })}
               </span>
             )}
           </button>
-          {synkFeil && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 500 }}>⚠ {synkFeil}</span>}
+          {synkFeil && <span style={{ fontSize: 11, color: '#dc2626', fontWeight: 500 }}><Ikon ikon={TriangleAlert} size={11} style={{ marginRight: 3 }} />{synkFeil}</span>}
         </div>
       </div>
 
@@ -1520,12 +1522,12 @@ export default function Framdriftsplan({ readOnly = false, ansattId = null }) {
       <div className="fd2-velg-wrap">
         <select className="fd2-velg-select" value=""
           onChange={e => { if (e.target.value) setSelectedId(e.target.value); }}>
-          <option value="" disabled>🔍 Velg prosjekt for å se framdriftsplan…</option>
+          <option value="" disabled>Velg prosjekt for å se framdriftsplan…</option>
           {[...aktive].sort((a, b) => a.navn.localeCompare(b.navn, 'nb')).map(p => (
             <option key={p.id} value={p.id}>
               {p.navn}
-              {(p.fdTasks || []).length > 0 ? ' ✓' : ''}
-              {p.fdGenAv === 'AI' ? ' ✨' : ''}
+              {(p.fdTasks || []).length > 0 ? ' \u2713' : ''}
+              {p.fdGenAv === 'AI' ? ' · AI' : ''}
             </option>
           ))}
         </select>
@@ -1535,9 +1537,9 @@ export default function Framdriftsplan({ readOnly = false, ansattId = null }) {
       <div className="fd2-dashboard-stats">
         {[
           { tall: aktive.length, label: 'Aktive prosjekter', color: '#1e293b' },
-          { tall: medAIPlan,     label: '✨ AI-plan',          color: '#7c3aed' },
+          { tall: medAIPlan,     label: <IkonTekst ikon={Sparkles} size={12} gap={4}>AI-plan</IkonTekst>, color: '#7c3aed' },
           { tall: utenPlan,      label: 'Mangler plan',        color: '#b45309' },
-          ...(antForsinket > 0 ? [{ tall: antForsinket, label: '🔴 Forsinket', color: '#dc2626' }] : []),
+          ...(antForsinket > 0 ? [{ tall: antForsinket, label: <IkonTekst ikon={CircleAlert} size={12} gap={4} farge="#dc2626">Forsinket</IkonTekst>, color: '#dc2626' }] : []),
         ].map((s, i) => (
           <div key={i} className="fd2-stat-boks" style={{ borderLeft: `3px solid ${s.color}` }}>
             <div className="fd2-stat-tall" style={{ color: s.color }}>{s.tall}</div>
@@ -1549,10 +1551,10 @@ export default function Framdriftsplan({ readOnly = false, ansattId = null }) {
       {/* Krever oppmerksomhet */}
       {krevOppmerksomhet.length > 0 && (
         <div className="fd2-oppmerksomhet">
-          <div className="fd2-oppmerksomhet-tittel">🔥 Krever oppmerksomhet</div>
-          {krevOppmerksomhet.map(({ p, info, ikon }) => (
+          <div className="fd2-oppmerksomhet-tittel"><IkonTekst ikon={Flame} size={14} gap={5}>Krever oppmerksomhet</IkonTekst></div>
+          {krevOppmerksomhet.map(({ p, info, ikon, ikonFarge }) => (
             <div key={p.id} className="fd2-oppmerksomhet-rad" onClick={() => setSelectedId(p.id)}>
-              <span>{ikon}</span>
+              <Ikon ikon={ikon} size={14} farge={ikonFarge} />
               <span className="fd2-oppm-navn">{p.navn}</span>
               <span className="fd2-oppm-info">{info}</span>
             </div>
@@ -1577,7 +1579,7 @@ export default function Framdriftsplan({ readOnly = false, ansattId = null }) {
               <div className="fd2-rad-dot" style={{ background: sc }} />
               <div className="fd2-rad-navn">{p.navn}</div>
               <div className="fd2-rad-badges">
-                {harAI && <span className="fd2-kilde-badge fd2-kilde-ai" style={{ fontSize: 10 }}>✨</span>}
+                {harAI && <span className="fd2-kilde-badge fd2-kilde-ai" style={{ fontSize: 10 }}><Ikon ikon={Sparkles} size={11} /></span>}
                 {tasks.length > 0
                   ? <span className="fd2-rad-info">{tasks.filter(t=>(t.pct??0)>=100).length}/{tasks.length} faser</span>
                   : <span className="fd2-rad-info" style={{ color: '#b45309' }}>Ingen plan</span>

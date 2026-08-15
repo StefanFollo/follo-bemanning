@@ -1,4 +1,9 @@
 import { useState } from 'react';
+import {
+  Truck, Key, CircleAlert, TriangleAlert, Clock, CircleCheck, Wrench, X,
+  Printer, Snowflake, Sun, Car, Trash2,
+} from 'lucide-react';
+import { Ikon, IkonTekst } from '../komponenter/Ikon';
 import { useApp } from '../context/AppContext';
 import { uid } from '../store';
 
@@ -22,10 +27,10 @@ function dagerTil(isoDate) {
 function serviceStatus(isoDate) {
   const d = dagerTil(isoDate);
   if (d === null) return null;
-  if (d < 0)   return { farge: '#fff', bg: '#dc2626', label: `Forfalt ${Math.abs(d)}d`, ikon: '🚨' };
-  if (d === 0) return { farge: '#fff', bg: '#b45309', label: 'I dag', ikon: '🔧' };
-  if (d <= 14) return { farge: '#92400e', bg: '#fef3c7', label: `om ${d}d`, ikon: '🔧' };
-  return { farge: '#166534', bg: '#dcfce7', label: `om ${d}d`, ikon: '🔧' };
+  if (d < 0)   return { farge: '#fff', bg: '#dc2626', label: `Forfalt ${Math.abs(d)}d`, ikon: CircleAlert };
+  if (d === 0) return { farge: '#fff', bg: '#b45309', label: 'I dag', ikon: Wrench };
+  if (d <= 14) return { farge: '#92400e', bg: '#fef3c7', label: `om ${d}d`, ikon: Wrench };
+  return { farge: '#166534', bg: '#dcfce7', label: `om ${d}d`, ikon: Wrench };
 }
 
 function fmtRestverdi(v) {
@@ -37,10 +42,10 @@ function fmtRestverdi(v) {
 function euStatus(isoDate) {
   const d = dagerTil(isoDate);
   if (d === null) return { farge: '#5d6b80', bg: '#f8fafc', label: 'Ukjent' };
-  if (d < 0)   return { farge: '#fff', bg: '#dc2626', label: `Forfalt ${Math.abs(d)}d`, ikon: '🚨' };
-  if (d <= 30) return { farge: '#fff', bg: '#b45309', label: `${d}d igjen`, ikon: '⚠️' };
-  if (d <= 90) return { farge: '#92400e', bg: '#fef3c7', label: `${d}d igjen`, ikon: '⏰' };
-  return { farge: '#166534', bg: '#dcfce7', label: `${d}d`, ikon: '✅' };
+  if (d < 0)   return { farge: '#fff', bg: '#dc2626', label: `Forfalt ${Math.abs(d)}d`, ikon: CircleAlert };
+  if (d <= 30) return { farge: '#fff', bg: '#b45309', label: `${d}d igjen`, ikon: TriangleAlert };
+  if (d <= 90) return { farge: '#92400e', bg: '#fef3c7', label: `${d}d igjen`, ikon: Clock };
+  return { farge: '#166534', bg: '#dcfce7', label: `${d}d`, ikon: CircleCheck };
 }
 
 function fmt(isoDate) {
@@ -60,7 +65,7 @@ function Modal({ title, onClose, children }) {
       <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 560 }}>
         <div className="modal-header">
           <h3>{title}</h3>
-          <button className="btn-icon" onClick={onClose}>✕</button>
+          <button className="btn-icon" onClick={onClose}><Ikon ikon={X} size={16} /></button>
         </div>
         {children}
       </div>
@@ -79,7 +84,7 @@ export default function Biler() {
   const [filter, setFilter] = useState('alle'); // 'alle' | 'ledig' | 'eu-varsel'
   const [lagretMsg, setLagretMsg] = useState('');
 
-  function visLagret(msg = '✅ Lagret automatisk') {
+  function visLagret(msg = 'Lagret automatisk') {
     setLagretMsg(msg);
     setTimeout(() => setLagretMsg(''), 2500);
   }
@@ -129,10 +134,10 @@ export default function Biler() {
     if (!form.regNr.trim()) return;
     if (editing) {
       dispatch({ type: 'UPDATE_BIL', payload: { ...form, id: editing.id } });
-      visLagret('✅ Endringer lagret');
+      visLagret('Endringer lagret');
     } else {
       dispatch({ type: 'ADD_BIL', payload: { ...form, id: uid() } });
-      visLagret('✅ Bil lagt til');
+      visLagret('Bil lagt til');
     }
     setShowModal(false);
   }
@@ -140,15 +145,15 @@ export default function Biler() {
   function slett(id) {
     if (confirm('Slette bilen?')) {
       dispatch({ type: 'DELETE_BIL', id });
-      visLagret('🗑 Bil slettet');
+      visLagret('Bil slettet');
     }
   }
 
   const summaryCards = [
-    { label: 'Totalt',      count: biler.length,      icon: '🚐', color: '#2563eb', bg: '#eff6ff', key: 'alle' },
-    { label: 'Ledig',       count: ledigCount,         icon: '🔑', color: '#b45309', bg: '#fffbeb', key: 'ledig' },
-    { label: 'EU-varsel',   count: euVarselCount,      icon: '🚨', color: '#dc2626', bg: '#fff5f5', key: 'eu-varsel' },
-    { label: 'Problemer',   count: problemCount,       icon: '⚠️', color: '#ea580c', bg: '#fff7ed', key: 'problem' },
+    { label: 'Totalt',      count: biler.length,      icon: Truck,         color: '#2563eb', bg: '#eff6ff', key: 'alle' },
+    { label: 'Ledig',       count: ledigCount,         icon: Key,           color: '#b45309', bg: '#fffbeb', key: 'ledig' },
+    { label: 'EU-varsel',   count: euVarselCount,      icon: CircleAlert,   color: '#dc2626', bg: '#fff5f5', key: 'eu-varsel' },
+    { label: 'Problemer',   count: problemCount,       icon: TriangleAlert, color: '#ea580c', bg: '#fff7ed', key: 'problem' },
   ];
 
   // PDF-rapport: full statusoversikt for alle biler, klar for utskrift/PDF
@@ -168,7 +173,7 @@ export default function Biler() {
         <td>${b.dekkType ? (b.dekkType === 'V' ? 'Vinter' : 'Sommer') : '–'}${b.dekklagring ? `<br><span class="lite">${b.dekklagring}</span>` : ''}</td>
         <td>${b.km ? fmtKm(b.km) : '–'}${b.kmDato ? `<br><span class="lite">${fmt(b.kmDato)}</span>` : ''}</td>
         <td>${fmtRestverdi(b.restverdiSkatteetaten) || '–'}</td>
-        <td>${harProblem ? `<span class="rod">${b.problemer}</span>` : '–'}${(b.erstatningsbil || '').trim() ? `<br><span class="lite">🚗 Erstatningsbil: ${b.erstatningsbil}</span>` : ''}</td>
+        <td>${harProblem ? `<span class="rod">${b.problemer}</span>` : '–'}${(b.erstatningsbil || '').trim() ? `<br><span class="lite">Erstatningsbil: ${b.erstatningsbil}</span>` : ''}</td>
         <td>${b.kommentar || ''}</td>
       </tr>`;
     }).join('');
@@ -229,15 +234,16 @@ export default function Biler() {
   return (
     <div className="page">
       <div className="page-header">
-        <h2>🚐 Firmabiler <span className="count-badge">{biler.length}</span></h2>
+        <h2><IkonTekst ikon={Truck} size={18}>Firmabiler</IkonTekst> <span className="count-badge">{biler.length}</span></h2>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {lagretMsg && (
-            <span style={{ fontSize: 13, color: lagretMsg.startsWith('🗑') ? '#5d6b80' : '#15803d', fontWeight: 500, transition: 'opacity .3s' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 13, color: lagretMsg.includes('slettet') ? '#5d6b80' : '#15803d', fontWeight: 500, transition: 'opacity .3s' }}>
+              <Ikon ikon={lagretMsg.includes('slettet') ? Trash2 : CircleCheck} size={14} />
               {lagretMsg}
             </span>
           )}
-          <button className="btn" onClick={skrivUtRapport} title="Åpner utskriftsvennlig statusrapport — velg «Lagre som PDF» i utskriftsdialogen">
-            🖨 PDF-rapport
+          <button className="btn" onClick={skrivUtRapport} title="Åpner utskriftsvennlig statusrapport — velg «Lagre som PDF» i utskriftsdialogen" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Ikon ikon={Printer} size={16} /> PDF-rapport
           </button>
           <button className="btn btn-primary" onClick={apneNy}>+ Legg til bil</button>
         </div>
@@ -254,7 +260,7 @@ export default function Biler() {
               style={{ borderLeft: `3px solid ${c.color}`, background: aktiv ? c.color : '#fff', cursor: c.key !== 'alle' ? 'pointer' : 'default' }}
               onClick={() => c.key !== 'alle' && setFilter(f => f === c.key ? 'alle' : c.key)}
             >
-              <div className="proj-summary-icon">{c.icon}</div>
+              <div className="proj-summary-icon"><Ikon ikon={c.icon} size={20} farge={aktiv ? '#fff' : c.color} /></div>
               <div className="proj-summary-count" style={{ color: aktiv ? '#fff' : c.color }}>{c.count}</div>
               <div className="proj-summary-label" style={{ color: aktiv ? 'rgba(255,255,255,.85)' : undefined }}>{c.label}</div>
             </div>
@@ -266,13 +272,13 @@ export default function Biler() {
       <div className="toolbar" style={{ marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
         <input
           className="search-input"
-          placeholder="🔍 Søk reg.nr., sjåfør, modell..."
+          placeholder="Søk reg.nr., sjåfør, modell..."
           value={sok}
           onChange={e => setSok(e.target.value)}
           style={{ maxWidth: 280 }}
         />
         {filter !== 'alle' && (
-          <button className="btn btn-sm" onClick={() => setFilter('alle')}>✕ Fjern filter</button>
+          <button className="btn btn-sm" onClick={() => setFilter('alle')} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Ikon ikon={X} size={14} /> Fjern filter</button>
         )}
         <span style={{ fontSize: 12, color: '#5d6b80', marginLeft: 'auto' }}>
           {filtrert.length} av {biler.length} biler
@@ -313,7 +319,7 @@ export default function Biler() {
                   {/* Sjåfør */}
                   <td style={{ padding: '8px 12px', whiteSpace: 'nowrap' }}>
                     {ledig
-                      ? <span style={{ color: '#b45309', fontWeight: 500, fontSize: 12 }}>🔑 LEDIG</span>
+                      ? <span style={{ color: '#b45309', fontWeight: 500, fontSize: 12 }}><Ikon ikon={Key} size={12} style={{ marginRight: 3 }} />LEDIG</span>
                       : <span style={{ color: '#1e293b' }}>{b.sjafor}</span>
                     }
                   </td>
@@ -323,8 +329,8 @@ export default function Biler() {
                     {b.euKontroll ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         <span style={{ fontSize: 11, color: '#5d6b80' }}>{fmt(b.euKontroll)}</span>
-                        <span style={{ fontSize: 11, fontWeight: 500, background: eu.bg, color: eu.farge, borderRadius: 4, padding: '1px 6px', display: 'inline-block' }}>
-                          {eu.ikon} {eu.label}
+                        <span style={{ fontSize: 11, fontWeight: 500, background: eu.bg, color: eu.farge, borderRadius: 4, padding: '1px 6px', display: 'inline-flex', alignItems: 'center', gap: 3, alignSelf: 'flex-start' }}>
+                          <Ikon ikon={eu.ikon} size={11} /> {eu.label}
                         </span>
                       </div>
                     ) : <span style={{ color: '#cbd5e1' }}>–</span>}
@@ -337,8 +343,8 @@ export default function Biler() {
                       return (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                           <span style={{ fontSize: 11, color: '#5d6b80' }}>{fmt(b.planlagtService)}</span>
-                          <span style={{ fontSize: 11, fontWeight: 500, background: sv.bg, color: sv.farge, borderRadius: 4, padding: '1px 6px', display: 'inline-block' }}>
-                            {sv.ikon} {sv.label}
+                          <span style={{ fontSize: 11, fontWeight: 500, background: sv.bg, color: sv.farge, borderRadius: 4, padding: '1px 6px', display: 'inline-flex', alignItems: 'center', gap: 3, alignSelf: 'flex-start' }}>
+                            <Ikon ikon={sv.ikon} size={11} /> {sv.label}
                           </span>
                         </div>
                       );
@@ -353,7 +359,9 @@ export default function Biler() {
                         background: b.dekkType === 'V' ? '#dbeafe' : '#fef9c3',
                         color: b.dekkType === 'V' ? '#1d4ed8' : '#854d0e',
                       }}>
-                        {b.dekkType === 'V' ? '❄️ Vinter' : '☀️ Sommer'}
+                        {b.dekkType === 'V'
+                          ? <IkonTekst ikon={Snowflake} size={12} gap={4}>Vinter</IkonTekst>
+                          : <IkonTekst ikon={Sun} size={12} gap={4}>Sommer</IkonTekst>}
                       </span>
                     ) : <span style={{ color: '#cbd5e1' }}>–</span>}
                   </td>
@@ -385,11 +393,11 @@ export default function Biler() {
                     {(b.problemer || '').trim() ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         <span style={{ fontSize: 12, color: '#c2410c', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={b.problemer}>
-                          ⚠️ {b.problemer}
+                          <Ikon ikon={TriangleAlert} size={12} style={{ marginRight: 3 }} />{b.problemer}
                         </span>
                         {(b.erstatningsbil || '').trim() && (
                           <span style={{ fontSize: 11, color: '#5d6b80', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={`Erstatningsbil: ${b.erstatningsbil}`}>
-                            🚗 {b.erstatningsbil}
+                            <Ikon ikon={Car} size={12} style={{ marginRight: 3 }} />{b.erstatningsbil}
                           </span>
                         )}
                       </div>

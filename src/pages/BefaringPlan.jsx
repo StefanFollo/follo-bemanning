@@ -2,7 +2,39 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { dateToIso, addDays, weekStart, overlaps, PROSJEKT_PALETTE, uid } from '../store';
 import { BEF_STATUS } from '../statuses';
+import {
+  Phone, Mail, Copy, CalendarDays, Building2, ClipboardList, Sparkles, Send, Eye,
+  MessageSquare, CircleCheck, Link2, Clock, PhoneCall, Rocket, FileText, CircleX,
+  TriangleAlert, Archive, Undo2, Wrench, X, Loader, Trash2, Check, ScrollText,
+  Package, MapPin, Hammer, RotateCw,
+} from 'lucide-react';
+import { Ikon } from '../komponenter/Ikon';
 import TilbudsdataVisning from '../komponenter/Tilbudsdata';
+
+// Tomtilstand for Tilbudsdata i rediger-modalen — stille resynk ved åpning
+// (payload kan ha landet på serveren via re-send etter forrige poll) + manuell knapp.
+function BefTilbudTomtilstand({ friskOpp }) {
+  const [sjekker, setSjekker] = React.useState(false);
+  React.useEffect(() => { Promise.resolve(friskOpp()).catch(() => {}); }, [friskOpp]);
+  async function sjekk() {
+    setSjekker(true);
+    try { await friskOpp(); } catch { /* stille */ }
+    setSjekker(false);
+  }
+  return (
+    <div style={{ fontSize: 12.5, color: '#5d6b80' }}>
+      <Ikon ikon={Send} size={13} /> Ingen tilbudsdata mottatt for denne befaringen ennå.
+      Be om data fra tilbuds-appen: åpne tilbudet der og velg «Send data på nytt»,
+      så fylles denne fanen. (Ingen automatikk — status og kolonne røres aldri.)
+      <div style={{ marginTop: 8 }}>
+        <button className="btn btn-sm" onClick={sjekk} disabled={sjekker}
+          title="Henter siste data fra skyen" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Ikon ikon={RotateCw} size={13} style={sjekker ? { animation: 'spin 1.2s linear infinite' } : undefined} /> Sjekk på nytt
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const JOBB_TYPER = ['Ny bygg', 'Tilbygg', 'Tak jobb', 'Fasade jobb', 'Bad', 'Tømrer', 'Maling', 'Rørlegger', 'Flislegging', 'Elektro', 'Rehabilitering', 'Annet'];
 
@@ -81,7 +113,7 @@ function tomModal() {
 }
 
 export default function BefaringPlan() {
-  const { state, dispatch } = useApp();
+  const { state, dispatch, friskOpp } = useApp();
   const befaringer = useMemo(() => state.befaringer || [], [state.befaringer]);
   const today = dateToIso(new Date());
 
@@ -445,25 +477,25 @@ export default function BefaringPlan() {
               <div className="bef-k-kontakt">
                 {b.telefon && (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                    <a href={`tel:${b.telefon}`} onClick={e => e.stopPropagation()} className="bef-k-kontakt-link">📱 {b.telefon}</a>
+                    <a href={`tel:${b.telefon}`} onClick={e => e.stopPropagation()} className="bef-k-kontakt-link"><Ikon ikon={Phone} size={12} /> {b.telefon}</a>
                     <button onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(b.telefon); }}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', fontSize: 11, opacity: 0.5, lineHeight: 1 }}
-                      title="Kopier telefonnummer">📋</button>
+                      title="Kopier telefonnummer"><Ikon ikon={Copy} size={12} /></button>
                   </span>
                 )}
                 {b.epost && (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                    <a href={`mailto:${b.epost}`} onClick={e => e.stopPropagation()} className="bef-k-kontakt-link">✉️ {b.epost}</a>
+                    <a href={`mailto:${b.epost}`} onClick={e => e.stopPropagation()} className="bef-k-kontakt-link"><Ikon ikon={Mail} size={12} /> {b.epost}</a>
                     <button onClick={e => { e.stopPropagation(); navigator.clipboard.writeText(b.epost); }}
                       style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 2px', fontSize: 11, opacity: 0.5, lineHeight: 1 }}
-                      title="Kopier e-post">📋</button>
+                      title="Kopier e-post"><Ikon ikon={Copy} size={12} /></button>
                   </span>
                 )}
               </div>
             )}
           </div>
-          <span className="bef-k-status-pill" style={{ background: s.bg, color: s.farge }}>
-            {s.ikon} {s.label}
+          <span className="bef-k-status-pill" style={{ background: s.bg, color: s.farge, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Ikon ikon={s.ikon} size={13} /> {s.label}
           </span>
         </div>
 
@@ -471,29 +503,29 @@ export default function BefaringPlan() {
           {b.jobbType && <span className="bef-k-chip">{b.jobbType}</span>}
           {b.dato && b.status === 'planlagt' && (
             <span className="bef-k-chip bef-k-chip--dato">
-              📅 {datoKort(b.dato)}{b.tid ? ` kl. ${b.tid}` : ''}
+              <Ikon ikon={CalendarDays} size={12} /> {datoKort(b.dato)}{b.tid ? ` kl. ${b.tid}` : ''}
             </span>
           )}
-          {belopVis && <span className="bef-k-chip bef-k-chip--belop">💰 {belopVis}</span>}
+          {belopVis && <span className="bef-k-chip bef-k-chip--belop">{belopVis}</span>}
           {ansattBefaring && (
             <span className="bef-k-chip bef-k-chip--ansatt" style={{ background: ansattFarge(b.ansvarligBefaringId) + '22', color: ansattFarge(b.ansvarligBefaringId) }} title="Ansvarlig befaring">
-              🏗 {ansattBefaring.navn.split(' ')[0]}
+              <Ikon ikon={Building2} size={12} /> {ansattBefaring.navn.split(' ')[0]}
             </span>
           )}
           {ansatt && ansatt.id !== ansattBefaring?.id && (
             <span className="bef-k-chip bef-k-chip--ansatt" style={{ background: ansattFarge(b.prosjektlederId) + '22', color: ansattFarge(b.prosjektlederId) }} title="Ansvarlig tilbud">
-              📋 {ansatt.navn.split(' ')[0]}
+              <Ikon ikon={ClipboardList} size={12} /> {ansatt.navn.split(' ')[0]}
             </span>
           )}
           {ansatt && !ansattBefaring && (
             <span className="bef-k-chip bef-k-chip--ansatt" style={{ background: ansattFarge(b.prosjektlederId) + '22', color: ansattFarge(b.prosjektlederId) }} title="Ansvarlig tilbud">
-              👤 {ansatt.navn.split(' ')[0]}
+              {ansatt.navn.split(' ')[0]}
             </span>
           )}
           {b.kilde === 'tilbuds-app-direkte' && (
             <span className="bef-k-chip" style={{ background: '#f0f9ff', color: '#0369a1', fontSize: 10 }}
               title={`Opprettet direkte fra tilbuds-app av ${b.opprettetAv || 'ukjent'}`}>
-              ✨ Fra tilbuds-app
+              <Ikon ikon={Sparkles} size={11} /> Fra tilbuds-app
             </span>
           )}
         </div>
@@ -503,12 +535,12 @@ export default function BefaringPlan() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, margin: '6px 0', padding: '8px 10px', background: '#f8faff', border: '1px solid #e0e8f8', borderRadius: 7 }}>
             {b.sistEventDato && (
               <span style={{ fontSize: 11, color: '#6b7280' }}>
-                📤 Sendt: {new Date(b.sistEventDato).toLocaleDateString('nb-NO', { day: '2-digit', month: 'short' })}
+                <Ikon ikon={Send} size={11} /> Sendt: {new Date(b.sistEventDato).toLocaleDateString('nb-NO', { day: '2-digit', month: 'short' })}
               </span>
             )}
             {b.kundeHarSettTilbud ? (
               <span style={{ fontSize: 11, color: '#0891b2', fontWeight: 500 }}>
-                👁 Åpnet {b.antallKundeAapninger || 1}x
+                <Ikon ikon={Eye} size={11} /> Åpnet {b.antallKundeAapninger || 1}x
                 {(() => {
                   const aapnet = (b.kundeAktivitet || []).find(a => a.handling === 'aapnet')
                   if (!aapnet) return null
@@ -523,13 +555,13 @@ export default function BefaringPlan() {
                 })()}
               </span>
             ) : (
-              b.status === 'tilbud_sendt' && <span style={{ fontSize: 11, color: '#5d6b80' }}>👁 Ikke åpnet ennå</span>
+              b.status === 'tilbud_sendt' && <span style={{ fontSize: 11, color: '#5d6b80' }}><Ikon ikon={Eye} size={11} /> Ikke åpnet ennå</span>
             )}
             {(b.kundeAktivitet || []).some(a => a.handling === 'klikket-sporsmal') && (
-              <span style={{ fontSize: 11, color: '#b45309', fontWeight: 500 }}>💬 Klikket Spørsmål</span>
+              <span style={{ fontSize: 11, color: '#b45309', fontWeight: 500 }}><Ikon ikon={MessageSquare} size={11} /> Klikket Spørsmål</span>
             )}
             {(b.kundeAktivitet || []).some(a => a.handling === 'klikket-aksepter') && (
-              <span style={{ fontSize: 11, color: '#15803d', fontWeight: 500 }}>✅ Klikket Aksepter</span>
+              <span style={{ fontSize: 11, color: '#15803d', fontWeight: 500 }}><Ikon ikon={CircleCheck} size={11} /> Klikket Aksepter</span>
             )}
             {(() => {
               // ALLE kundeside-lenker MÅ ha ?intern=1 — ellers forurenses
@@ -550,7 +582,7 @@ export default function BefaringPlan() {
                   title="Intern visning — telles ikke i kunde-statistikken"
                   style={{ fontSize: 11, color: '#2874a6', fontWeight: 500, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2 }}
                 >
-                  {token ? '👁 Se kundesiden ↗' : '🔗 Åpne kundens tilbudside ↗'}
+                  {token ? <><Ikon ikon={Eye} size={12} /> Se kundesiden ↗</> : <><Ikon ikon={Link2} size={12} /> Åpne kundens tilbudside ↗</>}
                 </a>
               );
             })()}
@@ -567,13 +599,13 @@ export default function BefaringPlan() {
               fontWeight: (erForsinket || erIdag) ? 500 : undefined,
               display: 'inline-block',
             }}>
-              ⏰ Tilbudsfrist: {datoKort(b.tilbudFrist)}
+              <Ikon ikon={Clock} size={12} /> Tilbudsfrist: {datoKort(b.tilbudFrist)}
               {fristDager !== null && <em> ({fristDager < 0 ? `${Math.abs(fristDager)}d over` : fristDager === 0 ? 'i dag' : `${fristDager}d`})</em>}
             </span>
           )}
           {b.nesteKontakt && (
             <span className="bef-k-dato-rad" style={{ color: kontaktFarge, fontWeight: kontaktDager !== null && kontaktDager <= 2 ? 500 : 400 }}>
-              📞 Neste kontakt: {datoKort(b.nesteKontakt)}
+              <Ikon ikon={PhoneCall} size={12} /> Neste kontakt: {datoKort(b.nesteKontakt)}
               {kontaktDager !== null && kontaktDager <= 2 && (
                 <em> ({kontaktDager < 0 ? `${Math.abs(kontaktDager)}d over` : kontaktDager === 0 ? 'i dag!' : `${kontaktDager}d`})</em>
               )}
@@ -581,22 +613,22 @@ export default function BefaringPlan() {
           )}
           {b.oensketOppstart && (
             <span className="bef-k-dato-rad" style={{ color: '#0891b2', fontWeight: 500 }}>
-              🚀 Ønsket oppstart: {datoKort(b.oensketOppstart)}
+              <Ikon ikon={Rocket} size={12} /> Ønsket oppstart: {datoKort(b.oensketOppstart)}
             </span>
           )}
           {b.resultat && (
             <span className="bef-k-dato-rad bef-k-resultat">
-              📝 {b.resultat}
+              <Ikon ikon={FileText} size={12} /> {b.resultat}
             </span>
           )}
           {b.tapArsak && b.status === 'tapt' && (
             <span className="bef-k-dato-rad" style={{ color: '#dc2626' }}>
-              ❌ {b.tapArsak}
+              <Ikon ikon={CircleX} size={12} /> {b.tapArsak}
             </span>
           )}
           {b.kommentar && (
             <span className="bef-k-dato-rad bef-k-kommentar">
-              💬 {b.kommentar.length > 60 ? b.kommentar.slice(0, 60) + '…' : b.kommentar}
+              <Ikon ikon={MessageSquare} size={12} /> {b.kommentar.length > 60 ? b.kommentar.slice(0, 60) + '…' : b.kommentar}
             </span>
           )}
         </div>
@@ -637,7 +669,7 @@ export default function BefaringPlan() {
             }}
           >
             {Object.entries(STATUS).map(([key, s]) => (
-              <option key={key} value={key}>{s.ikon} {s.label}</option>
+              <option key={key} value={key}>{s.label}</option>
             ))}
           </select>
         </div>
@@ -647,7 +679,7 @@ export default function BefaringPlan() {
           <div style={{ margin: '6px 0', padding: '8px 10px', background: '#fef3c7', border: '1px solid #b45309', borderRadius: 7 }}
             onClick={e => e.stopPropagation()}>
             <div style={{ fontSize: 12, fontWeight: 500, color: '#92400e', marginBottom: 4 }}>
-              ⚠️ Konflikt oppdaget!
+              <Ikon ikon={TriangleAlert} size={13} /> Konflikt oppdaget!
             </div>
             <div style={{ fontSize: 11, color: '#78350f', lineHeight: 1.5 }}>
               Manuelt satt: <strong>{STATUS[b.konflikt.manuellStatus]?.label || b.konflikt.manuellStatus}</strong><br />
@@ -656,11 +688,11 @@ export default function BefaringPlan() {
             <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
               <button style={{ fontSize: 11, padding: '3px 8px', background: '#b45309', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 500 }}
                 onClick={() => dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, konflikt: undefined, manueltOverstyrtAv: 'manuell', manueltOverstyrtDato: new Date().toISOString() } })}>
-                Behold {STATUS[b.konflikt.manuellStatus]?.ikon}
+                Behold <Ikon ikon={STATUS[b.konflikt.manuellStatus]?.ikon} size={12} />
               </button>
               <button style={{ fontSize: 11, padding: '3px 8px', background: '#15803d', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 500 }}
                 onClick={() => dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, status: b.konflikt.inkommendStatus, konflikt: undefined, manueltOverstyrtAv: undefined, manueltOverstyrtDato: undefined } })}>
-                Endre til {STATUS[b.konflikt.inkommendStatus]?.ikon}
+                Endre til <Ikon ikon={STATUS[b.konflikt.inkommendStatus]?.ikon} size={12} />
               </button>
             </div>
           </div>
@@ -672,14 +704,14 @@ export default function BefaringPlan() {
                 finnes (historisk feil) behandles som «ikke opprettet» */}
             {b.prosjektId && state.prosjekter.some(p => p.id === b.prosjektId) ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <span className="bef-k-prosjekt-badge">🏗 Prosjekt opprettet</span>
+                <span className="bef-k-prosjekt-badge"><Ikon ikon={Building2} size={12} /> Prosjekt opprettet</span>
                 <button
                   className="btn btn-sm"
                   style={{ fontSize: 11, padding: '2px 8px', color: '#0891b2', borderColor: '#7dd3fc', background: '#f0f9ff' }}
                   onClick={() => dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, arkivert: true } })}
                   title="Skjul fra aktiv liste – data beholdes i arkivet"
                 >
-                  📦 Arkiver
+                  <Ikon ikon={Archive} size={12} /> Arkiver
                 </button>
                 <button
                   className="btn btn-sm"
@@ -690,12 +722,12 @@ export default function BefaringPlan() {
                     dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, prosjektId: undefined } });
                   }}
                 >
-                  ↩ Angre
+                  <Ikon ikon={Undo2} size={12} /> Angre
                 </button>
               </div>
             ) : (
-              <button className="bef-k-opprett-btn" onClick={() => apneProsjektModal(b)}>
-                🏗 Opprett prosjekt
+              <button className="bef-k-opprett-btn" onClick={() => apneProsjektModal(b)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Ikon ikon={Building2} size={14} /> Opprett prosjekt
               </button>
             )}
           </div>
@@ -713,7 +745,7 @@ export default function BefaringPlan() {
           <input
             className="input"
             style={{ width: 200, height: 36 }}
-            placeholder="🔍 Søk navn, adresse, type..."
+            placeholder="Søk navn, adresse, type..."
             value={sok}
             onChange={e => setSok(e.target.value)}
           />
@@ -724,10 +756,10 @@ export default function BefaringPlan() {
             onChange={e => { setSortering(e.target.value); localStorage.setItem('fbs_bef_sort', e.target.value); }}
             title="Sortering — påvirker rekkefølgen i alle kolonner"
           >
-            <option value="adresse">↕ Adresse (A–Å)</option>
-            <option value="navn">↕ Navn (A–Å)</option>
-            <option value="nyeste">🆕 Nyeste først</option>
-            <option value="frist">📅 Frist / dato</option>
+            <option value="adresse">Adresse (A–Å)</option>
+            <option value="navn">Navn (A–Å)</option>
+            <option value="nyeste">Nyeste først</option>
+            <option value="frist">Frist / dato</option>
           </select>
           {(() => {
             // Ansatte som har minst én aktiv befaring
@@ -741,7 +773,7 @@ export default function BefaringPlan() {
                 onChange={e => setAnsvarligFilter(e.target.value)}
                 title="Filtrer på ansvarlig person"
               >
-                <option value="">👤 Alle ansvarlige</option>
+                <option value="">Alle ansvarlige</option>
                 {ansatteIds.map(id => {
                   const a = state.ansatte.find(x => x.id === id);
                   return a ? <option key={id} value={id}>{a.navn}</option> : null;
@@ -750,17 +782,17 @@ export default function BefaringPlan() {
             );
           })()}
           <div className="bef-view-tabs">
-            <button className={`bef-view-tab${viewTab === 'oversikt' ? ' aktiv' : ''}`} onClick={() => setViewTab('oversikt')}>📋 Oversikt</button>
-            <button className={`bef-view-tab${viewTab === 'kalender' ? ' aktiv' : ''}`} onClick={() => setViewTab('kalender')}>📅 Kalender</button>
+            <button className={`bef-view-tab${viewTab === 'oversikt' ? ' aktiv' : ''}`} onClick={() => setViewTab('oversikt')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={ClipboardList} size={14} /> Oversikt</button>
+            <button className={`bef-view-tab${viewTab === 'kalender' ? ' aktiv' : ''}`} onClick={() => setViewTab('kalender')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={CalendarDays} size={14} /> Kalender</button>
           </div>
           <button className="btn btn-primary" onClick={() => apneNy()}>+ Ny befaring</button>
           {isAdmin && (
             <button
               onClick={() => dedupPanel ? setDedupPanel(null) : kjorDedup(true)}
               title="Finn og rydd opp duplikate befaringer"
-              style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: 13, color: '#475569' }}
+              style={{ background: '#f1f5f9', border: '1px solid #cbd5e1', borderRadius: 6, padding: '5px 10px', cursor: 'pointer', fontSize: 13, color: '#475569', display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
-              🔧 Dedup
+              <Ikon ikon={Wrench} size={14} /> Dedup
             </button>
           )}
         </div>
@@ -770,16 +802,16 @@ export default function BefaringPlan() {
       {isAdmin && dedupPanel && (
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px', margin: '0 0 12px 0', fontSize: 13 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <strong style={{ color: '#1e293b' }}>🔧 Dedup befaringer</strong>
-            <button onClick={() => setDedupPanel(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#5d6b80' }}>✕</button>
+            <strong style={{ color: '#1e293b', display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={Wrench} size={14} /> Dedup befaringer</strong>
+            <button onClick={() => setDedupPanel(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#5d6b80' }}><Ikon ikon={X} size={16} /></button>
           </div>
 
-          {dedupPanel.loading && <div style={{ color: '#5d6b80' }}>⏳ Henter duplikater...</div>}
+          {dedupPanel.loading && <div style={{ color: '#5d6b80' }}><Ikon ikon={Loader} size={14} style={{ animation: 'spin 1.2s linear infinite' }} /> Henter duplikater...</div>}
 
-          {dedupPanel.error && <div style={{ color: '#dc2626' }}>⚠️ Feil: {dedupPanel.error}</div>}
+          {dedupPanel.error && <div style={{ color: '#dc2626' }}><Ikon ikon={TriangleAlert} size={14} /> Feil: {dedupPanel.error}</div>}
 
           {!dedupPanel.loading && !dedupPanel.error && dedupPanel.funnetDuplikater === 0 && (
-            <div style={{ color: '#15803d' }}>✅ Ingen duplikater funnet</div>
+            <div style={{ color: '#15803d' }}><Ikon ikon={CircleCheck} size={14} /> Ingen duplikater funnet</div>
           )}
 
           {!dedupPanel.loading && !dedupPanel.error && dedupPanel.duplikatGrupper > 0 && (
@@ -796,7 +828,7 @@ export default function BefaringPlan() {
                     <div style={{ color: '#5d6b80', fontSize: 12 }}>id: {g.behold.id} · {g.behold.dato} · {g.behold.status}</div>
                     {g.slett.map(s => (
                       <div key={s.id} style={{ color: '#dc2626', fontSize: 12, paddingLeft: 10 }}>
-                        🗑 {s.id} · {s.dato} · {s.status}{s.kilde ? ` (${s.kilde})` : ''}
+                        <Ikon ikon={Trash2} size={12} /> {s.id} · {s.dato} · {s.status}{s.kilde ? ` (${s.kilde})` : ''}
                       </div>
                     ))}
                     {g.mergeTilbudId && <div style={{ color: '#0891b2', fontSize: 12, paddingLeft: 10 }}>→ Overfører tilbudId {g.mergeTilbudId} til keeper</div>}
@@ -809,13 +841,13 @@ export default function BefaringPlan() {
                     if (!window.confirm(`Slette ${dedupPanel.skalSlettes} duplikate befaringer?\nDette kan ikke angres (men snapshots tas).`)) return;
                     kjorDedup(false);
                   }}
-                  style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontWeight: 500 }}
+                  style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontWeight: 500, display: 'inline-flex', alignItems: 'center', gap: 6 }}
                 >
-                  🗑 Slett {dedupPanel.skalSlettes} duplikater
+                  <Ikon ikon={Trash2} size={14} /> Slett {dedupPanel.skalSlettes} duplikater
                 </button>
               )}
               {dedupPanel.dry === false && (
-                <div style={{ color: '#15803d', fontWeight: 500 }}>✅ Slettet {dedupPanel.slettet} duplikater · {dedupPanel.gjenværende} befaringer igjen</div>
+                <div style={{ color: '#15803d', fontWeight: 500 }}><Ikon ikon={CircleCheck} size={14} /> Slettet {dedupPanel.slettet} duplikater · {dedupPanel.gjenværende} befaringer igjen</div>
               )}
             </>
           )}
@@ -834,10 +866,10 @@ export default function BefaringPlan() {
               onClick={() => setPipelineFilter(f => f === key ? null : key)}
               title={aktiv ? 'Klikk for å fjerne filter' : `Filtrer på: ${s.label}`}
             >
-              <div className="bef-pipeline-ikon">{s.ikon}</div>
+              <div className="bef-pipeline-ikon"><Ikon ikon={s.ikon} size={20} farge={aktiv ? '#fff' : s.farge} /></div>
               <div className="bef-pipeline-antall" style={{ color: aktiv ? '#fff' : s.farge }}>{teller[key] || 0}</div>
               <div className="bef-pipeline-label" style={{ color: aktiv ? '#fff' : undefined }}>{s.label}</div>
-              {aktiv && <div className="bef-pipeline-aktiv-pill">✕ fjern</div>}
+              {aktiv && <div className="bef-pipeline-aktiv-pill"><Ikon ikon={X} size={11} /> fjern</div>}
             </div>
           );
         })}
@@ -845,7 +877,7 @@ export default function BefaringPlan() {
       {pipelineFilter && (
         <div className="bef-filter-banner">
           Viser kun: <strong>{STATUS[pipelineFilter]?.label}</strong>
-          <button className="bef-filter-fjern" onClick={() => setPipelineFilter(null)}>✕ Fjern filter</button>
+          <button className="bef-filter-fjern" onClick={() => setPipelineFilter(null)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Ikon ikon={X} size={12} /> Fjern filter</button>
         </div>
       )}
 
@@ -855,7 +887,7 @@ export default function BefaringPlan() {
           {/* Leads (før befaring) */}
           <div className="bef-kolonne">
             <div className="bef-kolonne-header" style={{ borderColor: STATUS.lead.farge, color: STATUS.lead.farge }}>
-              <span>🌱 Leads <span className="bef-kolonne-teller">{leads.length}</span></span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={STATUS.lead.ikon} size={15} /> Leads <span className="bef-kolonne-teller">{leads.length}</span></span>
             </div>
             {leads.length === 0 && <div className="bef-tom-melding">Ingen leads.</div>}
             {leads.map(b => <BefKort key={b.id} b={b} />)}
@@ -865,7 +897,7 @@ export default function BefaringPlan() {
           {/* Planlagt befaring */}
           <div className="bef-kolonne">
             <div className="bef-kolonne-header" style={{ borderColor: STATUS.planlagt.farge, color: STATUS.planlagt.farge }}>
-              <span>📋 Planlagt befaring <span className="bef-kolonne-teller">{planlagte.length}</span></span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={STATUS.planlagt.ikon} size={15} /> Planlagt befaring <span className="bef-kolonne-teller">{planlagte.length}</span></span>
               {sumKr(planlagte) && <span className="bef-kolonne-kr">{sumKr(planlagte)}</span>}
             </div>
             {planlagte.length === 0 && <div className="bef-tom-melding">Ingen planlagte befaringer.</div>}
@@ -876,7 +908,7 @@ export default function BefaringPlan() {
           {/* Tilbud under arbeid */}
           <div className="bef-kolonne">
             <div className="bef-kolonne-header" style={{ borderColor: STATUS.tilbud_arbeid.farge, color: STATUS.tilbud_arbeid.farge }}>
-              <span>✏️ Tilbud under arbeid <span className="bef-kolonne-teller">{tilbudArbeid.length}</span></span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={STATUS.tilbud_arbeid.ikon} size={15} /> Tilbud under arbeid <span className="bef-kolonne-teller">{tilbudArbeid.length}</span></span>
               {sumKr(tilbudArbeid) && <span className="bef-kolonne-kr">{sumKr(tilbudArbeid)}</span>}
             </div>
             {tilbudArbeid.length === 0 && <div className="bef-tom-melding">Ingen tilbud under arbeid.</div>}
@@ -887,7 +919,7 @@ export default function BefaringPlan() {
           {/* Tilbud sendt */}
           <div className="bef-kolonne">
             <div className="bef-kolonne-header" style={{ borderColor: STATUS.tilbud_sendt.farge, color: STATUS.tilbud_sendt.farge }}>
-              <span>📤 Tilbud sendt <span className="bef-kolonne-teller">{tilbudSendt.length}</span></span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={STATUS.tilbud_sendt.ikon} size={15} /> Tilbud sendt <span className="bef-kolonne-teller">{tilbudSendt.length}</span></span>
               {sumKr(tilbudSendt) && <span className="bef-kolonne-kr">{sumKr(tilbudSendt)}</span>}
             </div>
             {tilbudSendt.length === 0 && <div className="bef-tom-melding">Ingen tilbud sendt.</div>}
@@ -897,7 +929,7 @@ export default function BefaringPlan() {
           {/* Godkjent */}
           <div className="bef-kolonne">
             <div className="bef-kolonne-header" style={{ borderColor: STATUS.godkjent.farge, color: STATUS.godkjent.farge }}>
-              <span>✅ Godkjent <span className="bef-kolonne-teller">{godkjente.length}</span></span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={STATUS.godkjent.ikon} size={15} /> Godkjent <span className="bef-kolonne-teller">{godkjente.length}</span></span>
               {sumKr(godkjente) && <span className="bef-kolonne-kr">{sumKr(godkjente)}</span>}
             </div>
             {godkjente.length === 0 && <div className="bef-tom-melding">Ingen godkjente tilbud.</div>}
@@ -909,8 +941,8 @@ export default function BefaringPlan() {
       {/* Arkiv-seksjon – vises under kanban */}
       {arkiverte.length > 0 && (
         <div className="bef-arkiv-seksjon">
-          <button className="bef-arkiv-toggle" onClick={() => setVisArkiv(v => !v)}>
-            📦 Arkiv <span className="bef-kolonne-teller">{arkiverte.length}</span>
+          <button className="bef-arkiv-toggle" onClick={() => setVisArkiv(v => !v)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Ikon ikon={Archive} size={15} /> Arkiv <span className="bef-kolonne-teller">{arkiverte.length}</span>
             <span style={{ marginLeft: 6, fontSize: 11 }}>{visArkiv ? '▲ Skjul' : '▼ Vis'}</span>
           </button>
           {visArkiv && (
@@ -922,11 +954,11 @@ export default function BefaringPlan() {
                 const prosjekt = b.prosjektId ? state.prosjekter.find(p => p.id === b.prosjektId) : null;
                 return (
                   <div key={b.id} className="bef-arkiv-rad" onClick={() => apneRediger(b)}>
-                    <span className="bef-arkiv-ikon">{STATUS[b.status]?.ikon || '📋'}</span>
+                    <span className="bef-arkiv-ikon"><Ikon ikon={STATUS[b.status]?.ikon || ClipboardList} size={14} /></span>
                     <span className="bef-arkiv-adresse">{b.adresse}</span>
                     <span className="bef-arkiv-navn">{b.kontaktNavn}</span>
-                    {prosjekt && <span className="bef-arkiv-prosjekt">🏗 {prosjekt.navn}</span>}
-                    {belopVis && <span className="bef-arkiv-belop">💰 {belopVis}</span>}
+                    {prosjekt && <span className="bef-arkiv-prosjekt"><Ikon ikon={Building2} size={12} /> {prosjekt.navn}</span>}
+                    {belopVis && <span className="bef-arkiv-belop">{belopVis}</span>}
                     {b.dato && <span className="bef-arkiv-dato">{datoKort(b.dato)}</span>}
                     <button
                       className="btn btn-sm"
@@ -934,7 +966,7 @@ export default function BefaringPlan() {
                       onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, arkivert: false } }); }}
                       title="Flytt tilbake til aktiv liste"
                     >
-                      ↩ Gjenopprett
+                      <Ikon ikon={Undo2} size={12} /> Gjenopprett
                     </button>
                   </div>
                 );
@@ -1002,13 +1034,13 @@ export default function BefaringPlan() {
                           {b.tid ? ` kl. ${b.tid}` : ''}
                         </span>
                         <span className="bef-kort-type">{b.jobbType}</span>
-                        {ansattBefaring && <span className="bef-kort-pl" title="Ansvarlig befaring">🏗 {ansattBefaring.navn.split(' ')[0]}</span>}
-                        {ansattTilbud && ansattTilbud.id !== ansattBefaring?.id && <span className="bef-kort-pl" title="Ansvarlig tilbud">📋 {ansattTilbud.navn.split(' ')[0]}</span>}
-                        {ansattTilbud && !ansattBefaring && <span className="bef-kort-pl" title="Ansvarlig tilbud">👤 {ansattTilbud.navn.split(' ')[0]}</span>}
+                        {ansattBefaring && <span className="bef-kort-pl" title="Ansvarlig befaring"><Ikon ikon={Building2} size={12} /> {ansattBefaring.navn.split(' ')[0]}</span>}
+                        {ansattTilbud && ansattTilbud.id !== ansattBefaring?.id && <span className="bef-kort-pl" title="Ansvarlig tilbud"><Ikon ikon={ClipboardList} size={12} /> {ansattTilbud.navn.split(' ')[0]}</span>}
+                        {ansattTilbud && !ansattBefaring && <span className="bef-kort-pl" title="Ansvarlig tilbud">{ansattTilbud.navn.split(' ')[0]}</span>}
                       </div>
                     </div>
-                    <div className="bef-kort-status" style={{ color: s.farge, background: s.bg }}>
-                      {s.ikon} {s.label}
+                    <div className="bef-kort-status" style={{ color: s.farge, background: s.bg, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <Ikon ikon={s.ikon} size={13} /> {s.label}
                     </div>
                   </div>
                 );
@@ -1033,24 +1065,24 @@ export default function BefaringPlan() {
                     </button>
                     <button onClick={() => setModalFane('aktivitet')}
                       style={{ fontSize: 12, padding: '3px 10px', border: 'none', borderRadius: 5, cursor: 'pointer', fontWeight: modalFane === 'aktivitet' ? 500 : 400, background: modalFane === 'aktivitet' ? '#fff' : 'transparent', color: modalFane === 'aktivitet' ? '#1e293b' : '#5d6b80' }}>
-                      📜 Aktivitet {aktivitetLog.length > 0 ? `(${aktivitetLog.length})` : ''}
+                      <Ikon ikon={ScrollText} size={13} /> Aktivitet {aktivitetLog.length > 0 ? `(${aktivitetLog.length})` : ''}
                     </button>
                   </div>
                   {/* Auto-save indikator */}
                   <span style={{ fontSize: 12, color: autoSaveSts === 'saved' ? '#15803d' : autoSaveSts === 'saving' ? '#b45309' : '#5d6b80', display: 'flex', alignItems: 'center', gap: 4, transition: 'color 0.3s' }}>
-                    {autoSaveSts === 'saving' && <span style={{ animation: 'spin 1s linear infinite', display: 'inline-block' }}>⏳</span>}
-                    {autoSaveSts === 'saved' && '✓'}
+                    {autoSaveSts === 'saving' && <Ikon ikon={Loader} size={13} style={{ animation: 'spin 1s linear infinite' }} />}
+                    {autoSaveSts === 'saved' && <Ikon ikon={Check} size={13} />}
                     {autoSaveSts === 'saving' ? 'Lagrer…' : autoSaveSts === 'saved' ? 'Lagret' : ''}
                   </span>
                 </div>
               )}
-              <button className="btn-icon" onClick={() => setVisModal(false)}>✕</button>
+              <button className="btn-icon" onClick={() => setVisModal(false)}><Ikon ikon={X} size={15} /></button>
             </div>
 
             {/* Aktivitet-fane */}
             {modalFane === 'aktivitet' && redigerer && (
               <div style={{ padding: '16px 20px', maxHeight: 420, overflowY: 'auto' }}>
-                <div style={{ fontSize: 13, fontWeight: 500, color: '#1e293b', marginBottom: 12 }}>📜 Endringshistorikk</div>
+                <div style={{ fontSize: 13, fontWeight: 500, color: '#1e293b', marginBottom: 12 }}><Ikon ikon={ScrollText} size={14} /> Endringshistorikk</div>
                 {aktivitetLaster && <div style={{ color: '#5d6b80', fontSize: 13 }}>Laster historikk…</div>}
                 {!aktivitetLaster && aktivitetLog.length === 0 && (
                   <div style={{ color: '#5d6b80', fontSize: 13 }}>Ingen loggede endringer ennå.</div>
@@ -1062,14 +1094,14 @@ export default function BefaringPlan() {
                     <div key={entry.id || i} style={{ display: 'flex', gap: 10, marginBottom: 12, paddingBottom: 12, borderBottom: '1px solid #f1f5f9' }}>
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#6366f1', marginTop: 5, flexShrink: 0 }} />
                       <div>
-                        <div style={{ fontSize: 12, color: '#5d6b80' }}>📅 {datoVis}</div>
+                        <div style={{ fontSize: 12, color: '#5d6b80' }}><Ikon ikon={CalendarDays} size={12} /> {datoVis}</div>
                         <div style={{ fontSize: 13, color: '#1e293b', marginTop: 2 }}>
                           <strong>{entry.endring?.felt || 'ukjent felt'}</strong>:
                           {entry.endring?.fraVerdi && <span style={{ color: '#dc2626' }}> {entry.endring.fraVerdi}</span>}
                           {entry.endring?.fraVerdi && ' → '}
                           <span style={{ color: '#15803d' }}>{entry.endring?.tilVerdi || '–'}</span>
                         </div>
-                        {entry.begrunnelse && <div style={{ fontSize: 11, color: '#5d6b80', marginTop: 2 }}>💬 {entry.begrunnelse}</div>}
+                        {entry.begrunnelse && <div style={{ fontSize: 11, color: '#5d6b80', marginTop: 2 }}><Ikon ikon={MessageSquare} size={11} /> {entry.begrunnelse}</div>}
                         <div style={{ fontSize: 11, color: '#5d6b80', marginTop: 2 }}>Kilde: {entry.kilde || '–'}</div>
                       </div>
                     </div>
@@ -1164,21 +1196,23 @@ export default function BefaringPlan() {
                 </div>
               </div>
 
-              {/* 📦 Tilbudsdata — samme delte komponent som prosjektpanelet (SPEC-tillegg 15.08) */}
-              {redigerer && (
-                <div className="bef-modal-seksjon" style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '10px 14px' }}>
-                  <div className="bef-modal-seksjon-tittel" style={{ color: '#15803d', marginBottom: 8 }}>📦 Tilbudsdata</div>
-                  {(redigerer.tilbudPayload || redigerer.tilbudLink || (redigerer.poster || []).length > 0 || redigerer.estimertSum > 0) ? (
-                    <TilbudsdataVisning prosjekt={redigerer} />
-                  ) : (
-                    <div style={{ fontSize: 12.5, color: '#5d6b80' }}>
-                      📤 Ingen tilbudsdata mottatt for denne befaringen ennå.
-                      Be om data fra tilbuds-appen: åpne tilbudet der og velg «Send data på nytt»,
-                      så fylles denne fanen. (Ingen automatikk — status og kolonne røres aldri.)
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* Tilbudsdata — samme delte komponent som prosjektpanelet (SPEC-tillegg 15.08).
+                  Leser LIVE befaring fra state (ikke redigerer-øyeblikksbildet) slik at
+                  payload som lander via re-send mens modalen er åpen vises straks. */}
+              {redigerer && (() => {
+                const liveBef = state.befaringer.find(x => x.id === redigerer.id) || redigerer;
+                const harData = liveBef.tilbudPayload || liveBef.tilbudLink || (liveBef.poster || []).length > 0 || liveBef.estimertSum > 0;
+                return (
+                  <div className="bef-modal-seksjon" style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '10px 14px' }}>
+                    <div className="bef-modal-seksjon-tittel" style={{ color: '#15803d', marginBottom: 8 }}><Ikon ikon={Package} size={14} /> Tilbudsdata</div>
+                    {harData ? (
+                      <TilbudsdataVisning prosjekt={liveBef} />
+                    ) : (
+                      <BefTilbudTomtilstand friskOpp={friskOpp} />
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* Status */}
               <div className="bef-modal-seksjon">
@@ -1189,7 +1223,7 @@ export default function BefaringPlan() {
                       className={`bef-status-btn${form.status === key ? ' aktiv' : ''}`}
                       style={form.status === key ? { background: s.farge, color: '#fff', borderColor: s.farge } : { borderColor: s.farge, color: s.farge }}
                       onClick={() => setForm(f => ({ ...f, status: key }))}>
-                      {s.ikon} {s.label}
+                      <Ikon ikon={s.ikon} size={14} /> {s.label}
                     </button>
                   ))}
                 </div>
@@ -1220,8 +1254,8 @@ export default function BefaringPlan() {
               <div className="modal-actions">
                 {redigerer && <button className="btn btn-danger" onClick={slett}>Slett</button>}
                 {redigerer && redigerer.status !== 'godkjent' && (
-                  <button className="btn" style={{ background: '#15803d', color: '#fff' }} onClick={() => godkjenn(redigerer)}>
-                    ✅ Godkjenn tilbud
+                  <button className="btn" style={{ background: '#15803d', color: '#fff', display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => godkjenn(redigerer)}>
+                    <Ikon ikon={CircleCheck} size={15} /> Godkjenn tilbud
                   </button>
                 )}
                 {redigerer ? (
@@ -1251,7 +1285,7 @@ export default function BefaringPlan() {
           <div className="modal bef-kap-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3>Ledig kapasitet – neste 16 uker</h3>
-              <button className="btn-icon" onClick={() => setVisKapasitet(null)}>✕</button>
+              <button className="btn-icon" onClick={() => setVisKapasitet(null)}><Ikon ikon={X} size={15} /></button>
             </div>
             <p style={{ margin: '0 0 16px', color: '#5d6b80', fontSize: 14 }}>
               Tilbud godkjent for <strong>{visKapasitet.kontaktNavn}</strong> – {visKapasitet.adresse}.
@@ -1289,24 +1323,24 @@ export default function BefaringPlan() {
         <div className="modal-backdrop" onClick={() => setVisProsjektModal(false)}>
           <div className="modal bef-modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>🏗 Opprett prosjekt fra befaring</h3>
-              <button className="btn-icon" onClick={() => setVisProsjektModal(false)}>✕</button>
+              <h3 style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Ikon ikon={Building2} size={17} /> Opprett prosjekt fra befaring</h3>
+              <button className="btn-icon" onClick={() => setVisProsjektModal(false)}><Ikon ikon={X} size={15} /></button>
             </div>
             <div className="form">
               {/* Forhåndsvisning av befaringsdata */}
               {visKapasitet && (
                 <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13 }}>
                   <div style={{ fontWeight: 500, color: '#1e293b', marginBottom: 4 }}>Fra befaring:</div>
-                  <div style={{ color: '#5d6b80' }}>📍 {visKapasitet.adresse}</div>
-                  {visKapasitet.jobbType && <div style={{ color: '#5d6b80' }}>🔨 {visKapasitet.jobbType}</div>}
+                  <div style={{ color: '#5d6b80' }}><Ikon ikon={MapPin} size={13} /> {visKapasitet.adresse}</div>
+                  {visKapasitet.jobbType && <div style={{ color: '#5d6b80' }}><Ikon ikon={Hammer} size={13} /> {visKapasitet.jobbType}</div>}
                   {visKapasitet.estimertBelop && (
                     <div style={{ color: '#5d6b80' }}>
-                      💰 {new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(Number(visKapasitet.estimertBelop))}
+                      {new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(Number(visKapasitet.estimertBelop))}
                     </div>
                   )}
                   {visKapasitet.oensketOppstart && (
                     <div style={{ color: '#0891b2', fontWeight: 500 }}>
-                      🚀 Ønsket oppstart: {datoKort(visKapasitet.oensketOppstart)}
+                      <Ikon ikon={Rocket} size={13} /> Ønsket oppstart: {datoKort(visKapasitet.oensketOppstart)}
                     </div>
                   )}
                 </div>
@@ -1377,8 +1411,8 @@ export default function BefaringPlan() {
 
               <div className="modal-actions">
                 <button className="btn" onClick={() => setVisProsjektModal(false)}>Avbryt</button>
-                <button className="btn btn-primary" onClick={opprettProsjekt} disabled={!prosjektForm.navn.trim()}>
-                  🏗 Opprett prosjekt
+                <button className="btn btn-primary" onClick={opprettProsjekt} disabled={!prosjektForm.navn.trim()} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Ikon ikon={Building2} size={15} /> Opprett prosjekt
                 </button>
               </div>
             </div>

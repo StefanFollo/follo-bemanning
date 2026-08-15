@@ -3,6 +3,11 @@ import { useApp } from '../context/AppContext';
 import { dateToIso } from '../store';
 import ServiceReklKalender from '../components/ServiceReklKalender';
 import { REKL_STATUS } from '../statuses';
+import {
+  CalendarDays, PhoneCall, Hammer, Clock, MessageSquare, Archive, Undo2,
+  X, ClipboardList, Printer,
+} from 'lucide-react';
+import { Ikon } from '../komponenter/Ikon';
 
 const REKL_TYPER = [
   'Tømrer', 'Maling', 'Rørlegger', 'Flislegging', 'Elektro',
@@ -257,25 +262,25 @@ export default function Reklamasjon() {
         <div className="rekl-kort-topp">
           <div className="rekl-kort-tittel">
             <div className="rekl-kort-adresse">{prosjekt ? prosjekt.navn : r.adresse}</div>
-            {r.kontaktNavn && <div className="rekl-kort-kontakt">👤 {r.kontaktNavn}</div>}
+            {r.kontaktNavn && <div className="rekl-kort-kontakt">{r.kontaktNavn}</div>}
           </div>
-          <span className="rekl-status-pill" style={{ background: s.bg, color: s.farge }}>
-            {s.ikon} {s.label}
+          <span className="rekl-status-pill" style={{ background: s.bg, color: s.farge, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Ikon ikon={s.ikon} size={13} /> {s.label}
           </span>
         </div>
 
         <div className="rekl-chips">
           <span className="rekl-chip rekl-chip--type">{r.type}</span>
-          <span className="rekl-chip rekl-chip--dato">📅 {datoKort(r.dato)}</span>
-          {r.telefon && <span className="rekl-chip">📞 {r.telefon}</span>}
+          <span className="rekl-chip rekl-chip--dato"><Ikon ikon={CalendarDays} size={12} /> {datoKort(r.dato)}</span>
+          {r.telefon && <span className="rekl-chip"><Ikon ikon={PhoneCall} size={12} /> {r.telefon}</span>}
           {ansatt && (
             <span className="rekl-chip" style={{ background: ansattFarge(r.ansvarligId) + '22', color: ansattFarge(r.ansvarligId) }}>
-              🔨 {ansatt.navn.split(' ')[0]}
+              <Ikon ikon={Hammer} size={12} /> {ansatt.navn.split(' ')[0]}
             </span>
           )}
           {r.kostnad && (
             <span className="rekl-chip rekl-chip--kostnad">
-              💰 {new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(Number(r.kostnad))}
+              {new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(Number(r.kostnad))}
             </span>
           )}
         </div>
@@ -289,7 +294,7 @@ export default function Reklamasjon() {
         <div className="rekl-bunntekst">
           {r.frist && (
             <span style={{ color: fristFarge, fontSize: 12 }}>
-              ⏰ Frist: {datoKort(r.frist)}
+              <Ikon ikon={Clock} size={12} /> Frist: {datoKort(r.frist)}
               {fristDager !== null && (
                 <em> ({fristDager < 0 ? `${Math.abs(fristDager)}d over` : fristDager === 0 ? 'i dag' : `${fristDager}d`})</em>
               )}
@@ -297,7 +302,7 @@ export default function Reklamasjon() {
           )}
           {r.kommentar && (
             <span className="rekl-kommentar">
-              💬 {r.kommentar.length > 50 ? r.kommentar.slice(0, 50) + '…' : r.kommentar}
+              <Ikon ikon={MessageSquare} size={12} /> {r.kommentar.length > 50 ? r.kommentar.slice(0, 50) + '…' : r.kommentar}
             </span>
           )}
         </div>
@@ -311,7 +316,7 @@ export default function Reklamasjon() {
               onClick={() => dispatch({ type: 'UPDATE_REKLAMASJON', payload: { ...r, arkivert: true } })}
               title="Flytt til arkivet — data beholdes og kan gjenopprettes"
             >
-              📦 Arkiver
+              <Ikon ikon={Archive} size={12} /> Arkiver
             </button>
           </div>
         )}
@@ -324,7 +329,7 @@ export default function Reklamasjon() {
             onChange={e => dispatch({ type: 'UPDATE_REKLAMASJON', payload: { ...r, status: e.target.value } })}
           >
             {Object.entries(REKL_STATUS).map(([key, s]) => (
-              <option key={key} value={key}>{s.ikon} {s.label}</option>
+              <option key={key} value={key}>{s.label}</option>
             ))}
           </select>
         </div>
@@ -339,13 +344,13 @@ export default function Reklamasjon() {
         <h2>Reklamasjoner</h2>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <div className="bef-view-tabs">
-            <button className={`bef-view-tab${visning === 'liste' ? ' aktiv' : ''}`} onClick={() => setVisning('liste')}>📋 Liste</button>
-            <button className={`bef-view-tab${visning === 'kalender' ? ' aktiv' : ''}`} onClick={() => setVisning('kalender')}>📅 Kalender</button>
+            <button className={`bef-view-tab${visning === 'liste' ? ' aktiv' : ''}`} onClick={() => setVisning('liste')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={ClipboardList} size={14} /> Liste</button>
+            <button className={`bef-view-tab${visning === 'kalender' ? ' aktiv' : ''}`} onClick={() => setVisning('kalender')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={CalendarDays} size={14} /> Kalender</button>
           </div>
           <input
             className="input"
             style={{ width: 200, height: 36 }}
-            placeholder="🔍 Søk..."
+            placeholder="Søk..."
             value={sok}
             onChange={e => setSok(e.target.value)}
           />
@@ -367,10 +372,10 @@ export default function Reklamasjon() {
               onClick={() => setStatusFilter(f => f === key ? null : key)}
               title={aktiv ? 'Klikk for å fjerne filter' : `Filtrer: ${s.label}`}
             >
-              <div className="bef-pipeline-ikon">{s.ikon}</div>
+              <div className="bef-pipeline-ikon"><Ikon ikon={s.ikon} size={20} farge={aktiv ? '#fff' : s.farge} /></div>
               <div className="bef-pipeline-antall" style={{ color: aktiv ? '#fff' : s.farge }}>{teller[key] || 0}</div>
               <div className="bef-pipeline-label" style={{ color: aktiv ? '#fff' : undefined }}>{s.label}</div>
-              {aktiv && <div className="bef-pipeline-aktiv-pill">✕ fjern</div>}
+              {aktiv && <div className="bef-pipeline-aktiv-pill"><Ikon ikon={X} size={11} /> fjern</div>}
             </div>
           );
         })}
@@ -378,7 +383,7 @@ export default function Reklamasjon() {
       {statusFilter && (
         <div className="bef-filter-banner">
           Viser kun: <strong>{REKL_STATUS[statusFilter]?.label}</strong>
-          <button className="bef-filter-fjern" onClick={() => setStatusFilter(null)}>✕ Fjern filter</button>
+          <button className="bef-filter-fjern" onClick={() => setStatusFilter(null)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Ikon ikon={X} size={12} /> Fjern filter</button>
         </div>
       )}
 
@@ -387,7 +392,7 @@ export default function Reklamasjon() {
         {/* Ny */}
         <div className="bef-kolonne">
           <div className="bef-kolonne-header" style={{ borderColor: REKL_STATUS.ny.farge, color: REKL_STATUS.ny.farge }}>
-            <span>🔵 Ny <span className="bef-kolonne-teller">{nyeRekl.length}</span></span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={REKL_STATUS.ny.ikon} size={15} /> Ny <span className="bef-kolonne-teller">{nyeRekl.length}</span></span>
             {sumKr(nyeRekl) && <span className="bef-kolonne-kr">{sumKr(nyeRekl)}</span>}
           </div>
           {nyeRekl.length === 0 && <div className="bef-tom-melding">Ingen nye reklamasjoner.</div>}
@@ -398,7 +403,7 @@ export default function Reklamasjon() {
         {/* Planlagt */}
         <div className="bef-kolonne">
           <div className="bef-kolonne-header" style={{ borderColor: REKL_STATUS.planlagt.farge, color: REKL_STATUS.planlagt.farge }}>
-            <span>📅 Planlagt <span className="bef-kolonne-teller">{planlagteRekl.length}</span></span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={REKL_STATUS.planlagt.ikon} size={15} /> Planlagt <span className="bef-kolonne-teller">{planlagteRekl.length}</span></span>
             {sumKr(planlagteRekl) && <span className="bef-kolonne-kr">{sumKr(planlagteRekl)}</span>}
           </div>
           {planlagteRekl.length === 0 && <div className="bef-tom-melding">Ingen planlagte reklamasjoner.</div>}
@@ -408,7 +413,7 @@ export default function Reklamasjon() {
         {/* Under utbedring */}
         <div className="bef-kolonne">
           <div className="bef-kolonne-header" style={{ borderColor: REKL_STATUS.under_arbeid.farge, color: REKL_STATUS.under_arbeid.farge }}>
-            <span>🔨 Under utbedring <span className="bef-kolonne-teller">{underArbeid.length}</span></span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={REKL_STATUS.under_arbeid.ikon} size={15} /> Under utbedring <span className="bef-kolonne-teller">{underArbeid.length}</span></span>
             {sumKr(underArbeid) && <span className="bef-kolonne-kr">{sumKr(underArbeid)}</span>}
           </div>
           {underArbeid.length === 0 && <div className="bef-tom-melding">Ingen reklamasjoner under arbeid.</div>}
@@ -418,7 +423,7 @@ export default function Reklamasjon() {
         {/* Utbedret / Avvist / Lukket */}
         <div className="bef-kolonne">
           <div className="bef-kolonne-header" style={{ borderColor: REKL_STATUS.utbedret.farge, color: REKL_STATUS.utbedret.farge }}>
-            <span>✅ Utbedret <span className="bef-kolonne-teller">{utbedredeRekl.length}</span></span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={REKL_STATUS.utbedret.ikon} size={15} /> Utbedret <span className="bef-kolonne-teller">{utbedredeRekl.length}</span></span>
             {sumKr(utbedredeRekl) && <span className="bef-kolonne-kr">{sumKr(utbedredeRekl)}</span>}
           </div>
           {utbedredeRekl.length === 0 && <div className="bef-tom-melding">Ingen utbedrede reklamasjoner.</div>}
@@ -429,15 +434,15 @@ export default function Reklamasjon() {
       {/* Arkiv — manuelt arkiverte reklamasjoner */}
       {arkiverte.length > 0 && (
         <div style={{ marginTop: 20 }}>
-          <button className="bef-arkiv-toggle" onClick={() => setVisArkiv(v => !v)}>
-            📦 Arkiv <span className="bef-kolonne-teller">{arkiverte.length}</span>
+          <button className="bef-arkiv-toggle" onClick={() => setVisArkiv(v => !v)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Ikon ikon={Archive} size={15} /> Arkiv <span className="bef-kolonne-teller">{arkiverte.length}</span>
             <span style={{ marginLeft: 6, fontSize: 11 }}>{visArkiv ? '▲ Skjul' : '▼ Vis'}</span>
           </button>
           {visArkiv && (
             <div className="bef-arkiv-liste">
               {arkiverte.map(r => (
                 <div key={r.id} className="bef-arkiv-rad" onClick={() => apneRediger(r)}>
-                  <span className="bef-arkiv-ikon">{(REKL_STATUS[r.status] || REKL_STATUS.ny).ikon}</span>
+                  <span className="bef-arkiv-ikon"><Ikon ikon={(REKL_STATUS[r.status] || REKL_STATUS.ny).ikon} size={14} /></span>
                   <span className="bef-arkiv-adresse">{r.adresse}</span>
                   <span className="bef-arkiv-navn">{r.kontaktNavn}</span>
                   {r.dato && <span className="bef-arkiv-dato">{datoKort(r.dato)}</span>}
@@ -447,7 +452,7 @@ export default function Reklamasjon() {
                     onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_REKLAMASJON', payload: { ...r, arkivert: false } }); }}
                     title="Flytt tilbake til aktiv liste"
                   >
-                    ↩ Gjenopprett
+                    <Ikon ikon={Undo2} size={12} /> Gjenopprett
                   </button>
                 </div>
               ))}
@@ -463,7 +468,7 @@ export default function Reklamasjon() {
           <div className="modal bef-modal" style={{ maxWidth: 600 }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3>{redigerer ? 'Rediger reklamasjon' : 'Ny reklamasjon'}</h3>
-              <button className="btn-icon" onClick={() => setVisModal(false)}>✕</button>
+              <button className="btn-icon" onClick={() => setVisModal(false)}><Ikon ikon={X} size={15} /></button>
             </div>
             <div className="form">
 
@@ -512,7 +517,7 @@ export default function Reklamasjon() {
                     <input type="date" className="input" value={form.frist} onChange={e => setForm(f => ({ ...f, frist: e.target.value }))} />
                   </div>
                   <div>
-                    <label>📅 Planlagt utført (kalender)</label>
+                    <label>Planlagt utført (kalender)</label>
                     <input type="date" className="input" value={form.planlagtDato || ''}
                       onChange={e => setForm(f => ({ ...f, planlagtDato: e.target.value }))}
                       title="Når skal reklamasjonen tas — vises i den delte kalenderen" />
@@ -553,7 +558,7 @@ export default function Reklamasjon() {
                         ? { background: s.farge, color: '#fff', borderColor: s.farge }
                         : { borderColor: s.farge, color: s.farge }}
                       onClick={() => setForm(f => ({ ...f, status: key }))}>
-                      {s.ikon} {s.label}
+                      <Ikon ikon={s.ikon} size={14} /> {s.label}
                     </button>
                   ))}
                 </div>
@@ -570,8 +575,8 @@ export default function Reklamasjon() {
               <div className="modal-actions">
                 {redigerer && <button className="btn btn-danger" onClick={slett}>Slett</button>}
                 {redigerer && (
-                  <button className="btn" onClick={() => printPDF(redigerer)} title="Skriv ut / lagre som PDF">
-                    🖨️ PDF
+                  <button className="btn" onClick={() => printPDF(redigerer)} title="Skriv ut / lagre som PDF" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Ikon ikon={Printer} size={15} /> PDF
                   </button>
                 )}
                 <button className="btn" onClick={() => setVisModal(false)}>Avbryt</button>

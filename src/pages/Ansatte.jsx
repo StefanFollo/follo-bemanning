@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { HardHat, Wrench, Thermometer, Cake, CircleCheck, TriangleAlert, X, CalendarDays } from 'lucide-react';
+import { Ikon, IkonTekst } from '../komponenter/Ikon';
 import { useApp } from '../context/AppContext';
 
 const FAG_COLORS = {
@@ -21,7 +23,7 @@ function Modal({ title, onClose, children }) {
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{title}</h3>
-          <button className="btn-icon" onClick={onClose}>✕</button>
+          <button className="btn-icon" onClick={onClose}><Ikon ikon={X} size={16} /></button>
         </div>
         {children}
       </div>
@@ -123,13 +125,13 @@ export default function Ansatte() {
           className={`tab-btn ${gruppe === 'fast' ? 'active' : ''}`}
           onClick={() => { setGruppe('fast'); setFilterFag('alle'); }}
         >
-          👷 Fast ansatte <span className="count-badge" style={{ marginLeft: 4 }}>{fastCount}</span>
+          <IkonTekst ikon={HardHat} size={15}>Fast ansatte</IkonTekst> <span className="count-badge" style={{ marginLeft: 4 }}>{fastCount}</span>
         </button>
         <button
           className={`tab-btn ${gruppe === 'innleie' ? 'active' : ''}`}
           onClick={() => { setGruppe('innleie'); setFilterFag('alle'); }}
         >
-          🔧 Innleie <span className="count-badge" style={{ marginLeft: 4 }}>{innleieCount}</span>
+          <IkonTekst ikon={Wrench} size={15}>Innleie</IkonTekst> <span className="count-badge" style={{ marginLeft: 4 }}>{innleieCount}</span>
         </button>
       </div>
 
@@ -188,7 +190,7 @@ export default function Ansatte() {
                   <span className="ct-prosjekt-navn">{a.navn}</span>
                   {a.sykmeldt && (
                     <span style={{ fontSize: 10, color: '#5d6b80', fontWeight: 500, letterSpacing: '0.03em' }}>
-                      🤒 SYKMELDT{a.sykmeldtTil ? ` t.o.m. ${bursdagLabel ? new Date(a.sykmeldtTil + 'T00:00:00').toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' }) : a.sykmeldtTil}` : ''}
+                      <Ikon ikon={Thermometer} size={11} style={{ marginRight: 3 }} />SYKMELDT{a.sykmeldtTil ? ` t.o.m. ${bursdagLabel ? new Date(a.sykmeldtTil + 'T00:00:00').toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' }) : a.sykmeldtTil}` : ''}
                     </span>
                   )}
                   {!a.sykmeldt && a.innleie && (
@@ -208,7 +210,7 @@ export default function Ansatte() {
               <div className="ct-col ct-kontakt">{a.epost || <span style={{ color: '#cbd5e1' }}>–</span>}</div>
               <div className="ct-col ct-kontakt">
                 {a.bursdag
-                  ? <span style={{ color: '#ec4899' }}>🎂 {bursdagLabel(a.bursdag)}</span>
+                  ? <span style={{ color: '#ec4899' }}><Ikon ikon={Cake} size={14} style={{ marginRight: 4 }} />{bursdagLabel(a.bursdag)}</span>
                   : <span style={{ color: '#cbd5e1' }}>–</span>}
               </div>
               <div className="ct-col ct-actions">
@@ -217,13 +219,13 @@ export default function Ansatte() {
                     className="btn btn-sm"
                     style={{ background: '#f0fdf4', color: '#15803d', borderColor: '#bbf7d0' }}
                     onClick={() => dispatch({ type: 'UPDATE_ANSATT', payload: { ...a, sykmeldt: false, sykmeldtFra: '', sykmeldtTil: '' } })}
-                  >✅ Friskmeldt</button>
+                  ><IkonTekst ikon={CircleCheck} size={14} gap={4}>Friskmeldt</IkonTekst></button>
                 ) : (
                   <button
                     className="btn btn-sm"
                     style={{ background: '#f8fafc', color: '#5d6b80', borderColor: '#e2e8f0' }}
                     onClick={() => { setSykmeldtForm({ fra: new Date().toISOString().slice(0, 10), til: '' }); setSykmeldtModal(a); }}
-                  >🤒 Syk</button>
+                  ><IkonTekst ikon={Thermometer} size={14} gap={4}>Syk</IkonTekst></button>
                 )}
                 <button className="btn btn-sm" onClick={() => openEdit(a)}>Rediger</button>
                 <button className="btn btn-sm btn-danger" onClick={() => handleDelete(a.id)}>Slett</button>
@@ -248,7 +250,7 @@ export default function Ansatte() {
                 style={!form.innleie ? { background: '#1e293b', borderColor: '#1e293b', color: '#fff' } : {}}
                 onClick={() => setForm(f => ({ ...f, innleie: false }))}
               >
-                👷 Fast ansatt
+                <IkonTekst ikon={HardHat} size={14} gap={4}>Fast ansatt</IkonTekst>
               </button>
               <button
                 type="button"
@@ -256,7 +258,7 @@ export default function Ansatte() {
                 style={form.innleie ? { background: '#f97316', borderColor: '#f97316', color: '#fff' } : {}}
                 onClick={() => setForm(f => ({ ...f, innleie: true }))}
               >
-                🔧 Innleie
+                <IkonTekst ikon={Wrench} size={14} gap={4}>Innleie</IkonTekst>
               </button>
             </div>
             <label>Navn *</label>
@@ -269,7 +271,7 @@ export default function Ansatte() {
             <input value={form.telefon} onChange={e => setForm(f => ({ ...f, telefon: e.target.value }))} placeholder="+47 000 00 000" />
             <label>E-post</label>
             <input value={form.epost} onChange={e => setForm(f => ({ ...f, epost: e.target.value }))} placeholder="navn@epost.no" />
-            <label>🎂 Bursdag (dag og måned)</label>
+            <label><IkonTekst ikon={Cake} size={14} gap={4}>Bursdag (dag og måned)</IkonTekst></label>
             <div style={{ display: 'flex', gap: 8 }}>
               <select
                 value={form.bursdag ? form.bursdag.split('-')[0] : ''}
@@ -301,7 +303,7 @@ export default function Ansatte() {
                 ))}
               </select>
               {form.bursdag && (
-                <button type="button" className="btn" onClick={() => setForm(f => ({ ...f, bursdag: '' }))}>✕</button>
+                <button type="button" className="btn" onClick={() => setForm(f => ({ ...f, bursdag: '' }))}><Ikon ikon={X} size={16} /></button>
               )}
             </div>
             <label style={{ marginTop: 8 }}>Bemanningsplan</label>
@@ -332,8 +334,8 @@ export default function Ansatte() {
               </div>
               <span style={{ fontSize: 13, color: '#374151' }}>
                 {form.utenforBemanningsplan
-                  ? '⚠️ Ikke i bemanningsplan (kontor / admin)'
-                  : '✅ Inkludert i bemanningsplan'}
+                  ? <IkonTekst ikon={TriangleAlert} size={14} farge="#b45309">Ikke i bemanningsplan (kontor / admin)</IkonTekst>
+                  : <IkonTekst ikon={CircleCheck} size={14} farge="#15803d">Inkludert i bemanningsplan</IkonTekst>}
               </span>
             </div>
             <div className="form-actions">
@@ -345,7 +347,7 @@ export default function Ansatte() {
       )}
 
       {sykmeldtModal && (
-        <Modal title={`🤒 Sykmelding – ${sykmeldtModal.navn}`} onClose={() => setSykmeldtModal(null)}>
+        <Modal title={<IkonTekst ikon={Thermometer} size={16}>Sykmelding – {sykmeldtModal.navn}</IkonTekst>} onClose={() => setSykmeldtModal(null)}>
           <div className="form">
             <label>Fra dato</label>
             <input type="date" value={sykmeldtForm.fra} onChange={e => setSykmeldtForm(f => ({ ...f, fra: e.target.value }))} />
@@ -353,7 +355,7 @@ export default function Ansatte() {
             <input type="date" value={sykmeldtForm.til} min={sykmeldtForm.fra} onChange={e => setSykmeldtForm(f => ({ ...f, til: e.target.value }))} />
             {sykmeldtForm.til && sykmeldtForm.fra && (
               <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '10px 12px', fontSize: 13, color: '#475569' }}>
-                📅 Sykmeldt i {Math.max(1, Math.round((new Date(sykmeldtForm.til) - new Date(sykmeldtForm.fra)) / 86400000))} dager
+                <IkonTekst ikon={CalendarDays} size={14}>Sykmeldt i {Math.max(1, Math.round((new Date(sykmeldtForm.til) - new Date(sykmeldtForm.fra)) / 86400000))} dager</IkonTekst>
               </div>
             )}
             <div className="form-actions">
@@ -379,7 +381,7 @@ export default function Ansatte() {
                 <div key={f} className="fag-item">
                   <span className="fag-dot" style={{ background: fagColor(f) }} />
                   <span>{f}</span>
-                  <button className="btn-icon btn-danger-icon" onClick={() => handleDeleteFag(f)}>✕</button>
+                  <button className="btn-icon btn-danger-icon" onClick={() => handleDeleteFag(f)}><Ikon ikon={X} size={16} /></button>
                 </div>
               ))}
             </div>

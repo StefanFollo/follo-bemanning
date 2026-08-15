@@ -3,6 +3,11 @@ import { useApp } from '../context/AppContext';
 import { dateToIso } from '../store';
 import ServiceReklKalender from '../components/ServiceReklKalender';
 import { SERV_STATUS } from '../statuses';
+import {
+  CalendarDays, Hammer, Clock, Rocket, MessageSquare, Archive, Undo2,
+  Zap, Pencil, X, ClipboardList, Printer,
+} from 'lucide-react';
+import { Ikon } from '../komponenter/Ikon';
 
 const SERV_TYPER = [
   'Diverse', 'Tømrer', 'Maling', 'Rørlegger', 'Flislegging',
@@ -249,27 +254,27 @@ export default function Service() {
         <div className="rekl-kort-topp">
           <div className="rekl-kort-tittel">
             <div className="rekl-kort-adresse">{j.adresse}</div>
-            {j.kontaktNavn && <div className="rekl-kort-kontakt">👤 {j.kontaktNavn}</div>}
+            {j.kontaktNavn && <div className="rekl-kort-kontakt">{j.kontaktNavn}</div>}
           </div>
-          <span className="rekl-status-pill" style={{ background: s.bg, color: s.farge }}>
-            {s.ikon} {s.label}
+          <span className="rekl-status-pill" style={{ background: s.bg, color: s.farge, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Ikon ikon={s.ikon} size={13} /> {s.label}
           </span>
         </div>
 
         <div className="rekl-chips">
           <span className="rekl-chip rekl-chip--type">{j.type}</span>
-          <span className="rekl-chip rekl-chip--dato">📅 {datoKort(j.dato)}</span>
+          <span className="rekl-chip rekl-chip--dato"><Ikon ikon={CalendarDays} size={12} /> {datoKort(j.dato)}</span>
           {ansatt && (
             <span className="rekl-chip" style={{ background: ansattFarge(j.ansvarligId) + '22', color: ansattFarge(j.ansvarligId) }}>
-              🔨 {ansatt.navn.split(' ')[0]}
+              <Ikon ikon={Hammer} size={12} /> {ansatt.navn.split(' ')[0]}
             </span>
           )}
           {j.estimertTimer && (
-            <span className="rekl-chip">⏱ {j.estimertTimer}t</span>
+            <span className="rekl-chip"><Ikon ikon={Clock} size={12} /> {j.estimertTimer}t</span>
           )}
           {j.belop && (
             <span className="rekl-chip rekl-chip--kostnad">
-              💰 {new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(Number(j.belop))}
+              {new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(Number(j.belop))}
             </span>
           )}
         </div>
@@ -283,7 +288,7 @@ export default function Service() {
         <div className="rekl-bunntekst">
           {j.oensketDato && (
             <span style={{ color: fristFarge || '#0891b2', fontSize: 12, fontWeight: 500 }}>
-              🚀 Ønsket dato: {datoKort(j.oensketDato)}
+              <Ikon ikon={Rocket} size={12} /> Ønsket dato: {datoKort(j.oensketDato)}
               {fristDager !== null && j.status !== 'ferdig' && j.status !== 'fakturert' && (
                 <em> ({fristDager < 0 ? `${Math.abs(fristDager)}d over` : fristDager === 0 ? 'i dag' : `${fristDager}d`})</em>
               )}
@@ -291,7 +296,7 @@ export default function Service() {
           )}
           {j.kommentar && (
             <span className="rekl-kommentar">
-              💬 {j.kommentar.length > 50 ? j.kommentar.slice(0, 50) + '…' : j.kommentar}
+              <Ikon ikon={MessageSquare} size={12} /> {j.kommentar.length > 50 ? j.kommentar.slice(0, 50) + '…' : j.kommentar}
             </span>
           )}
         </div>
@@ -305,7 +310,7 @@ export default function Service() {
               onClick={() => dispatch({ type: 'UPDATE_SERVICE_JOBB', payload: { ...j, arkivert: true } })}
               title="Flytt til arkivet — data beholdes og kan gjenopprettes"
             >
-              📦 Arkiver
+              <Ikon ikon={Archive} size={12} /> Arkiver
             </button>
           </div>
         )}
@@ -318,7 +323,7 @@ export default function Service() {
             onChange={e => dispatch({ type: 'UPDATE_SERVICE_JOBB', payload: { ...j, status: e.target.value } })}
           >
             {Object.entries(SERV_STATUS).map(([key, s]) => (
-              <option key={key} value={key}>{s.ikon} {s.label}</option>
+              <option key={key} value={key}>{s.label}</option>
             ))}
           </select>
         </div>
@@ -331,18 +336,18 @@ export default function Service() {
       {/* Header */}
       <div className="page-header">
         <div>
-          <h2>⚡ Service</h2>
+          <h2 style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><Ikon ikon={Zap} size={18} /> Service</h2>
           <div style={{ fontSize: 13, color: '#5d6b80', marginTop: 2 }}>Små jobber under 1 uke</div>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <div className="bef-view-tabs">
-            <button className={`bef-view-tab${visning === 'liste' ? ' aktiv' : ''}`} onClick={() => setVisning('liste')}>📋 Liste</button>
-            <button className={`bef-view-tab${visning === 'kalender' ? ' aktiv' : ''}`} onClick={() => setVisning('kalender')}>📅 Kalender</button>
+            <button className={`bef-view-tab${visning === 'liste' ? ' aktiv' : ''}`} onClick={() => setVisning('liste')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={ClipboardList} size={14} /> Liste</button>
+            <button className={`bef-view-tab${visning === 'kalender' ? ' aktiv' : ''}`} onClick={() => setVisning('kalender')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={CalendarDays} size={14} /> Kalender</button>
           </div>
           <input
             className="input"
             style={{ width: 200, height: 36 }}
-            placeholder="🔍 Søk adresse, type..."
+            placeholder="Søk adresse, type..."
             value={sok}
             onChange={e => setSok(e.target.value)}
           />
@@ -364,10 +369,10 @@ export default function Service() {
               onClick={() => setStatusFilter(f => f === key ? null : key)}
               title={aktiv ? 'Klikk for å fjerne filter' : `Filtrer: ${s.label}`}
             >
-              <div className="bef-pipeline-ikon">{s.ikon}</div>
+              <div className="bef-pipeline-ikon"><Ikon ikon={s.ikon} size={20} farge={aktiv ? '#fff' : s.farge} /></div>
               <div className="bef-pipeline-antall" style={{ color: aktiv ? '#fff' : s.farge }}>{teller[key] || 0}</div>
               <div className="bef-pipeline-label" style={{ color: aktiv ? '#fff' : undefined }}>{s.label}</div>
-              {aktiv && <div className="bef-pipeline-aktiv-pill">✕ fjern</div>}
+              {aktiv && <div className="bef-pipeline-aktiv-pill"><Ikon ikon={X} size={11} /> fjern</div>}
             </div>
           );
         })}
@@ -375,7 +380,7 @@ export default function Service() {
       {statusFilter && (
         <div className="bef-filter-banner">
           Viser kun: <strong>{SERV_STATUS[statusFilter]?.label}</strong>
-          <button className="bef-filter-fjern" onClick={() => setStatusFilter(null)}>✕ Fjern filter</button>
+          <button className="bef-filter-fjern" onClick={() => setStatusFilter(null)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Ikon ikon={X} size={12} /> Fjern filter</button>
         </div>
       )}
 
@@ -384,7 +389,7 @@ export default function Service() {
         {/* Ny */}
         <div className="bef-kolonne">
           <div className="bef-kolonne-header" style={{ borderColor: SERV_STATUS.ny.farge, color: SERV_STATUS.ny.farge }}>
-            <span>🔵 Ny <span className="bef-kolonne-teller">{nyeJobber.length}</span></span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={SERV_STATUS.ny.ikon} size={15} /> Ny <span className="bef-kolonne-teller">{nyeJobber.length}</span></span>
             {sumKr(nyeJobber) && <span className="bef-kolonne-kr">{sumKr(nyeJobber)}</span>}
           </div>
           {nyeJobber.length === 0 && <div className="bef-tom-melding">Ingen nye jobber.</div>}
@@ -395,7 +400,7 @@ export default function Service() {
         {/* Planlagt */}
         <div className="bef-kolonne">
           <div className="bef-kolonne-header" style={{ borderColor: SERV_STATUS.planlagt.farge, color: SERV_STATUS.planlagt.farge }}>
-            <span>📅 Planlagt <span className="bef-kolonne-teller">{planlagteJobber.length}</span></span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={SERV_STATUS.planlagt.ikon} size={15} /> Planlagt <span className="bef-kolonne-teller">{planlagteJobber.length}</span></span>
             {sumKr(planlagteJobber) && <span className="bef-kolonne-kr">{sumKr(planlagteJobber)}</span>}
           </div>
           {planlagteJobber.length === 0 && <div className="bef-tom-melding">Ingen planlagte jobber.</div>}
@@ -405,7 +410,7 @@ export default function Service() {
         {/* Under arbeid */}
         <div className="bef-kolonne">
           <div className="bef-kolonne-header" style={{ borderColor: SERV_STATUS.under_arbeid.farge, color: SERV_STATUS.under_arbeid.farge }}>
-            <span>🔨 Under arbeid <span className="bef-kolonne-teller">{underArbeid.length}</span></span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={SERV_STATUS.under_arbeid.ikon} size={15} /> Under arbeid <span className="bef-kolonne-teller">{underArbeid.length}</span></span>
             {sumKr(underArbeid) && <span className="bef-kolonne-kr">{sumKr(underArbeid)}</span>}
           </div>
           {underArbeid.length === 0 && <div className="bef-tom-melding">Ingen jobber under arbeid.</div>}
@@ -415,7 +420,7 @@ export default function Service() {
         {/* Ferdig – ikke fakturert */}
         <div className="bef-kolonne">
           <div className="bef-kolonne-header" style={{ borderColor: SERV_STATUS.ferdig.farge, color: SERV_STATUS.ferdig.farge }}>
-            <span>✅ Ferdig <span className="bef-kolonne-teller">{ferdige.length}</span></span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={SERV_STATUS.ferdig.ikon} size={15} /> Ferdig <span className="bef-kolonne-teller">{ferdige.length}</span></span>
             {sumKr(ferdige) && <span className="bef-kolonne-kr">{sumKr(ferdige)}</span>}
           </div>
           {ferdige.length === 0 && <div className="bef-tom-melding">Ingen ferdige jobber.</div>}
@@ -425,7 +430,7 @@ export default function Service() {
         {/* Fakturert */}
         <div className="bef-kolonne">
           <div className="bef-kolonne-header" style={{ borderColor: SERV_STATUS.fakturert.farge, color: SERV_STATUS.fakturert.farge }}>
-            <span>🧾 Fakturert <span className="bef-kolonne-teller">{fakturerte.length}</span></span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={SERV_STATUS.fakturert.ikon} size={15} /> Fakturert <span className="bef-kolonne-teller">{fakturerte.length}</span></span>
             {sumKr(fakturerte) && <span className="bef-kolonne-kr">{sumKr(fakturerte)}</span>}
           </div>
           {fakturerte.length === 0 && <div className="bef-tom-melding">Ingen fakturerte jobber.</div>}
@@ -436,15 +441,15 @@ export default function Service() {
       {/* Arkiv — manuelt arkiverte jobber */}
       {arkiverte.length > 0 && (
         <div style={{ marginTop: 20 }}>
-          <button className="bef-arkiv-toggle" onClick={() => setVisArkiv(v => !v)}>
-            📦 Arkiv <span className="bef-kolonne-teller">{arkiverte.length}</span>
+          <button className="bef-arkiv-toggle" onClick={() => setVisArkiv(v => !v)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Ikon ikon={Archive} size={15} /> Arkiv <span className="bef-kolonne-teller">{arkiverte.length}</span>
             <span style={{ marginLeft: 6, fontSize: 11 }}>{visArkiv ? '▲ Skjul' : '▼ Vis'}</span>
           </button>
           {visArkiv && (
             <div className="bef-arkiv-liste">
               {arkiverte.map(j => (
                 <div key={j.id} className="bef-arkiv-rad" onClick={() => apneRediger(j)}>
-                  <span className="bef-arkiv-ikon">{(SERV_STATUS[j.status] || SERV_STATUS.ny).ikon}</span>
+                  <span className="bef-arkiv-ikon"><Ikon ikon={(SERV_STATUS[j.status] || SERV_STATUS.ny).ikon} size={14} /></span>
                   <span className="bef-arkiv-adresse">{j.adresse}</span>
                   <span className="bef-arkiv-navn">{j.kontaktNavn}</span>
                   {j.dato && <span className="bef-arkiv-dato">{datoKort(j.dato)}</span>}
@@ -454,7 +459,7 @@ export default function Service() {
                     onClick={e => { e.stopPropagation(); dispatch({ type: 'UPDATE_SERVICE_JOBB', payload: { ...j, arkivert: false } }); }}
                     title="Flytt tilbake til aktiv liste"
                   >
-                    ↩ Gjenopprett
+                    <Ikon ikon={Undo2} size={12} /> Gjenopprett
                   </button>
                 </div>
               ))}
@@ -469,8 +474,8 @@ export default function Service() {
         <div className="modal-backdrop" onClick={() => setVisModal(false)}>
           <div className="modal bef-modal" style={{ maxWidth: 580 }} onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>{redigerer ? '✏️ Rediger service-jobb' : '⚡ Ny service-jobb'}</h3>
-              <button className="btn-icon" onClick={() => setVisModal(false)}>✕</button>
+              <h3 style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>{redigerer ? <><Ikon ikon={Pencil} size={16} /> Rediger service-jobb</> : <><Ikon ikon={Zap} size={16} /> Ny service-jobb</>}</h3>
+              <button className="btn-icon" onClick={() => setVisModal(false)}><Ikon ikon={X} size={15} /></button>
             </div>
             <div className="form">
 
@@ -527,7 +532,7 @@ export default function Service() {
                       onChange={e => setForm(f => ({ ...f, oensketDato: e.target.value }))} />
                   </div>
                   <div>
-                    <label>📅 Planlagt utført (kalender)</label>
+                    <label>Planlagt utført (kalender)</label>
                     <input type="date" className="input" value={form.planlagtDato || ''}
                       onChange={e => setForm(f => ({ ...f, planlagtDato: e.target.value }))}
                       title="Når skal jobben tas — vises i den delte kalenderen" />
@@ -578,7 +583,7 @@ export default function Service() {
                         ? { background: s.farge, color: '#fff', borderColor: s.farge }
                         : { borderColor: s.farge, color: s.farge }}
                       onClick={() => setForm(f => ({ ...f, status: key }))}>
-                      {s.ikon} {s.label}
+                      <Ikon ikon={s.ikon} size={14} /> {s.label}
                     </button>
                   ))}
                 </div>
@@ -595,8 +600,8 @@ export default function Service() {
               <div className="modal-actions">
                 {redigerer && <button className="btn btn-danger" onClick={slett}>Slett</button>}
                 {redigerer && (
-                  <button className="btn" onClick={() => printPDF(redigerer)} title="Skriv ut / lagre som PDF">
-                    🖨️ PDF
+                  <button className="btn" onClick={() => printPDF(redigerer)} title="Skriv ut / lagre som PDF" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    <Ikon ikon={Printer} size={15} /> PDF
                   </button>
                 )}
                 <button className="btn" onClick={() => setVisModal(false)}>Avbryt</button>

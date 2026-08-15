@@ -1,4 +1,9 @@
 import React, { useState } from 'react';
+import {
+  ClipboardList, Pencil, Send, CircleCheck, CircleX, X, Search, Phone, Mail,
+  CalendarDays, Clock, PhoneCall, Rocket, FilePen, MessageSquare,
+} from 'lucide-react';
+import { Ikon } from '../komponenter/Ikon';
 import { useApp } from '../context/AppContext';
 import { weekStart, addDays, isoToDate, dateToIso, formatDate, overlaps } from '../store';
 import { getHolidayMap } from '../holidays';
@@ -7,11 +12,11 @@ const DAG_NAVN    = ['Man', 'Tir', 'Ons', 'Tor', 'Fre'];
 const MAANED_NAVN = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des'];
 
 const BEF_STATUS = {
-  planlagt:      { label: 'Planlagt befaring',   farge: '#3b82f6', bg: '#eff6ff', ikon: '📋' },
-  tilbud_arbeid: { label: 'Tilbud under arbeid', farge: '#b45309', bg: '#fffbeb', ikon: '✏️' },
-  tilbud_sendt:  { label: 'Tilbud sendt',        farge: '#6d28d9', bg: '#f5f3ff', ikon: '📤' },
-  godkjent:      { label: 'Godkjent',            farge: '#15803d', bg: '#f0fdf4', ikon: '✅' },
-  tapt:          { label: 'Tapt',                farge: '#6b7280', bg: '#f9fafb', ikon: '❌' },
+  planlagt:      { label: 'Planlagt befaring',   farge: '#3b82f6', bg: '#eff6ff', ikon: ClipboardList },
+  tilbud_arbeid: { label: 'Tilbud under arbeid', farge: '#b45309', bg: '#fffbeb', ikon: Pencil },
+  tilbud_sendt:  { label: 'Tilbud sendt',        farge: '#6d28d9', bg: '#f5f3ff', ikon: Send },
+  godkjent:      { label: 'Godkjent',            farge: '#15803d', bg: '#f0fdf4', ikon: CircleCheck },
+  tapt:          { label: 'Tapt',                farge: '#6b7280', bg: '#f9fafb', ikon: CircleX },
 };
 function datoKort(iso) {
   if (!iso) return '';
@@ -461,7 +466,7 @@ export default function RorleggerPlan() {
                       >
                         <span className="gantt-label">{jobNavn}</span>
                         <div className="gantt-actions">
-                          <button onClick={e => { e.stopPropagation(); handleDeletePlan(plan.id); }} title="Slett">✕</button>
+                          <button onClick={e => { e.stopPropagation(); handleDeletePlan(plan.id); }} title="Slett"><Ikon ikon={X} size={12} /></button>
                         </div>
                       </div>
                     );
@@ -523,9 +528,9 @@ export default function RorleggerPlan() {
                           zIndex: 3, cursor: 'default',
                           boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
                         }}
-                        title={`🔍 Befaring\n${b.kontaktNavn} — ${b.adresse}\n${b.dato}${b.tid ? ' kl. ' + b.tid : ''}${b.jobbType ? '\nType: ' + b.jobbType : ''}${b.notat ? '\n' + b.notat : ''}`}
+                        title={`Befaring\n${b.kontaktNavn} — ${b.adresse}\n${b.dato}${b.tid ? ' kl. ' + b.tid : ''}${b.jobbType ? '\nType: ' + b.jobbType : ''}${b.notat ? '\n' + b.notat : ''}`}
                       >
-                        🔍 {b.tid || ''}
+                        <Ikon ikon={Search} size={10} /> {b.tid || ''}
                       </div>
                     );
                   })}
@@ -621,10 +626,10 @@ export default function RorleggerPlan() {
                               <div key={t.id + '-bef'}
                                 className="ror-bar"
                                 style={{ ...getTimerBarStyle(t.startTid, t.sluttTid, t.row, totalRows), background: farge, opacity: 0.9, backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,0.15) 4px,rgba(255,255,255,0.15) 8px)' }}
-                                title={`🔍 Befaring\n${t.kontaktNavn} — ${t.adresse}\nkl. ${t.tid}${t.jobbType ? '\nType: ' + t.jobbType : ''}${t.notat ? '\n' + t.notat : ''}`}
+                                title={`Befaring\n${t.kontaktNavn} — ${t.adresse}\nkl. ${t.tid}${t.jobbType ? '\nType: ' + t.jobbType : ''}${t.notat ? '\n' + t.notat : ''}`}
                                 onClick={e => e.stopPropagation()}
                               >
-                                <span className="ror-bar-label">🔍 {t.tid}</span>
+                                <span className="ror-bar-label"><Ikon ikon={Search} size={10} style={{ marginRight: 2 }} />{t.tid}</span>
                                 <span className="ror-bar-prosjekt">{t.kontaktNavn || t.adresse}</span>
                               </div>
                             );
@@ -717,13 +722,13 @@ export default function RorleggerPlan() {
                               <div className="bef-k-adresse">{b.kontaktNavn}</div>
                               {(b.telefon || b.epost) && (
                                 <div className="bef-k-kontakt">
-                                  {b.telefon && <a href={`tel:${b.telefon}`} className="bef-k-kontakt-link">📱 {b.telefon}</a>}
-                                  {b.epost   && <a href={`mailto:${b.epost}`} className="bef-k-kontakt-link">✉️ {b.epost}</a>}
+                                  {b.telefon && <a href={`tel:${b.telefon}`} className="bef-k-kontakt-link"><Ikon ikon={Phone} size={12} style={{ marginRight: 3 }} />{b.telefon}</a>}
+                                  {b.epost   && <a href={`mailto:${b.epost}`} className="bef-k-kontakt-link"><Ikon ikon={Mail} size={12} style={{ marginRight: 3 }} />{b.epost}</a>}
                                 </div>
                               )}
                             </div>
                             <span className="bef-k-status-pill" style={{ background: s.bg, color: s.farge, whiteSpace: 'nowrap' }}>
-                              {s.ikon} {s.label}
+                              <Ikon ikon={s.ikon} size={12} style={{ marginRight: 4 }} />{s.label}
                             </span>
                           </div>
 
@@ -732,23 +737,23 @@ export default function RorleggerPlan() {
                             {b.jobbType && <span className="bef-k-chip">{b.jobbType}</span>}
                             {b.dato && (
                               <span className="bef-k-chip bef-k-chip--dato">
-                                📅 {datoKort(b.dato)}{b.tid ? ` kl. ${b.tid}` : ''}
+                                <Ikon ikon={CalendarDays} size={12} style={{ marginRight: 3 }} />{datoKort(b.dato)}{b.tid ? ` kl. ${b.tid}` : ''}
                               </span>
                             )}
-                            {belopVis && <span className="bef-k-chip bef-k-chip--belop">💰 {belopVis}</span>}
+                            {belopVis && <span className="bef-k-chip bef-k-chip--belop">{belopVis}</span>}
                           </div>
 
                           {/* Datoer og kommentar */}
                           <div className="bef-k-datoer">
                             {b.tilbudFrist && (
                               <span className="bef-k-dato-rad" style={{ color: fristFarge }}>
-                                ⏰ Tilbudsfrist: {datoKort(b.tilbudFrist)}
+                                <Ikon ikon={Clock} size={12} style={{ marginRight: 3 }} />Tilbudsfrist: {datoKort(b.tilbudFrist)}
                                 {fristDager !== null && <em> ({fristDager < 0 ? `${Math.abs(fristDager)}d over` : fristDager === 0 ? 'i dag' : `${fristDager}d`})</em>}
                               </span>
                             )}
                             {b.nesteKontakt && (
                               <span className="bef-k-dato-rad" style={{ color: kontFarge, fontWeight: kontDager !== null && kontDager <= 2 ? 500 : 400 }}>
-                                📞 Neste kontakt: {datoKort(b.nesteKontakt)}
+                                <Ikon ikon={PhoneCall} size={12} style={{ marginRight: 3 }} />Neste kontakt: {datoKort(b.nesteKontakt)}
                                 {kontDager !== null && kontDager <= 2 && (
                                   <em> ({kontDager < 0 ? `${Math.abs(kontDager)}d over` : kontDager === 0 ? 'i dag!' : `${kontDager}d`})</em>
                                 )}
@@ -756,15 +761,15 @@ export default function RorleggerPlan() {
                             )}
                             {b.oensketOppstart && (
                               <span className="bef-k-dato-rad" style={{ color: '#0891b2', fontWeight: 500 }}>
-                                🚀 Ønsket oppstart: {datoKort(b.oensketOppstart)}
+                                <Ikon ikon={Rocket} size={12} style={{ marginRight: 3 }} />Ønsket oppstart: {datoKort(b.oensketOppstart)}
                               </span>
                             )}
                             {b.resultat && (
-                              <span className="bef-k-dato-rad bef-k-resultat">📝 {b.resultat}</span>
+                              <span className="bef-k-dato-rad bef-k-resultat"><Ikon ikon={FilePen} size={12} style={{ marginRight: 3 }} />{b.resultat}</span>
                             )}
                             {b.kommentar && (
                               <span className="bef-k-dato-rad bef-k-kommentar">
-                                💬 {b.kommentar.length > 80 ? b.kommentar.slice(0, 80) + '…' : b.kommentar}
+                                <Ikon ikon={MessageSquare} size={12} style={{ marginRight: 3 }} />{b.kommentar.length > 80 ? b.kommentar.slice(0, 80) + '…' : b.kommentar}
                               </span>
                             )}
                           </div>
@@ -777,7 +782,7 @@ export default function RorleggerPlan() {
                               onChange={e => dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, status: e.target.value } })}
                             >
                               {Object.entries(BEF_STATUS).map(([key, sv]) => (
-                                <option key={key} value={key}>{sv.ikon} {sv.label}</option>
+                                <option key={key} value={key}>{sv.label}</option>
                               ))}
                             </select>
                           </div>
@@ -798,7 +803,7 @@ export default function RorleggerPlan() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3>{editPlan ? 'Rediger plan' : 'Ny plan'}</h3>
-              <button className="btn-icon" onClick={() => setShowPlanModal(false)}>✕</button>
+              <button className="btn-icon" onClick={() => setShowPlanModal(false)}><Ikon ikon={X} size={16} /></button>
             </div>
 
             <div className="form-group">
@@ -871,7 +876,7 @@ export default function RorleggerPlan() {
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
               <h3>{editTimer ? 'Rediger oppdrag' : 'Nytt oppdrag'}</h3>
-              <button className="btn-icon" onClick={() => setShowModal(false)}>✕</button>
+              <button className="btn-icon" onClick={() => setShowModal(false)}><Ikon ikon={X} size={16} /></button>
             </div>
 
             <div className="form-group">
