@@ -129,7 +129,6 @@ body {
   display: flex; align-items: center; justify-content: center;
   cursor: default;
 }
-.brand-name { font-weight: 500; font-size: 15px; color: var(--header-text-active); white-space: nowrap; }
 .brand-sub { display: none; } /* versjonsstempel: tooltip på logoen i stedet */
 
 .nav { display: flex; gap: 2px; flex-wrap: nowrap; align-items: center; min-width: 0; flex: 1; }
@@ -138,7 +137,7 @@ body {
   border: none;
   color: var(--header-text);
   cursor: pointer;
-  padding: 15px 9px 13px;
+  padding: 15px 8px 13px;
   border-bottom: 2px solid transparent;
   border-radius: 0;
   font-size: 13px;
@@ -151,6 +150,12 @@ body {
   font-weight: 600; /* bevisst unntak fra maks-500 (spec design v2) */
   border-bottom-color: var(--header-accent);
   background: transparent;
+}
+
+/* Mellombredder: frigjør plass så alle 13 nav-punkter står på én linje. */
+@media (max-width: 1360px) {
+  .nav-user-name { display: none; }
+  .lagre-status { display: none; }
 }
 
 /* «Mer ▾»-dropdown for smal skjerm */
@@ -1498,7 +1503,6 @@ body {
     gap: 8px;
   }
   .brand-logo { width: 32px; height: 32px; font-size: 13px; }
-  .brand-name { display: none; }
   .brand-sub { display: none; }
   .nav-user-name { display: none; }
   .lagre-status { display: none; }

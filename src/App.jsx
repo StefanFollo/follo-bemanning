@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, lazy, Suspense, useSyncExternalStore, Component } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, lazy, Suspense, useSyncExternalStore, Component } from 'react';
 import { House, Search, ShieldAlert, Zap, Building2, HardHat, CalendarDays, Wrench, ChartGantt, ClipboardCheck, Truck, BookOpen, Users, RotateCw } from 'lucide-react';
 import { Ikon } from './komponenter/Ikon';
 import { AppProvider, harUlagredeEndringer } from './context/AppContext';
@@ -215,25 +215,34 @@ function SaveButton() {
 
 // ═══ Design v2: ren tekst-nav på ÉN linje, aldri to rader ═══
 // Ved plassmangel flyttes de siste punktene til en «Mer ▾»-dropdown.
-// Antall synlige styres av vindusbredde (deterministisk, ingen måle-magi).
-function synligeForBredde(bredde, antallTabs) {
-  if (bredde >= 1280) return antallTabs;
-  if (bredde >= 1100) return Math.min(antallTabs, 10);
-  if (bredde >= 950) return Math.min(antallTabs, 8);
-  if (bredde >= 800) return Math.min(antallTabs, 6);
-  return Math.min(antallTabs, 4);
-}
-
+// EKTE måling (ikke breakpoint-gjetting): krymp til innholdet faktisk får
+// plass i nav-containeren, voks igjen når det er romslig margin — ellers
+// overlappet fanene brukernavnet på mellomstore skjermer.
 function TekstNav({ TABS, activeTab, setActiveTab }) {
-  const [bredde, setBredde] = useState(() => window.innerWidth);
+  const [antallSynlige, setAntallSynlige] = useState(TABS.length);
+  const [, tving] = useState(0); // render-tick så måle-løkka kjører etter resize
   const [merApen, setMerApen] = useState(false);
   const merRef = useRef(null);
+  const navRef = useRef(null);
 
+  useEffect(() => { setAntallSynlige(TABS.length); }, [TABS]);
+
+  // Krymp til innholdet faktisk får plass — synkront etter hver render.
+  // (Konvergerer: når ingenting endres, slutter løkken av seg selv.)
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    if (nav.scrollWidth > nav.clientWidth + 1 && antallSynlige > 3) {
+      setAntallSynlige(antallSynlige - 1);
+    }
+  });
+
+  // Ved vindus-endring: start på nytt fra full liste og la løkken konvergere.
   useEffect(() => {
-    const onResize = () => setBredde(window.innerWidth);
+    const onResize = () => { setAntallSynlige(TABS.length); tving(t => t + 1); };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, []);
+  }, [TABS.length]);
 
   useEffect(() => {
     if (!merApen) return;
@@ -242,13 +251,12 @@ function TekstNav({ TABS, activeTab, setActiveTab }) {
     return () => document.removeEventListener('mousedown', lukk);
   }, [merApen]);
 
-  const antallSynlige = synligeForBredde(bredde, TABS.length);
   const synlige = TABS.slice(0, antallSynlige);
   const skjulte = TABS.slice(antallSynlige);
   const aktivISkjult = skjulte.some(t => t.id === activeTab);
 
   return (
-    <nav className="nav">
+    <nav className="nav" ref={navRef}>
       {synlige.map(tab => (
         <button
           key={tab.id}
@@ -383,7 +391,6 @@ function App() {
         <header className="app-header">
           <div className="header-brand">
             <div className="brand-logo" title={`FolloByggService — Bemannings- og framdriftsplanlegger · v${FBS_VERSJON} (skal være lik på alle enheter)`}>FBS</div>
-            <div className="brand-name">FolloByggService</div>
           </div>
           <TekstNav TABS={TABS} activeTab={activeTab} setActiveTab={setActiveTab} />
           <div className="nav-hoyre">
