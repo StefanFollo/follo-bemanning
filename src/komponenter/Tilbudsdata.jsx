@@ -148,7 +148,7 @@ export default function TilbudsdataVisning({ prosjekt }) {
               </div>
               {Array.isArray(post.kalkyle?.timer) && post.kalkyle.timer.length > 0 && (
                 <div style={{ fontSize: 12, color: '#5d6b80', paddingLeft: 8 }}>
-                  {post.kalkyle.timer.map((t, j) => `${t.fag || 'annet'}: ${t.antall || 0} t`).join(' · ')}
+                  {post.kalkyle.timer.map(t => `${t.fag || 'annet'}: ${t.antall || 0} t`).join(' · ')}
                 </div>
               )}
             </div>
