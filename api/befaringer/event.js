@@ -38,7 +38,7 @@ const redis = new Redis({
 })
 
 const FARGE_PALETT = ['#6b8fc4', '#a78bfa', '#fb923c', '#34d399', '#f472b6', '#facc15', '#60a5fa', '#fb7185']
-const TILLATTE_TYPER = ['tilbud-sendt', 'tilbud-under-arbeid', 'trukket', 'vunnet', 'tapt', 'avvist', 'kunde-aktivitet', 'befaring-opprettet-fra-tilbud']
+const TILLATTE_TYPER = ['tilbud-sendt', 'tilbud-under-arbeid', 'trukket', 'vunnet', 'tapt', 'avvist', 'kunde-aktivitet', 'befaring-opprettet-fra-tilbud', 'payload-oppdatering']
 
 // Type → ny befaring-status i bemanning-systemet
 const TYPE_TIL_STATUS = {
@@ -215,6 +215,89 @@ export default async function handler(req, res) {
       await skrivStateOgBump(redis, { ...state, befaringer: oppdatertBefaringer, _fieldTs: { ...(state._fieldTs || {}), befaringer: nowTs }, ...dedupUpdate, _updatedAt: nowTs })
       console.log(`POST /api/befaringer/event type:kunde-aktivitet handling:${handling} befaringId:${befaringId}`)
       return res.status(200).json({ ok: true, befaringId, handling })
+    }
+
+    // ── payload-oppdatering (SPEC-trinn3): ren data-påfylling, ALDRI status ──
+    // Manuelt re-send fra tilbuds-appen. Setter KUN tilbudPayload
+    // (+_mottattDato/_mottattType). Ingen auto-opprettelse ved manglende treff.
+    if (type === 'payload-oppdatering') {
+      if (!data || typeof data !== 'object' || Object.keys(data).length === 0) {
+        return res.status(400).json({ error: 'payload-oppdatering: mangler data (payloaden)' })
+      }
+
+      // Oppslag: kildeBefaringId → tilbudId → adresse+kundenavn (aldri opprett ny)
+      let befId = kildeBefaringId && befaringer.find(b => b.id === kildeBefaringId) ? kildeBefaringId : null
+      let kilde = befId ? 'via kildeBefaringId' : null
+      if (!befId && tilbudId) {
+        const bef = befaringer.find(b => String(b.tilbudId) === String(tilbudId))
+        if (bef) { befId = bef.id; kilde = 'via tilbudId-mapping' }
+      }
+      if (!befId) {
+        const normFn = s => (s || '').toLowerCase().replace(/\s+/g, ' ').trim()
+        const kunde = normFn(matchingFallback?.kundenavn || data.kundenavn)
+        const adresse = normFn(matchingFallback?.adresse || data.adresse)
+        if (kunde && adresse) {
+          const bef = befaringer.find(b => normFn(b.kontaktNavn) === kunde && normFn(b.adresse) === adresse)
+          if (bef) { befId = bef.id; kilde = 'via adresse-fallback' }
+        }
+      }
+      if (!befId) {
+        console.warn(`[event] payload-oppdatering: ingen befaring funnet (tilbudId:${tilbudId}, kildeBefaringId:${kildeBefaringId})`)
+        return res.status(200).json({
+          ok: true,
+          befaringFunnet: false,
+          beskjed: 'Fant ingen befaring — opprett kobling manuelt i bemannings-appen.',
+        })
+      }
+
+      const bef = befaringer.find(b => b.id === befId)
+
+      // Nyere payload på befaringen? Behold den — svar forklarer.
+      const eksMottatt = bef.tilbudPayload?._mottattDato || null
+      if (eksMottatt && eksMottatt > naa) {
+        console.log(`[event] payload-oppdatering: beholdt nyere versjon på ${befId} (${eksMottatt} > ${naa})`)
+        return res.status(200).json({
+          ok: true,
+          befaringFunnet: true,
+          kildeBefaringId: befId,
+          beholdtNyereVersjon: true,
+          beskjed: `Befaringen har allerede nyere tilbudsdata (mottatt ${eksMottatt.slice(0, 16).replace('T', ' ')}) — beholdt den.`,
+        })
+      }
+
+      // Snapshot av befaringen FØR endring (eksisterende sikkerhetsnett)
+      await appendSnapshot(redis, { objekt: 'befaring', objektId: befId, dataFør: bef, utløstAv: 'payload-oppdatering' })
+
+      const nowTsPl = Date.now()
+      const oppdaterte = befaringer.map(b => b.id === befId
+        ? { ...b, tilbudPayload: { ...data, _mottattType: 'payload-oppdatering', _mottattDato: naa }, _endret: nowTsPl }
+        : b
+      )
+      await skrivStateOgBump(redis, {
+        ...state,
+        befaringer: oppdaterte,
+        _fieldTs: { ...(state._fieldTs || {}), befaringer: nowTsPl },
+        ...dedupUpdate,
+        _updatedAt: nowTsPl,
+      })
+      await appendAuditLog(redis, byggAuditEntry({
+        objekt: 'befaring',
+        objektId: befId,
+        felt: 'tilbudPayload',
+        fraVerdi: eksMottatt ? `payload fra ${eksMottatt.slice(0, 10)}` : null,
+        tilVerdi: `payload mottatt ${naa.slice(0, 10)} (${Object.keys(data).length} felter)`,
+        endretAv: data.kontaktperson || 'tilbuds-app',
+        kilde: 'payload-oppdatering',
+        begrunnelse: `Manuelt re-send av tilbudsdata (${kilde}). Status/kolonne urørt.`,
+      }))
+      console.log(`[event] payload-oppdatering → ${befId} (${kilde}), ${Object.keys(data).length} felter`)
+      return res.status(200).json({
+        ok: true,
+        befaringFunnet: true,
+        kildeBefaringId: befId,
+        oppslagsKilde: kilde,
+        beskjed: `Data sendt til befaring ${bef.adresse || bef.kontaktNavn || befId}.`,
+      })
     }
 
     // Oppdater kilde-befaring hvis ID er oppgitt og finnes

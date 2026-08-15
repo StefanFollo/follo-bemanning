@@ -8,6 +8,7 @@ import {
   harTilbud, kandidatScore, finnKandidater, TILBUDSFELTER, erTom, likVerdi,
 } from '../mergeProsjekter';
 import TilbudsdataVisning from '../komponenter/Tilbudsdata';
+import { beregnAktivering, beregnForkast, kalkyleSammendrag, harKalkyle } from '../framdriftUtkast';
 
 function formaterBelop(belop) {
   if (!belop && belop !== 0) return null;
@@ -177,33 +178,136 @@ function fdTasksTilFramdrift(project) {
   }
 }
 
-function ProsjektFramdrift({ project, laster, feil, onGenerer }) {
+// ── SPEC-trinn4b: utkast-visning — tydelig merket, PL redigerer/aktiverer/forkaster ──
+function FramdriftUtkast({ project, utkast, onAktiver, onForkast, onOppdaterUtkast }) {
+  const faser = utkast.faser || []
+
+  function endreFase(i, endring) {
+    const nyeFaser = faser.map((f, j) => j === i ? { ...f, ...endring } : f)
+    onOppdaterUtkast({ ...utkast, faser: nyeFaser })
+  }
+  function slettFase(i) {
+    onOppdaterUtkast({ ...utkast, faser: faser.filter((_, j) => j !== i) })
+  }
+  function flyttFase(i, retning) {
+    const j = i + retning
+    if (j < 0 || j >= faser.length) return
+    const nye = [...faser]
+    ;[nye[i], nye[j]] = [nye[j], nye[i]]
+    onOppdaterUtkast({ ...utkast, faser: nye })
+  }
+  function leggTilFase() {
+    const sisteUke = faser.reduce((mx, f) => Math.max(mx, (f.startUke || utkast.oppstartUke) + Math.ceil((f.varighetDager || 5) / 5)), utkast.oppstartUke || 1)
+    onOppdaterUtkast({
+      ...utkast,
+      faser: [...faser, { id: `fase-${Date.now()}`, navn: 'Ny fase', fag: ['annet'], startUke: sisteUke, varighetDager: 5, timer: 0, estimertTimer: 0, avhengerAv: [], posterRef: [], status: 'planlagt' }],
+    })
+  }
+
+  return (
+    <div style={{ fontSize: 13 }}>
+      <div style={{ background: 'var(--warning-bg)', border: '1px solid var(--warning-border)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontWeight: 500, color: 'var(--warning)' }}>
+        ✨ Utkast — ikke aktivert. Rediger fasene, og aktiver når planen ser riktig ut.
+      </div>
+      <div style={{ color: '#5d6b80', marginBottom: 8 }}>
+        Generert fra tilbudskalkylen {utkast.generertDato ? new Date(utkast.generertDato).toLocaleDateString('nb-NO') : ''} · {faser.length} faser · uke {utkast.oppstartUke}–{utkast.estimertSluttUke}
+      </div>
+
+      {faser.map((f, i) => (
+        <div key={f.id || i} style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '5px 0', borderBottom: '1px solid var(--bg-subtle)', flexWrap: 'wrap' }}>
+          <span style={{ color: '#5d6b80', width: 18, textAlign: 'right' }}>{i + 1}.</span>
+          <input className="input" style={{ flex: '1 1 140px', height: 30, fontSize: 13 }} value={f.navn}
+            onChange={e => endreFase(i, { navn: e.target.value })} />
+          <label style={{ display: 'flex', alignItems: 'center', gap: 3, color: '#5d6b80', fontSize: 12 }}>
+            uke <input className="input" type="number" style={{ width: 58, height: 30, fontSize: 13 }} value={f.startUke || ''}
+              onChange={e => endreFase(i, { startUke: parseInt(e.target.value) || utkast.oppstartUke })} />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 3, color: '#5d6b80', fontSize: 12 }}>
+            dager <input className="input" type="number" style={{ width: 54, height: 30, fontSize: 13 }} value={f.varighetDager || ''}
+              onChange={e => endreFase(i, { varighetDager: Math.max(1, parseInt(e.target.value) || 1) })} />
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 3, color: '#5d6b80', fontSize: 12 }}>
+            timer <input className="input" type="number" style={{ width: 60, height: 30, fontSize: 13 }} value={f.estimertTimer ?? f.timer ?? ''}
+              onChange={e => endreFase(i, { estimertTimer: parseInt(e.target.value) || 0, timer: parseInt(e.target.value) || 0 })} />
+          </label>
+          <span style={{ fontSize: 11, color: '#5d6b80' }}>{(f.fag || []).join(', ')}{f.kritisk ? ' · ⚠ kritisk' : ''}</span>
+          {Array.isArray(f.avhengerAv) && f.avhengerAv.length > 0 && (
+            <span style={{ fontSize: 11, color: '#5d6b80' }} title="Avhenger av fase(r)">⛓ etter {f.avhengerAv.map(n => n + 1).join(', ')}</span>
+          )}
+          <span style={{ marginLeft: 'auto', display: 'flex', gap: 2 }}>
+            <button className="btn-icon" title="Flytt opp" onClick={() => flyttFase(i, -1)} disabled={i === 0}>↑</button>
+            <button className="btn-icon" title="Flytt ned" onClick={() => flyttFase(i, 1)} disabled={i === faser.length - 1}>↓</button>
+            <button className="btn-icon btn-danger-icon" title="Slett fase" onClick={() => slettFase(i)}>✕</button>
+          </span>
+        </div>
+      ))}
+      <button className="btn btn-sm" style={{ marginTop: 8 }} onClick={leggTilFase}>+ Legg til fase</button>
+
+      {Array.isArray(utkast.merknader) && utkast.merknader.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontWeight: 500, marginBottom: 4 }}>Merknader fra AI:</div>
+          {utkast.merknader.map((m, i) => <div key={i} style={{ color: 'var(--text-secondary)' }}>💡 {m}</div>)}
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 8, marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+        <button className="btn btn-primary" onClick={onAktiver} disabled={faser.length === 0}>✓ Aktiver plan</button>
+        <button className="btn" style={{ color: 'var(--danger)' }} onClick={onForkast}>🗑 Forkast utkast</button>
+        {(project.framdriftsplan || (project.fdTasks || []).length > 0) && (
+          <span style={{ fontSize: 12, color: '#5d6b80', alignSelf: 'center' }}>Aktivering arkiverer dagens plan (kan gjenopprettes)</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ProsjektFramdrift({ project, laster, feil, onGenerer, onAktiver, onForkast, onOppdaterUtkast }) {
   const [valgtFase, setValgtFase] = useState(null)
+  const [visHistorikk, setVisHistorikk] = useState(false)
 
   // Bruker nytt framdriftsplan-objekt hvis det finnes, ellers konverterer gammelt fdTasks
   const harNyttFormat = Boolean(project.framdriftsplan)
   const harGammeltFormat = Array.isArray(project.fdTasks) && project.fdTasks.length > 0
   const fd = project.framdriftsplan || (harGammeltFormat ? fdTasksTilFramdrift(project) : null)
+  const kalkyle = harKalkyle(project) ? kalkyleSammendrag(project) : null
 
   if (laster) {
     return (
       <div className="fd-tom">
         <div style={{ fontSize: 22 }}>⏳</div>
-        <div style={{ fontWeight: 500 }}>Genererer framdriftsplan med AI…</div>
+        <div style={{ fontWeight: 500 }}>Genererer framdriftsplan-utkast med AI…</div>
         <div style={{ fontSize: 12, color: '#5d6b80' }}>Tar 10–20 sekunder</div>
       </div>
+    )
+  }
+
+  // SPEC-trinn4b: utkast har forrang i visningen til det aktiveres/forkastes
+  if (project.framdriftsplanUtkast) {
+    return (
+      <>
+        <FramdriftUtkast project={project} utkast={project.framdriftsplanUtkast}
+          onAktiver={onAktiver} onForkast={onForkast} onOppdaterUtkast={onOppdaterUtkast} />
+        {feil && <div className="fd-feil" style={{ marginTop: 10 }}>❌ {feil}</div>}
+      </>
     )
   }
 
   if (!fd) {
     return (
       <div className="fd-tom">
-        <div>🗓 Ingen framdriftsplan generert ennå</div>
-        {project.kildeTilbudData ? (
-          <button className="btn btn-primary" onClick={onGenerer}>✨ Generer framdriftsplan med AI</button>
+        <div>🗓 Ingen framdriftsplan ennå</div>
+        {kalkyle ? (
+          <>
+            <div style={{ fontSize: 12, color: '#5d6b80' }}>
+              Dette prosjektet har full kalkyle fra tilbudet ({kalkyle.tekst})
+            </div>
+            <button className="btn btn-primary" onClick={onGenerer}>✨ Generer utkast fra kalkylen</button>
+          </>
+        ) : project.kildeTilbudData ? (
+          <button className="btn btn-primary" onClick={onGenerer}>✨ Generer utkast med AI</button>
         ) : (
           <div style={{ fontSize: 12, color: '#5d6b80' }}>
-            Prosjektet må opprettes fra tilbuds-appen for å bruke AI-generering.
+            Ingen tilbudsdata på prosjektet — bruk «🔗 Koble til tilbud» i 📦 Tilbudsdata-fanen først.
           </div>
         )}
         {feil && <div className="fd-feil" style={{ marginTop: 10 }}>❌ {feil}</div>}
@@ -251,13 +355,30 @@ function ProsjektFramdrift({ project, laster, feil, onGenerer }) {
           {totalVarighetUker ? ` · ${totalVarighetUker} uker` : ''}
         </span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-          {project.kildeTilbudData && (
-            <button className="btn btn-sm" onClick={onGenerer} title="Generer ny detaljert plan med AI">
-              ✨ {fd._fraFdTasks ? 'Generer ny med AI' : 'Regenerer'}
+          {(kalkyle || project.kildeTilbudData) && (
+            <button className="btn btn-sm" onClick={onGenerer}
+              title="Lager et nytt UTKAST fra kalkylen — dagens plan røres ikke før du aktiverer">
+              ✨ Generer nytt utkast
+            </button>
+          )}
+          {(project.framdriftsplanHistorikk || []).length > 0 && (
+            <button className="btn btn-sm" onClick={() => setVisHistorikk(v => !v)}>
+              🗄 {project.framdriftsplanHistorikk.length}
             </button>
           )}
         </div>
       </div>
+
+      {visHistorikk && (project.framdriftsplanHistorikk || []).length > 0 && (
+        <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: 8, padding: 10, margin: '8px 0', fontSize: 12.5 }}>
+          <div style={{ fontWeight: 500, marginBottom: 4 }}>Tidligere planer (arkivert ved aktivering — slettes aldri):</div>
+          {project.framdriftsplanHistorikk.map((h, i) => (
+            <div key={i} style={{ padding: '3px 0', color: '#5d6b80' }}>
+              🗄 {h.arkivertDato ? new Date(h.arkivertDato).toLocaleDateString('nb-NO') : '?'} av {h.arkivertAv || '?'} — {h.fraFdTasks ? `${(h.fdTasks || []).length} faser (fra tilbuds-appen)` : `${(h.faser || []).length} faser${h.generertDato ? `, generert ${new Date(h.generertDato).toLocaleDateString('nb-NO')}` : ''}`}
+            </div>
+          ))}
+        </div>
+      )}
 
       {feil && <div className="fd-feil">❌ {feil}</div>}
 
@@ -1284,6 +1405,7 @@ export default function Prosjekter({ onNavigate = null }) {
     setFdFeil('');
   }
 
+  // SPEC-trinn4b: generering lager alltid et UTKAST — aldri auto-aktivert.
   async function genererFramdrift(prosjektId) {
     setFdLaster(true);
     setFdFeil('');
@@ -1292,17 +1414,35 @@ export default function Prosjekter({ onNavigate = null }) {
       const r = await fetch('/api/prosjekter/framdrift', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ prosjektId }),
+        body: JSON.stringify({ prosjektId, somUtkast: true }),
       });
       const data = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(data?.error || `Feil ${r.status}`);
       const prosjekt = state.prosjekter.find(p => p.id === prosjektId);
-      if (prosjekt) dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...prosjekt, framdriftsplan: data.framdriftsplan } });
+      if (prosjekt) dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...prosjekt, framdriftsplanUtkast: data.framdriftsplan } });
     } catch (e) {
       setFdFeil(e.message);
     } finally {
       setFdLaster(false);
     }
+  }
+
+  function aktiverUtkast(p) {
+    const utkast = p.framdriftsplanUtkast;
+    if (!utkast) return;
+    const harEksisterende = p.framdriftsplan || (Array.isArray(p.fdTasks) && p.fdTasks.length > 0);
+    if (harEksisterende && !confirm('Erstatte eksisterende framdriftsplan?\n\nDen gamle arkiveres i plan-historikken og kan gjenopprettes — ingenting slettes.')) return;
+    const av = localStorage.getItem('fbs_user_navn') || localStorage.getItem('fbs_role') || 'ukjent';
+    const { nyProsjekt } = beregnAktivering(p, utkast, { av, dato: new Date().toISOString() });
+    dispatch({ type: 'UPDATE_PROSJEKT', payload: nyProsjekt });
+    loggAudit(p.id, 'framdriftsplan', harEksisterende ? 'eksisterende plan (arkivert)' : null, `${utkast.faser?.length || 0} faser`,
+      'Aktiverte AI-generert framdriftsplan fra tilbudskalkylen');
+  }
+
+  function forkastUtkast(p) {
+    if (!p.framdriftsplanUtkast) return;
+    const { nyProsjekt } = beregnForkast(p);
+    dispatch({ type: 'UPDATE_PROSJEKT', payload: nyProsjekt });
   }
 
   async function hentLogg(p) {
@@ -1754,7 +1894,12 @@ export default function Prosjekter({ onNavigate = null }) {
             </>}
           >
             {panelFane === 'framdrift' && (
-              <ProsjektFramdrift project={p} laster={fdLaster} feil={fdFeil} onGenerer={() => genererFramdrift(p.id)} />
+              <ProsjektFramdrift project={p} laster={fdLaster} feil={fdFeil}
+                onGenerer={() => genererFramdrift(p.id)}
+                onAktiver={() => aktiverUtkast(p)}
+                onForkast={() => forkastUtkast(p)}
+                onOppdaterUtkast={u => dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...p, framdriftsplanUtkast: u } })}
+              />
             )}
             {panelFane === 'bemanning' && (
               <div>

@@ -55,6 +55,41 @@ function ukeTilDato(uke, aar) {
   return d.toISOString().slice(0, 10)
 }
 
+// SPEC-trinn4b: bygg tilbudData fra full tilbudPayload når kildeTilbudData
+// mangler (manuelt koblede prosjekter / re-sendt payload). Rent additivt.
+function byggTilbudDataFraPayload(prosjekt) {
+  const tp = prosjekt.tilbudPayload
+  if (!tp) return null
+  const poster = (Array.isArray(tp.poster) && tp.poster.length ? tp.poster : prosjekt.poster) || []
+  const timer = {}
+  if (tp.fagBreakdown && typeof tp.fagBreakdown === 'object') {
+    for (const [fag, info] of Object.entries(tp.fagBreakdown)) {
+      const t = typeof info === 'object' ? (info.timer ?? info.antallTimer) : info
+      if (parseFloat(t) > 0) timer[fag.toLowerCase()] = parseFloat(t)
+    }
+  }
+  if (Object.keys(timer).length === 0) {
+    for (const post of poster) {
+      if (Array.isArray(post.kalkyle?.timer)) {
+        for (const rad of post.kalkyle.timer) {
+          const fag = (rad.fag || 'annet').toLowerCase()
+          timer[fag] = (timer[fag] || 0) + (parseFloat(rad.antall) || 0)
+        }
+      }
+    }
+  }
+  if (poster.length === 0 && Object.keys(timer).length === 0) return null
+  return {
+    poster,
+    timer,
+    oppstart: prosjekt.oppstartTekst || tp.oppstart || '',
+    varighet: prosjekt.varighetTekst || tp.varighet || (prosjekt.varighetUker ? `${prosjekt.varighetUker} uker` : ''),
+    kundenavn: prosjekt.kunde?.navn || tp.kundenavn || '',
+    byggInfo: tp.byggInfo || null,
+    soner: Array.isArray(tp.soner) ? tp.soner : null,
+  }
+}
+
 async function genererMedAI(tilbudData, prosjekt, kontekst, apiKey) {
   const { poster = [], timer = {}, oppstart = '', varighet = '' } = tilbudData
   const adresse = tilbudData.adresse || prosjekt.adresse || '(ukjent)'
@@ -89,13 +124,22 @@ async function genererMedAI(tilbudData, prosjekt, kontekst, apiKey) {
 
   const varighetN = parseInt((varighet + '').match(/(\d+)/)?.[1] || '12')
 
+  // SPEC-trinn4b: byggInfo/soner som kontekst når payloaden har det
+  const byggKontekst = [
+    tilbudData.byggInfo && (typeof tilbudData.byggInfo === 'string'
+      ? `- Bygg: ${tilbudData.byggInfo}`
+      : `- Bygg: ${[tilbudData.byggInfo.byggeaar && `byggeår ${tilbudData.byggInfo.byggeaar}`, tilbudData.byggInfo.byggtype, tilbudData.byggInfo.bra && `${tilbudData.byggInfo.bra} m² BRA`, tilbudData.byggInfo.tilstand && `tilstand: ${tilbudData.byggInfo.tilstand}`].filter(Boolean).join(', ')}`),
+    Array.isArray(tilbudData.soner) && tilbudData.soner.length > 0 &&
+      `- Soner: ${tilbudData.soner.map(s => `${s.navn || s.name}${s.areal ? ` (${s.areal} m²)` : ''}`).join(', ')}`,
+  ].filter(Boolean).join('\n')
+
   const prompt = `Du er ekspert på byggeprosesser i Norge. Lag en realistisk framdriftsplan.
 
 PROSJEKT:
 - Adresse: ${adresse}
 - Oppstart: uke ${uke} ${aar}
 - Total varighet: ${varighet || `${varighetN} uker`}
-- Mannskap tilgjengelig: 2-3 fagarbeidere${kontekst ? `\n\nEKSTRA KONTEKST FRA PL:\n${kontekst}` : ''}
+- Mannskap tilgjengelig: 2-3 fagarbeidere${byggKontekst ? `\n${byggKontekst}` : ''}${kontekst ? `\n\nEKSTRA KONTEKST FRA PL:\n${kontekst}` : ''}
 
 TIMER PER FAG:
 ${timerLinjer}
@@ -118,6 +162,9 @@ REGLER:
 - Marker kritiske faser (membran, våtrom) med kritisk: true
 - Lag 2-4 milepæler: materialvalg fra kunde, vannskade-stopp, sluttbefaring
 - Faser starter aldri samme uke med mindre de kan gå parallelt
+- "avhengerAv": indekser (0-basert) til faser som MÅ være ferdige først
+- "posterRef": numrene fra TILBUDSPOSTER-listen som fasen dekker
+- "merknader": praktiske huskeregler ("Membran må herde 2 døgn før flislegging")
 
 RETURNER KUN VALID JSON (ingen forklaringstekst):
 {
@@ -133,9 +180,12 @@ RETURNER KUN VALID JSON (ingen forklaringstekst):
       "timer": 24,
       "mannskap": 2,
       "kritisk": false,
-      "beskrivelse": "Riving av eksisterende bad"
+      "beskrivelse": "Riving av eksisterende bad",
+      "avhengerAv": [],
+      "posterRef": [1, 2]
     }
   ],
+  "merknader": ["Membran må herde 2 døgn før flislegging"],
   "milepaler": [
     {
       "navn": "Vannskade-stopp",
@@ -183,11 +233,14 @@ RETURNER KUN VALID JSON (ingen forklaringstekst):
     startDato: ukeTilDato(Math.max(uke, parseInt(f.startUke) || uke), aar),
     varighetDager: Math.max(1, parseInt(f.varighetDager) || 5),
     timer: parseInt(f.timer) || 0,
+    estimertTimer: parseInt(f.timer) || 0,
     mannskap: Math.max(1, parseInt(f.mannskap) || 2),
     ansvarlig: null,
     foreslattMannskap: [],
     kritisk: Boolean(f.kritisk),
     venterPaa: [],
+    avhengerAv: Array.isArray(f.avhengerAv) ? f.avhengerAv.map(n => parseInt(n)).filter(n => n >= 0 && n < (plan.faser || []).length && n !== i) : [],
+    posterRef: Array.isArray(f.posterRef) ? f.posterRef : [],
     beskrivelse: (f.beskrivelse || '').slice(0, 200),
     status: 'planlagt',
   }))
@@ -225,6 +278,7 @@ RETURNER KUN VALID JSON (ingen forklaringstekst):
     milepaler,
     kritiskSti: faser.filter(f => f.kritisk).map(f => f.id),
     advarsler: plan.advarsler || [],
+    merknader: Array.isArray(plan.merknader) ? plan.merknader.slice(0, 10) : [],
     sistRedigert: new Date().toISOString(),
   }
 }
@@ -242,7 +296,7 @@ export default async function handler(req, res) {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return res.status(500).json({ error: 'ANTHROPIC_API_KEY mangler i Vercel-env-vars' })
 
-  const { prosjektId, kontekst } = req.body || {}
+  const { prosjektId, kontekst, somUtkast } = req.body || {}
   if (!prosjektId) return res.status(400).json({ error: 'Mangler prosjektId' })
 
   try {
@@ -251,10 +305,14 @@ export default async function handler(req, res) {
     const prosjekt = prosjekter.find(p => p.id === prosjektId)
     if (!prosjekt) return res.status(404).json({ error: 'Prosjekt ikke funnet' })
 
-    const tilbudData = prosjekt.kildeTilbudData
+    // SPEC-trinn4b: kildeTilbudData → fallback til full tilbudPayload
+    let tilbudData = prosjekt.kildeTilbudData
     if (!tilbudData || (!tilbudData.poster?.length && !Object.keys(tilbudData.timer || {}).length)) {
+      tilbudData = byggTilbudDataFraPayload(prosjekt)
+    }
+    if (!tilbudData) {
       return res.status(400).json({
-        error: 'Ingen tilbudsdata på prosjektet. Prosjektet ble ikke opprettet fra tilbuds-appen med framdrift.',
+        error: 'Ingen tilbudsdata på prosjektet. Koble prosjektet til et tilbud først (📦 Tilbudsdata-fanen).',
       })
     }
 
@@ -262,6 +320,16 @@ export default async function handler(req, res) {
 
     // Behold versjonsnummer ved regenerering
     framdriftsplan.versjon = (prosjekt.framdriftsplan?.versjon || 0) + 1
+
+    // SPEC-trinn4b: utkast-modus — generér og RETURNER, men skriv ALDRI state.
+    // Klienten lagrer utkastet på prosjektet; aktivering er et eget, bevisst valg.
+    if (somUtkast) {
+      framdriftsplan.status = 'utkast'
+      framdriftsplan.generertFra = 'tilbud-kalkyle'
+      framdriftsplan.generertAv = session.navn || session.email || 'PL'
+      console.log(`POST /api/prosjekter/framdrift [utkast] prosjektId:${prosjektId} → ${framdriftsplan.faser.length} faser`)
+      return res.status(200).json({ ok: true, utkast: true, framdriftsplan })
+    }
 
     const nowTs = Date.now()
     const oppdatertState = {
