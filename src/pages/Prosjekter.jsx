@@ -4,8 +4,10 @@ import { formatDate, PROSJEKT_PALETTE, isoToDate, dateToIso, daysBetween } from 
 import { StatusFaner, KompaktRad, DetaljPanel, VarselBanner } from '../komponenter/Designsystem';
 import {
   beregnMerge, beregnAngre, beregnPekerOppdatering, beregnAngrePekere,
-  harTilbud, kandidatScore, finnKandidater, TILBUDSFELTER,
+  beregnKobling, beregnFjernKobling, tilbudsfelterFraBefaring,
+  harTilbud, kandidatScore, finnKandidater, TILBUDSFELTER, erTom, likVerdi,
 } from '../mergeProsjekter';
+import TilbudsdataVisning from '../komponenter/Tilbudsdata';
 
 function formaterBelop(belop) {
   if (!belop && belop !== 0) return null;
@@ -687,6 +689,123 @@ function MergeModal({ startProsjekt, forslagId, alleProsjekter, tildelingerByPro
   );
 }
 
+// ═══ «Koble til tilbud»-dialog (SPEC-del2 trinn 2) ═══
+// Søker blant befaringer som HAR tilbudPayload; fuzzy-forslag øverst.
+// Kopierer kun tilbudsdata (gruppe A) — driftsdata røres ALDRI.
+function KobleDialog({ prosjekt, befaringer, onUtfør, onLukk }) {
+  const [valgtBefId, setValgtBefId] = useState(null);
+  const [søk, setSøk] = useState('');
+  const [beholdManuell, setBeholdManuell] = useState({});
+
+  const medPayload = befaringer.filter(b => b && b.tilbudPayload);
+  const kandidater = useMemo(() => {
+    const q = søk.toLowerCase();
+    return medPayload
+      .filter(b => !q || (b.adresse || '').toLowerCase().includes(q) || (b.kontaktNavn || '').toLowerCase().includes(q))
+      .map(b => ({ b, score: kandidatScore(prosjekt, { adresse: b.adresse, navn: b.kontaktNavn, kunde: { navn: b.kontaktNavn } }) }))
+      .sort((x, y) => y.score - x.score);
+  }, [medPayload, prosjekt, søk]);
+
+  const valgtBef = medPayload.find(b => b.id === valgtBefId) || null;
+
+  // Tørrkjøring for forhåndsvisning
+  const preview = useMemo(() => {
+    if (!valgtBef) return null;
+    return beregnKobling(prosjekt, valgtBef, { beholdManuell, av: 'forhåndsvisning', dato: 'forhåndsvisning' });
+  }, [prosjekt, valgtBef, beholdManuell]);
+
+  const erstattede = (preview?.kopierteFelter || []).filter(k => !erTom(k.fraVerdi));
+  const nyeFelter = (preview?.kopierteFelter || []).filter(k => erTom(k.fraVerdi));
+
+  return (
+    <Modal title="🔗 Koble prosjekt til tilbud" onClose={onLukk}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '70vh', overflowY: 'auto', fontSize: 13 }}>
+        <div style={{ color: '#5d6b80' }}>
+          Koble <b>{prosjekt.adresse || prosjekt.navn}</b> til et tilbud fra tilbuds-appen.
+          Tilbudsdata kopieres inn — bemanning, datoer og status røres ikke.
+        </div>
+
+        {!valgtBef && (
+          <>
+            <input className="input" autoFocus placeholder="Søk på adresse eller kundenavn…"
+              value={søk} onChange={e => setSøk(e.target.value)} style={{ width: '100%' }} />
+            <div style={{ maxHeight: 280, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {kandidater.slice(0, 30).map(({ b, score }) => (
+                <button key={b.id} className="btn" style={{ textAlign: 'left', display: 'flex', gap: 8, alignItems: 'center' }}
+                  onClick={() => setValgtBefId(b.id)}>
+                  {score >= 30 && <span title="Fuzzy-forslag: lignende adresse/kunde">🔗</span>}
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {b.adresse || b.kontaktNavn}
+                    {b.kontaktNavn ? <span style={{ color: '#5d6b80' }}> · {b.kontaktNavn}</span> : null}
+                    {(b.estimertSum || b.tilbudPayload?.totalSum) ? <span style={{ color: '#15803d' }}> · {formaterBelop(b.estimertSum || b.tilbudPayload?.totalSum)}</span> : null}
+                    {Array.isArray(b.poster) && b.poster.length > 0 ? <span style={{ color: '#5d6b80' }}> · {b.poster.length} poster</span> : null}
+                  </span>
+                </button>
+              ))}
+              {kandidater.length === 0 && (
+                <div style={{ color: '#5d6b80', padding: 8 }}>
+                  Ingen befaringer med tilbudsdata matcher søket. (Kun befaringer som har mottatt full tilbudspakke vises her.)
+                </div>
+              )}
+            </div>
+          </>
+        )}
+
+        {valgtBef && preview && (
+          <>
+            <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+              <div style={{ fontWeight: 500 }}>{valgtBef.adresse || valgtBef.kontaktNavn}</div>
+              <div style={{ fontSize: 12, color: '#5d6b80' }}>
+                {[valgtBef.kontaktNavn, valgtBef.status, formaterBelop(valgtBef.estimertSum || valgtBef.tilbudPayload?.totalSum)].filter(Boolean).join(' · ')}
+              </div>
+              <button className="btn btn-sm" style={{ marginTop: 6 }} onClick={() => setValgtBefId(null)}>Velg annet…</button>
+            </div>
+
+            <div style={{ background: 'var(--success-bg)', border: '1px solid var(--success-border)', borderRadius: 8, padding: 10 }}>
+              <div style={{ fontWeight: 500, color: 'var(--success)', marginBottom: 4 }}>📦 Kopieres inn fra tilbudet:</div>
+              {nyeFelter.length > 0 && (
+                <div style={{ padding: '2px 0' }}>+ {nyeFelter.map(k => k.felt).join(', ')}</div>
+              )}
+              {erstattede.map(k => (
+                <div key={k.felt} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '2px 0', flexWrap: 'wrap' }}>
+                  <span>
+                    + <b>{k.felt}</b>: <span style={{ textDecoration: 'line-through', color: 'var(--warning)' }}>{mergeVisVerdi(k.fraVerdi)} manuell</span> → {mergeVisVerdi(k.tilVerdi)} fra tilbud
+                  </span>
+                  <label style={{ display: 'inline-flex', gap: 4, alignItems: 'center', color: '#5d6b80', cursor: 'pointer', fontSize: 12 }}>
+                    <input type="checkbox" checked={!!beholdManuell[k.felt]}
+                      onChange={e => setBeholdManuell(bm => ({ ...bm, [k.felt]: e.target.checked }))} />
+                    behold manuell verdi
+                  </label>
+                </div>
+              ))}
+              {Object.entries(beholdManuell).filter(([, v]) => v).map(([felt]) => (
+                <div key={felt} style={{ color: '#5d6b80', padding: '2px 0' }}>
+                  ✋ <b>{felt}</b>: beholder manuell verdi
+                  {' '}<label style={{ display: 'inline-flex', gap: 4, alignItems: 'center', cursor: 'pointer', fontSize: 12 }}>
+                    <input type="checkbox" checked onChange={() => setBeholdManuell(bm => ({ ...bm, [felt]: false }))} /> behold manuell verdi
+                  </label>
+                </div>
+              ))}
+            </div>
+            <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+              ✓ Bemanning, datoer, status, farge, prosjektleder, KS og framdrift røres <b>ikke</b>.
+              «Fjern kobling» i ⋯-menyen gjenoppretter alt nøyaktig som før.
+            </div>
+          </>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+          <button className="btn" onClick={onLukk}>Avbryt</button>
+          <button className="btn btn-primary" disabled={!valgtBef}
+            onClick={() => onUtfør({ befaringId: valgtBef.id, beholdManuell })}>
+            🔗 Koble til
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 // ── KS-plan forslag (laster maler lazy fra API) ───────────────────────────────
 function ProsjektKSPlanKnapp({ project, onOppdater }) {
   const [laster, setLaster] = useState(false)
@@ -1000,6 +1119,44 @@ export default function Prosjekter({ onNavigate = null }) {
     if (ikkeTilbakestilt.length > 0) {
       alert(`Sammenslåingen er angret. Disse feltene var endret manuelt ETTER sammenslåingen og ble derfor ikke rørt: ${ikkeTilbakestilt.join(', ')}`);
     }
+  }
+
+  // ═══ Koble til tilbud (SPEC-del2 trinn 2) — kun gruppe A, alt reversibelt ═══
+  const [kobleFor, setKobleFor] = useState(null); // prosjekt | null
+
+  function utførKobling(prosjektId, valgInn) {
+    const prosjekt = state.prosjekter.find(p => p.id === prosjektId);
+    const befaring = (state.befaringer || []).find(b => b.id === valgInn.befaringId);
+    if (!prosjekt || !befaring) return;
+    const av = localStorage.getItem('fbs_user_navn') || localStorage.getItem('fbs_role') || 'ukjent';
+    const dato = new Date().toISOString();
+    const { nyProsjekt, kopierteFelter, felterFør } = beregnKobling(prosjekt, befaring, { ...valgInn, av, dato });
+
+    // Historikk FØRST (tømmes aldri) — så selv om fjern-logikken skulle
+    // feile ligger før-verdiene her ordrett.
+    try {
+      const hist = JSON.parse(localStorage.getItem('fbs_koble_historikk') || '[]');
+      hist.push({ dato, av, prosjektId: prosjekt.id, befaringId: befaring.id, felterFør, prosjektFør: prosjekt });
+      localStorage.setItem('fbs_koble_historikk', JSON.stringify(hist));
+    } catch (e) { console.error('fbs_koble_historikk:', e); }
+
+    dispatch({ type: 'UPDATE_PROSJEKT', payload: nyProsjekt });
+    loggAudit(prosjekt.id, 'koble-tilbud', null, befaring.adresse || befaring.kontaktNavn,
+      `Koblet prosjektet til tilbud fra befaring «${befaring.adresse || befaring.kontaktNavn}» — ${kopierteFelter.length} felter kopiert`);
+    setKobleFor(null);
+  }
+
+  function fjernKobling(p) {
+    if (!p.tilbudsfelterFørKobling) {
+      alert('Dette prosjektet har ingen manuell tilbuds-kobling å fjerne.');
+      return;
+    }
+    if (!confirm(`Fjerne tilbuds-koblingen på «${p.adresse || p.navn}»?\n\nTilbudsfeltene settes tilbake nøyaktig slik de var før koblingen. Ingen annen data røres.`)) return;
+    const resultat = beregnFjernKobling(p);
+    if (!resultat) return;
+    dispatch({ type: 'UPDATE_PROSJEKT', payload: resultat.nyProsjekt });
+    loggAudit(p.id, 'fjern-tilbud-kobling', p.befaringId || null, null,
+      `Fjernet tilbuds-koblingen — tilbudsfeltene gjenopprettet til verdiene før kobling`);
   }
 
   // Oppslags-indekser (unngå O(n) skann per prosjekt i render-loopen)
@@ -1533,6 +1690,10 @@ export default function Prosjekter({ onNavigate = null }) {
               duplikatHint[p.id]
                 ? { ikon: '🔗', label: `Slå sammen med ${duplikatHint[p.id].label}…`, onClick: () => setMergeFor({ prosjekt: p, forslagId: duplikatHint[p.id].id }) }
                 : { ikon: '🔗', label: 'Slå sammen med…', onClick: () => setMergeFor({ prosjekt: p, forslagId: null }) },
+              !(p.tilbudPayload || p.tilbudLink)
+                && { ikon: '📦', label: 'Koble til tilbud…', onClick: () => setKobleFor(p) },
+              p.tilbudsfelterFørKobling
+                && { ikon: '✂', label: 'Fjern tilbuds-kobling', onClick: () => fjernKobling(p) },
               { skille: true },
               ...['jobber_med', 'godkjent', 'aktiv'].filter(s => normStatus(p.status) !== s).map(s => ({
                 ikon: '→', label: SAVE_LABELS[s], onClick: () => settProsjektStatus(p, s),
@@ -1571,7 +1732,7 @@ export default function Prosjekter({ onNavigate = null }) {
               { key: 'framdrift', label: '📊 Framdrift' },
               { key: 'bemanning', label: '👷 Bemanning' },
               { key: 'ks', label: '✅ KS' },
-              ...(p.tilbudPayload || p.kildeTilbudData ? [{ key: 'tilbud', label: '📦 Tilbudsdata' }] : []),
+              { key: 'tilbud', label: '📦 Tilbudsdata' },
               { key: 'logg', label: '📜 Logg' },
             ]}
             aktivFane={panelFane}
@@ -1623,32 +1784,19 @@ export default function Prosjekter({ onNavigate = null }) {
                 ))}
               </div>
             )}
-            {panelFane === 'tilbud' && (() => {
-              const tp = p.tilbudPayload || {};
-              const kd = p.kildeTilbudData || {};
-              const poster = tp.poster || kd.poster || p.poster || [];
-              return (
-                <div style={{ fontSize: 13 }}>
-                  {p.tilbudLink && (
-                    <a href={p.tilbudLink} target="_blank" rel="noopener noreferrer" style={{ color: '#2874a6', fontWeight: 500 }}>🔗 Åpne kundens tilbudside ↗</a>
-                  )}
-                  <div style={{ margin: '10px 0', color: '#5d6b80' }}>
-                    {[p.pristype && `Pristype: ${p.pristype}`, (p.estimertSum || tp.estimertSum) && `Estimert: ${formaterBelop(p.estimertSum || tp.estimertSum)}`,
-                      (p.oppstartTekst || kd.oppstart) && `Oppstart: ${p.oppstartTekst || kd.oppstart}`, (p.varighetTekst || kd.varighet) && `Varighet: ${p.varighetTekst || kd.varighet}`,
-                    ].filter(Boolean).map((r, i) => <div key={i}>{r}</div>)}
+            {panelFane === 'tilbud' && (
+              (p.tilbudPayload || p.tilbudLink || p.kildeTilbudData || (Array.isArray(p.poster) && p.poster.length > 0))
+                ? <TilbudsdataVisning prosjekt={p} />
+                : (
+                  <div style={{ textAlign: 'center', padding: '32px 16px', color: '#5d6b80', fontSize: 13 }}>
+                    <div style={{ fontSize: 28, marginBottom: 8 }}>📦</div>
+                    <div style={{ marginBottom: 14 }}>Dette prosjektet har ingen tilbudsdata — det er trolig regnet manuelt.</div>
+                    <button className="btn btn-primary" onClick={() => { setValgtId(null); setKobleFor(p); }}>
+                      🔗 Koble til tilbud
+                    </button>
                   </div>
-                  {poster.length > 0 && <>
-                    <div style={{ fontWeight: 500, margin: '10px 0 6px' }}>Poster ({poster.length})</div>
-                    {poster.map((post, i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', borderBottom: '1px solid #f8fafc' }}>
-                        <span>{post.navn || post.tittel || `Post ${i + 1}`}</span>
-                        {post.sum != null && <span style={{ color: '#5d6b80' }}>{formaterBelop(post.sum)}</span>}
-                      </div>
-                    ))}
-                  </>}
-                </div>
-              );
-            })()}
+                )
+            )}
             {panelFane === 'logg' && (
               <div style={{ fontSize: 12.5 }}>
                 {loggEntries === null && <div style={{ color: '#5d6b80' }}>⏳ Henter logg…</div>}
@@ -1753,6 +1901,16 @@ export default function Prosjekter({ onNavigate = null }) {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* ── Koble til tilbud-dialog (SPEC-del2 trinn 2) ── */}
+      {kobleFor && (
+        <KobleDialog
+          prosjekt={kobleFor}
+          befaringer={state.befaringer || []}
+          onUtfør={valg => utførKobling(kobleFor.id, valg)}
+          onLukk={() => setKobleFor(null)}
+        />
       )}
 
       {/* ── Slå sammen-modal (SPEC-merge-prosjekter) ── */}

@@ -276,6 +276,102 @@ export function beregnAngre(hoved, sekundar, mergeInfo) {
   return { nyHoved, nySekundar, ikkeTilbakestilt };
 }
 
+// ═══ «Koble til tilbud» (SPEC-del2 trinn 2) — samme gruppe A-regler ═══
+// Kobling KOPIERER tilbudsdata fra en befaring inn på prosjektet.
+// Driftsdata (gruppe B) røres ALDRI. «Fjern kobling» gjenoppretter eksakt.
+
+function byggTimerFraPoster(poster) {
+  const timer = {};
+  for (const post of (poster || [])) {
+    if (Array.isArray(post.kalkyle?.timer)) {
+      for (const rad of post.kalkyle.timer) {
+        const fag = (rad.fag || 'annet').toLowerCase();
+        timer[fag] = (timer[fag] || 0) + (parseFloat(rad.antall) || 0);
+      }
+    }
+  }
+  return timer;
+}
+
+// Verdiene en befaring bidrar med per tilbudsfelt (samme mapping som
+// «Opprett prosjekt» i BefaringPlan bruker).
+export function tilbudsfelterFraBefaring(bef) {
+  const poster = bef.poster || [];
+  const timerPerFag = byggTimerFraPoster(poster);
+  return {
+    poster,
+    fag: bef.fag || [],
+    pristype: bef.pristype || '',
+    belop: bef.estimertBelop || bef.estimertSum || '',
+    estimertSum: bef.estimertSum || 0,
+    valgteOpsjoner: bef.valgteOpsjoner || [],
+    tilbudLink: bef.tilbudLink || '',
+    kildeBefaringId: bef.id || '',
+    befaringId: bef.id || '',
+    tilbudPayload: bef.tilbudPayload ? { ...bef.tilbudPayload } : null,
+    oppstartTekst: bef.oppstartTekst || '',
+    varighetTekst: bef.varighetTekst || '',
+    varighetUker: bef.varighetUker ?? null,
+    ...(poster.length > 0 || Object.keys(timerPerFag).length > 0
+      ? {
+          kildeTilbudData: {
+            poster,
+            timer: timerPerFag,
+            oppstart: bef.oppstartTekst || '',
+            varighet: bef.varighetTekst || '',
+            kundenavn: bef.kontaktNavn || '',
+          },
+        }
+      : {}),
+  };
+}
+
+// beregnKobling(prosjekt, befaring, {beholdManuell, av, dato})
+// → { nyProsjekt, kopierteFelter, felterFør, felterSomManglet }
+// felterFør/felterSomManglet lagres på prosjektet slik at «Fjern kobling»
+// kan gjenopprette EKSAKT før-tilstand (også felter som ikke fantes).
+export function beregnKobling(prosjekt, befaring, valg) {
+  const kilde = tilbudsfelterFraBefaring(befaring);
+  const nyProsjekt = { ...prosjekt };
+  const kopierteFelter = [];
+  const felterFør = {};
+  const felterSomManglet = [];
+
+  for (const [felt, tilVerdi] of Object.entries(kilde)) {
+    if (erTom(tilVerdi)) continue;               // ingenting å vinne med
+    if (valg.beholdManuell?.[felt]) continue;    // Stefan beholder manuell verdi
+    if (likVerdi(nyProsjekt[felt], tilVerdi)) continue;
+    if (felt in nyProsjekt) felterFør[felt] = nyProsjekt[felt];
+    else felterSomManglet.push(felt);
+    kopierteFelter.push({ felt, fraVerdi: felt in prosjekt ? prosjekt[felt] : undefined, tilVerdi });
+    nyProsjekt[felt] = tilVerdi;
+  }
+
+  nyProsjekt.tilbudKobletDato = valg.dato;
+  nyProsjekt.tilbudKobletAv = valg.av;
+  nyProsjekt.tilbudsfelterFørKobling = { felterFør, felterSomManglet };
+
+  return { nyProsjekt, kopierteFelter, felterFør, felterSomManglet };
+}
+
+// «Fjern kobling»: nullstiller KUN de kopierte tilbudsfeltene tilbake til
+// verdiene før kobling. Rører aldri annen data.
+export function beregnFjernKobling(prosjekt) {
+  const logg = prosjekt.tilbudsfelterFørKobling;
+  if (!logg) return null;
+  const nyProsjekt = { ...prosjekt };
+  for (const [felt, verdi] of Object.entries(logg.felterFør || {})) {
+    nyProsjekt[felt] = verdi;
+  }
+  for (const felt of logg.felterSomManglet || []) {
+    delete nyProsjekt[felt];
+  }
+  delete nyProsjekt.tilbudKobletDato;
+  delete nyProsjekt.tilbudKobletAv;
+  delete nyProsjekt.tilbudsfelterFørKobling;
+  return { nyProsjekt };
+}
+
 // Angre-pekere: elementer i pekere-loggen som FORTSATT peker på hoved-ID
 // settes tilbake til sekundær-ID (manuelt flyttede etterpå røres ikke).
 export function beregnAngrePekere(state, pekereIds, sekundarId, hovedId) {
