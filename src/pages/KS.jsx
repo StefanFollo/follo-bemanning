@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react'
 import { useApp } from '../context/AppContext'
+import KSFagForslag from '../komponenter/KSFagForslag'
 
 // ── Konstanter ────────────────────────────────────────────────────────────────
 
@@ -2658,6 +2659,16 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
           <div style={{ fontWeight: 500, fontSize: 13, color: '#475569', marginBottom: 12 }}>
             📋 Tildelte ({ksSjekklister.length + (prosjekt.sjekklister?.length || 0)})
           </div>
+
+          {/* 4a: Forslag fra tilbudets fag — samme komponent som prosjektpanelet */}
+          <KSFagForslag
+            prosjekt={prosjekt}
+            maler={maler}
+            onTildel={nye => {
+              onOppdaterProsjekt({ ...prosjekt, ksSjekklister: [...ksSjekklister, ...nye] })
+              visToast(`La til ${nye.length} sjekklister fra forslag.`, 'ok', nye.map(k => k.malId))
+            }}
+          />
 
           {/* Prosjekt-sjekklister (via /api/sjekklister) */}
           {(prosjekt.sjekklister || []).length > 0 && (

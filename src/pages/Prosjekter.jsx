@@ -9,6 +9,9 @@ import {
 } from '../mergeProsjekter';
 import TilbudsdataVisning from '../komponenter/Tilbudsdata';
 import { beregnAktivering, beregnForkast, kalkyleSammendrag, harKalkyle } from '../framdriftUtkast';
+import KSFagForslag from '../komponenter/KSFagForslag';
+import { erForslagSkjult } from '../ksForslag';
+import { beregnKalkyleVsBemanning, erUnderbemannetMotKalkyle } from '../kalkyleBemanning';
 
 function formaterBelop(belop) {
   if (!belop && belop !== 0) return null;
@@ -928,6 +931,77 @@ function KobleDialog({ prosjekt, befaringer, onUtfør, onLukk }) {
 }
 
 // ── KS-plan forslag (laster maler lazy fra API) ───────────────────────────────
+// ═══ 4a: forslags-boks i prosjektpanelets KS-fane (laster maler lazy) ═══
+function PanelKSForslag({ prosjekt, onOppdater }) {
+  const [maler, setMaler] = useState(null);
+  const [lastet, setLastet] = useState(false);
+  const harGrunnlag = !!(prosjekt.tilbudPayload || (prosjekt.fag || []).length > 0);
+  useEffect(() => {
+    if (lastet || !harGrunnlag || erForslagSkjult(prosjekt.id)) return;
+    setLastet(true);
+    const token = localStorage.getItem('fbs_token') || '';
+    fetch('/api/ks/maler', { headers: { Authorization: 'Bearer ' + token } })
+      .then(r => r.json())
+      .then(d => { if (Array.isArray(d)) setMaler(d); })
+      .catch(() => {});
+  }, [lastet, harGrunnlag, prosjekt.id]);
+  if (!harGrunnlag || !maler) return null;
+  return (
+    <KSFagForslag
+      prosjekt={prosjekt}
+      maler={maler}
+      onTildel={nye => onOppdater({ ...prosjekt, ksSjekklister: [...(prosjekt.ksSjekklister || []), ...nye] })}
+    />
+  );
+}
+
+// ═══ 4c: kalkyletimer mot faktisk bemanning — ren visning ═══
+function KalkyleVsBemanningSeksjon({ prosjekt, tildelinger, ansatteById }) {
+  const beregning = useMemo(
+    () => beregnKalkyleVsBemanning(prosjekt, tildelinger, ansatteById),
+    [prosjekt, tildelinger, ansatteById]
+  );
+  if (!beregning) return null; // uten fagBreakdown: ingen seksjon
+
+  const Bar = ({ pct }) => (
+    <span style={{ flex: '0 0 90px', height: 8, background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: 4, overflow: 'hidden', display: 'inline-block' }}>
+      <span style={{ display: 'block', height: '100%', width: Math.min(100, pct) + '%', background: pct >= 100 ? 'var(--success)' : pct >= 50 ? 'var(--accent)' : 'var(--warning)' }} />
+    </span>
+  );
+
+  return (
+    <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 12px', marginBottom: 14, fontSize: 13 }}>
+      <div style={{ fontWeight: 500, marginBottom: 6 }}>📊 Kalkyle vs. bemannet</div>
+      {beregning.rader.map(r => (
+        <div key={r.fag} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
+          <span style={{ flex: '0 0 84px' }}>{r.bemannetTimer === 0 ? '⚠ ' : ''}{r.label}</span>
+          <Bar pct={r.pct} />
+          <span style={{ color: '#5d6b80', whiteSpace: 'nowrap' }}>{r.bemannetTimer} / {r.kalkyleTimer} t</span>
+          <span style={{ fontWeight: 500, color: r.pct >= 100 ? 'var(--success)' : r.pct >= 50 ? 'var(--text-secondary)' : 'var(--warning)', marginLeft: 'auto' }}>
+            {r.pct >= 100 ? '✓' : `${r.pct}%`}
+          </span>
+        </div>
+      ))}
+      {beregning.utenforKalkyle.map(r => (
+        <div key={r.fag} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', color: '#5d6b80' }}>
+          <span style={{ flex: '0 0 84px' }}>{r.label}</span>
+          <span style={{ fontSize: 12 }}>utenfor kalkyle</span>
+          <span style={{ marginLeft: 'auto', whiteSpace: 'nowrap' }}>{r.bemannetTimer} t</span>
+        </div>
+      ))}
+      <div style={{ borderTop: '1px solid var(--border)', marginTop: 6, paddingTop: 6, color: 'var(--text-secondary)' }}>
+        Totalt bemannet: <b>{beregning.totalBemannet}</b> av <b>{beregning.totalKalkyle}</b> kalkyletimer
+        <span style={{ color: '#5d6b80' }}> (tildelinger × 7,5 t/dag, man–fre)</span>
+      </div>
+      {beregning.manglerRader.map((m, i) => (
+        <div key={i} style={{ color: 'var(--warning)', fontWeight: 500, marginTop: 2 }}>
+          ⚠ {m.label} mangler ~{m.manglerTimer} t (≈{m.ukesverk.toLocaleString('nb-NO')} ukesverk)
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function ProsjektKSPlanKnapp({ project, onOppdater }) {
   const [laster, setLaster] = useState(false)
   const [maler, setMaler] = useState(null)
@@ -1360,6 +1434,17 @@ export default function Prosjekter({ onNavigate = null }) {
         .map(p => p.id)
     );
   }, [alleProsjekter, tildelingerByProsjekt]);
+
+  // ── 4c lett varsel: Pågående + kalkyle-fag <50 % bemannet + <2 uker til slutt ──
+  const underbemannetIds = useMemo(() => {
+    const iDag = dateToIso(new Date());
+    return new Set(
+      alleProsjekter
+        .filter(p => !p.arkivert && normStatus(p.status) === 'aktiv' && p.tilbudPayload?.fagBreakdown)
+        .filter(p => erUnderbemannetMotKalkyle(p, state.tildelinger, ansatteById, iDag))
+        .map(p => p.id)
+    );
+  }, [alleProsjekter, state.tildelinger, ansatteById]);
 
   // ── Duplikat-hint — fuzzy-motor fra mergeProsjekter (SPEC §2): Levenshtein ≤3
   // på gatenavn, husnummer må matche eksakt, kundenavn vekter sterkt.
@@ -1809,8 +1894,16 @@ export default function Prosjekter({ onNavigate = null }) {
           <KompaktRad
             tittel={visAdresse}
             undertittel={kundeNavn ? `👤 ${kundeNavn}` : null}
-            varsel={varsel ? `⚠ ${varsel.label}` : manglerBemanning ? '👷 ingen bemanning neste uke' : null}
-            varselFarge={varsel ? varsel.farge : manglerBemanning ? '#b45309' : null}
+            varsel={(() => {
+              // Rød frist (over/≤7d) vinner alltid; underbemannet-mot-kalkyle er
+              // mer handlingsrettet enn det gule «Xd igjen» og tar dets plass.
+              if (varsel && varsel.farge === '#dc2626') return `⚠ ${varsel.label}`;
+              if (underbemannetIds.has(p.id)) return '👷 underbemannet mot kalkyle';
+              if (varsel) return `⚠ ${varsel.label}`;
+              if (manglerBemanning) return '👷 ingen bemanning neste uke';
+              return null;
+            })()}
+            varselFarge={varsel?.farge === '#dc2626' ? varsel.farge : underbemannetIds.has(p.id) ? '#b45309' : varsel ? varsel.farge : manglerBemanning ? '#b45309' : null}
             hint={duplikatHint[p.id] ? `🔗 ligner på ${duplikatHint[p.id].label}` : null}
             meta={[
               p.startDato ? `📅 ${formatDate(p.startDato)}${p.sluttDato ? ` – ${formatDate(p.sluttDato)}` : ''}` : null,
@@ -1903,6 +1996,7 @@ export default function Prosjekter({ onNavigate = null }) {
             )}
             {panelFane === 'bemanning' && (
               <div>
+                <KalkyleVsBemanningSeksjon prosjekt={p} tildelinger={state.tildelinger} ansatteById={ansatteById} />
                 {tild.length === 0 && <div style={{ color: '#5d6b80', fontSize: 13, marginBottom: 12 }}>Ingen tildelinger på prosjektet.</div>}
                 {tild.map(t => {
                   const a = ansatteById[t.ansattId];
@@ -1920,6 +2014,7 @@ export default function Prosjekter({ onNavigate = null }) {
             )}
             {panelFane === 'ks' && (
               <div>
+                <PanelKSForslag prosjekt={p} onOppdater={np => dispatch({ type: 'UPDATE_PROSJEKT', payload: np })} />
                 {!(p.ksSjekklister || []).length && <div style={{ color: '#5d6b80', fontSize: 13 }}>Ingen KS-sjekklister tildelt. Gå til KS / HMS-fanen for å legge til.</div>}
                 {(p.ksSjekklister || []).map((ks, i) => (
                   <div key={ks.id || i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
