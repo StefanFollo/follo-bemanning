@@ -113,7 +113,7 @@ RETURNER KUN VALID JSON:
   })
   if (!r.ok) throw new Error(`Claude ${r.status}`)
   const d = await r.json()
-  const rawText = d.content?.[0]?.text || ''
+  const rawText = (d.content || []).map(c => c?.text || '').join('')
   const jsonMatch = rawText.match(/\{[\s\S]*\}/)
   if (!jsonMatch) throw new Error('AI returnerte ingen JSON')
   const plan = JSON.parse(jsonMatch[0])

@@ -208,7 +208,7 @@ RETURNER KUN VALID JSON (ingen forklaringstekst):
     },
     body: JSON.stringify({
       model: 'claude-opus-5',
-      max_tokens: 3000,
+      max_tokens: 4000,
       messages: [{ role: 'user', content: prompt }],
     }),
   })
@@ -219,7 +219,7 @@ RETURNER KUN VALID JSON (ingen forklaringstekst):
   }
 
   const d = await r.json()
-  const rawText = d.content?.[0]?.text || ''
+  const rawText = (d.content || []).map(c => c?.text || '').join('')
   const jsonMatch = rawText.match(/\{[\s\S]*\}/)
   if (!jsonMatch) throw new Error('AI returnerte ingen JSON')
   const plan = JSON.parse(jsonMatch[0])
