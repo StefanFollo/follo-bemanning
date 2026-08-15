@@ -1,7 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatDate, PROSJEKT_PALETTE, isoToDate, dateToIso, daysBetween } from '../store';
 import { StatusFaner, KompaktRad, DetaljPanel, VarselBanner } from '../komponenter/Designsystem';
+import {
+  beregnMerge, beregnAngre, beregnPekerOppdatering, beregnAngrePekere,
+  harTilbud, kandidatScore, finnKandidater, TILBUDSFELTER,
+} from '../mergeProsjekter';
 
 function formaterBelop(belop) {
   if (!belop && belop !== 0) return null;
@@ -450,6 +454,239 @@ function normStatus(s) {
   return s;
 }
 
+// ═══ Slå sammen duplikat-prosjekter (SPEC-merge-prosjekter.md) ═══
+// Forhåndsvisning side-om-side. INGEN slette-kode: sekundær arkiveres
+// med all data intakt, alt kan angres. Logikken bor i src/mergeProsjekter.js.
+
+function mergeVisVerdi(v) {
+  if (v === undefined || v === null || v === '') return '(tomt)';
+  if (Array.isArray(v)) return `${v.length} stk`;
+  if (typeof v === 'object') return '✓ (data)';
+  if (typeof v === 'number') return v.toLocaleString('nb-NO');
+  const s = String(v);
+  return s.length > 42 ? s.slice(0, 40) + '…' : s;
+}
+
+function MergeModal({ startProsjekt, forslagId, alleProsjekter, tildelingerByProsjekt, onUtfør, onLukk }) {
+  const [hovedId, setHovedId] = useState(startProsjekt.id);
+  const [sekundarId, setSekundarId] = useState(forslagId || null);
+  const [søk, setSøk] = useState('');
+  const [valgtAdresse, setValgtAdresse] = useState(null);
+  const [tilbudKilde, setTilbudKilde] = useState(null);
+  const [beholdManuell, setBeholdManuell] = useState({});
+
+  const aktive = alleProsjekter.filter(p => !p.arkivert);
+  const hoved = aktive.find(p => p.id === hovedId) || null;
+  const sekundar = aktive.find(p => p.id === sekundarId && p.id !== hovedId) || null;
+
+  // Kandidat-liste: fuzzy-forslag først (hjelp), deretter ALLE prosjekter
+  // (PL skriver av og til feil adresse — forslag er aldri en begrensning).
+  const basis = aktive.find(p => p.id === startProsjekt.id) || startProsjekt;
+  const kandidater = useMemo(() => {
+    const forslag = finnKandidater(basis, aktive);
+    const forslagIds = new Set(forslag.map(k => k.prosjekt.id));
+    const q = søk.toLowerCase();
+    const treffer = p =>
+      !q ||
+      (p.adresse || '').toLowerCase().includes(q) ||
+      (p.navn || '').toLowerCase().includes(q) ||
+      (p.kunde?.navn || '').toLowerCase().includes(q);
+    return [
+      ...forslag.filter(k => treffer(k.prosjekt)).map(k => ({ ...k, erForslag: true })),
+      ...aktive
+        .filter(p => p.id !== basis.id && !forslagIds.has(p.id) && treffer(p))
+        .map(p => ({ prosjekt: p, score: 0, erForslag: false })),
+    ];
+  }, [basis, aktive, søk]);
+
+  const begge = hoved && sekundar;
+  const beggeHarTilbud = begge && harTilbud(hoved) && harTilbud(sekundar);
+  const effektivKilde = beggeHarTilbud
+    ? tilbudKilde // Stefan MÅ velge når begge har tilbud
+    : begge && harTilbud(sekundar) ? 'sekundar'
+    : begge && harTilbud(hoved) ? 'hoved'
+    : null;
+
+  // Tørrkjøring for forhåndsvisning — ingenting skrives før «Slå sammen»
+  const preview = useMemo(() => {
+    if (!begge || (beggeHarTilbud && !tilbudKilde)) return null;
+    return beregnMerge(hoved, sekundar, {
+      adresse: valgtAdresse ?? hoved.adresse,
+      tilbudKilde: effektivKilde,
+      beholdManuell,
+      av: 'forhåndsvisning', dato: 'forhåndsvisning',
+    });
+  }, [hoved, sekundar, begge, beggeHarTilbud, tilbudKilde, effektivKilde, valgtAdresse, beholdManuell]);
+
+  const tilbudsEndringer = (preview?.kopierteFelter || []).filter(k => k.kilde === 'tilbud');
+  const utfyllinger = (preview?.kopierteFelter || []).filter(k => k.kilde === 'sekundar-utfyll');
+  const antallBemanning = begge ? (tildelingerByProsjekt[hoved.id] || []).length : 0;
+  const sekBemanning = begge ? (tildelingerByProsjekt[sekundar.id] || []).length : 0;
+
+  const adresseAlternativer = begge
+    ? [...new Set([hoved.adresse, sekundar.adresse].filter(Boolean))]
+    : [];
+
+  function byttHovedOgSekundar() {
+    setHovedId(sekundarId); setSekundarId(hovedId);
+    setTilbudKilde(k => (k === 'hoved' ? 'sekundar' : k === 'sekundar' ? 'hoved' : null));
+    setBeholdManuell({});
+  }
+
+  const kolonneStil = { flex: 1, minWidth: 0, border: '1px solid var(--border)', borderRadius: 8, padding: 12 };
+  const kanSlåSammen = begge && (!beggeHarTilbud || !!tilbudKilde);
+
+  return (
+    <Modal title="🔗 Slå sammen prosjekter" onClose={onLukk}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxHeight: '70vh', overflowY: 'auto' }}>
+
+        {!sekundar && (
+          <div>
+            <div style={{ fontSize: 13, color: '#5d6b80', marginBottom: 8 }}>
+              Velg prosjektet som skal slås sammen med <b>{basis.adresse || basis.navn}</b>.
+              Forslagene er hjelp — du kan velge hvilket som helst prosjekt.
+            </div>
+            <input
+              className="input" autoFocus placeholder="Søk adresse, navn eller kunde…"
+              value={søk} onChange={e => setSøk(e.target.value)} style={{ width: '100%', marginBottom: 8 }}
+            />
+            <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {kandidater.slice(0, 40).map(({ prosjekt: p, erForslag }) => (
+                <button key={p.id} className="btn" style={{ textAlign: 'left', display: 'flex', gap: 8, alignItems: 'center' }}
+                  onClick={() => setSekundarId(p.id)}>
+                  {erForslag && <span title="Fuzzy-forslag: lignende adresse/kunde" style={{ flexShrink: 0 }}>🔗</span>}
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {p.adresse || p.navn}
+                    {p.kunde?.navn ? <span style={{ color: '#5d6b80' }}> · {p.kunde.navn}</span> : null}
+                    {harTilbud(p) ? <span style={{ color: '#15803d' }}> · 📦 tilbud</span> : null}
+                  </span>
+                </button>
+              ))}
+              {kandidater.length === 0 && <div style={{ color: '#5d6b80', fontSize: 13, padding: 8 }}>Ingen prosjekter matcher søket.</div>}
+            </div>
+          </div>
+        )}
+
+        {begge && (
+          <>
+            {/* Side-om-side med bytt-knapp */}
+            <div style={{ display: 'flex', gap: 10, alignItems: 'stretch' }}>
+              <div style={{ ...kolonneStil, borderColor: 'var(--accent)', background: 'var(--accent-subtle)' }}>
+                <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--accent)', marginBottom: 4 }}>⭐ HOVEDPROSJEKT (beholdes aktivt)</div>
+                <div style={{ fontWeight: 500 }}>{hoved.adresse || hoved.navn}</div>
+                <div style={{ fontSize: 12, color: '#5d6b80', marginTop: 2 }}>
+                  {[normStatus(hoved.status), hoved.kunde?.navn, formaterBelop(hoved.belop), harTilbud(hoved) ? '📦 tilbud' : 'manuelt', `👷 ${antallBemanning} tildelinger`].filter(Boolean).join(' · ')}
+                </div>
+              </div>
+              <button className="btn btn-sm" title="Bytt hvilken som er hovedprosjekt" onClick={byttHovedOgSekundar} style={{ alignSelf: 'center', flexShrink: 0 }}>⇄ Bytt</button>
+              <div style={kolonneStil}>
+                <div style={{ fontSize: 11, fontWeight: 500, color: '#5d6b80', marginBottom: 4 }}>📦 SLÅS INN (arkiveres — kan angres)</div>
+                <div style={{ fontWeight: 500 }}>{sekundar.adresse || sekundar.navn}</div>
+                <div style={{ fontSize: 12, color: '#5d6b80', marginTop: 2 }}>
+                  {[normStatus(sekundar.status), sekundar.kunde?.navn, formaterBelop(sekundar.belop), harTilbud(sekundar) ? '📦 tilbud' : 'manuelt', `👷 ${sekBemanning} tildelinger`].filter(Boolean).join(' · ')}
+                </div>
+                <button className="btn btn-sm" style={{ marginTop: 6 }} onClick={() => { setSekundarId(null); setSøk(''); }}>Velg annet…</button>
+              </div>
+            </div>
+
+            {/* Adresse-valg (retter skrivefeil i samme steg) */}
+            {adresseAlternativer.length > 1 && (
+              <div style={{ fontSize: 13 }}>
+                <div style={{ fontWeight: 500, marginBottom: 4 }}>Adresse på det sammenslåtte prosjektet:</div>
+                {adresseAlternativer.map(adr => (
+                  <label key={adr} style={{ display: 'flex', gap: 6, alignItems: 'center', padding: '3px 0', cursor: 'pointer' }}>
+                    <input type="radio" name="merge-adresse" checked={(valgtAdresse ?? hoved.adresse) === adr} onChange={() => setValgtAdresse(adr)} />
+                    {adr}
+                  </label>
+                ))}
+              </div>
+            )}
+
+            {/* Begge har tilbud → Stefan velger hvilket som gjelder */}
+            {beggeHarTilbud && (
+              <div style={{ fontSize: 13, background: 'var(--warning-bg)', border: '1px solid var(--warning-border)', borderRadius: 8, padding: 10 }}>
+                <div style={{ fontWeight: 500, color: 'var(--warning)', marginBottom: 4 }}>⚠ Begge prosjektene har tilbuds-kobling — velg hvilket tilbud som gjelder:</div>
+                <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', padding: '2px 0' }}>
+                  <input type="radio" name="merge-tilbud" checked={tilbudKilde === 'hoved'} onChange={() => setTilbudKilde('hoved')} />
+                  Tilbudet på {hoved.adresse || hoved.navn} ({formaterBelop(hoved.belop) || 'uten beløp'})
+                </label>
+                <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', padding: '2px 0' }}>
+                  <input type="radio" name="merge-tilbud" checked={tilbudKilde === 'sekundar'} onChange={() => setTilbudKilde('sekundar')} />
+                  Tilbudet på {sekundar.adresse || sekundar.navn} ({formaterBelop(sekundar.belop) || 'uten beløp'})
+                </label>
+              </div>
+            )}
+
+            {/* Forhåndsvisning */}
+            {preview && (
+              <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {effektivKilde === 'sekundar' && (
+                  <div style={{ background: 'var(--success-bg)', border: '1px solid var(--success-border)', borderRadius: 8, padding: 10 }}>
+                    <div style={{ fontWeight: 500, color: 'var(--success)', marginBottom: 4 }}>📦 Tilbudsdata (følger ALLTID med fra tilbudet):</div>
+                    {tilbudsEndringer.length === 0 && <div style={{ color: '#5d6b80' }}>Ingen felter endres — hovedprosjektet har allerede tilbudets verdier.</div>}
+                    {tilbudsEndringer.map(k => (
+                      <div key={k.felt} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '2px 0', flexWrap: 'wrap' }}>
+                        <span>
+                          + <b>{k.felt}</b>:{' '}
+                          {k.fraVerdi !== undefined && !('' + k.fraVerdi === '') ? (
+                            <><span style={{ textDecoration: 'line-through', color: 'var(--warning)' }}>{mergeVisVerdi(k.fraVerdi)} manuell</span> → {mergeVisVerdi(k.tilVerdi)} fra tilbud</>
+                          ) : (
+                            <>{mergeVisVerdi(k.tilVerdi)}</>
+                          )}
+                        </span>
+                        {k.fraVerdi !== undefined && k.fraVerdi !== null && k.fraVerdi !== '' && (
+                          <label style={{ display: 'inline-flex', gap: 4, alignItems: 'center', color: '#5d6b80', cursor: 'pointer', fontSize: 12 }}>
+                            <input type="checkbox" checked={!!beholdManuell[k.felt]}
+                              onChange={e => setBeholdManuell(b => ({ ...b, [k.felt]: e.target.checked }))} />
+                            behold manuell verdi
+                          </label>
+                        )}
+                      </div>
+                    ))}
+                    {Object.entries(beholdManuell).filter(([, v]) => v).map(([felt]) => (
+                      <div key={felt} style={{ color: '#5d6b80', padding: '2px 0' }}>
+                        ✋ <b>{felt}</b>: beholder manuell verdi {mergeVisVerdi(hoved[felt])}
+                        {' '}<label style={{ display: 'inline-flex', gap: 4, alignItems: 'center', cursor: 'pointer', fontSize: 12 }}>
+                          <input type="checkbox" checked onChange={() => setBeholdManuell(b => ({ ...b, [felt]: false }))} /> behold manuell verdi
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+                  <div style={{ fontWeight: 500, marginBottom: 4 }}>👷 Driftsdata (hovedprosjektet beholder sitt):</div>
+                  <div>✓ Bemanning ({antallBemanning}{sekBemanning > 0 ? ` + ${sekBemanning} flyttes over` : ''}), status «{SAVE_LABELS[normStatus(hoved.status)] || hoved.status}», datoer, farge, prosjektleder</div>
+                  {utfyllinger.length > 0 && (
+                    <div style={{ marginTop: 4, color: '#5d6b80' }}>
+                      Tomme felter fylles fra sekundær: {utfyllinger.map(k => k.felt).join(', ')}
+                    </div>
+                  )}
+                </div>
+                <div style={{ color: 'var(--success)', fontWeight: 500 }}>
+                  🔒 Ingenting slettes. Sekundærprosjektet arkiveres med all data intakt og kan gjenopprettes med ett klikk.
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
+          <button className="btn" onClick={onLukk}>Avbryt</button>
+          <button className="btn btn-primary" disabled={!kanSlåSammen}
+            title={!begge ? 'Velg prosjekt først' : beggeHarTilbud && !tilbudKilde ? 'Velg hvilket tilbud som gjelder' : ''}
+            onClick={() => onUtfør({
+              hovedId: hoved.id, sekundarId: sekundar.id,
+              adresse: valgtAdresse ?? hoved.adresse,
+              tilbudKilde: effektivKilde, beholdManuell,
+            })}>
+            🔗 Slå sammen
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 // ── KS-plan forslag (laster maler lazy fra API) ───────────────────────────────
 function ProsjektKSPlanKnapp({ project, onOppdater }) {
   const [laster, setLaster] = useState(false)
@@ -677,6 +914,94 @@ export default function Prosjekter({ onNavigate = null }) {
     dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...p, status: nyStatus } });
   }
 
+  // ═══ Slå sammen duplikater (SPEC-merge-prosjekter.md) ═══
+  // 🔒 Ingen slette-kode: kopierer til hoved + arkiverer sekundær. Alt angres.
+  const [mergeFor, setMergeFor] = useState(null);      // {prosjekt, forslagId}
+  const [mergeToast, setMergeToast] = useState(null);  // {tekst, hovedId, sekundarId}
+  useEffect(() => {
+    if (!mergeToast) return;
+    const t = setTimeout(() => setMergeToast(null), 30000);
+    return () => clearTimeout(t);
+  }, [mergeToast]);
+
+  function loggAudit(objektId, felt, fraVerdi, tilVerdi, begrunnelse) {
+    const token = localStorage.getItem('fbs_token') || '';
+    fetch('/api/befaringer/audit-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ objektId, felt, fraVerdi, tilVerdi, kilde: 'merge-prosjekter', begrunnelse }),
+    }).catch(() => {});
+  }
+
+  const PEKER_ACTION = { tildelinger: 'UPDATE_TILDELING', oppgaver: 'UPDATE_OPPGAVE', rorPlaner: 'UPDATE_ROR_PLAN', rorTimer: 'UPDATE_ROR_TIMER', befaringer: 'UPDATE_BEFARING' };
+
+  function utførMerge(valgInn) {
+    const hoved = state.prosjekter.find(p => p.id === valgInn.hovedId);
+    const sekundar = state.prosjekter.find(p => p.id === valgInn.sekundarId);
+    if (!hoved || !sekundar || hoved.id === sekundar.id) return;
+    const av = localStorage.getItem('fbs_user_navn') || localStorage.getItem('fbs_role') || 'ukjent';
+    const dato = new Date().toISOString();
+    const { nyHoved, nySekundar, kopierteFelter } = beregnMerge(hoved, sekundar, { ...valgInn, av, dato });
+    const pekere = beregnPekerOppdatering(state, sekundar.id, hoved.id);
+    const pekerIds = Object.fromEntries(Object.entries(pekere).map(([k, v]) => [k, v.ids]));
+
+    // Peker-listen lagres PÅ mergetFra-innslaget (synkes til skyen) slik at
+    // angre virker fra hvilken som helst enhet — ikke bare denne maskinen.
+    const sisteMerge = nyHoved.mergetFra[nyHoved.mergetFra.length - 1];
+    sisteMerge.pekere = pekerIds;
+
+    // 1) Backup FØRST: begge prosjektenes komplette JSON i fbs_merge_historikk.
+    //    Tømmes aldri — selv om angre-logikken skulle feile ligger originalene her.
+    try {
+      const hist = JSON.parse(localStorage.getItem('fbs_merge_historikk') || '[]');
+      hist.push({ dato, av, hovedFør: hoved, sekundarFør: sekundar, pekereFør: pekerIds, valgtAdresse: valgInn.adresse || '' });
+      localStorage.setItem('fbs_merge_historikk', JSON.stringify(hist));
+    } catch (e) { console.error('fbs_merge_historikk:', e); }
+
+    // 2) Skriv — utelukkende UPDATE-actions (denne flyten HAR ingen slette-kode)
+    dispatch({ type: 'UPDATE_PROSJEKT', payload: nyHoved });
+    dispatch({ type: 'UPDATE_PROSJEKT', payload: nySekundar });
+    for (const [samling, info] of Object.entries(pekere)) {
+      for (const item of info.oppdaterte) dispatch({ type: PEKER_ACTION[samling], payload: item });
+    }
+
+    loggAudit(hoved.id, 'merge', sekundar.adresse || sekundar.navn, hoved.adresse || hoved.navn,
+      `Slo sammen «${sekundar.adresse || sekundar.navn}» inn i «${hoved.adresse || hoved.navn}» — ${kopierteFelter.length} felter kopiert, adresse satt til «${valgInn.adresse || hoved.adresse || ''}»`);
+
+    setMergeFor(null);
+    setValgtId(null);
+    setMergeToast({
+      tekst: `🔗 Slo sammen «${sekundar.adresse || sekundar.navn}» inn i «${hoved.adresse || hoved.navn}»`,
+      hovedId: hoved.id, sekundarId: sekundar.id,
+    });
+  }
+
+  function angreMerge(hovedId, sekundarId) {
+    const hoved = state.prosjekter.find(p => p.id === hovedId);
+    const sekundar = state.prosjekter.find(p => p.id === sekundarId);
+    const mergeInfo = (hoved?.mergetFra || []).filter(m => m.id === sekundarId).slice(-1)[0];
+    if (!hoved || !sekundar || !mergeInfo) {
+      alert('Fant ikke sammenslåings-loggen for dette prosjektet — ingenting er endret.');
+      return;
+    }
+    const { nyHoved, nySekundar, ikkeTilbakestilt } = beregnAngre(hoved, sekundar, mergeInfo);
+    const angrePekere = beregnAngrePekere(state, mergeInfo.pekere || {}, sekundarId, hovedId);
+
+    dispatch({ type: 'UPDATE_PROSJEKT', payload: nyHoved });
+    dispatch({ type: 'UPDATE_PROSJEKT', payload: nySekundar });
+    for (const [samling, info] of Object.entries(angrePekere)) {
+      for (const item of info.oppdaterte) dispatch({ type: PEKER_ACTION[samling], payload: item });
+    }
+
+    loggAudit(hovedId, 'angre-merge', hoved.adresse || hoved.navn, sekundar.adresse || sekundar.navn,
+      `Angret sammenslåing: «${sekundar.adresse || sekundar.navn}» gjenopprettet fra «${hoved.adresse || hoved.navn}»`);
+
+    setMergeToast(null);
+    if (ikkeTilbakestilt.length > 0) {
+      alert(`Sammenslåingen er angret. Disse feltene var endret manuelt ETTER sammenslåingen og ble derfor ikke rørt: ${ikkeTilbakestilt.join(', ')}`);
+    }
+  }
+
   // Oppslags-indekser (unngå O(n) skann per prosjekt i render-loopen)
   const ansatteById = useMemo(() => {
     const m = {};
@@ -758,22 +1083,20 @@ export default function Prosjekter({ onNavigate = null }) {
     );
   }, [alleProsjekter, tildelingerByProsjekt]);
 
-  // ── PR2: duplikat-hint — normalisert adresse-sammenligning, KUN visning ──
+  // ── Duplikat-hint — fuzzy-motor fra mergeProsjekter (SPEC §2): Levenshtein ≤3
+  // på gatenavn, husnummer må matche eksakt, kundenavn vekter sterkt.
+  // KUN visning/hjelp — aldri auto-handling. hint[p.id] = { id, label }.
   const duplikatHint = useMemo(() => {
-    const norm = s => (s || '').toLowerCase().replace(/[^a-zæøå0-9]/g, '');
-    const perAdresse = new Map();
-    for (const p of alleProsjekter) {
-      const n = norm(p.adresse || p.navn);
-      if (n.length < 4) continue;
-      (perAdresse.get(n) || perAdresse.set(n, []).get(n)).push(p);
-    }
+    const aktive = alleProsjekter.filter(p => !p.arkivert);
     const hint = {};
-    for (const gruppe of perAdresse.values()) {
-      if (gruppe.length < 2) continue;
-      for (const p of gruppe) {
-        const andre = gruppe.find(x => x.id !== p.id);
-        if (andre) hint[p.id] = andre.adresse || andre.navn;
+    for (const p of aktive) {
+      let best = null;
+      for (const q of aktive) {
+        if (q.id === p.id) continue;
+        const s = kandidatScore(p, q);
+        if (s >= 50 && (!best || s > best.score)) best = { score: s, q };
       }
+      if (best) hint[p.id] = { id: best.q.id, label: best.q.adresse || best.q.navn };
     }
     return hint;
   }, [alleProsjekter]);
@@ -1151,18 +1474,25 @@ export default function Prosjekter({ onNavigate = null }) {
         const ks = Array.isArray(p.ksSjekklister) && p.ksSjekklister.length > 0 ? p.ksSjekklister.length : null;
 
         if (aktivFane === 'arkivert') {
+          const mergetHoved = p.mergetInn
+            ? state.prosjekter.find(x => x.id === p.mergetInn.hovedId)
+            : null;
           return (
             <KompaktRad
               key={p.id}
               tittel={visAdresse}
               undertittel={kundeNavn ? `👤 ${kundeNavn}` : null}
+              varsel={p.mergetInn ? `🔗 Slått sammen med ${mergetHoved ? (mergetHoved.adresse || mergetHoved.navn) : 'annet prosjekt'}` : null}
+              varselFarge={p.mergetInn ? '#0e7490' : null}
               meta={[
                 p.arkivertDato ? `🗄 Arkivert ${formatDate(p.arkivertDato.slice(0, 10))}` : '🗄 Arkivert',
                 p.arkivertAv ? `av ${p.arkivertAv}` : null,
               ]}
               hoyre={[belopVis]}
               meny={[
-                { ikon: '↩', label: 'Gjenopprett', onClick: () => gjenopprettProsjekt(p) },
+                p.mergetInn
+                  ? { ikon: '↩', label: 'Angre sammenslåing', onClick: () => angreMerge(p.mergetInn.hovedId, p.id) }
+                  : { ikon: '↩', label: 'Gjenopprett', onClick: () => gjenopprettProsjekt(p) },
                 { ikon: '✏️', label: 'Rediger', onClick: () => openEdit(p) },
               ]}
               onClick={() => openEdit(p)}
@@ -1184,7 +1514,7 @@ export default function Prosjekter({ onNavigate = null }) {
             undertittel={kundeNavn ? `👤 ${kundeNavn}` : null}
             varsel={varsel ? `⚠ ${varsel.label}` : manglerBemanning ? '👷 ingen bemanning neste uke' : null}
             varselFarge={varsel ? varsel.farge : manglerBemanning ? '#b45309' : null}
-            hint={duplikatHint[p.id] ? `🔗 ligner på ${duplikatHint[p.id]}` : null}
+            hint={duplikatHint[p.id] ? `🔗 ligner på ${duplikatHint[p.id].label}` : null}
             meta={[
               p.startDato ? `📅 ${formatDate(p.startDato)}${p.sluttDato ? ` – ${formatDate(p.sluttDato)}` : ''}` : null,
               varighetUker(p.startDato, p.sluttDato),
@@ -1200,6 +1530,9 @@ export default function Prosjekter({ onNavigate = null }) {
             hurtigknapp={hurtigknapp}
             meny={[
               { ikon: '✏️', label: 'Rediger', onClick: () => openEdit(p) },
+              duplikatHint[p.id]
+                ? { ikon: '🔗', label: `Slå sammen med ${duplikatHint[p.id].label}…`, onClick: () => setMergeFor({ prosjekt: p, forslagId: duplikatHint[p.id].id }) }
+                : { ikon: '🔗', label: 'Slå sammen med…', onClick: () => setMergeFor({ prosjekt: p, forslagId: null }) },
               { skille: true },
               ...['jobber_med', 'godkjent', 'aktiv'].filter(s => normStatus(p.status) !== s).map(s => ({
                 ikon: '→', label: SAVE_LABELS[s], onClick: () => settProsjektStatus(p, s),
@@ -1420,6 +1753,32 @@ export default function Prosjekter({ onNavigate = null }) {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* ── Slå sammen-modal (SPEC-merge-prosjekter) ── */}
+      {mergeFor && (
+        <MergeModal
+          startProsjekt={mergeFor.prosjekt}
+          forslagId={mergeFor.forslagId}
+          alleProsjekter={state.prosjekter}
+          tildelingerByProsjekt={tildelingerByProsjekt}
+          onUtfør={utførMerge}
+          onLukk={() => setMergeFor(null)}
+        />
+      )}
+
+      {/* ── Toast med angre-lenke (30 sek) etter merge ── */}
+      {mergeToast && (
+        <div style={{
+          position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 500,
+          background: 'var(--bg-surface)', border: '1px solid var(--border-strong)', borderLeft: '3px solid var(--success)',
+          borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-panel)',
+          padding: '10px 16px', display: 'flex', gap: 12, alignItems: 'center', maxWidth: '90vw',
+        }}>
+          <span style={{ fontSize: 13 }}>{mergeToast.tekst}</span>
+          <button className="btn btn-sm" onClick={() => angreMerge(mergeToast.hovedId, mergeToast.sekundarId)}>↩ Angre</button>
+          <button className="btn-icon" onClick={() => setMergeToast(null)} title="Lukk">✕</button>
+        </div>
       )}
     </div>
   );
