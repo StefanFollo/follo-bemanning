@@ -10,6 +10,247 @@ import {
 } from 'lucide-react';
 import { Ikon } from '../komponenter/Ikon';
 import TilbudsdataVisning from '../komponenter/Tilbudsdata';
+import {
+  klassifiserKoblinger, forslagForSpokelse, beregnKobleTilbud, beregnStatusFix,
+  beregnAngreSak, hentReparasjonHistorikk, leggTilReparasjonHistorikk, mapSalgsStatus,
+} from '../reparasjonKoblinger';
+
+// ═══ Fase 3: «Reparer koblinger»-wizard (admin) ═══
+// Én sak om gangen, alt reversibelt, ingen bulk/auto/sletting.
+function ReparerKoblinger({ state, dispatch, onLukk }) {
+  const [rapport, setRapport] = React.useState(null);
+  const [lasteFeil, setLasteFeil] = React.useState('');
+  const [sakIdx, setSakIdx] = React.useState(0);
+  const [velgAnnen, setVelgAnnen] = React.useState(false);
+  const [sok, setSok] = React.useState('');
+  const [overstyrVern, setOverstyrVern] = React.useState(false);
+  const [okt, setOkt] = React.useState([]); // avgjorte saker i denne økten (for angre)
+  const tellingRef = React.useRef(state.befaringer.length);
+
+  React.useEffect(() => {
+    const token = localStorage.getItem('fbs_token') || '';
+    fetch('/api/befaringer/koblinger', { headers: { Authorization: 'Bearer ' + token } })
+      .then(r2 => r2.json())
+      .then(d => setRapport(d))
+      .catch(e => setLasteFeil(String(e.message || e)));
+  }, []);
+
+  function auditLogg(objektId, felt, fraVerdi, tilVerdi, begrunnelse) {
+    const token = localStorage.getItem('fbs_token') || '';
+    fetch('/api/befaringer/audit-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ objektId, felt, fraVerdi, tilVerdi, kilde: 'reparert-av-stefan', begrunnelse }),
+    }).catch(() => {});
+  }
+  function postLosning(losning) {
+    const token = localStorage.getItem('fbs_token') || '';
+    fetch('/api/befaringer/koblinger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ losning }),
+    }).catch(() => {});
+    // Speil løsningen i lokal rapport-state så saken forsvinner fra køen
+    // umiddelbart (serveren er fasit ved neste åpning).
+    setRapport(rap => {
+      if (!rap) return rap;
+      const losninger = { ...(rap.losninger || {}) };
+      if (losning.angret) delete losninger[String(losning.tilbudId)];
+      else losninger[String(losning.tilbudId)] = { ...losning, dato: new Date().toISOString() };
+      return { ...rap, losninger };
+    });
+  }
+
+  if (lasteFeil) return <div className="modal-backdrop" onClick={onLukk}><div className="modal" onClick={e => e.stopPropagation()}><div style={{ padding: 20 }}>Kunne ikke hente koblingsrapporten: {lasteFeil}</div></div></div>;
+  if (!rapport) return <div className="modal-backdrop"><div className="modal"><div style={{ padding: 20 }}>Henter koblingsrapport…</div></div></div>;
+
+  const losninger = rapport.losninger || {};
+  const { friske, spokelser, mismatch } = klassifiserKoblinger(rapport.koblinger, state.befaringer);
+  const saker = [...spokelser, ...mismatch].filter(k => !losninger[String(k.tilbudId)]);
+  const sak = saker[Math.min(sakIdx, Math.max(0, saker.length - 1))] || null;
+  const tellingOk = state.befaringer.length >= tellingRef.current; // aldri færre enn ved start
+
+  function ferdigMedSak(historikkInnslag) {
+    leggTilReparasjonHistorikk(historikkInnslag);
+    setOkt(o => [...o, historikkInnslag]);
+    setVelgAnnen(false); setSok(''); setOverstyrVern(false);
+  }
+
+  function kobleTil(befaring) {
+    const { nyBefaring, før } = beregnKobleTilbud(befaring, sak);
+    dispatch({ type: 'UPDATE_BEFARING', payload: nyBefaring });
+    postLosning({ tilbudId: sak.tilbudId, nyKildeBefaringId: befaring.id });
+    auditLogg(befaring.id, 'tilbudId', før.tilbudId ?? null, String(sak.tilbudId),
+      'Fase 3: spøkelse-kobling reparert — tilbudet koblet til denne befaringen');
+    ferdigMedSak({ dato: new Date().toISOString(), handling: 'koblet', tilbudId: sak.tilbudId, befaringId: befaring.id, før, sakType: 'spokelse' });
+  }
+
+  function opprettNy() {
+    const nyId = uid();
+    dispatch({ type: 'ADD_BEFARING', payload: {
+      id: nyId,
+      kontaktNavn: sak.kundenavn || 'Ukjent kunde',
+      adresse: sak.adresse || '',
+      status: mapSalgsStatus(sak.salgsStatus) || 'planlagt',
+      dato: new Date().toISOString().slice(0, 10),
+      tid: '',
+      notat: 'Opprettet av Reparer koblinger (fase 3) for tilbud ' + sak.tilbudId,
+      kommentar: '',
+      prosjektlederId: '', ansvarligBefaringId: '',
+      tilbudId: sak.tilbudId,
+      ...(sak.tilbudLink ? { tilbudLink: sak.tilbudLink } : {}),
+      ...(sak.tilbudPayload ? { tilbudPayload: { ...sak.tilbudPayload, _mottattType: 'reparasjon', _mottattDato: new Date().toISOString() } } : {}),
+    }});
+    postLosning({ tilbudId: sak.tilbudId, nyKildeBefaringId: nyId });
+    auditLogg(nyId, 'status', null, mapSalgsStatus(sak.salgsStatus) || 'planlagt',
+      'Fase 3: ny befaring opprettet for tilbud uten gyldig kobling');
+    ferdigMedSak({ dato: new Date().toISOString(), handling: 'opprettet', tilbudId: sak.tilbudId, befaringId: nyId, før: null, sakType: 'spokelse' });
+  }
+
+  function bytStatus(befaring) {
+    const { nyBefaring, før } = beregnStatusFix(befaring, sak);
+    dispatch({ type: 'UPDATE_BEFARING', payload: { ...nyBefaring, manueltOverstyrtAv: undefined, manueltOverstyrtDato: undefined } });
+    postLosning({ tilbudId: sak.tilbudId, status: sak.forventetStatus });
+    auditLogg(befaring.id, 'status', før.status, sak.forventetStatus,
+      'Fase 3: status-mismatch reparert — tilbudets status brukt');
+    ferdigMedSak({ dato: new Date().toISOString(), handling: 'status-fikset', tilbudId: sak.tilbudId, befaringId: befaring.id, før, sakType: 'mismatch' });
+  }
+
+  function beholdBefaringens(befaring) {
+    postLosning({ tilbudId: sak.tilbudId, behold: 'befaring', status: befaring.status });
+    auditLogg(befaring.id, 'status', befaring.status, befaring.status,
+      'Fase 3: mismatch avgjort — befaringens status beholdt (tilbuds-appen kan synke sin vei)');
+    ferdigMedSak({ dato: new Date().toISOString(), handling: 'beholdt', tilbudId: sak.tilbudId, befaringId: befaring.id, før: null, sakType: 'mismatch' });
+  }
+
+  function angreSak(innslag) {
+    const befaring = state.befaringer.find(b => b.id === innslag.befaringId);
+    if (befaring && innslag.før) {
+      const { nyBefaring } = beregnAngreSak(befaring, innslag);
+      dispatch({ type: 'UPDATE_BEFARING', payload: nyBefaring });
+    }
+    postLosning({ tilbudId: innslag.tilbudId, angret: true });
+    auditLogg(innslag.befaringId, 'reparasjon', innslag.handling, 'angret', 'Fase 3: sak angret');
+    setOkt(o => o.filter(x => x !== innslag));
+    leggTilReparasjonHistorikk({ ...innslag, angret: true, angretDato: new Date().toISOString() });
+  }
+
+  const forslag = sak && sak.type === 'spokelse' ? forslagForSpokelse(sak, state.befaringer) : null;
+  const mismatchBef = sak && sak.type === 'mismatch' ? state.befaringer.find(b => b.id === sak.befaringId) : null;
+  const sokLav = sok.toLowerCase();
+  const kandidatListe = velgAnnen
+    ? state.befaringer.filter(b => !b.arkivert && (!sok || (b.adresse || '').toLowerCase().includes(sokLav) || (b.kontaktNavn || '').toLowerCase().includes(sokLav))).slice(0, 25)
+    : [];
+
+  return (
+    <div className="modal-backdrop" onClick={onLukk}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: 620 }}>
+        <div className="modal-header">
+          <h3>Reparer koblinger (fase 3)</h3>
+          <button className="btn-icon" onClick={onLukk}><Ikon ikon={X} size={15} /></button>
+        </div>
+        <div style={{ padding: '0 4px', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '68vh', overflowY: 'auto' }}>
+          <div style={{ color: '#5d6b80' }}>
+            Rapport fra tilbuds-appen{rapport.mottattDato ? ' (' + new Date(rapport.mottattDato).toLocaleString('nb-NO') + ')' : ''}:
+            {' '}{friske.length} friske · {spokelser.length} spøkelser · {mismatch.length} status-mismatch · {Object.keys(losninger).length} avgjort
+            {!tellingOk && <div style={{ color: 'var(--danger)', fontWeight: 500 }}>Advarsel: antall befaringer har sunket — stopp og sjekk!</div>}
+          </div>
+
+          {(rapport.koblinger || []).length === 0 && (
+            <div style={{ background: 'var(--warning-bg)', border: '1px solid var(--warning-border)', borderRadius: 8, padding: 12, color: 'var(--warning)' }}>
+              Ingen rapport mottatt ennå. Be tilbuds-appen sende koblingslista
+              (knapp der — API-et er klart til å ta imot).
+            </div>
+          )}
+
+          {saker.length === 0 && (rapport.koblinger || []).length > 0 && (
+            <div style={{ color: 'var(--success)', fontWeight: 500 }}>Alle saker er avgjort. Godt jobbet!</div>
+          )}
+
+          {sak && (
+            <div style={{ border: '1px solid var(--border)', borderLeft: '3px solid ' + (sak.type === 'spokelse' ? 'var(--danger)' : 'var(--warning)'), borderRadius: 8, padding: 12 }}>
+              <div style={{ fontWeight: 500, marginBottom: 6 }}>
+                Sak {saker.indexOf(sak) + 1} av {saker.length}: {sak.type === 'spokelse' ? 'Spøkelse-kobling' : 'Status-mismatch'}
+              </div>
+              <div style={{ color: '#5d6b80', marginBottom: 8 }}>
+                Tilbud {sak.tilbudId}{sak.kundenavn ? ' · ' + sak.kundenavn : ''}{sak.adresse ? ' · ' + sak.adresse : ''} · salgsstatus «{sak.salgsStatus}»
+              </div>
+
+              {sak.type === 'spokelse' && (
+                <>
+                  <div style={{ marginBottom: 8 }}>
+                    Peker på befaring <code>{sak.kildeBefaringId || '(mangler)'}</code> — som ikke finnes.
+                  </div>
+                  {forslag && !velgAnnen && (
+                    <div style={{ background: 'var(--accent-subtle)', borderRadius: 6, padding: 8, marginBottom: 8 }}>
+                      Forslag: <b>{forslag.befaring.adresse || forslag.befaring.kontaktNavn}</b>
+                      {forslag.befaring.kontaktNavn ? ' · ' + forslag.befaring.kontaktNavn : ''} (status {forslag.befaring.status})
+                    </div>
+                  )}
+                  {!forslag && !velgAnnen && <div style={{ color: '#5d6b80', marginBottom: 8 }}>Ingen god fuzzy-match blant befaringene.</div>}
+                  {velgAnnen && (
+                    <div style={{ marginBottom: 8 }}>
+                      <input className="input" placeholder="Søk befaring…" value={sok} onChange={e => setSok(e.target.value)} style={{ width: '100%', marginBottom: 6 }} />
+                      <div style={{ maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {kandidatListe.map(b => (
+                          <button key={b.id} className="btn" style={{ textAlign: 'left' }} onClick={() => kobleTil(b)}>
+                            {b.adresse || b.kontaktNavn} {b.kontaktNavn ? '· ' + b.kontaktNavn : ''} · {b.status}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    {forslag && !velgAnnen && <button className="btn btn-primary" onClick={() => kobleTil(forslag.befaring)}>Godkjenn forslag</button>}
+                    <button className="btn" onClick={() => setVelgAnnen(v => !v)}>{velgAnnen ? 'Skjul liste' : 'Velg annen…'}</button>
+                    <button className="btn" onClick={opprettNy}>Opprett ny befaring</button>
+                    <button className="btn" onClick={() => setSakIdx(i => i + 1)}>Hopp over</button>
+                  </div>
+                </>
+              )}
+
+              {sak.type === 'mismatch' && mismatchBef && (
+                <>
+                  <div style={{ marginBottom: 8 }}>
+                    Befaringen «{mismatchBef.adresse || mismatchBef.kontaktNavn}» står i
+                    {' '}<b>{sak.befaringStatus}</b>, tilbudet sier <b>{sak.forventetStatus}</b>
+                    {' '}(flytting {sak.befaringStatus} → {sak.forventetStatus}).
+                  </div>
+                  {mismatchBef.manueltOverstyrtAv && (
+                    <label style={{ display: 'flex', gap: 6, alignItems: 'center', background: 'var(--warning-bg)', border: '1px solid var(--warning-border)', borderRadius: 6, padding: 8, marginBottom: 8, cursor: 'pointer', color: 'var(--warning)' }}>
+                      <input type="checkbox" checked={overstyrVern} onChange={e => setOverstyrVern(e.target.checked)} />
+                      Denne er MANUELT overstyrt ({mismatchBef.manueltOverstyrtAv}
+                      {mismatchBef.manueltOverstyrtDato ? ', ' + new Date(mismatchBef.manueltOverstyrtDato).toLocaleDateString('nb-NO') : ''}) —
+                      kryss av for å bekrefte at tilbudets status likevel skal brukes
+                    </label>
+                  )}
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <button className="btn btn-primary" disabled={!!mismatchBef.manueltOverstyrtAv && !overstyrVern}
+                      onClick={() => bytStatus(mismatchBef)}>Bruk tilbudets status</button>
+                    <button className="btn" onClick={() => beholdBefaringens(mismatchBef)}>Behold befaringens</button>
+                    <button className="btn" onClick={() => setSakIdx(i => i + 1)}>Hopp over</button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {okt.length > 0 && (
+            <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+              <div style={{ fontWeight: 500, marginBottom: 4 }}>Avgjort i denne økten (kan angres):</div>
+              {okt.map((innslag, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0', color: '#5d6b80' }}>
+                  <span>Tilbud {innslag.tilbudId}: {innslag.handling}</span>
+                  <button className="btn btn-sm" style={{ marginLeft: 'auto' }} onClick={() => angreSak(innslag)}>Angre</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // Tomtilstand for Tilbudsdata i rediger-modalen — stille resynk ved åpning
 // (payload kan ha landet på serveren via re-send etter forrige poll) + manuell knapp.
@@ -121,6 +362,7 @@ export default function BefaringPlan() {
   const [visModal, setVisModal] = useState(false);
   const [redigerer, setRedigerer] = useState(null);
   const [dedupPanel, setDedupPanel] = useState(null); // null | {loading} | {dry, plan, ...}
+  const [visReparer, setVisReparer] = useState(false); // fase 3-verktøyet
   const [form, setForm] = useState(tomModal());
   const [autoSaveSts, setAutoSaveSts] = useState(null); // null | 'saving' | 'saved'
   const [modalFane, setModalFane] = useState('detaljer'); // 'detaljer' | 'aktivitet'
@@ -786,6 +1028,12 @@ export default function BefaringPlan() {
             <button className={`bef-view-tab${viewTab === 'kalender' ? ' aktiv' : ''}`} onClick={() => setViewTab('kalender')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={CalendarDays} size={14} /> Kalender</button>
           </div>
           <button className="btn btn-primary" onClick={() => apneNy()}>+ Ny befaring</button>
+          {isAdmin && (
+            <button className="btn" onClick={() => setVisReparer(true)}
+              title="Fase 3: reparer historiske tilbud-befaring-koblinger — én sak om gangen, alt reversibelt">
+              Reparer koblinger
+            </button>
+          )}
           {/* Dedup skjult fra UI (B-listen 15.08): sletter fysisk uten tombstones. Koden beholdes. */}
           {false && isAdmin && (
             <button
@@ -798,6 +1046,8 @@ export default function BefaringPlan() {
           )}
         </div>
       </div>
+
+      {visReparer && <ReparerKoblinger state={state} dispatch={dispatch} onLukk={() => setVisReparer(false)} />}
 
       {/* Admin: dedup-panel */}
       {isAdmin && dedupPanel && (
