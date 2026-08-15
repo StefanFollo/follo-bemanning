@@ -912,6 +912,7 @@ function UkeVisning({
           <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(${weekDays.length}, minmax(36px, 1fr))` }}>
             <DagGridHeader weekDays={weekDays} HOLIDAYS={HOLIDAYS} today={today} />
             {renderProsjektRader(dagProsjekter, dagLedige, weekDays.length, DagAnsattRad, currentWeek, weekEnd, { days: weekDays, gantt })}
+            {!fagFilter && <RorleggerRader state={state} days={weekDays} unit="day" viewStart={currentWeek} viewEnd={weekEnd} />}
           </div>
         </div>
       ) : ukeMode === 'uke' ? (
@@ -933,6 +934,7 @@ function UkeVisning({
           <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(260, minmax(28px, 1fr))` }}>
             <UkeGridHeader WORK_DAYS_UKE={WORK_DAYS_UKE} TEN_WEEKS={TEN_WEEKS} today={today} HOLIDAYS={HOLIDAYS} />
             {renderProsjektRader(ukeProsjekter, ukeLedige, 260, UkeAnsattRad, periodeStart, periodeEnd, { days: WORK_DAYS_UKE, gantt })}
+            {!fagFilter && <RorleggerRader state={state} days={WORK_DAYS_UKE} unit="day" viewStart={periodeStart} viewEnd={periodeEnd} />}
           </div>
         </div>
       ) : (
@@ -940,6 +942,7 @@ function UkeVisning({
           <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(18, minmax(80px, 1fr))` }}>
             <MaanedGridHeader SIX_MONTHS={SIX_MONTHS} today={today} />
             {renderProsjektRader(maanedProsjekter, maanedLedige, 18, MaanedAnsattRad, currentMonth, maanedPeriodeEnd, { days: SIX_MONTHS, gantt })}
+            {!fagFilter && <RorleggerRader state={state} days={SIX_MONTHS} unit="month" viewStart={currentMonth} viewEnd={maanedPeriodeEnd} />}
           </div>
         </div>
       )}
@@ -1223,6 +1226,103 @@ function MaanedGridHeader({ SIX_MONTHS, today }) {
           <div key={m} className={`uke-header-cell ${isCurrentMonth ? 'today' : ''}`} style={{ fontSize: 12 }}>
             <div style={{ fontWeight: 500 }}>{monthLabel(m)}</div>
           </div>
+        );
+      })}
+    </>
+  );
+}
+
+// ── Rørlegger-seksjon nederst i uke-visningen — SYNKET fra Rørlegger-fanen.
+// Kun visning her; planene redigeres under Rørlegger (rorPlaner/rorTimer/befaringer).
+function hentRorItems(state, ansattId, viewStart, viewEnd, medEnkeltdager) {
+  const items = [];
+  for (const p of (state.rorPlaner || [])) {
+    if (p.ansattId !== ansattId || !overlaps(p.startDato, p.sluttDato, viewStart, viewEnd)) continue;
+    const proj = state.prosjekter.find(x => x.id === p.prosjektId);
+    items.push({ id: 'rp-' + p.id, startDato: p.startDato, sluttDato: p.sluttDato, navn: p.fritekst || proj?.navn || '?', farge: proj?.farge || '#0e7490' });
+  }
+  if (medEnkeltdager) {
+    for (const t of (state.rorTimer || [])) {
+      if (t.ansattId !== ansattId || !t.dato || t.dato < viewStart || t.dato > viewEnd) continue;
+      const proj = state.prosjekter.find(x => x.id === t.prosjektId);
+      items.push({ id: 'rt-' + t.id, startDato: t.dato, sluttDato: t.dato, navn: t.fritekst || proj?.navn || '?', farge: proj?.farge || '#0e7490' });
+    }
+    for (const b of (state.befaringer || [])) {
+      if (b.prosjektlederId !== ansattId || !b.dato || b.dato < viewStart || b.dato > viewEnd) continue;
+      items.push({ id: 'bf-' + b.id, startDato: b.dato, sluttDato: b.dato, navn: '🔍 ' + (b.adresse || b.navn || 'Befaring'), farge: '#6d28d9' });
+    }
+  }
+  return items;
+}
+
+function fordelLaner(items) {
+  const laneSlutt = []; const laneOf = {};
+  for (const it of [...items].sort((a, b) => a.startDato.localeCompare(b.startDato) || a.sluttDato.localeCompare(b.sluttDato))) {
+    let l = laneSlutt.findIndex(s => it.startDato > s);
+    if (l === -1) { l = laneSlutt.length; laneSlutt.push(it.sluttDato); } else laneSlutt[l] = it.sluttDato;
+    laneOf[it.id] = l;
+  }
+  return { laneOf, antall: Math.max(1, laneSlutt.length) };
+}
+
+function RorleggerRader({ state, days, unit, viewStart, viewEnd }) {
+  const rorleggere = state.ansatte
+    .filter(a => a.fag === 'Rørlegger')
+    .sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  if (rorleggere.length === 0) return null;
+  const n = days.length;
+
+  function pos(start, slutt) {
+    let si = -1, ei = -1;
+    if (unit === 'month') {
+      for (let i = 0; i < n; i++) {
+        if (overlaps(start, slutt, days[i], monthEnd(days[i]))) { if (si === -1) si = i; ei = i; }
+      }
+    } else {
+      for (let i = 0; i < n; i++) {
+        if (si === -1 && days[i] >= start) si = i;
+        if (days[i] <= slutt) ei = i;
+      }
+    }
+    if (si === -1 || ei === -1 || si > ei) return null;
+    return { left: `${(si / n) * 100}%`, width: `${((ei - si + 1) / n) * 100}%` };
+  }
+
+  return (
+    <>
+      <div style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, padding: '5px 10px', background: '#ecfeff', borderTop: '2px solid #0e7490', borderBottom: '1px solid #a5f3fc', fontSize: 11, fontWeight: 500, color: '#0e7490', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        🔧 Rørlegger — synket fra Rørlegger-fanen
+      </div>
+      {rorleggere.map(ansatt => {
+        const items = hentRorItems(state, ansatt.id, viewStart, viewEnd, unit !== 'month');
+        const { laneOf, antall } = fordelLaner(items);
+        const radH = Math.max(40, antall * 20 + 8);
+        return (
+          <React.Fragment key={ansatt.id}>
+            <div className="uke-row-label" style={{ minHeight: radH }}>
+              <div className="mini-avatar" style={{ background: '#0e7490' }}>
+                {ansatt.navn.split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <div className="row-navn">{ansatt.navn}</div>
+                <div className="row-fag" style={{ color: '#0e7490' }}>Rørlegger</div>
+              </div>
+            </div>
+            <div style={{ gridColumn: '2 / -1', position: 'relative', minHeight: radH, borderBottom: '1px solid #f1f5f9' }}
+              title="Rørlegger-planen redigeres i Rørlegger-fanen">
+              {items.map(it => {
+                const p = pos(it.startDato, it.sluttDato);
+                if (!p) return null;
+                return (
+                  <div key={it.id}
+                    style={{ position: 'absolute', left: p.left, width: p.width, top: laneOf[it.id] * 20 + 4, height: 16, background: it.farge, borderRadius: 3, opacity: .9, color: '#fff', fontSize: 9.5, fontWeight: 500, display: 'flex', alignItems: 'center', padding: '0 4px', overflow: 'hidden', whiteSpace: 'nowrap' }}
+                    title={`${it.navn} · ${formatDate(it.startDato)} – ${formatDate(it.sluttDato)} — redigeres i Rørlegger-fanen`}>
+                    {it.navn}
+                  </div>
+                );
+              })}
+            </div>
+          </React.Fragment>
         );
       })}
     </>
@@ -1818,6 +1918,66 @@ function OversiktVisning({
               unassigned.forEach(a => rows.push(renderAnsattRad(a)));
             }
 
+            return rows;
+          })()}
+
+          {/* ── Rørlegger nederst — SYNKET fra Rørlegger-fanen (kun visning) ── */}
+          {!fagFilter && (() => {
+            const rorleggere = state.ansatte
+              .filter(a => a.fag === 'Rørlegger')
+              .sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+            if (rorleggere.length === 0) return null;
+            const rows = [
+              <div key="ror-header" style={{ display: 'flex', height: kompakt ? 22 : 26, alignItems: 'stretch', background: '#ecfeff', borderTop: '2px solid #0e7490', borderBottom: '1px solid #a5f3fc', minWidth: LABEL_W + totalW }}>
+                <div style={{ width: LABEL_W, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 7, padding: '0 12px', position: 'sticky', left: 0, zIndex: 3, background: '#fff', borderRight: '2px solid #a5f3fc' }}>
+                  <span style={{ fontSize: 11 }}>🔧</span>
+                  <span style={{ fontWeight: 500, fontSize: 12, color: '#0e7490', whiteSpace: 'nowrap' }}>Rørlegger</span>
+                  <span style={{ fontSize: 10, color: '#5d6b80', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>fra Rørlegger-fanen</span>
+                </div>
+                <div style={{ flex: 1 }} />
+              </div>,
+            ];
+            for (const ansatt of rorleggere) {
+              const items = hentRorItems(state, ansatt.id, viewStart, viewEnd, true);
+              const { laneOf, antall } = fordelLaner(items);
+              const rowH = antall * LANE_H;
+              rows.push(
+                <div key={'ror-' + ansatt.id} className="oversikt-row" style={{ height: rowH }}>
+                  <div className="oversikt-row-label" style={{ width: LABEL_W, height: rowH }}>
+                    <div className="mini-avatar" style={{ background: '#0e7490', width: AVATAR, height: AVATAR, fontSize: kompakt ? 7 : 8, flexShrink: 0 }}>
+                      {ansatt.navn.split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase()}
+                    </div>
+                    <span className="oversikt-row-navn" style={{ fontSize: kompakt ? 11 : 12 }}>{ansatt.navn}</span>
+                    <span style={{ fontSize: 9, color: '#0e7490', flexShrink: 0 }}>🔧</span>
+                  </div>
+                  <div className="oversikt-bars-area" style={{ width: totalW, height: rowH }}>
+                    {allDays.map((d, i) => {
+                      const dow = (new Date(d + 'T00:00:00').getDay() + 6) % 7;
+                      return (
+                        <div key={d}
+                          className={`oversikt-bg-cell${d === today ? ' today-col' : ''}${HOLIDAYS[d] ? ' holiday-col' : ''}${dow === 4 ? ' week-last' : ''}`}
+                          style={{ left: i * DAY_W, width: DAY_W }}
+                        />
+                      );
+                    })}
+                    {todayIdx >= 0 && (
+                      <div className="oversikt-needle" style={{ left: todayIdx * DAY_W + DAY_W / 2 }} />
+                    )}
+                    {items.map(it => {
+                      const bp = barProps(it);
+                      if (!bp) return null;
+                      return (
+                        <div key={it.id} className="oversikt-bar"
+                          style={{ left: bp.left, width: bp.width, top: laneOf[it.id] * LANE_H + 2, height: LANE_H - 4, background: it.farge, cursor: 'default' }}
+                          title={`${it.navn} · ${formatDate(it.startDato)} – ${formatDate(it.sluttDato)} — redigeres i Rørlegger-fanen`}>
+                          <span className="oversikt-bar-label" style={{ fontSize: kompakt ? 9 : 10.5 }}>{it.navn}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            }
             return rows;
           })()}
 
