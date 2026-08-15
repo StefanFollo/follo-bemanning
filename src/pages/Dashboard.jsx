@@ -42,7 +42,7 @@ export default function Dashboard({ onNavigate }) {
   const ukeSluttI = addDays(ukeStartI, 6);
 
   // Ansatte som er med i bemanningsplan-kapasitetsberegningen
-  const planAnsatte = state.ansatte.filter(a => !a.utenforBemanningsplan);
+  const planAnsatte = state.ansatte.filter(a => !a.arkivert && !a.utenforBemanningsplan);
 
   // ── Dagens bemanning ───────────────────────────────────────
   const FERIE_ID = '__FERIE__';
@@ -78,6 +78,11 @@ export default function Dashboard({ onNavigate }) {
       .map(t => t.ansattId)
   );
   const ledigeIdag = planAnsatte.filter(a => !opptattIds.has(a.id));
+
+  // Utløpte sykmeldinger (t.o.m.-dato passert) — samlelinje, ALDRI auto-friskmeld
+  const utlopteSykmeldinger = state.ansatte.filter(a =>
+    !a.arkivert && a.sykmeldt && a.sykmeldtTil && a.sykmeldtTil < today
+  );
 
   // ── Nøkkeltall ─────────────────────────────────────────────
   const aktiveProsj = state.prosjekter.filter(p => p.status === 'aktiv' || !p.status).length;
@@ -153,6 +158,25 @@ export default function Dashboard({ onNavigate }) {
           <p className="dash-dato">{ukedagNavn.charAt(0).toUpperCase() + ukedagNavn.slice(1)}, {datoLabel(today)}</p>
         </div>
       </div>
+
+      {/* ── Utløpte sykmeldinger — samlelinje (aldri auto-friskmeld) ── */}
+      {utlopteSykmeldinger.length > 0 && (
+        <div
+          onClick={() => onNavigate && onNavigate('ansatte')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, cursor: onNavigate ? 'pointer' : 'default',
+            background: 'var(--warning-bg)', border: '1px solid var(--warning-border)',
+            borderLeft: '3px solid var(--warning)', borderRadius: 'var(--radius-md)',
+            padding: '8px 12px', margin: '0 0 12px', fontSize: 13, fontWeight: 500, color: 'var(--warning)',
+          }}
+          title="Gå til Ansatte for å friskmelde eller forlenge"
+        >
+          <Ikon ikon={TriangleAlert} size={15} />
+          {utlopteSykmeldinger.length === 1
+            ? `1 sykmelding utløpt (${utlopteSykmeldinger[0].navn}) — friskmeld eller forleng`
+            : `${utlopteSykmeldinger.length} sykmeldinger utløpt (${utlopteSykmeldinger.map(a => (a.navn || '').split(' ')[0]).join(', ')}) — friskmeld eller forleng`}
+        </div>
+      )}
 
       {/* ── Nøkkeltall ── */}
       <div className="dash-stats">

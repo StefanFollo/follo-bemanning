@@ -2838,7 +2838,31 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
 
 // ── Oversiktsskjerm ───────────────────────────────────────────────────────────
 
-function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliotek, onVisAvvik, onRensTestData, onOppdaterMaler }) {
+// Én rad per ukjent prosjekt-ID: velg riktig prosjekt og re-pek sjekklistene.
+function OrphanKobleRad({ ukjentId, sjekklisteIds, prosjekter, onKoble }) {
+  const [valgt, setValgt] = useState('')
+  const [jobber, setJobber] = useState(false)
+  const aktive = (prosjekter || []).filter(p => !p.arkivert).sort((a, b) => (a.navn || '').localeCompare(b.navn || '', 'nb'))
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 0', flexWrap: 'wrap' }}>
+      <span>• ID {ukjentId} — {sjekklisteIds.length} sjekklister</span>
+      {onKoble && (
+        <>
+          <select className="input" style={{ height: 26, fontSize: 12, maxWidth: 220 }} value={valgt} onChange={e => setValgt(e.target.value)}>
+            <option value="">Koble til riktig prosjekt…</option>
+            {aktive.map(p => <option key={p.id} value={p.id}>{p.navn || p.adresse}</option>)}
+          </select>
+          <button className="btn" style={{ fontSize: 11, padding: '2px 8px' }} disabled={!valgt || jobber}
+            onClick={async e => { e.stopPropagation(); setJobber(true); await onKoble(sjekklisteIds, valgt); setJobber(false); }}>
+            {jobber ? 'Kobler…' : 'Koble'}
+          </button>
+        </>
+      )}
+    </div>
+  )
+}
+
+function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliotek, onVisAvvik, onRepointOrphans, onOppdaterMaler }) {
   const [aiModal, setAiModal] = useState(false)
   const [visdiag, setVisdiag] = useState(false)
   const [nyligBrukt, setNyligBrukt] = useState(() => {
@@ -2932,13 +2956,16 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
           {harMismatch && (
             <div style={{ fontSize: 13, color: '#92400e', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }} onClick={() => setVisdiag(v => !v)}>
               <span><Ikon ikon={TriangleAlert} size={13} /> {ugyldigeSl.length} sjekklister koblet til ukjente prosjekter {visdiag ? '▲' : '▼'}</span>
-              {onRensTestData && <button className="btn" style={{ fontSize: 11, padding: '2px 8px', background: '#dc2626', color: '#fff', border: 'none' }} onClick={e => { e.stopPropagation(); onRensTestData(ugyldigeSl.map(s => s.id)) }}><IkonTekst ikon={Trash2} size={12} gap={4}>Slett</IkonTekst></button>}
+              {onRepointOrphans && <span style={{ fontSize: 11, color: '#92400e' }}>klikk for å koble til riktig prosjekt</span>}
             </div>
           )}
           {visdiag && harMismatch && (
             <div style={{ marginTop: 8, fontSize: 12, color: '#92400e' }}>
               {[...new Set(ugyldigeSl.map(s => s.prosjektId))].map(id => (
-                <div key={id}>• ID {id} — {ugyldigeSl.filter(s => s.prosjektId === id).length} sjekklister</div>
+                <OrphanKobleRad key={id} ukjentId={id}
+                  sjekklisteIds={ugyldigeSl.filter(s => s.prosjektId === id).map(s => s.id)}
+                  prosjekter={prosjekter}
+                  onKoble={onRepointOrphans} />
               ))}
             </div>
           )}
@@ -3008,6 +3035,21 @@ export default function KS({ readOnly = false, ansattId = null }) {
     setValgtProsjekt(p)
   }
 
+  // Re-pek foreldreløse sjekklister til riktig prosjekt (B-listen 15.08):
+  // Slett skal ikke være eneste utvei når koblingen bare er feil.
+  async function repointOrphans(ids, nyttProsjektId) {
+    const alle = await apiFetch('/api/ks/sjekklister')
+    await Promise.all(ids.map(id => {
+      const sl = alle.find(x => x.id === id)
+      if (!sl) return null
+      return apiFetch(`/api/ks/sjekklister?id=${id}`, { method: 'PUT', body: { ...sl, prosjektId: nyttProsjektId } }).catch(() => {})
+    }))
+    const ferske = await apiFetch('/api/ks/sjekklister')
+    setSjekklister(ferske)
+  }
+
+  // Beholdes ubrukt med vilje — fysisk sletting er erstattet av re-peking.
+  // eslint-disable-next-line no-unused-vars
   async function rensOrphans(ids) {
     if (!window.confirm(`Slett ${ids.length} sjekklister som er koblet til ukjente prosjekter?`)) return
     await Promise.all(ids.map(id => apiFetch(`/api/ks/sjekklister?id=${id}`, { method: 'DELETE' }).catch(() => {})))
@@ -3044,7 +3086,7 @@ export default function KS({ readOnly = false, ansattId = null }) {
     .filter(p => p.status === 'aktiv' || p.status === undefined)
     .filter(p => !tildelteProsjektIds || tildelteProsjektIds.has(p.id)), [state.prosjekter, tildelteProsjektIds])
 
-  const ansatte = state.ansatte || []
+  const ansatte = (state.ansatte || []).filter(a => !a.arkivert)
 
   if (laster) return (
     <div className="ks-side" style={{ textAlign: 'center', paddingTop: 80 }}>
@@ -3176,7 +3218,7 @@ export default function KS({ readOnly = false, ansattId = null }) {
         onVelgProsjekt={velgProsjekt}
         onVisBibliotek={() => setView('bibliotek')}
         onVisAvvik={() => setView('avvik')}
-        onRensTestData={isAdmin ? rensOrphans : undefined}
+        onRepointOrphans={isAdmin ? repointOrphans : undefined}
         onOppdaterMaler={setMaler}
       />
       {/* AI-floating-button */}

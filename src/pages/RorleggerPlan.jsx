@@ -97,7 +97,7 @@ export default function RorleggerPlan() {
     dato: '', startTid: '08:00', sluttTid: '12:00', notat: '',
   });
 
-  const rorleggere = state.ansatte.filter(a => a.fag === 'Rørlegger').sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  const rorleggere = state.ansatte.filter(a => !a.arkivert && a.fag === 'Rørlegger').sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
 
   // ──────────────────────────────────────────────
   // GANTT – data per modus

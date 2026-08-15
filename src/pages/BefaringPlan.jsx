@@ -786,7 +786,8 @@ export default function BefaringPlan() {
             <button className={`bef-view-tab${viewTab === 'kalender' ? ' aktiv' : ''}`} onClick={() => setViewTab('kalender')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={CalendarDays} size={14} /> Kalender</button>
           </div>
           <button className="btn btn-primary" onClick={() => apneNy()}>+ Ny befaring</button>
-          {isAdmin && (
+          {/* Dedup skjult fra UI (B-listen 15.08): sletter fysisk uten tombstones. Koden beholdes. */}
+          {false && isAdmin && (
             <button
               onClick={() => dedupPanel ? setDedupPanel(null) : kjorDedup(true)}
               title="Finn og rydd opp duplikate befaringer"

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Ikon, IkonTekst } from '../komponenter/Ikon';
 import { useApp } from '../context/AppContext';
+import { kandidatScore } from '../mergeProsjekter';
 import { uid, mergeWithCloud } from '../store';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -1433,8 +1434,24 @@ export default function Framdriftsplan({ readOnly = false, ansattId = null }) {
     : null, [ansattId, state.tildelinger]);
 
   const aktive = useMemo(() => state.prosjekter
-    .filter(p => p.status !== 'fullfort')
+    .filter(p => !p.arkivert && p.status !== 'fullfort')
     .filter(p => !tildelteProsjektIds || tildelteProsjektIds.has(p.id)), [state.prosjekter, tildelteProsjektIds]);
+  const [velgerSok, setVelgerSok] = useState('');
+
+  // Duplikat-hint (samme fuzzy-motor som Prosjekter): vis «ligner på …»
+  // under velgeren når det valgte prosjektet har en sannsynlig dublett.
+  const duplikatAvValgt = useMemo(() => {
+    if (!selectedId) return null;
+    const valgt = aktive.find(p => p.id === selectedId);
+    if (!valgt) return null;
+    let best = null;
+    for (const q of aktive) {
+      if (q.id === valgt.id) continue;
+      const sc = kandidatScore(valgt, q);
+      if (sc >= 50 && (!best || sc > best.sc)) best = { sc, q };
+    }
+    return best ? (best.q.adresse || best.q.navn) : null;
+  }, [selectedId, aktive]);
 
   const counts = useMemo(() => ({
     Alle:        aktive.length,
@@ -1518,12 +1535,17 @@ export default function Framdriftsplan({ readOnly = false, ansattId = null }) {
         </div>
       </div>
 
-      {/* Velg prosjekt */}
-      <div className="fd2-velg-wrap">
+      {/* Velg prosjekt — med søk, uten arkiverte (B-listen 15.08) */}
+      <div className="fd2-velg-wrap" style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <input className="input" placeholder="Søk prosjekt…" value={velgerSok}
+          onChange={e => setVelgerSok(e.target.value)}
+          style={{ height: 38, maxWidth: 220 }} />
         <select className="fd2-velg-select" value=""
           onChange={e => { if (e.target.value) setSelectedId(e.target.value); }}>
           <option value="" disabled>Velg prosjekt for å se framdriftsplan…</option>
-          {[...aktive].sort((a, b) => a.navn.localeCompare(b.navn, 'nb')).map(p => (
+          {[...aktive]
+            .filter(p => !velgerSok || (p.navn || '').toLowerCase().includes(velgerSok.toLowerCase()) || (p.adresse || '').toLowerCase().includes(velgerSok.toLowerCase()))
+            .sort((a, b) => a.navn.localeCompare(b.navn, 'nb')).map(p => (
             <option key={p.id} value={p.id}>
               {p.navn}
               {(p.fdTasks || []).length > 0 ? ' \u2713' : ''}
@@ -1532,6 +1554,11 @@ export default function Framdriftsplan({ readOnly = false, ansattId = null }) {
           ))}
         </select>
       </div>
+      {duplikatAvValgt && (
+        <div style={{ fontSize: 12, color: 'var(--warning)', margin: '4px 0 8px', display: 'flex', alignItems: 'center', gap: 5 }}>
+          <Ikon ikon={TriangleAlert} size={12} /> Valgt prosjekt ligner på «{duplikatAvValgt}» — mulig dublett (slå sammen fra Prosjekter-siden)
+        </div>
+      )}
 
       {/* Stats */}
       <div className="fd2-dashboard-stats">

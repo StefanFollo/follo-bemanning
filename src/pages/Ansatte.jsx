@@ -76,10 +76,30 @@ export default function Ansatte() {
     setShowModal(false);
   }
 
+  // Fysisk sletting er ERSTATTET med arkivering (B-listen 15.08) — koden
+  // beholdes ubrukt med vilje. Historiske tildelinger røres ikke.
+  // eslint-disable-next-line no-unused-vars
   function handleDelete(id) {
     if (confirm('Slett ansatt og alle tilknyttede tildelinger?')) {
       dispatch({ type: 'DELETE_ANSATT', id });
     }
+  }
+
+  function arkiverAnsatt(a) {
+    if (!confirm(`Arkivere ${a.navn}?\n\nPersonen skjules fra lister og bemanningsplan, men slettes IKKE — historiske tildelinger beholdes, og du kan gjenopprette når som helst.`)) return;
+    dispatch({
+      type: 'UPDATE_ANSATT',
+      payload: {
+        ...a,
+        arkivert: true,
+        arkivertDato: new Date().toISOString(),
+        arkivertAv: localStorage.getItem('fbs_user_navn') || localStorage.getItem('fbs_role') || 'ukjent',
+      },
+    });
+  }
+
+  function gjenopprettAnsatt(a) {
+    dispatch({ type: 'UPDATE_ANSATT', payload: { ...a, arkivert: false } });
   }
 
   function handleAddFag() {
@@ -96,7 +116,9 @@ export default function Ansatte() {
 
   let fastCount = 0, innleieCount = 0;
   const alleIGruppe = [];
-  const sortedAnsatte = [...state.ansatte].sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  const sortedAnsatte = state.ansatte.filter(a => !a.arkivert).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  const arkiverte = state.ansatte.filter(a => a.arkivert).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  const iDagIso = new Date().toISOString().slice(0, 10);
   for (const a of sortedAnsatte) {
     if (a.innleie) { innleieCount++; if (gruppe === 'innleie') alleIGruppe.push(a); }
     else           { fastCount++;    if (gruppe === 'fast')    alleIGruppe.push(a); }
@@ -110,7 +132,7 @@ export default function Ansatte() {
   return (
     <div className="page">
       <div className="page-header">
-        <h2>Ansatte <span className="count-badge">{state.ansatte.length}</span></h2>
+        <h2>Ansatte <span className="count-badge">{sortedAnsatte.length}</span></h2>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={() => setShowFagModal(true)}>Administrer fag</button>
           <button className="btn btn-primary" onClick={openNew}>
@@ -193,6 +215,11 @@ export default function Ansatte() {
                       <Ikon ikon={Thermometer} size={11} style={{ marginRight: 3 }} />SYKMELDT{a.sykmeldtTil ? ` t.o.m. ${bursdagLabel ? new Date(a.sykmeldtTil + 'T00:00:00').toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' }) : a.sykmeldtTil}` : ''}
                     </span>
                   )}
+                  {a.sykmeldt && a.sykmeldtTil && a.sykmeldtTil < iDagIso && (
+                    <span style={{ fontSize: 10, color: 'var(--warning)', fontWeight: 500, letterSpacing: '0.03em', display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                      <Ikon ikon={TriangleAlert} size={11} /> SYKMELDING UTLØPT — friskmeld eller forleng
+                    </span>
+                  )}
                   {!a.sykmeldt && a.innleie && (
                     <span style={{ fontSize: 10, color: '#f97316', fontWeight: 500, letterSpacing: '0.03em' }}>INNLEIE</span>
                   )}
@@ -228,8 +255,27 @@ export default function Ansatte() {
                   ><IkonTekst ikon={Thermometer} size={14} gap={4}>Syk</IkonTekst></button>
                 )}
                 <button className="btn btn-sm" onClick={() => openEdit(a)}>Rediger</button>
-                <button className="btn btn-sm btn-danger" onClick={() => handleDelete(a.id)}>Slett</button>
+                <button className="btn btn-sm" style={{ color: 'var(--warning)' }} onClick={() => arkiverAnsatt(a)}>Arkiver</button>
               </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ── Arkiverte ansatte — tombstone-mønsteret fra prosjektene ── */}
+      {arkiverte.length > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-muted)', marginBottom: 8 }}>
+            Arkiverte ({arkiverte.length})
+          </div>
+          {arkiverte.map(a => (
+            <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', marginBottom: 5, fontSize: 13, color: 'var(--text-muted)' }}>
+              <span style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>{a.navn}</span>
+              <span>{a.fag || ''}</span>
+              <span style={{ fontSize: 11 }}>
+                Arkivert {a.arkivertDato ? new Date(a.arkivertDato).toLocaleDateString('nb-NO') : ''}{a.arkivertAv ? ` av ${a.arkivertAv}` : ''}
+              </span>
+              <button className="btn btn-sm" style={{ marginLeft: 'auto' }} onClick={() => gjenopprettAnsatt(a)}>Gjenopprett</button>
             </div>
           ))}
         </div>

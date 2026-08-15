@@ -271,7 +271,19 @@ function FramdriftUtkast({ project, utkast, onAktiver, onForkast, onOppdaterUtka
   )
 }
 
-function ProsjektFramdrift({ project, laster, feil, onGenerer, onAktiver, onForkast, onOppdaterUtkast }) {
+// Punkt 7 (B-listen): hint når start-/sluttdato mangler — uten datoer er
+// prosjektet usynlig i gantt og får ingen frist-varsler. KUN hint, aldri auto.
+function DatoHint({ project, onSettDatoer }) {
+  if (project.startDato && project.sluttDato) return null;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--accent-subtle)', border: '1px solid var(--border)', borderLeft: '3px solid var(--accent)', borderRadius: 'var(--radius-md)', padding: '7px 10px', marginBottom: 10, fontSize: 12.5, flexWrap: 'wrap' }}>
+      <span>Sett start- og sluttdato for å få prosjektet inn i gantt-visningen og frist-varslene.</span>
+      {onSettDatoer && <button className="btn btn-sm" onClick={onSettDatoer}>Sett datoer</button>}
+    </div>
+  );
+}
+
+function ProsjektFramdrift({ project, laster, feil, onGenerer, onAktiver, onForkast, onOppdaterUtkast, onSettDatoer }) {
   const [valgtFase, setValgtFase] = useState(null)
   const [visHistorikk, setVisHistorikk] = useState(false)
 
@@ -293,6 +305,7 @@ function ProsjektFramdrift({ project, laster, feil, onGenerer, onAktiver, onFork
 
   // SPEC-trinn4b: utkast har forrang i visningen til det aktiveres/forkastes
   if (project.framdriftsplanUtkast) {
+    // (dato-hint vises også over utkastet)
     return (
       <>
         <FramdriftUtkast project={project} utkast={project.framdriftsplanUtkast}
@@ -305,6 +318,7 @@ function ProsjektFramdrift({ project, laster, feil, onGenerer, onAktiver, onFork
   if (!fd) {
     return (
       <div className="fd-tom">
+        <DatoHint project={project} onSettDatoer={onSettDatoer} />
         <TomIkon ikon={CalendarDays} size={34} />
         <div>Ingen framdriftsplan ennå</div>
         {kalkyle ? (
@@ -352,6 +366,7 @@ function ProsjektFramdrift({ project, laster, feil, onGenerer, onAktiver, onFork
 
   return (
     <div className="fd-seksjon">
+      <DatoHint project={project} onSettDatoer={onSettDatoer} />
       <div className="fd-header">
         {fd._fraFdTasks ? (
           <span className="fd-meta-badge" style={{ background: '#eff6ff', color: '#2563eb', borderColor: '#bfdbfe' }}>
@@ -2033,6 +2048,7 @@ export default function Prosjekter({ onNavigate = null }) {
                 onAktiver={() => aktiverUtkast(p)}
                 onForkast={() => forkastUtkast(p)}
                 onOppdaterUtkast={u => dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...p, framdriftsplanUtkast: u } })}
+                onSettDatoer={() => { setValgtId(null); openEdit(p); }}
               />
             )}
             {panelFane === 'bemanning' && (
@@ -2114,7 +2130,7 @@ export default function Prosjekter({ onNavigate = null }) {
             <label>Prosjektleder</label>
             <select value={form.prosjektlederId || ''} onChange={e => setForm(f => ({ ...f, prosjektlederId: e.target.value }))}>
               <option value="">– Ingen valgt –</option>
-              {[...state.ansatte]
+              {state.ansatte.filter(a => !a.arkivert)
                 .sort((a, b) => a.navn.localeCompare(b.navn, 'nb'))
                 .map(a => (
                   <option key={a.id} value={a.id}>{a.navn}{a.fag ? ` (${a.fag})` : ''}</option>

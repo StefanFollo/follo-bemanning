@@ -76,7 +76,7 @@ function daysDiff(a, b) {
 export default function Bemanningsplan({ readOnly = false }) {
   const { state, dispatch } = useApp();
   // Ansatte som er med i bemanningsplan-kapasitetsberegningen
-  const planAnsatte = state.ansatte.filter(a => !a.utenforBemanningsplan && a.fag !== 'Rørlegger');
+  const planAnsatte = state.ansatte.filter(a => !a.arkivert && !a.utenforBemanningsplan && a.fag !== 'Rørlegger');
 
   const [tab, setTab] = useState('uke');
   const [fullscreen, setFullscreen] = useState(false);
@@ -616,7 +616,7 @@ export default function Bemanningsplan({ readOnly = false }) {
           <div className="form">
             <label>Ansatt *</label>
             <select value={tilForm.ansattId} onChange={e => setTilForm(f => ({ ...f, ansattId: e.target.value }))}>
-              {[...state.ansatte].sort((a, b) => a.navn.localeCompare(b.navn, 'nb')).map(a => (
+              {state.ansatte.filter(a => !a.arkivert).sort((a, b) => a.navn.localeCompare(b.navn, 'nb')).map(a => (
                 <option key={a.id} value={a.id}>
                   {a.navn} ({a.fag}{a.innleie ? ' – innleie' : ''})
                 </option>
@@ -2002,7 +2002,7 @@ function FerieVisning({ state, readOnly, ferieYearOffset, setFerieYearOffset, op
   const ferieEnd   = monthEnd(ferieMonths[FERIE_MND - 1]);
   const ferieYear  = ferieBase.slice(0, 4);
 
-  const sortedAnsatte = [...state.ansatte].sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  const sortedAnsatte = state.ansatte.filter(a => !a.arkivert).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
 
   // For each employee, compute ferie periods and total days in view
   function ferieDager(t) {
@@ -2160,8 +2160,8 @@ function TeamsVisning({
 }) {
   const teams = state.teams || [];
   const aktiveProsjekter = state.prosjekter.filter(p => p.status === 'aktiv' || !p.status).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
-  const fastAnsatte = state.ansatte.filter(a => !a.innleie).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
-  const innleieAnsatte = state.ansatte.filter(a => a.innleie).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  const fastAnsatte = state.ansatte.filter(a => !a.arkivert && !a.innleie).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  const innleieAnsatte = state.ansatte.filter(a => !a.arkivert && a.innleie).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
   const planAnsatteAlle = [...fastAnsatte, ...innleieAnsatte];
   const TEAM_FARGER = ['#3b82f6','#16a34a','#dc2626','#9333ea','#ea580c','#0891b2','#be185d','#854d0e'];
 
@@ -2470,7 +2470,7 @@ function BursdagVisning({ state }) {
 
   // Group ansatte by birth month (bursdag format "MM-DD")
   const byMonth = Array.from({ length: 12 }, () => []);
-  for (const a of state.ansatte) {
+  for (const a of state.ansatte.filter(x => !x.arkivert)) {
     if (!a.bursdag) continue;
     const mi = parseInt(a.bursdag.slice(0, 2), 10) - 1;
     if (mi >= 0 && mi < 12) byMonth[mi].push(a);
@@ -2486,12 +2486,12 @@ function BursdagVisning({ state }) {
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const dd = String(d.getDate()).padStart(2, '0');
     const md = `${mm}-${dd}`;
-    for (const a of state.ansatte) {
+    for (const a of state.ansatte.filter(x => !x.arkivert)) {
       if (a.bursdag === md) upcoming.push({ ansatt: a, offset, md });
     }
   }
 
-  const totalMedBursdag = state.ansatte.filter(a => a.bursdag).length;
+  const totalMedBursdag = state.ansatte.filter(a => !a.arkivert && a.bursdag).length;
 
   return (
     <div>
