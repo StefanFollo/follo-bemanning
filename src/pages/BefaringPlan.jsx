@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { dateToIso, addDays, weekStart, overlaps, PROSJEKT_PALETTE, uid } from '../store';
 import { BEF_STATUS } from '../statuses';
+import TilbudsdataVisning from '../komponenter/Tilbudsdata';
 
 const JOBB_TYPER = ['Ny bygg', 'Tilbygg', 'Tak jobb', 'Fasade jobb', 'Bad', 'Tømrer', 'Maling', 'Rørlegger', 'Flislegging', 'Elektro', 'Rehabilitering', 'Annet'];
 
@@ -498,7 +499,7 @@ export default function BefaringPlan() {
         </div>
 
         {/* Tilbud-link og kunde-aktivitet — vises på Tilbud sendt / Godkjent */}
-        {(b.tilbudLink || b.sistEventDato) && (b.status === 'tilbud_sendt' || b.status === 'godkjent') && (
+        {(b.tilbudLink || b.sistEventDato || b.tilbudPayload?.publicToken) && (b.status === 'tilbud_sendt' || b.status === 'godkjent') && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, margin: '6px 0', padding: '8px 10px', background: '#f8faff', border: '1px solid #e0e8f8', borderRadius: 7 }}>
             {b.sistEventDato && (
               <span style={{ fontSize: 11, color: '#6b7280' }}>
@@ -530,17 +531,29 @@ export default function BefaringPlan() {
             {(b.kundeAktivitet || []).some(a => a.handling === 'klikket-aksepter') && (
               <span style={{ fontSize: 11, color: '#15803d', fontWeight: 500 }}>✅ Klikket Aksepter</span>
             )}
-            {b.tilbudLink && (
-              <a
-                href={b.tilbudLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={e => e.stopPropagation()}
-                style={{ fontSize: 11, color: '#2874a6', fontWeight: 500, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2 }}
-              >
-                🔗 Åpne kundens tilbudside ↗
-              </a>
-            )}
+            {(() => {
+              // ALLE kundeside-lenker MÅ ha ?intern=1 — ellers forurenses
+              // «Åpnet tilbudet Nx»-statistikken av interne PL-besøk.
+              const token = b.tilbudPayload?.publicToken || b.tilbudPayload?.public_token;
+              const url = token
+                ? `https://follo-befaring.vercel.app/t/${token}?intern=1`
+                : b.tilbudLink
+                  ? b.tilbudLink + (b.tilbudLink.includes('?') ? '&' : '?') + 'intern=1'
+                  : null;
+              if (!url) return null;
+              return (
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  title="Intern visning — telles ikke i kunde-statistikken"
+                  style={{ fontSize: 11, color: '#2874a6', fontWeight: 500, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2 }}
+                >
+                  {token ? '👁 Se kundesiden ↗' : '🔗 Åpne kundens tilbudside ↗'}
+                </a>
+              );
+            })()}
           </div>
         )}
 
@@ -1151,76 +1164,19 @@ export default function BefaringPlan() {
                 </div>
               </div>
 
-              {/* Fra tilbuds-appen (read-only) */}
-              {redigerer && (redigerer.poster?.length > 0 || redigerer.tilbudLink || redigerer.estimertSum > 0 || redigerer.fag?.length > 0) && (
+              {/* 📦 Tilbudsdata — samme delte komponent som prosjektpanelet (SPEC-tillegg 15.08) */}
+              {redigerer && (
                 <div className="bef-modal-seksjon" style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '10px 14px' }}>
-                  <div className="bef-modal-seksjon-tittel" style={{ color: '#15803d', marginBottom: 8 }}>📄 Fra tilbuds-appen</div>
-                  <div style={{ fontSize: 13, display: 'grid', gap: 5 }}>
-                    {redigerer.estimertSum > 0 && (
-                      <div>
-                        💰 <strong>{fmtKr(redigerer.estimertSum)}</strong>
-                        {redigerer.pristype && <span style={{ marginLeft: 8, color: '#5d6b80' }}>({redigerer.pristype})</span>}
-                      </div>
-                    )}
-                    {Array.isArray(redigerer.fag) && redigerer.fag.length > 0 && (
-                      <div>🔨 Fag: <strong>{redigerer.fag.join(', ')}</strong></div>
-                    )}
-                    {redigerer.varighetTekst && <div>⏱ Varighet: {redigerer.varighetTekst}</div>}
-                    {redigerer.oppstartTekst && <div>🚀 Oppstart: {redigerer.oppstartTekst}</div>}
-                    {Array.isArray(redigerer.poster) && redigerer.poster.length > 0 && (
-                      <div style={{ marginTop: 4 }}>
-                        <div style={{ fontWeight: 500, marginBottom: 3, color: '#374151' }}>Tilbudsposter ({redigerer.poster.length}):</div>
-                        {redigerer.poster.slice(0, 6).map((p, i) => (
-                          <div key={i} style={{ paddingLeft: 8, color: '#374151', fontSize: 12, lineHeight: '1.6' }}>
-                            • {p.navn || p.beskrivelse || `Post ${i + 1}`}
-                            {p.kalkyle?.totalPris > 0 && <span style={{ color: '#5d6b80' }}> — {fmtKr(p.kalkyle.totalPris)}</span>}
-                          </div>
-                        ))}
-                        {redigerer.poster.length > 6 && (
-                          <div style={{ paddingLeft: 8, color: '#5d6b80', fontSize: 12 }}>… og {redigerer.poster.length - 6} til</div>
-                        )}
-                      </div>
-                    )}
-                    {redigerer.tilbudLink && (
-                      <a href={redigerer.tilbudLink} target="_blank" rel="noopener noreferrer"
-                        style={{ color: '#2563eb', fontSize: 12, textDecoration: 'none', marginTop: 2 }}>
-                        🔗 Åpne tilbud →
-                      </a>
-                    )}
-                    {/* Utvidede felt fra tilbudPayload (byggInfo, soner, totalSum osv.) */}
-                    {redigerer.tilbudPayload && (() => {
-                      const p = redigerer.tilbudPayload;
-                      return (
-                        <>
-                          {p.totalSum != null && p.totalSum > 0 && (
-                            <div>💰 Akseptert sum: <strong>{fmtKr(p.totalSum)}</strong></div>
-                          )}
-                          {p.byggInfo && (
-                            <div style={{ marginTop: 4 }}>
-                              <span style={{ fontWeight: 500 }}>🏗 Byggeinfo:</span>
-                              <div style={{ paddingLeft: 8, color: '#374151', fontSize: 12, whiteSpace: 'pre-wrap' }}>{p.byggInfo}</div>
-                            </div>
-                          )}
-                          {Array.isArray(p.soner) && p.soner.length > 0 && (
-                            <div style={{ marginTop: 4 }}>
-                              <span style={{ fontWeight: 500 }}>📍 Soner ({p.soner.length}):</span>
-                              {p.soner.map((s, i) => (
-                                <div key={i} style={{ paddingLeft: 8, color: '#374151', fontSize: 12 }}>
-                                  • {s.navn || s.name || `Sone ${i + 1}`}{s.areal ? ` — ${s.areal} m²` : ''}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {p.kundeKommentar && (
-                            <div style={{ marginTop: 4 }}>
-                              <span style={{ fontWeight: 500 }}>💬 Kundekommentar:</span>
-                              <div style={{ paddingLeft: 8, color: '#374151', fontSize: 12, fontStyle: 'italic' }}>"{p.kundeKommentar}"</div>
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </div>
+                  <div className="bef-modal-seksjon-tittel" style={{ color: '#15803d', marginBottom: 8 }}>📦 Tilbudsdata</div>
+                  {(redigerer.tilbudPayload || redigerer.tilbudLink || (redigerer.poster || []).length > 0 || redigerer.estimertSum > 0) ? (
+                    <TilbudsdataVisning prosjekt={redigerer} />
+                  ) : (
+                    <div style={{ fontSize: 12.5, color: '#5d6b80' }}>
+                      📤 Ingen tilbudsdata mottatt for denne befaringen ennå.
+                      Be om data fra tilbuds-appen: åpne tilbudet der og velg «Send data på nytt»,
+                      så fylles denne fanen. (Ingen automatikk — status og kolonne røres aldri.)
+                    </div>
+                  )}
                 </div>
               )}
 
