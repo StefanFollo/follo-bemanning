@@ -3,7 +3,7 @@ import {
   Sparkles, TriangleAlert, Link as LinkIkon, Link2, ArrowUp, ArrowDown, ArrowRight, X, Trash2,
   Lightbulb, Check, CircleX, CircleCheck, CalendarDays, Package, Flag, Archive, Star,
   Users, Lock, ClipboardList, Hammer, Wrench, Eye, Pencil, Scissors, Undo2, Maximize,
-  List, ChartGantt, Loader, Pin, ChevronLeft, ChevronRight, ScrollText, ClipboardCheck, CircleAlert, Ban,
+  List, ChartGantt, Loader, Pin, ChevronLeft, ChevronRight, ScrollText, ClipboardCheck, CircleAlert, Ban, RotateCw,
 } from 'lucide-react';
 import { Ikon, IkonTekst, TomIkon } from '../komponenter/Ikon';
 import { useApp } from '../context/AppContext';
@@ -939,6 +939,39 @@ function KobleDialog({ prosjekt, befaringer, onUtfør, onLukk }) {
 }
 
 // ── KS-plan forslag (laster maler lazy fra API) ───────────────────────────────
+// ═══ Tomtilstand for Tilbudsdata — med stille resynk (UX-fix 15.08) ═══
+// Payloaden kan ha landet på serveren via re-send ETTER forrige poll.
+// Én stille refetch ved åpning fanger den uten at brukeren må trykke F5.
+function TilbudTomtilstand({ onKoble, friskOpp }) {
+  const [sjekker, setSjekker] = useState(false);
+  useEffect(() => {
+    Promise.resolve(friskOpp()).catch(() => {});
+  }, [friskOpp]);
+
+  async function sjekkPaaNytt() {
+    setSjekker(true);
+    try { await friskOpp(); } catch { /* stille */ }
+    setSjekker(false);
+  }
+
+  return (
+    <div style={{ textAlign: 'center', padding: '32px 16px', color: '#5d6b80', fontSize: 13 }}>
+      <TomIkon ikon={Package} size={34} />
+      <div style={{ marginBottom: 14 }}>Dette prosjektet har ingen tilbudsdata — det er trolig regnet manuelt.</div>
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+        <button className="btn btn-primary" onClick={onKoble} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Ikon ikon={Link2} size={15} /> Koble til tilbud
+        </button>
+        <button className="btn" onClick={sjekkPaaNytt} disabled={sjekker}
+          title="Henter siste data fra skyen — nyttig rett etter «Send data på nytt» fra tilbuds-appen"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Ikon ikon={RotateCw} size={14} style={sjekker ? { animation: 'spin 1.2s linear infinite' } : undefined} /> Sjekk på nytt
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ═══ 4a: forslags-boks i prosjektpanelets KS-fane (laster maler lazy) ═══
 function PanelKSForslag({ prosjekt, onOppdater }) {
   const [maler, setMaler] = useState(null);
@@ -1129,7 +1162,7 @@ function ProsjektKSPlanKnapp({ project, onOppdater }) {
 }
 
 export default function Prosjekter({ onNavigate = null }) {
-  const { state, dispatch } = useApp();
+  const { state, dispatch, friskOpp } = useApp();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
@@ -2035,19 +2068,11 @@ export default function Prosjekter({ onNavigate = null }) {
             {panelFane === 'tilbud' && (
               (p.tilbudPayload || p.tilbudLink || p.kildeTilbudData || (Array.isArray(p.poster) && p.poster.length > 0))
                 ? <TilbudsdataVisning prosjekt={p} />
-                : (
-                  <div style={{ textAlign: 'center', padding: '32px 16px', color: '#5d6b80', fontSize: 13 }}>
-                    <TomIkon ikon={Package} size={34} />
-                    <div style={{ marginBottom: 14 }}>Dette prosjektet har ingen tilbudsdata — det er trolig regnet manuelt.</div>
-                    <button className="btn btn-primary" onClick={() => { setValgtId(null); setKobleFor(p); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                      <Ikon ikon={Link2} size={15} /> Koble til tilbud
-                    </button>
-                  </div>
-                )
+                : <TilbudTomtilstand friskOpp={friskOpp} onKoble={() => { setValgtId(null); setKobleFor(p); }} />
             )}
             {panelFane === 'logg' && (
               <div style={{ fontSize: 12.5 }}>
-                {loggEntries === null && <div style={{ color: '#5d6b80' }}>⏳ Henter logg…</div>}
+                {loggEntries === null && <div style={{ color: '#5d6b80' }}>Henter logg…</div>}
                 {Array.isArray(loggEntries) && loggEntries.length === 0 && <div style={{ color: '#5d6b80' }}>Ingen logg-innslag funnet for dette prosjektet.</div>}
                 {(loggEntries || []).map((e, i) => (
                   <div key={i} style={{ padding: '7px 0', borderBottom: '1px solid #f1f5f9' }}>

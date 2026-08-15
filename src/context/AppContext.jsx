@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useEffect, useState, useRef } from 'react';
+import { createContext, useContext, useReducer, useEffect, useState, useRef, useCallback } from 'react';
 import {
   loadState, FIELD_MAP,
   saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag, saveTeams, saveRorTimer, saveRorPlaner, saveBefaringer, saveReklamasjoner, saveServiceJobber, saveBiler,
@@ -435,6 +435,12 @@ export function AppProvider({ children }) {
     return () => clearTimeout(timer);
   }, [state, cloudReady]);
 
+  // Manuell/stille resynk (deles via context): brukes bl.a. når Tilbudsdata
+  // åpnes uten payload i klient-cachen — dataene kan ha kommet til serveren
+  // via re-send etter forrige poll (UX-fix 15.08: «Ingen tilbudsdata» selv om
+  // serveren hadde dem; F5 løste det).
+  const friskOppRef = useRef(() => {});
+
   // Sanntids-polling: sjekk sky hvert 5. sekund.
   // Hvis en annen bruker har lagret, henter vi ny data og fletter inn.
   useEffect(() => {
@@ -449,6 +455,7 @@ export function AppProvider({ children }) {
         dispatch({ type: 'LOAD_STATE', payload: merged });
       }
     }
+    friskOppRef.current = friskOpp;
     const interval = setInterval(friskOpp, 5000);
     // Enheter som våkner fra dvale (iPad!) eller får nett igjen: synk STRAKS,
     // før brukeren rekker å redigere på gamle data.
@@ -464,8 +471,11 @@ export function AppProvider({ children }) {
     };
   }, [cloudReady]);
 
+  // Stabil referanse — komponenter kan trygt kalle denne fra useEffect.
+  const friskOpp = useCallback(() => friskOppRef.current(), []);
+
   return (
-    <AppContext.Provider value={{ state, dispatch }}>
+    <AppContext.Provider value={{ state, dispatch, friskOpp }}>
       {children}
     </AppContext.Provider>
   );

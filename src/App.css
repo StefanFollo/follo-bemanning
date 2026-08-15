@@ -1938,7 +1938,7 @@ body {
   /* Vis print-only elementer */
   .fd2-print-only { display: block !important; }
 
-  /* Skjul SVG-kontroller (slett-✕ og avkrysning) */
+  /* Skjul SVG-kontroller (slett-kryss og avkrysning) */
   .fd2-g-ctrl { display: none !important; }
 
   /* Bevar SVG-farger ved utskrift */

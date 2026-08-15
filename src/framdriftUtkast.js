@@ -1,6 +1,6 @@
 // ═══ Framdriftsplan-utkast (SPEC-trinn4b) — ren, testbar logikk ═══
 //
-// 🛑 Utkast auto-aktiveres ALDRI. Aktivering er et eksplisitt valg, og en
+// Utkast auto-aktiveres ALDRI. Aktivering er et eksplisitt valg, og en
 // eksisterende plan arkiveres alltid i framdriftsplanHistorikk (aldri slettet).
 // Forkast rører KUN utkast-feltet.
 
