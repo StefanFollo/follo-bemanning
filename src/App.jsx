@@ -1,5 +1,5 @@
-import { useState, useEffect, lazy, Suspense, useSyncExternalStore, Component } from 'react';
-import { House, Search, ShieldAlert, Zap, Building2, HardHat, CalendarDays, Wrench, ChartGantt, ClipboardCheck, Truck, BookOpen, Users, LogOut, TriangleAlert, Check, Loader, RotateCw } from 'lucide-react';
+import { useState, useEffect, useRef, lazy, Suspense, useSyncExternalStore, Component } from 'react';
+import { House, Search, ShieldAlert, Zap, Building2, HardHat, CalendarDays, Wrench, ChartGantt, ClipboardCheck, Truck, BookOpen, Users, RotateCw } from 'lucide-react';
 import { Ikon } from './komponenter/Ikon';
 import { AppProvider, harUlagredeEndringer } from './context/AppContext';
 import { useApp } from './context/AppContext';
@@ -124,10 +124,10 @@ const ADMIN_TABS = [
   { id: 'service', label: 'Service', icon: Zap },
   { id: 'prosjekter', label: 'Prosjekter', icon: Building2 },
   { id: 'ansatte', label: 'Ansatte', icon: HardHat },
-  { id: 'bemanningsplan', label: 'Bemanningsplan', icon: CalendarDays },
+  { id: 'bemanningsplan', label: 'Bemanning', icon: CalendarDays },
   { id: 'rorlegger', label: 'Rørlegger', icon: Wrench },
   { id: 'framdrift', label: 'Framdrift', icon: ChartGantt },
-  { id: 'ks', label: 'KS / HMS', icon: ClipboardCheck },
+  { id: 'ks', label: 'KS/HMS', icon: ClipboardCheck },
   { id: 'biler', label: 'Biler', icon: Truck },
   { id: 'rutiner', label: 'Rutiner', icon: BookOpen },
   { id: 'brukere', label: 'Brukere', icon: Users },
@@ -141,7 +141,7 @@ const KONTOR_TABS = [
   { id: 'prosjekter', label: 'Prosjekter', icon: Building2 },
   { id: 'ansatte', label: 'Ansatte', icon: HardHat },
   { id: 'framdrift', label: 'Framdrift', icon: ChartGantt },
-  { id: 'ks', label: 'KS / HMS', icon: ClipboardCheck },
+  { id: 'ks', label: 'KS/HMS', icon: ClipboardCheck },
   { id: 'biler', label: 'Biler', icon: Truck },
   { id: 'rutiner', label: 'Rutiner', icon: BookOpen },
 ];
@@ -152,9 +152,9 @@ const RORLEGGER_TABS = [
 ];
 
 const ANSATT_TABS = [
-  { id: 'bemanningsplan', label: 'Bemanningsplan', icon: CalendarDays },
+  { id: 'bemanningsplan', label: 'Bemanning', icon: CalendarDays },
   { id: 'framdrift', label: 'Framdrift', icon: ChartGantt },
-  { id: 'ks', label: 'KS / HMS', icon: ClipboardCheck },
+  { id: 'ks', label: 'KS/HMS', icon: ClipboardCheck },
   { id: 'rutiner', label: 'Rutiner', icon: BookOpen },
 ];
 
@@ -194,28 +194,94 @@ function SaveButton() {
     setKlikkLagrer(false);
   }
 
-  const visning = synk === 'feil'
-    ? { ikon: TriangleAlert, label: 'Ikke lagret', stil: { background: 'var(--danger-bg)', color: 'var(--danger)', border: '1px solid var(--danger-border)' }, tittel: 'Får ikke kontakt med skyen — endringene dine ligger trygt lokalt og sendes automatisk når nettet er tilbake. Klikk for å prøve nå.' }
+  // Design v2: passiv status-tekst + fylt oransje «Lagre nå»-knapp
+  // (eneste fylte element i baren). Ingen ikoner i topp-baren.
+  const status = synk === 'feil'
+    ? { tekst: 'Ikke lagret', klasse: 'lagre-status lagre-status--feil', tittel: 'Får ikke kontakt med skyen — endringene dine ligger trygt lokalt og sendes automatisk når nettet er tilbake.' }
     : synk === 'lagrer' || klikkLagrer
-    ? { ikon: Loader, label: 'Lagrer…', stil: { background: 'var(--warning-bg)', color: 'var(--warning)', border: '1px solid var(--warning-border)' }, tittel: 'Lagrer til skyen…' }
-    : { ikon: Check, label: 'Alt lagret', stil: { background: 'transparent', color: 'var(--text-muted)', border: '1px solid transparent' }, tittel: 'Alle endringer lagres automatisk til skyen. Klikk for å tvinge en lagring nå.' };
+    ? { tekst: 'Lagrer…', klasse: 'lagre-status', tittel: 'Lagrer til skyen…' }
+    : { tekst: 'Alt lagret', klasse: 'lagre-status', tittel: 'Alle endringer lagres automatisk til skyen.' };
 
   return (
-    <button
-      className="nav-btn"
-      style={{
-        ...visning.stil,
-        fontWeight: 500,
-        transition: 'background .3s',
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-      }}
-      onClick={handleSave}
-      title={visning.tittel}
-    >
-      <Ikon ikon={visning.ikon} size={15} style={visning.ikon === Loader ? { animation: 'spin 1.2s linear infinite' } : undefined} /> {visning.label}
-    </button>
+    <>
+      <span className={status.klasse} title={status.tittel}>{status.tekst}</span>
+      <button className="lagre-naa-knapp" onClick={handleSave} disabled={klikkLagrer}
+        title="Tving en lagring til skyen nå">
+        Lagre nå
+      </button>
+    </>
+  );
+}
+
+// ═══ Design v2: ren tekst-nav på ÉN linje, aldri to rader ═══
+// Ved plassmangel flyttes de siste punktene til en «Mer ▾»-dropdown.
+// Antall synlige styres av vindusbredde (deterministisk, ingen måle-magi).
+function synligeForBredde(bredde, antallTabs) {
+  if (bredde >= 1280) return antallTabs;
+  if (bredde >= 1100) return Math.min(antallTabs, 10);
+  if (bredde >= 950) return Math.min(antallTabs, 8);
+  if (bredde >= 800) return Math.min(antallTabs, 6);
+  return Math.min(antallTabs, 4);
+}
+
+function TekstNav({ TABS, activeTab, setActiveTab }) {
+  const [bredde, setBredde] = useState(() => window.innerWidth);
+  const [merApen, setMerApen] = useState(false);
+  const merRef = useRef(null);
+
+  useEffect(() => {
+    const onResize = () => setBredde(window.innerWidth);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    if (!merApen) return;
+    const lukk = e => { if (merRef.current && !merRef.current.contains(e.target)) setMerApen(false); };
+    document.addEventListener('mousedown', lukk);
+    return () => document.removeEventListener('mousedown', lukk);
+  }, [merApen]);
+
+  const antallSynlige = synligeForBredde(bredde, TABS.length);
+  const synlige = TABS.slice(0, antallSynlige);
+  const skjulte = TABS.slice(antallSynlige);
+  const aktivISkjult = skjulte.some(t => t.id === activeTab);
+
+  return (
+    <nav className="nav">
+      {synlige.map(tab => (
+        <button
+          key={tab.id}
+          className={`nav-btn ${activeTab === tab.id ? 'active' : ''}`}
+          onClick={() => setActiveTab(tab.id)}
+        >
+          {tab.label}
+        </button>
+      ))}
+      {skjulte.length > 0 && (
+        <div className="nav-mer" ref={merRef}>
+          <button
+            className={`nav-btn ${aktivISkjult ? 'active' : ''}`}
+            onClick={() => setMerApen(a => !a)}
+          >
+            Mer ▾
+          </button>
+          {merApen && (
+            <div className="nav-mer-liste">
+              {skjulte.map(tab => (
+                <button
+                  key={tab.id}
+                  className={`nav-mer-valg${activeTab === tab.id ? ' aktiv' : ''}`}
+                  onClick={() => { setActiveTab(tab.id); setMerApen(false); }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </nav>
   );
 }
 
@@ -316,28 +382,11 @@ function App() {
       <div className="app">
         <header className="app-header">
           <div className="header-brand">
-            <div className="brand-logo">FBS</div>
-            <div>
-              <div className="brand-name">FolloByggService</div>
-              <div className="brand-sub">
-                Bemannings- og framdriftsplanlegger
-                <span style={{ marginLeft: 6, opacity: 0.6, fontSize: 10 }} title="Versjon (byggtidspunkt) — skal være lik på alle enheter">
-                  v{FBS_VERSJON}
-                </span>
-              </div>
-            </div>
+            <div className="brand-logo" title={`FolloByggService — Bemannings- og framdriftsplanlegger · v${FBS_VERSJON} (skal være lik på alle enheter)`}>FBS</div>
+            <div className="brand-name">FolloByggService</div>
           </div>
-          <nav className="nav">
-            {TABS.map(tab => (
-              <button
-                key={tab.id}
-                className={`nav-btn ${activeTab === tab.id ? 'active' : ''}`}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                <span className="nav-icon"><Ikon ikon={tab.icon} size={18} /></span>
-                <span>{tab.label}</span>
-              </button>
-            ))}
+          <TekstNav TABS={TABS} activeTab={activeTab} setActiveTab={setActiveTab} />
+          <div className="nav-hoyre">
             <div className="nav-user">
               {userNavn && <span className="nav-user-name">{userNavn}</span>}
               <span className={`nav-role-badge nav-role-${role}`}>
@@ -345,10 +394,10 @@ function App() {
               </span>
             </div>
             {(isAdmin || isKontor || isBefaring) && <SaveButton />}
-            <button className="nav-btn logout-btn" onClick={handleLogout} title="Logg ut" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <Ikon ikon={LogOut} size={16} /> Logg ut
+            <button className="nav-btn logout-btn" onClick={handleLogout} title="Logg ut">
+              Logg ut
             </button>
-          </nav>
+          </div>
         </header>
 
         <main className="main">

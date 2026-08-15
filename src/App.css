@@ -90,61 +90,101 @@ body {
 .login-link-btn:hover { color: var(--accent); }
 
 /* Nav user info */
-.nav-user { display: flex; align-items: center; gap: 8px; margin-left: 8px; padding-left: 12px; border-left: 1px solid var(--border); }
-.nav-user-name { font-size: 13px; color: var(--text-secondary); font-weight: 500; }
-.nav-role-badge { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: var(--radius-lg); letter-spacing: .3px; }
-.nav-role-admin { background: #f59e0b; color: var(--text-primary); }
-.nav-role-kontor { background: #7c3aed; color: white; }
-.nav-role-rorlegger { background: #0891b2; color: white; }
-.nav-role-ansatt { background: var(--success); color: white; }
-.nav-role-befaring { background: var(--warning); color: white; }
+.nav-user { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.nav-user-name { font-size: 13px; color: var(--header-text); font-weight: 500; white-space: nowrap; }
+/* Rolle-badge: diskret outline (design v2) — ikke fylt */
+.nav-role-badge { font-size: 11px; font-weight: 500; padding: 1px 8px; border-radius: var(--radius-lg); letter-spacing: .3px; background: transparent; }
+.nav-role-admin { border: 1px solid var(--header-accent); color: var(--header-accent); }
+.nav-role-kontor { border: 1px solid #b39ddb; color: #b39ddb; }
+.nav-role-rorlegger { border: 1px solid #7dd3e0; color: #7dd3e0; }
+.nav-role-ansatt { border: 1px solid #86d3a2; color: #86d3a2; }
+.nav-role-befaring { border: 1px solid var(--header-accent); color: var(--header-accent); }
 
 /* Logout button */
-.logout-btn { margin-left: 8px; border-left: 1px solid var(--border); padding-left: 16px; }
+.logout-btn { border-bottom: none !important; padding: 8px 4px 8px 10px; }
 
 /* ===== APP SHELL ===== */
 .app { display: flex; flex-direction: column; min-height: 100vh; }
 
+/* ═══ Topp-bar «Marine dyp» — ren tekst-nav på ÉN linje (design v2) ═══ */
 .app-header {
   background: var(--bg-header);
-  color: var(--text-primary);
-  padding: 0 24px;
+  color: var(--header-text);
+  padding: 0 20px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  min-height: 64px;
-  border-bottom: 1px solid var(--border);
+  gap: 14px;
+  flex-wrap: nowrap;          /* aldri to rader */
+  min-height: 52px;
 }
 
-.header-brand { display: flex; align-items: center; gap: 12px; }
+.header-brand { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .brand-logo {
-  background: var(--accent);
-  color: #fff;
-  font-weight: 500;
-  font-size: 18px;
-  width: 44px; height: 44px;
-  border-radius: var(--radius-lg);
+  background: var(--header-accent);
+  color: var(--bg-header);
+  font-weight: 700;
+  font-size: 15px;
+  width: 34px; height: 34px;
+  border-radius: 5px;
   display: flex; align-items: center; justify-content: center;
+  cursor: default;
 }
-.brand-name { font-weight: 500; font-size: 17px; color: var(--text-primary); }
-.brand-sub { font-size: 12px; color: var(--text-muted); }
+.brand-name { font-weight: 500; font-size: 15px; color: var(--header-text-active); white-space: nowrap; }
+.brand-sub { display: none; } /* versjonsstempel: tooltip på logoen i stedet */
 
-.nav { display: flex; gap: 4px; flex-wrap: wrap; }
+.nav { display: flex; gap: 2px; flex-wrap: nowrap; align-items: center; min-width: 0; flex: 1; }
 .nav-btn {
   background: transparent;
   border: none;
-  color: var(--text-secondary);
+  color: var(--header-text);
   cursor: pointer;
-  padding: 8px 14px;
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  display: flex; align-items: center; gap: 6px;
-  transition: background .15s, color .15s;
+  padding: 15px 9px 13px;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  font-size: 13px;
+  white-space: nowrap;
+  transition: color .15s, border-color .15s;
 }
-.nav-btn:hover { background: var(--bg-subtle); color: var(--text-primary); }
-.nav-btn.active { background: var(--accent-subtle); color: var(--accent); font-weight: 500; }
+.nav-btn:hover { color: var(--header-text-hover); background: transparent; }
+.nav-btn.active {
+  color: var(--header-text-active);
+  font-weight: 600; /* bevisst unntak fra maks-500 (spec design v2) */
+  border-bottom-color: var(--header-accent);
+  background: transparent;
+}
+
+/* «Mer ▾»-dropdown for smal skjerm */
+.nav-mer { position: relative; }
+.nav-mer-liste {
+  position: absolute; top: 44px; left: 0; z-index: 400;
+  background: var(--bg-surface); border: 1px solid var(--border);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-panel);
+  padding: 4px; min-width: 180px;
+}
+.nav-mer-valg {
+  display: block; width: 100%; text-align: left; background: none; border: none;
+  padding: 9px 12px; font-size: 13px; color: var(--text-primary);
+  cursor: pointer; border-radius: var(--radius-sm); white-space: nowrap;
+}
+.nav-mer-valg:hover { background: var(--bg-subtle); }
+.nav-mer-valg.aktiv { color: var(--accent); font-weight: 600; }
+
+/* Høyre side av baren */
+.nav-hoyre { display: flex; align-items: center; gap: 10px; flex-shrink: 0; margin-left: auto; }
+.lagre-status { font-size: 12px; color: var(--header-text-dempet); white-space: nowrap; }
+.lagre-status--feil { color: #fca5a5; font-weight: 500; }
+.lagre-naa-knapp {
+  background: var(--header-accent);
+  color: var(--bg-header);
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600; /* bevisst unntak — eneste fylte element i baren */
+  cursor: pointer;
+  white-space: nowrap;
+}
+.lagre-naa-knapp:hover { filter: brightness(1.08); }
 .nav-icon { font-size: 16px; }
 
 .main { flex: 1; padding: 24px; max-width: 1400px; width: 100%; margin: 0 auto; }
@@ -1450,14 +1490,19 @@ body {
 
 /* ===== RESPONSIVE / MOBILE ===== */
 @media (max-width: 640px) {
-  /* Header */
+  /* Header: kompakt marine-bar — logo + status/Lagre nå + Logg ut.
+     Firmanavn og brukernavn skjules (bunn-nav-en har fanene). */
   .app-header {
-    padding: 8px 12px;
-    min-height: 52px;
+    padding: 6px 10px;
+    min-height: 46px;
+    gap: 8px;
   }
-  .brand-logo { width: 36px; height: 36px; font-size: 14px; }
-  .brand-name { font-size: 15px; }
+  .brand-logo { width: 32px; height: 32px; font-size: 13px; }
+  .brand-name { display: none; }
   .brand-sub { display: none; }
+  .nav-user-name { display: none; }
+  .lagre-status { display: none; }
+  .nav-hoyre { gap: 8px; }
 
   /* Hide desktop nav, show mobile nav */
   .nav { display: none; }

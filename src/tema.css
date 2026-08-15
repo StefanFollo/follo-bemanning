@@ -7,7 +7,13 @@
   --bg-app: #fafbfc;
   --bg-surface: #ffffff;
   --bg-subtle: #f1f5f9;
-  --bg-header: #ffffff;
+  /* Design v2 «Marine dyp» (SPEC-design-marine-tekstnav, godkjent 15.08) */
+  --bg-header: #0f2942;
+  --header-text: #94a9bd;        /* 6,1:1 på marine — AA ok for 13px */
+  --header-text-hover: #cdd9e4;
+  --header-text-active: #ffffff;
+  --header-text-dempet: #7d94a9; /* 4,7:1 — småtekst som «Alt lagret» */
+  --header-accent: #f59e0b;      /* oransje: logo, aktiv-strek, Lagre-knapp */
 
   /* Tekst */
   --text-primary: #0f172a;
@@ -18,10 +24,10 @@
   --text-muted: #5d6b80;
   --text-disabled: #94a3b8; /* kun dekor/deaktivert — ikke lesetekst */
 
-  /* Primær-aksent (FBS marine) */
-  --accent: #1e40af;
-  --accent-hover: #1e3a8a;
-  --accent-subtle: #eff6ff;
+  /* Primær-aksent: marine dyp (design v2 — var #1e40af blå) */
+  --accent: #0f2942;
+  --accent-hover: #1a3a5c;
+  --accent-subtle: #e8eef4;
 
   /* Semantiske */
   --success: #15803d;  --success-bg: #f0fdf4;  --success-border: #bbf7d0;
