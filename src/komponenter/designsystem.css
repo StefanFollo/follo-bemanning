@@ -1,6 +1,6 @@
 /* ═══ FBS Designsystem (SPEC-prosjektside-C + SPEC-tema-lys-strammet) ═══
    Én kilde til utseende for KPI-kort, status-faner, kompakte rader,
-   ⋯-menyer og varsel-bannere — gjenbrukes på alle sider.
+   rad-menyer og varsel-bannere — gjenbrukes på alle sider.
    Alle farger fra tokens i src/tema.css. */
 
 /* ── 1.1 KPI-kort — hvit flate, 3px farget VENSTRE-kant, farget tall ── */
@@ -70,7 +70,7 @@
 }
 .ds-rad-hurtigknapp:hover { background: var(--warning-border); }
 
-/* ── 1.4 ⋯-meny — hvit dropdown, 1px kant, panel-skygge ── */
+/* ── 1.4 Rad-meny — hvit dropdown, 1px kant, panel-skygge ── */
 .ds-radmeny { position: relative; }
 .ds-radmeny-knapp {
   width: 34px; height: 34px; border-radius: var(--radius-md); border: 1px solid var(--border);

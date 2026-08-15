@@ -1,8 +1,10 @@
 // ═══ 4a: Forslags-boks for KS-sjekklister fra tilbudets fag ═══
 // Brukes i prosjektpanelets KS-fane og på KS/HMS-sidens prosjektvisning.
-// KUN forslag: oppretter aldri noe selv — PL tildeler med «✓ Tildel valgte».
+// KUN forslag: oppretter aldri noe selv — PL tildeler med «Tildel valgte».
 
 import { useState, useMemo } from 'react';
+import { Check, Lightbulb } from 'lucide-react';
+import { Ikon } from './Ikon';
 import { lagFagForslag, erForslagSkjult, skjulForslag, lagKsTildeling } from '../ksForslag';
 
 export default function KSFagForslag({ prosjekt, maler, onTildel }) {
@@ -45,8 +47,8 @@ export default function KSFagForslag({ prosjekt, maler, onTildel }) {
       borderLeft: '3px solid var(--accent)', borderRadius: 'var(--radius-md)',
       padding: '10px 12px', marginBottom: 12, fontSize: 13,
     }}>
-      <div style={{ fontWeight: 500, color: 'var(--accent)', marginBottom: 6 }}>
-        💡 Forslag basert på tilbudet{grunnlag ? ` (${grunnlag})` : ''}:
+      <div style={{ fontWeight: 500, color: 'var(--accent)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Ikon ikon={Lightbulb} size={15} /> Forslag basert på tilbudet{grunnlag ? ` (${grunnlag})` : ''}:
       </div>
       {forslag.map(({ mal, grunn }) => (
         <label key={mal.id} style={{ display: 'flex', alignItems: 'center', gap: 7, padding: '3px 0', cursor: 'pointer' }}>
@@ -61,8 +63,8 @@ export default function KSFagForslag({ prosjekt, maler, onTildel }) {
         </label>
       ))}
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-        <button className="btn btn-sm btn-primary" disabled={valgte.size === 0} onClick={tildelValgte}>
-          ✓ Tildel valgte ({valgte.size})
+        <button className="btn btn-sm btn-primary" disabled={valgte.size === 0} onClick={tildelValgte} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <Ikon ikon={Check} size={14} /> Tildel valgte ({valgte.size})
         </button>
         <button className="btn btn-sm" onClick={() => { skjulForslag(prosjekt.id); setSkjult(true); }}>
           Skjul forslag

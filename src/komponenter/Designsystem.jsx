@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
+import { MoreHorizontal, X, TriangleAlert } from 'lucide-react';
+import { Ikon } from './Ikon';
 import './designsystem.css';
 
 // ═══════════════════════════════════════════════════════════════════
@@ -54,7 +56,7 @@ export function StatusFaner({ faner, aktiv, onVelg }) {
   );
 }
 
-// ── 1.4 ⋯-meny — alle handlinger bak én knapp, aldri knapperader ──
+// ── 1.4 Rad-meny — alle handlinger bak én knapp, aldri knapperader ──
 export function RadMeny({ valg }) {
   const [apen, setApen] = useState(false);
   const ref = useRef(null);
@@ -68,7 +70,7 @@ export function RadMeny({ valg }) {
   }, [apen]);
   return (
     <div className="ds-radmeny" ref={ref} onClick={e => e.stopPropagation()}>
-      <button className="ds-radmeny-knapp" title="Handlinger" onClick={() => setApen(a => !a)}>⋯</button>
+      <button className="ds-radmeny-knapp" title="Handlinger" onClick={() => setApen(a => !a)}><Ikon ikon={MoreHorizontal} size={16} /></button>
       {apen && (
         <div className="ds-radmeny-liste">
           {valg.filter(Boolean).map((v, i) => v.skille
@@ -90,7 +92,7 @@ export function RadMeny({ valg }) {
 
 // ── 1.3 Kompakt rad ──
 // tittel + valgfri varsel-tekst; meta-linje under; høyre side: nøkkeltall,
-// mini fremdrifts-bar, ⋯-meny. Farget venstre-kant ved varsel.
+// mini fremdrifts-bar, rad-meny. Farget venstre-kant ved varsel.
 export function KompaktRad({
   tittel, undertittel, varsel, varselFarge, meta = [], hint,
   hoyre = [], fremdrift = null, meny = null, hurtigknapp = null, onClick,
@@ -148,7 +150,7 @@ export function DetaljPanel({ tittel, undertittel, faner = [], aktivFane, onFane
             <div className="ds-panel-tittel">{tittel}</div>
             {undertittel && <div className="ds-panel-undertittel">{undertittel}</div>}
           </div>
-          <button className="ds-panel-lukk" onClick={onLukk} title="Lukk (Esc)">✕</button>
+          <button className="ds-panel-lukk" onClick={onLukk} title="Lukk (Esc)"><Ikon ikon={X} size={15} /></button>
         </div>
         {faner.length > 0 && (
           <div className="ds-panel-faner">
@@ -171,13 +173,13 @@ export function DetaljPanel({ tittel, undertittel, faner = [], aktivFane, onFane
 }
 
 // ── 1.6 Varsel-banner (klikk = filtrer) ──
-export function VarselBanner({ ikon = '⚠', tekst, tone = 'roed', aktiv = false, onClick }) {
+export function VarselBanner({ ikon = TriangleAlert, tekst, tone = 'roed', aktiv = false, onClick }) {
   return (
     <button
       className={`ds-banner ds-banner--${tone}${aktiv ? ' ds-banner--aktiv' : ''}`}
       onClick={onClick}
     >
-      {ikon} {tekst}
+      <Ikon ikon={ikon} size={15} /> {tekst}
     </button>
   );
 }

@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════
 // Slå sammen duplikat-prosjekter — REN logikk (SPEC-merge-prosjekter.md)
 //
-// 🔒 KJERNEPRINSIPP: Denne modulen inneholder INGEN slette-kode.
+// KJERNEPRINSIPP: Denne modulen inneholder INGEN slette-kode.
 // Merge gjør nøyaktig to ting: KOPIERER felter til hovedprosjektet og
 // ARKIVERER sekundærprosjektet med all data intakt. Angre gjenoppretter
 // eksakt før-tilstand. Alt her er rene funksjoner uten side-effekter —

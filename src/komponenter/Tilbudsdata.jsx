@@ -3,6 +3,9 @@
 // opsjoner, byggInfo, notater + lenke-rad (kundeside/PDF/tilbuds-app).
 // Robust mot delvise payloads — hver seksjon vises kun når data finnes.
 
+import { Eye, FileText, Calculator, Link2, CircleCheck, Square, MapPin } from 'lucide-react';
+import { Ikon } from './Ikon';
+
 const TILBUDSAPP_URL = 'https://follo-befaring.vercel.app';
 
 function fmtKr(n) {
@@ -48,17 +51,17 @@ export function TilbudLenkeRad({ prosjekt }) {
       {publicToken && (
         <a style={knappStil} href={`${TILBUDSAPP_URL}/t/${publicToken}?intern=1`} target="_blank" rel="noopener noreferrer"
           title="Åpner kundens tilbudside i intern visning — telles ikke i kunde-statistikken">
-          👁 Se kundesiden
+          <Ikon ikon={Eye} size={15} /> Se kundesiden
         </a>
       )}
       {pdfUrl && (
         <a style={knappStil} href={pdfUrl} target="_blank" rel="noopener noreferrer">
-          📄 Åpne tilbud-PDF
+          <Ikon ikon={FileText} size={15} /> Åpne tilbud-PDF
         </a>
       )}
       {tilbudLink && (
         <a style={knappStil} href={tilbudLink} target="_blank" rel="noopener noreferrer">
-          🧮 Åpne i tilbuds-appen
+          <Ikon ikon={Calculator} size={15} /> Åpne i tilbuds-appen
         </a>
       )}
     </div>
@@ -86,11 +89,11 @@ export default function TilbudsdataVisning({ prosjekt }) {
   const kundeKommentar = tp.kundeKommentar || null;
 
   const nokkeltall = [
-    totalSum != null && totalSum > 0 && ['💰 Totalsum (inkl. mva)', fmtKr(totalSum)],
+    totalSum != null && totalSum > 0 && ['Totalsum (inkl. mva)', fmtKr(totalSum)],
     totalEksMva != null && totalEksMva > 0 && ['Sum eks. mva', fmtKr(totalEksMva)],
     (p.estimertSum || tp.estimertSum) && ['Estimert sum', fmtKr(p.estimertSum || tp.estimertSum)],
     p.belop && ['Kontraktssum i prosjektet', fmtKr(p.belop)],
-    totalTimer && ['⏱ Totale timer', fmtTimer(totalTimer)],
+    totalTimer && ['Totale timer', fmtTimer(totalTimer)],
     (p.pristype || tp.pristype) && ['Pristype', p.pristype || tp.pristype],
     (p.oppstartTekst || kd.oppstart) && ['Oppstart', p.oppstartTekst || kd.oppstart],
     (p.varighetTekst || kd.varighet) && ['Varighet', p.varighetTekst || kd.varighet],
@@ -103,8 +106,8 @@ export default function TilbudsdataVisning({ prosjekt }) {
       <TilbudLenkeRad prosjekt={p} />
 
       {p.tilbudKobletDato && (
-        <div style={{ fontSize: 12, color: '#5d6b80', margin: '6px 0' }}>
-          🔗 Koblet til tilbud {new Date(p.tilbudKobletDato).toLocaleDateString('nb-NO')}{p.tilbudKobletAv ? ` av ${p.tilbudKobletAv}` : ''}
+        <div style={{ fontSize: 12, color: '#5d6b80', margin: '6px 0', display: 'flex', alignItems: 'center', gap: 5 }}>
+          <Ikon ikon={Link2} size={13} /> Koblet til tilbud {new Date(p.tilbudKobletDato).toLocaleDateString('nb-NO')}{p.tilbudKobletAv ? ` av ${p.tilbudKobletAv}` : ''}
         </div>
       )}
 
@@ -164,7 +167,7 @@ export default function TilbudsdataVisning({ prosjekt }) {
             const erValgt = valgte.has(id) || valgte.has(navn);
             return (
               <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid var(--bg-subtle)' }}>
-                <span>{erValgt ? '✅' : '⬜'} {navn}</span>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={erValgt ? CircleCheck : Square} size={14} farge={erValgt ? 'var(--success)' : 'var(--text-muted)'} /> {navn}</span>
                 {typeof o === 'object' && o.sum != null && <span style={{ color: '#5d6b80' }}>{fmtKr(o.sum)}</span>}
               </div>
             );
@@ -174,7 +177,7 @@ export default function TilbudsdataVisning({ prosjekt }) {
       {!opsjoner && (p.valgteOpsjoner || []).length > 0 && (
         <Seksjon tittel="Valgte opsjoner">
           {p.valgteOpsjoner.map((o, i) => (
-            <div key={i}>✅ {typeof o === 'string' ? o : o.navn || o.id || `Opsjon ${i + 1}`}</div>
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Ikon ikon={CircleCheck} size={14} farge='var(--success)' /> {typeof o === 'string' ? o : o.navn || o.id || `Opsjon ${i + 1}`}</div>
           ))}
         </Seksjon>
       )}
@@ -192,7 +195,7 @@ export default function TilbudsdataVisning({ prosjekt }) {
           )}
           {soner && soner.length > 0 && soner.map((s, i) => (
             <div key={i} style={{ paddingLeft: 8, color: 'var(--text-secondary)' }}>
-              📍 {s.navn || s.name || `Sone ${i + 1}`}{s.areal ? ` — ${s.areal} m²` : ''}
+              <Ikon ikon={MapPin} size={13} /> {s.navn || s.name || `Sone ${i + 1}`}{s.areal ? ` — ${s.areal} m²` : ''}
             </div>
           ))}
         </Seksjon>

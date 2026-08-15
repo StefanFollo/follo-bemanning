@@ -1,4 +1,6 @@
 import { useState, useEffect, lazy, Suspense, useSyncExternalStore, Component } from 'react';
+import { House, Search, ShieldAlert, Zap, Building2, HardHat, CalendarDays, Wrench, ChartGantt, ClipboardCheck, Truck, BookOpen, Users, LogOut, TriangleAlert, Check, Loader, RotateCw } from 'lucide-react';
+import { Ikon } from './komponenter/Ikon';
 import { AppProvider, harUlagredeEndringer } from './context/AppContext';
 import { useApp } from './context/AppContext';
 import { saveToCloud, forceTimestampAlleFields, abonnerSynk, hentSynkStatus } from './store';
@@ -44,7 +46,7 @@ class FeilVern extends Component {
     if (!this.state.feil) return this.props.children;
     return (
       <div style={{ maxWidth: 720, margin: '40px auto', padding: '24px 28px', background: '#fef2f2', border: '2px solid #fca5a5', borderRadius: 12 }}>
-        <h3 style={{ margin: '0 0 8px', color: '#991b1b' }}>⚠️ Noe gikk galt på denne siden</h3>
+        <h3 style={{ margin: '0 0 8px', color: '#991b1b' }}>Noe gikk galt på denne siden</h3>
         <p style={{ margin: '0 0 12px', fontSize: 14, color: '#7f1d1d' }}>
           Resten av appen virker — bytt fane, eller last siden på nytt.
           Send gjerne et skjermbilde av denne boksen til Stefan/support.
@@ -55,7 +57,7 @@ class FeilVern extends Component {
           {String(this.state.feil?.stack || '').split('\n').slice(1, 4).join('\n')}
         </pre>
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <button className="btn" onClick={() => this.setState({ feil: null })}>↻ Prøv igjen</button>
+          <button className="btn" onClick={() => this.setState({ feil: null })} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={RotateCw} size={14} /> Prøv igjen</button>
           <button className="btn btn-primary" onClick={() => window.location.reload()}>Last appen på nytt</button>
         </div>
       </div>
@@ -116,51 +118,51 @@ function useAutoOppdatering(aktiv) {
 }
 
 const ADMIN_TABS = [
-  { id: 'dashboard', label: 'Oversikt', icon: '🏠' },
-  { id: 'befaring', label: 'Befaring', icon: '🔍' },
-  { id: 'reklamasjon', label: 'Reklamasjon', icon: '⚠️' },
-  { id: 'service', label: 'Service', icon: '⚡' },
-  { id: 'prosjekter', label: 'Prosjekter', icon: '🏗' },
-  { id: 'ansatte', label: 'Ansatte', icon: '👷' },
-  { id: 'bemanningsplan', label: 'Bemanningsplan', icon: '📅' },
-  { id: 'rorlegger', label: 'Rørlegger', icon: '🔧' },
-  { id: 'framdrift', label: 'Framdrift', icon: '📊' },
-  { id: 'ks', label: 'KS / HMS', icon: '✅' },
-  { id: 'biler', label: 'Biler', icon: '🚐' },
-  { id: 'rutiner', label: 'Rutiner', icon: '📘' },
-  { id: 'brukere', label: 'Brukere', icon: '👥' },
+  { id: 'dashboard', label: 'Oversikt', icon: House },
+  { id: 'befaring', label: 'Befaring', icon: Search },
+  { id: 'reklamasjon', label: 'Reklamasjon', icon: ShieldAlert },
+  { id: 'service', label: 'Service', icon: Zap },
+  { id: 'prosjekter', label: 'Prosjekter', icon: Building2 },
+  { id: 'ansatte', label: 'Ansatte', icon: HardHat },
+  { id: 'bemanningsplan', label: 'Bemanningsplan', icon: CalendarDays },
+  { id: 'rorlegger', label: 'Rørlegger', icon: Wrench },
+  { id: 'framdrift', label: 'Framdrift', icon: ChartGantt },
+  { id: 'ks', label: 'KS / HMS', icon: ClipboardCheck },
+  { id: 'biler', label: 'Biler', icon: Truck },
+  { id: 'rutiner', label: 'Rutiner', icon: BookOpen },
+  { id: 'brukere', label: 'Brukere', icon: Users },
 ];
 
 const KONTOR_TABS = [
-  { id: 'dashboard', label: 'Oversikt', icon: '🏠' },
-  { id: 'befaring', label: 'Befaring', icon: '🔍' },
-  { id: 'reklamasjon', label: 'Reklamasjon', icon: '⚠️' },
-  { id: 'service', label: 'Service', icon: '⚡' },
-  { id: 'prosjekter', label: 'Prosjekter', icon: '🏗' },
-  { id: 'ansatte', label: 'Ansatte', icon: '👷' },
-  { id: 'framdrift', label: 'Framdrift', icon: '📊' },
-  { id: 'ks', label: 'KS / HMS', icon: '✅' },
-  { id: 'biler', label: 'Biler', icon: '🚐' },
-  { id: 'rutiner', label: 'Rutiner', icon: '📘' },
+  { id: 'dashboard', label: 'Oversikt', icon: House },
+  { id: 'befaring', label: 'Befaring', icon: Search },
+  { id: 'reklamasjon', label: 'Reklamasjon', icon: ShieldAlert },
+  { id: 'service', label: 'Service', icon: Zap },
+  { id: 'prosjekter', label: 'Prosjekter', icon: Building2 },
+  { id: 'ansatte', label: 'Ansatte', icon: HardHat },
+  { id: 'framdrift', label: 'Framdrift', icon: ChartGantt },
+  { id: 'ks', label: 'KS / HMS', icon: ClipboardCheck },
+  { id: 'biler', label: 'Biler', icon: Truck },
+  { id: 'rutiner', label: 'Rutiner', icon: BookOpen },
 ];
 
 const RORLEGGER_TABS = [
-  { id: 'rorlegger', label: 'Rørlegger', icon: '🔧' },
-  { id: 'rutiner', label: 'Rutiner', icon: '📘' },
+  { id: 'rorlegger', label: 'Rørlegger', icon: Wrench },
+  { id: 'rutiner', label: 'Rutiner', icon: BookOpen },
 ];
 
 const ANSATT_TABS = [
-  { id: 'bemanningsplan', label: 'Bemanningsplan', icon: '📅' },
-  { id: 'framdrift', label: 'Framdrift', icon: '📊' },
-  { id: 'ks', label: 'KS / HMS', icon: '✅' },
-  { id: 'rutiner', label: 'Rutiner', icon: '📘' },
+  { id: 'bemanningsplan', label: 'Bemanningsplan', icon: CalendarDays },
+  { id: 'framdrift', label: 'Framdrift', icon: ChartGantt },
+  { id: 'ks', label: 'KS / HMS', icon: ClipboardCheck },
+  { id: 'rutiner', label: 'Rutiner', icon: BookOpen },
 ];
 
 const BEFARING_TABS = [
-  { id: 'befaring', label: 'Befaring', icon: '🔍' },
-  { id: 'service', label: 'Service', icon: '⚡' },
-  { id: 'reklamasjon', label: 'Reklamasjon', icon: '⚠️' },
-  { id: 'rutiner', label: 'Rutiner', icon: '📘' },
+  { id: 'befaring', label: 'Befaring', icon: Search },
+  { id: 'service', label: 'Service', icon: Zap },
+  { id: 'reklamasjon', label: 'Reklamasjon', icon: ShieldAlert },
+  { id: 'rutiner', label: 'Rutiner', icon: BookOpen },
 ];
 
 function getResetToken() {
@@ -193,10 +195,10 @@ function SaveButton() {
   }
 
   const visning = synk === 'feil'
-    ? { label: '⚠️ Ikke lagret', stil: { background: 'var(--danger-bg)', color: 'var(--danger)', border: '1px solid var(--danger-border)' }, tittel: 'Får ikke kontakt med skyen — endringene dine ligger trygt lokalt og sendes automatisk når nettet er tilbake. Klikk for å prøve nå.' }
+    ? { ikon: TriangleAlert, label: 'Ikke lagret', stil: { background: 'var(--danger-bg)', color: 'var(--danger)', border: '1px solid var(--danger-border)' }, tittel: 'Får ikke kontakt med skyen — endringene dine ligger trygt lokalt og sendes automatisk når nettet er tilbake. Klikk for å prøve nå.' }
     : synk === 'lagrer' || klikkLagrer
-    ? { label: '⏳ Lagrer…', stil: { background: 'var(--warning-bg)', color: 'var(--warning)', border: '1px solid var(--warning-border)' }, tittel: 'Lagrer til skyen…' }
-    : { label: '✓ Alt lagret', stil: { background: 'transparent', color: 'var(--text-muted)', border: '1px solid transparent' }, tittel: 'Alle endringer lagres automatisk til skyen. Klikk for å tvinge en lagring nå.' };
+    ? { ikon: Loader, label: 'Lagrer…', stil: { background: 'var(--warning-bg)', color: 'var(--warning)', border: '1px solid var(--warning-border)' }, tittel: 'Lagrer til skyen…' }
+    : { ikon: Check, label: 'Alt lagret', stil: { background: 'transparent', color: 'var(--text-muted)', border: '1px solid transparent' }, tittel: 'Alle endringer lagres automatisk til skyen. Klikk for å tvinge en lagring nå.' };
 
   return (
     <button
@@ -205,11 +207,14 @@ function SaveButton() {
         ...visning.stil,
         fontWeight: 500,
         transition: 'background .3s',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
       }}
       onClick={handleSave}
       title={visning.tittel}
     >
-      {visning.label}
+      <Ikon ikon={visning.ikon} size={15} style={visning.ikon === Loader ? { animation: 'spin 1.2s linear infinite' } : undefined} /> {visning.label}
     </button>
   );
 }
@@ -329,7 +334,7 @@ function App() {
                 className={`nav-btn ${activeTab === tab.id ? 'active' : ''}`}
                 onClick={() => setActiveTab(tab.id)}
               >
-                <span className="nav-icon">{tab.icon}</span>
+                <span className="nav-icon"><Ikon ikon={tab.icon} size={18} /></span>
                 <span>{tab.label}</span>
               </button>
             ))}
@@ -340,8 +345,8 @@ function App() {
               </span>
             </div>
             {(isAdmin || isKontor || isBefaring) && <SaveButton />}
-            <button className="nav-btn logout-btn" onClick={handleLogout} title="Logg ut">
-              🚪 Logg ut
+            <button className="nav-btn logout-btn" onClick={handleLogout} title="Logg ut" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Ikon ikon={LogOut} size={16} /> Logg ut
             </button>
           </nav>
         </header>
@@ -374,7 +379,7 @@ function App() {
                 className={`mobile-nav-btn ${activeTab === tab.id ? 'active' : ''}`}
                 onClick={() => setActiveTab(tab.id)}
               >
-                <span className="mobile-nav-icon">{tab.icon}</span>
+                <span className="mobile-nav-icon"><Ikon ikon={tab.icon} size={20} /></span>
                 <span>{tab.label}</span>
               </button>
             ))}

@@ -3845,3 +3845,6 @@ body {
 .fd2-rad-badges { display: flex; align-items: center; gap: 6px; }
 .fd2-rad-info { font-size: 11px; color: var(--text-muted); }
 .fd2-rad-status { font-size: 11px; font-weight: 500; min-width: 80px; text-align: right; }
+
+/* Lucide Loader-animasjon (SaveButton m.fl.) */
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }

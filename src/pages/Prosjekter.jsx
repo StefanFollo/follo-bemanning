@@ -1,4 +1,11 @@
 import { useState, useMemo, useEffect } from 'react';
+import {
+  Sparkles, TriangleAlert, Link as LinkIkon, Link2, ArrowUp, ArrowDown, ArrowRight, X, Trash2,
+  Lightbulb, Check, CircleX, CircleCheck, CalendarDays, Package, Flag, Archive, Star,
+  Users, Lock, ClipboardList, Hammer, Wrench, Eye, Pencil, Scissors, Undo2, Maximize,
+  List, ChartGantt, Loader, Pin, ChevronLeft, ChevronRight, ScrollText, ClipboardCheck, CircleAlert, Ban,
+} from 'lucide-react';
+import { Ikon, IkonTekst, TomIkon } from '../komponenter/Ikon';
 import { useApp } from '../context/AppContext';
 import { formatDate, PROSJEKT_PALETTE, isoToDate, dateToIso, daysBetween } from '../store';
 import { StatusFaner, KompaktRad, DetaljPanel, VarselBanner } from '../komponenter/Designsystem';
@@ -209,8 +216,8 @@ function FramdriftUtkast({ project, utkast, onAktiver, onForkast, onOppdaterUtka
 
   return (
     <div style={{ fontSize: 13 }}>
-      <div style={{ background: 'var(--warning-bg)', border: '1px solid var(--warning-border)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontWeight: 500, color: 'var(--warning)' }}>
-        ✨ Utkast — ikke aktivert. Rediger fasene, og aktiver når planen ser riktig ut.
+      <div style={{ background: 'var(--warning-bg)', border: '1px solid var(--warning-border)', borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontWeight: 500, color: 'var(--warning)', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Ikon ikon={Sparkles} size={15} /> Utkast — ikke aktivert. Rediger fasene, og aktiver når planen ser riktig ut.
       </div>
       <div style={{ color: '#5d6b80', marginBottom: 8 }}>
         Generert fra tilbudskalkylen {utkast.generertDato ? new Date(utkast.generertDato).toLocaleDateString('nb-NO') : ''} · {faser.length} faser · uke {utkast.oppstartUke}–{utkast.estimertSluttUke}
@@ -233,14 +240,14 @@ function FramdriftUtkast({ project, utkast, onAktiver, onForkast, onOppdaterUtka
             timer <input className="input" type="number" style={{ width: 60, height: 30, fontSize: 13 }} value={f.estimertTimer ?? f.timer ?? ''}
               onChange={e => endreFase(i, { estimertTimer: parseInt(e.target.value) || 0, timer: parseInt(e.target.value) || 0 })} />
           </label>
-          <span style={{ fontSize: 11, color: '#5d6b80' }}>{(f.fag || []).join(', ')}{f.kritisk ? ' · ⚠ kritisk' : ''}</span>
+          <span style={{ fontSize: 11, color: '#5d6b80' }}>{(f.fag || []).join(', ')}{f.kritisk ? ' · kritisk' : ''}</span>
           {Array.isArray(f.avhengerAv) && f.avhengerAv.length > 0 && (
-            <span style={{ fontSize: 11, color: '#5d6b80' }} title="Avhenger av fase(r)">⛓ etter {f.avhengerAv.map(n => n + 1).join(', ')}</span>
+            <span style={{ fontSize: 11, color: '#5d6b80' }} title="Avhenger av fase(r)"><Ikon ikon={LinkIkon} size={11} /> etter {f.avhengerAv.map(n => n + 1).join(', ')}</span>
           )}
           <span style={{ marginLeft: 'auto', display: 'flex', gap: 2 }}>
-            <button className="btn-icon" title="Flytt opp" onClick={() => flyttFase(i, -1)} disabled={i === 0}>↑</button>
-            <button className="btn-icon" title="Flytt ned" onClick={() => flyttFase(i, 1)} disabled={i === faser.length - 1}>↓</button>
-            <button className="btn-icon btn-danger-icon" title="Slett fase" onClick={() => slettFase(i)}>✕</button>
+            <button className="btn-icon" title="Flytt opp" onClick={() => flyttFase(i, -1)} disabled={i === 0}><Ikon ikon={ArrowUp} size={14} /></button>
+            <button className="btn-icon" title="Flytt ned" onClick={() => flyttFase(i, 1)} disabled={i === faser.length - 1}><Ikon ikon={ArrowDown} size={14} /></button>
+            <button className="btn-icon btn-danger-icon" title="Slett fase" onClick={() => slettFase(i)}><Ikon ikon={X} size={14} /></button>
           </span>
         </div>
       ))}
@@ -249,13 +256,13 @@ function FramdriftUtkast({ project, utkast, onAktiver, onForkast, onOppdaterUtka
       {Array.isArray(utkast.merknader) && utkast.merknader.length > 0 && (
         <div style={{ marginTop: 12 }}>
           <div style={{ fontWeight: 500, marginBottom: 4 }}>Merknader fra AI:</div>
-          {utkast.merknader.map((m, i) => <div key={i} style={{ color: 'var(--text-secondary)' }}>💡 {m}</div>)}
+          {utkast.merknader.map((m, i) => <div key={i} style={{ color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}><Ikon ikon={Lightbulb} size={13} /> {m}</div>)}
         </div>
       )}
 
       <div style={{ display: 'flex', gap: 8, marginTop: 14, borderTop: '1px solid var(--border)', paddingTop: 12 }}>
-        <button className="btn btn-primary" onClick={onAktiver} disabled={faser.length === 0}>✓ Aktiver plan</button>
-        <button className="btn" style={{ color: 'var(--danger)' }} onClick={onForkast}>🗑 Forkast utkast</button>
+        <button className="btn btn-primary" onClick={onAktiver} disabled={faser.length === 0} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={Check} size={15} /> Aktiver plan</button>
+        <button className="btn" style={{ color: 'var(--danger)', display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={onForkast}><Ikon ikon={Trash2} size={15} /> Forkast utkast</button>
         {(project.framdriftsplan || (project.fdTasks || []).length > 0) && (
           <span style={{ fontSize: 12, color: '#5d6b80', alignSelf: 'center' }}>Aktivering arkiverer dagens plan (kan gjenopprettes)</span>
         )}
@@ -277,7 +284,7 @@ function ProsjektFramdrift({ project, laster, feil, onGenerer, onAktiver, onFork
   if (laster) {
     return (
       <div className="fd-tom">
-        <div style={{ fontSize: 22 }}>⏳</div>
+        <TomIkon ikon={Loader} size={30} />
         <div style={{ fontWeight: 500 }}>Genererer framdriftsplan-utkast med AI…</div>
         <div style={{ fontSize: 12, color: '#5d6b80' }}>Tar 10–20 sekunder</div>
       </div>
@@ -290,7 +297,7 @@ function ProsjektFramdrift({ project, laster, feil, onGenerer, onAktiver, onFork
       <>
         <FramdriftUtkast project={project} utkast={project.framdriftsplanUtkast}
           onAktiver={onAktiver} onForkast={onForkast} onOppdaterUtkast={onOppdaterUtkast} />
-        {feil && <div className="fd-feil" style={{ marginTop: 10 }}>❌ {feil}</div>}
+        {feil && <div className="fd-feil" style={{ marginTop: 10 }}>{feil}</div>}
       </>
     )
   }
@@ -298,22 +305,23 @@ function ProsjektFramdrift({ project, laster, feil, onGenerer, onAktiver, onFork
   if (!fd) {
     return (
       <div className="fd-tom">
-        <div>🗓 Ingen framdriftsplan ennå</div>
+        <TomIkon ikon={CalendarDays} size={34} />
+        <div>Ingen framdriftsplan ennå</div>
         {kalkyle ? (
           <>
             <div style={{ fontSize: 12, color: '#5d6b80' }}>
               Dette prosjektet har full kalkyle fra tilbudet ({kalkyle.tekst})
             </div>
-            <button className="btn btn-primary" onClick={onGenerer}>✨ Generer utkast fra kalkylen</button>
+            <button className="btn btn-primary" onClick={onGenerer} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={Sparkles} size={15} /> Generer utkast fra kalkylen</button>
           </>
         ) : project.kildeTilbudData ? (
-          <button className="btn btn-primary" onClick={onGenerer}>✨ Generer utkast med AI</button>
+          <button className="btn btn-primary" onClick={onGenerer} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={Sparkles} size={15} /> Generer utkast med AI</button>
         ) : (
           <div style={{ fontSize: 12, color: '#5d6b80' }}>
-            Ingen tilbudsdata på prosjektet — bruk «🔗 Koble til tilbud» i 📦 Tilbudsdata-fanen først.
+            Ingen tilbudsdata på prosjektet — bruk «Koble til tilbud» i Tilbudsdata-fanen først.
           </div>
         )}
-        {feil && <div className="fd-feil" style={{ marginTop: 10 }}>❌ {feil}</div>}
+        {feil && <div className="fd-feil" style={{ marginTop: 10 }}>{feil}</div>}
       </div>
     )
   }
@@ -347,10 +355,10 @@ function ProsjektFramdrift({ project, laster, feil, onGenerer, onAktiver, onFork
       <div className="fd-header">
         {fd._fraFdTasks ? (
           <span className="fd-meta-badge" style={{ background: '#eff6ff', color: '#2563eb', borderColor: '#bfdbfe' }}>
-            ✨ Fra tilbuds-appen
+            <Ikon ikon={Sparkles} size={13} /> Fra tilbuds-appen
           </span>
         ) : (
-          <span className="fd-meta-badge">✨ AI-generert</span>
+          <span className="fd-meta-badge"><Ikon ikon={Sparkles} size={13} /> AI-generert</span>
         )}
         <span className="fd-meta">
           {generertDato ? new Date(generertDato).toLocaleDateString('nb-NO') : ''}
@@ -360,13 +368,13 @@ function ProsjektFramdrift({ project, laster, feil, onGenerer, onAktiver, onFork
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
           {(kalkyle || project.kildeTilbudData) && (
             <button className="btn btn-sm" onClick={onGenerer}
-              title="Lager et nytt UTKAST fra kalkylen — dagens plan røres ikke før du aktiverer">
-              ✨ Generer nytt utkast
+              title="Lager et nytt UTKAST fra kalkylen — dagens plan røres ikke før du aktiverer" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Ikon ikon={Sparkles} size={14} /> Generer nytt utkast
             </button>
           )}
           {(project.framdriftsplanHistorikk || []).length > 0 && (
-            <button className="btn btn-sm" onClick={() => setVisHistorikk(v => !v)}>
-              🗄 {project.framdriftsplanHistorikk.length}
+            <button className="btn btn-sm" onClick={() => setVisHistorikk(v => !v)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Ikon ikon={Archive} size={14} /> {project.framdriftsplanHistorikk.length}
             </button>
           )}
         </div>
@@ -376,18 +384,18 @@ function ProsjektFramdrift({ project, laster, feil, onGenerer, onAktiver, onFork
         <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: 8, padding: 10, margin: '8px 0', fontSize: 12.5 }}>
           <div style={{ fontWeight: 500, marginBottom: 4 }}>Tidligere planer (arkivert ved aktivering — slettes aldri):</div>
           {project.framdriftsplanHistorikk.map((h, i) => (
-            <div key={i} style={{ padding: '3px 0', color: '#5d6b80' }}>
-              🗄 {h.arkivertDato ? new Date(h.arkivertDato).toLocaleDateString('nb-NO') : '?'} av {h.arkivertAv || '?'} — {h.fraFdTasks ? `${(h.fdTasks || []).length} faser (fra tilbuds-appen)` : `${(h.faser || []).length} faser${h.generertDato ? `, generert ${new Date(h.generertDato).toLocaleDateString('nb-NO')}` : ''}`}
+            <div key={i} style={{ padding: '3px 0', color: '#5d6b80', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Ikon ikon={Archive} size={13} /> {h.arkivertDato ? new Date(h.arkivertDato).toLocaleDateString('nb-NO') : '?'} av {h.arkivertAv || '?'} — {h.fraFdTasks ? `${(h.fdTasks || []).length} faser (fra tilbuds-appen)` : `${(h.faser || []).length} faser${h.generertDato ? `, generert ${new Date(h.generertDato).toLocaleDateString('nb-NO')}` : ''}`}
             </div>
           ))}
         </div>
       )}
 
-      {feil && <div className="fd-feil">❌ {feil}</div>}
+      {feil && <div className="fd-feil">{feil}</div>}
 
       {advarsler.length > 0 && (
         <div className="fd-advarsler">
-          {advarsler.map((a, i) => <div key={i} className="fd-advarsel">⚠️ {a}</div>)}
+          {advarsler.map((a, i) => <div key={i} className="fd-advarsel"><Ikon ikon={TriangleAlert} size={13} /> {a}</div>)}
         </div>
       )}
 
@@ -409,7 +417,7 @@ function ProsjektFramdrift({ project, laster, feil, onGenerer, onAktiver, onFork
                     onClick={() => setValgtFase(v => v?.id === fase.id ? null : fase)}
                     title={fase.navn}
                   >
-                    {fase.kritisk && <span style={{ marginRight: 2 }}>🔴</span>}
+                    {fase.kritisk && <Ikon ikon={CircleAlert} size={12} farge="var(--danger)" style={{ marginRight: 2 }} />}
                     {fase.navn}
                   </div>
                   <div className="fd-gantt-track" style={{ '--uke-w': `${100 / visUker}%` }}>
@@ -439,7 +447,7 @@ function ProsjektFramdrift({ project, laster, feil, onGenerer, onAktiver, onFork
                     style={{ left: `${leftPct}%` }}
                     title={m.beskrivelse || m.navn}
                   >
-                    <span className="fd-gantt-mil-pin">{m.kritisk ? '📌' : '🚩'}</span>
+                    <span className="fd-gantt-mil-pin"><Ikon ikon={m.kritisk ? Pin : Flag} size={13} farge={m.kritisk ? 'var(--danger)' : undefined} /></span>
                     <span className="fd-gantt-mil-label">{m.navn}</span>
                   </div>
                 )
@@ -457,7 +465,7 @@ function ProsjektFramdrift({ project, laster, feil, onGenerer, onAktiver, onFork
               className={`fd-milepael-chip${m.kritisk ? ' fd-milepael-chip--kritisk' : ''}`}
               title={m.beskrivelse}
             >
-              {m.kritisk ? '📌' : '🚩'} U{m.uke} — {m.navn}
+              <Ikon ikon={m.kritisk ? Pin : Flag} size={12} /> U{m.uke} — {m.navn}
             </span>
           ))}
         </div>
@@ -471,10 +479,10 @@ function ProsjektFramdrift({ project, laster, feil, onGenerer, onAktiver, onFork
                 <span className="fd-fase-modal-fag-dot" style={{ background: fagFarge(valgtFase.fag) }} />
                 {valgtFase.navn}
                 {valgtFase.kritisk && (
-                  <span style={{ marginLeft: 8, color: '#dc2626', fontSize: 12 }}>🔴 Kritisk fase</span>
+                  <span style={{ marginLeft: 8, color: '#dc2626', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 4 }}><Ikon ikon={CircleAlert} size={13} /> Kritisk fase</span>
                 )}
               </div>
-              <button className="btn-icon" onClick={() => setValgtFase(null)}>✕</button>
+              <button className="btn-icon" onClick={() => setValgtFase(null)}><Ikon ikon={X} size={15} /></button>
             </div>
             <div className="fd-fase-modal-grid">
               <div className="fd-fase-modal-felt">
@@ -556,7 +564,7 @@ function Modal({ title, onClose, children }) {
       <div className="modal" onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <h3>{title}</h3>
-          <button className="btn-icon" onClick={onClose}>✕</button>
+          <button className="btn-icon" onClick={onClose}><Ikon ikon={X} size={15} /></button>
         </div>
         {children}
       </div>
@@ -587,7 +595,7 @@ function normStatus(s) {
 function mergeVisVerdi(v) {
   if (v === undefined || v === null || v === '') return '(tomt)';
   if (Array.isArray(v)) return `${v.length} stk`;
-  if (typeof v === 'object') return '✓ (data)';
+  if (typeof v === 'object') return '(data)';
   if (typeof v === 'number') return v.toLocaleString('nb-NO');
   const s = String(v);
   return s.length > 42 ? s.slice(0, 40) + '…' : s;
@@ -663,7 +671,7 @@ function MergeModal({ startProsjekt, forslagId, alleProsjekter, tildelingerByPro
   const kanSlåSammen = begge && (!beggeHarTilbud || !!tilbudKilde);
 
   return (
-    <Modal title="🔗 Slå sammen prosjekter" onClose={onLukk}>
+    <Modal title="Slå sammen prosjekter" onClose={onLukk}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxHeight: '70vh', overflowY: 'auto' }}>
 
         {!sekundar && (
@@ -680,11 +688,11 @@ function MergeModal({ startProsjekt, forslagId, alleProsjekter, tildelingerByPro
               {kandidater.slice(0, 40).map(({ prosjekt: p, erForslag }) => (
                 <button key={p.id} className="btn" style={{ textAlign: 'left', display: 'flex', gap: 8, alignItems: 'center' }}
                   onClick={() => setSekundarId(p.id)}>
-                  {erForslag && <span title="Fuzzy-forslag: lignende adresse/kunde" style={{ flexShrink: 0 }}>🔗</span>}
+                  {erForslag && <Ikon ikon={Link2} size={14} style={{ flexShrink: 0 }} />}
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {p.adresse || p.navn}
                     {p.kunde?.navn ? <span style={{ color: '#5d6b80' }}> · {p.kunde.navn}</span> : null}
-                    {harTilbud(p) ? <span style={{ color: '#15803d' }}> · 📦 tilbud</span> : null}
+                    {harTilbud(p) ? <span style={{ color: '#15803d' }}> · tilbud</span> : null}
                   </span>
                 </button>
               ))}
@@ -698,18 +706,18 @@ function MergeModal({ startProsjekt, forslagId, alleProsjekter, tildelingerByPro
             {/* Side-om-side med bytt-knapp */}
             <div style={{ display: 'flex', gap: 10, alignItems: 'stretch' }}>
               <div style={{ ...kolonneStil, borderColor: 'var(--accent)', background: 'var(--accent-subtle)' }}>
-                <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--accent)', marginBottom: 4 }}>⭐ HOVEDPROSJEKT (beholdes aktivt)</div>
+                <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--accent)', marginBottom: 4 }}>HOVEDPROSJEKT (beholdes aktivt)</div>
                 <div style={{ fontWeight: 500 }}>{hoved.adresse || hoved.navn}</div>
                 <div style={{ fontSize: 12, color: '#5d6b80', marginTop: 2 }}>
-                  {[normStatus(hoved.status), hoved.kunde?.navn, formaterBelop(hoved.belop), harTilbud(hoved) ? '📦 tilbud' : 'manuelt', `👷 ${antallBemanning} tildelinger`].filter(Boolean).join(' · ')}
+                  {[normStatus(hoved.status), hoved.kunde?.navn, formaterBelop(hoved.belop), harTilbud(hoved) ? 'tilbud' : 'manuelt', `${antallBemanning} tildelinger`].filter(Boolean).join(' · ')}
                 </div>
               </div>
-              <button className="btn btn-sm" title="Bytt hvilken som er hovedprosjekt" onClick={byttHovedOgSekundar} style={{ alignSelf: 'center', flexShrink: 0 }}>⇄ Bytt</button>
+              <button className="btn btn-sm" title="Bytt hvilken som er hovedprosjekt" onClick={byttHovedOgSekundar} style={{ alignSelf: 'center', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5 }}><Ikon ikon={ArrowRight} size={13} style={{ transform: 'scaleX(1)' }} /> Bytt</button>
               <div style={kolonneStil}>
-                <div style={{ fontSize: 11, fontWeight: 500, color: '#5d6b80', marginBottom: 4 }}>📦 SLÅS INN (arkiveres — kan angres)</div>
+                <div style={{ fontSize: 11, fontWeight: 500, color: '#5d6b80', marginBottom: 4 }}>SLÅS INN (arkiveres — kan angres)</div>
                 <div style={{ fontWeight: 500 }}>{sekundar.adresse || sekundar.navn}</div>
                 <div style={{ fontSize: 12, color: '#5d6b80', marginTop: 2 }}>
-                  {[normStatus(sekundar.status), sekundar.kunde?.navn, formaterBelop(sekundar.belop), harTilbud(sekundar) ? '📦 tilbud' : 'manuelt', `👷 ${sekBemanning} tildelinger`].filter(Boolean).join(' · ')}
+                  {[normStatus(sekundar.status), sekundar.kunde?.navn, formaterBelop(sekundar.belop), harTilbud(sekundar) ? 'tilbud' : 'manuelt', `${sekBemanning} tildelinger`].filter(Boolean).join(' · ')}
                 </div>
                 <button className="btn btn-sm" style={{ marginTop: 6 }} onClick={() => { setSekundarId(null); setSøk(''); }}>Velg annet…</button>
               </div>
@@ -731,7 +739,7 @@ function MergeModal({ startProsjekt, forslagId, alleProsjekter, tildelingerByPro
             {/* Begge har tilbud → Stefan velger hvilket som gjelder */}
             {beggeHarTilbud && (
               <div style={{ fontSize: 13, background: 'var(--warning-bg)', border: '1px solid var(--warning-border)', borderRadius: 8, padding: 10 }}>
-                <div style={{ fontWeight: 500, color: 'var(--warning)', marginBottom: 4 }}>⚠ Begge prosjektene har tilbuds-kobling — velg hvilket tilbud som gjelder:</div>
+                <div style={{ fontWeight: 500, color: 'var(--warning)', marginBottom: 4 }}>Begge prosjektene har tilbuds-kobling — velg hvilket tilbud som gjelder:</div>
                 <label style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer', padding: '2px 0' }}>
                   <input type="radio" name="merge-tilbud" checked={tilbudKilde === 'hoved'} onChange={() => setTilbudKilde('hoved')} />
                   Tilbudet på {hoved.adresse || hoved.navn} ({formaterBelop(hoved.belop) || 'uten beløp'})
@@ -748,14 +756,14 @@ function MergeModal({ startProsjekt, forslagId, alleProsjekter, tildelingerByPro
               <div style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {effektivKilde === 'sekundar' && (
                   <div style={{ background: 'var(--success-bg)', border: '1px solid var(--success-border)', borderRadius: 8, padding: 10 }}>
-                    <div style={{ fontWeight: 500, color: 'var(--success)', marginBottom: 4 }}>📦 Tilbudsdata (følger ALLTID med fra tilbudet):</div>
+                    <div style={{ fontWeight: 500, color: 'var(--success)', marginBottom: 4 }}>Tilbudsdata (følger ALLTID med fra tilbudet):</div>
                     {tilbudsEndringer.length === 0 && <div style={{ color: '#5d6b80' }}>Ingen felter endres — hovedprosjektet har allerede tilbudets verdier.</div>}
                     {tilbudsEndringer.map(k => (
                       <div key={k.felt} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '2px 0', flexWrap: 'wrap' }}>
                         <span>
                           + <b>{k.felt}</b>:{' '}
                           {k.fraVerdi !== undefined && !('' + k.fraVerdi === '') ? (
-                            <><span style={{ textDecoration: 'line-through', color: 'var(--warning)' }}>{mergeVisVerdi(k.fraVerdi)} manuell</span> → {mergeVisVerdi(k.tilVerdi)} fra tilbud</>
+                            <><span style={{ textDecoration: 'line-through', color: 'var(--warning)' }}>{mergeVisVerdi(k.fraVerdi)} manuell</span> {"→"} {mergeVisVerdi(k.tilVerdi)} fra tilbud</>
                           ) : (
                             <>{mergeVisVerdi(k.tilVerdi)}</>
                           )}
@@ -771,7 +779,7 @@ function MergeModal({ startProsjekt, forslagId, alleProsjekter, tildelingerByPro
                     ))}
                     {Object.entries(beholdManuell).filter(([, v]) => v).map(([felt]) => (
                       <div key={felt} style={{ color: '#5d6b80', padding: '2px 0' }}>
-                        ✋ <b>{felt}</b>: beholder manuell verdi {mergeVisVerdi(hoved[felt])}
+                        <b>{felt}</b>: beholder manuell verdi {mergeVisVerdi(hoved[felt])}
                         {' '}<label style={{ display: 'inline-flex', gap: 4, alignItems: 'center', cursor: 'pointer', fontSize: 12 }}>
                           <input type="checkbox" checked onChange={() => setBeholdManuell(b => ({ ...b, [felt]: false }))} /> behold manuell verdi
                         </label>
@@ -780,16 +788,16 @@ function MergeModal({ startProsjekt, forslagId, alleProsjekter, tildelingerByPro
                   </div>
                 )}
                 <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
-                  <div style={{ fontWeight: 500, marginBottom: 4 }}>👷 Driftsdata (hovedprosjektet beholder sitt):</div>
-                  <div>✓ Bemanning ({antallBemanning}{sekBemanning > 0 ? ` + ${sekBemanning} flyttes over` : ''}), status «{SAVE_LABELS[normStatus(hoved.status)] || hoved.status}», datoer, farge, prosjektleder</div>
+                  <div style={{ fontWeight: 500, marginBottom: 4 }}>Driftsdata (hovedprosjektet beholder sitt):</div>
+                  <div>Bemanning ({antallBemanning}{sekBemanning > 0 ? ` + ${sekBemanning} flyttes over` : ''}), status «{SAVE_LABELS[normStatus(hoved.status)] || hoved.status}», datoer, farge, prosjektleder</div>
                   {utfyllinger.length > 0 && (
                     <div style={{ marginTop: 4, color: '#5d6b80' }}>
                       Tomme felter fylles fra sekundær: {utfyllinger.map(k => k.felt).join(', ')}
                     </div>
                   )}
                 </div>
-                <div style={{ color: 'var(--success)', fontWeight: 500 }}>
-                  🔒 Ingenting slettes. Sekundærprosjektet arkiveres med all data intakt og kan gjenopprettes med ett klikk.
+                <div style={{ color: 'var(--success)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Ikon ikon={Lock} size={13} /> Ingenting slettes. Sekundærprosjektet arkiveres med all data intakt og kan gjenopprettes med ett klikk.
                 </div>
               </div>
             )}
@@ -805,7 +813,7 @@ function MergeModal({ startProsjekt, forslagId, alleProsjekter, tildelingerByPro
               adresse: valgtAdresse ?? hoved.adresse,
               tilbudKilde: effektivKilde, beholdManuell,
             })}>
-            🔗 Slå sammen
+            <Ikon ikon={Link2} size={15} /> Slå sammen
           </button>
         </div>
       </div>
@@ -842,7 +850,7 @@ function KobleDialog({ prosjekt, befaringer, onUtfør, onLukk }) {
   const nyeFelter = (preview?.kopierteFelter || []).filter(k => erTom(k.fraVerdi));
 
   return (
-    <Modal title="🔗 Koble prosjekt til tilbud" onClose={onLukk}>
+    <Modal title="Koble prosjekt til tilbud" onClose={onLukk}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '70vh', overflowY: 'auto', fontSize: 13 }}>
         <div style={{ color: '#5d6b80' }}>
           Koble <b>{prosjekt.adresse || prosjekt.navn}</b> til et tilbud fra tilbuds-appen.
@@ -857,7 +865,7 @@ function KobleDialog({ prosjekt, befaringer, onUtfør, onLukk }) {
               {kandidater.slice(0, 30).map(({ b, score }) => (
                 <button key={b.id} className="btn" style={{ textAlign: 'left', display: 'flex', gap: 8, alignItems: 'center' }}
                   onClick={() => setValgtBefId(b.id)}>
-                  {score >= 30 && <span title="Fuzzy-forslag: lignende adresse/kunde">🔗</span>}
+                  {score >= 30 && <Ikon ikon={Link2} size={14} />}
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {b.adresse || b.kontaktNavn}
                     {b.kontaktNavn ? <span style={{ color: '#5d6b80' }}> · {b.kontaktNavn}</span> : null}
@@ -886,14 +894,14 @@ function KobleDialog({ prosjekt, befaringer, onUtfør, onLukk }) {
             </div>
 
             <div style={{ background: 'var(--success-bg)', border: '1px solid var(--success-border)', borderRadius: 8, padding: 10 }}>
-              <div style={{ fontWeight: 500, color: 'var(--success)', marginBottom: 4 }}>📦 Kopieres inn fra tilbudet:</div>
+              <div style={{ fontWeight: 500, color: 'var(--success)', marginBottom: 4 }}>Kopieres inn fra tilbudet:</div>
               {nyeFelter.length > 0 && (
                 <div style={{ padding: '2px 0' }}>+ {nyeFelter.map(k => k.felt).join(', ')}</div>
               )}
               {erstattede.map(k => (
                 <div key={k.felt} style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '2px 0', flexWrap: 'wrap' }}>
                   <span>
-                    + <b>{k.felt}</b>: <span style={{ textDecoration: 'line-through', color: 'var(--warning)' }}>{mergeVisVerdi(k.fraVerdi)} manuell</span> → {mergeVisVerdi(k.tilVerdi)} fra tilbud
+                    + <b>{k.felt}</b>: <span style={{ textDecoration: 'line-through', color: 'var(--warning)' }}>{mergeVisVerdi(k.fraVerdi)} manuell</span> {"→"} {mergeVisVerdi(k.tilVerdi)} fra tilbud
                   </span>
                   <label style={{ display: 'inline-flex', gap: 4, alignItems: 'center', color: '#5d6b80', cursor: 'pointer', fontSize: 12 }}>
                     <input type="checkbox" checked={!!beholdManuell[k.felt]}
@@ -904,7 +912,7 @@ function KobleDialog({ prosjekt, befaringer, onUtfør, onLukk }) {
               ))}
               {Object.entries(beholdManuell).filter(([, v]) => v).map(([felt]) => (
                 <div key={felt} style={{ color: '#5d6b80', padding: '2px 0' }}>
-                  ✋ <b>{felt}</b>: beholder manuell verdi
+                  <b>{felt}</b>: beholder manuell verdi
                   {' '}<label style={{ display: 'inline-flex', gap: 4, alignItems: 'center', cursor: 'pointer', fontSize: 12 }}>
                     <input type="checkbox" checked onChange={() => setBeholdManuell(bm => ({ ...bm, [felt]: false }))} /> behold manuell verdi
                   </label>
@@ -912,8 +920,8 @@ function KobleDialog({ prosjekt, befaringer, onUtfør, onLukk }) {
               ))}
             </div>
             <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
-              ✓ Bemanning, datoer, status, farge, prosjektleder, KS og framdrift røres <b>ikke</b>.
-              «Fjern kobling» i ⋯-menyen gjenoppretter alt nøyaktig som før.
+              Bemanning, datoer, status, farge, prosjektleder, KS og framdrift røres <b>ikke</b>.
+              «Fjern kobling» i rad-menyen gjenoppretter alt nøyaktig som før.
             </div>
           </>
         )}
@@ -921,8 +929,8 @@ function KobleDialog({ prosjekt, befaringer, onUtfør, onLukk }) {
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
           <button className="btn" onClick={onLukk}>Avbryt</button>
           <button className="btn btn-primary" disabled={!valgtBef}
-            onClick={() => onUtfør({ befaringId: valgtBef.id, beholdManuell })}>
-            🔗 Koble til
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => onUtfør({ befaringId: valgtBef.id, beholdManuell })}>
+            <Ikon ikon={Link2} size={15} /> Koble til
           </button>
         </div>
       </div>
@@ -971,14 +979,14 @@ function KalkyleVsBemanningSeksjon({ prosjekt, tildelinger, ansatteById }) {
 
   return (
     <div style={{ border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '10px 12px', marginBottom: 14, fontSize: 13 }}>
-      <div style={{ fontWeight: 500, marginBottom: 6 }}>📊 Kalkyle vs. bemannet</div>
+      <div style={{ fontWeight: 500, marginBottom: 6 }}>Kalkyle vs. bemannet</div>
       {beregning.rader.map(r => (
         <div key={r.fag} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 0' }}>
-          <span style={{ flex: '0 0 84px' }}>{r.bemannetTimer === 0 ? '⚠ ' : ''}{r.label}</span>
+          <span style={{ flex: '0 0 84px', display: 'inline-flex', alignItems: 'center', gap: 4 }}>{r.bemannetTimer === 0 ? <Ikon ikon={TriangleAlert} size={12} farge="var(--warning)" /> : null}{r.label}</span>
           <Bar pct={r.pct} />
           <span style={{ color: '#5d6b80', whiteSpace: 'nowrap' }}>{r.bemannetTimer} / {r.kalkyleTimer} t</span>
           <span style={{ fontWeight: 500, color: r.pct >= 100 ? 'var(--success)' : r.pct >= 50 ? 'var(--text-secondary)' : 'var(--warning)', marginLeft: 'auto' }}>
-            {r.pct >= 100 ? '✓' : `${r.pct}%`}
+            {r.pct >= 100 ? <Ikon ikon={Check} size={14} /> : `${r.pct}%`}
           </span>
         </div>
       ))}
@@ -994,8 +1002,8 @@ function KalkyleVsBemanningSeksjon({ prosjekt, tildelinger, ansatteById }) {
         <span style={{ color: '#5d6b80' }}> (tildelinger × 7,5 t/dag, man–fre)</span>
       </div>
       {beregning.manglerRader.map((m, i) => (
-        <div key={i} style={{ color: 'var(--warning)', fontWeight: 500, marginTop: 2 }}>
-          ⚠ {m.label} mangler ~{m.manglerTimer} t (≈{m.ukesverk.toLocaleString('nb-NO')} ukesverk)
+        <div key={i} style={{ color: 'var(--warning)', fontWeight: 500, marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
+          <Ikon ikon={TriangleAlert} size={13} /> {m.label} mangler ~{m.manglerTimer} t (≈{m.ukesverk.toLocaleString('nb-NO')} ukesverk)
         </div>
       ))}
     </div>
@@ -1059,16 +1067,16 @@ function ProsjektKSPlanKnapp({ project, onOppdater }) {
 
   const forslatteMaler = maler ? lagForslag(maler) : []
   const FASER = [
-    { id: 'oppstart', label: '📅 Oppstart', farge: '#3b82f6' },
-    { id: 'bygg', label: '🔨 Bygg-fase', farge: '#f59e0b' },
-    { id: 'slutt', label: '✅ Sluttkontroll', farge: '#16a34a' },
+    { id: 'oppstart', label: 'Oppstart', ikon: CalendarDays, farge: '#3b82f6' },
+    { id: 'bygg', label: 'Bygg-fase', ikon: Hammer, farge: '#f59e0b' },
+    { id: 'slutt', label: 'Sluttkontroll', ikon: CircleCheck, farge: '#16a34a' },
   ]
 
   return (
     <>
       <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 10 }}>
-        <button className="btn btn-primary" onClick={aapneForslag} disabled={laster} style={{ fontSize: 13 }}>
-          {laster ? '⏳ Laster...' : '✨ Foreslå KS-sjekkliste-plan'}
+        <button className="btn btn-primary" onClick={aapneForslag} disabled={laster} style={{ fontSize: 13, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          {laster ? 'Laster…' : <><Ikon ikon={Sparkles} size={15} /> Foreslå KS-sjekkliste-plan</>}
         </button>
         {ksSjekklister.length > 0 && (
           <span style={{ fontSize: 12, color: '#5d6b80' }}>{ksSjekklister.length} sjekklister tildelt</span>
@@ -1081,8 +1089,8 @@ function ProsjektKSPlanKnapp({ project, onOppdater }) {
           <div style={{ background: '#fff', borderRadius: 16, maxWidth: 520, width: '100%', padding: '22px 20px', maxHeight: '88vh', overflow: 'auto', boxShadow: '0 20px 48px rgba(0,0,0,.25)' }}
             onClick={e => e.stopPropagation()}>
             <div style={{ fontWeight: 500, fontSize: 17, marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
-              ✨ Foreslått sjekkliste-plan
-              <button className="btn-icon" onClick={() => setVisModal(false)}>✕</button>
+              <IkonTekst ikon={Sparkles} size={16}>Foreslått sjekkliste-plan</IkonTekst>
+              <button className="btn-icon" onClick={() => setVisModal(false)}><Ikon ikon={X} size={15} /></button>
             </div>
             <div style={{ fontSize: 13, color: '#5d6b80', marginBottom: 16 }}>
               Basert på <strong>"{project.jobbType || project.navn}"</strong> — juster gjerne utvalget
@@ -1100,7 +1108,7 @@ function ProsjektKSPlanKnapp({ project, onOppdater }) {
                         <input type="checkbox" checked={er || valgte.has(m.id)} disabled={er}
                           onChange={e => { const s = new Set(valgte); if (e.target.checked) s.add(m.id); else s.delete(m.id); setValgte(s) }} />
                         <span style={{ fontSize: 13, color: er ? '#5d6b80' : '#1e293b', flex: 1 }}>{m.navn}</span>
-                        {er ? <span style={{ fontSize: 10, color: '#5d6b80' }}>✓</span> : <span style={{ fontSize: 10, color: '#5d6b80' }}>{m.punkter?.length || 0} pkt</span>}
+                        {er ? <Ikon ikon={Check} size={11} style={{ color: '#5d6b80' }} /> : <span style={{ fontSize: 10, color: '#5d6b80' }}>{m.punkter?.length || 0} pkt</span>}
                       </label>
                     )
                   })}
@@ -1110,7 +1118,7 @@ function ProsjektKSPlanKnapp({ project, onOppdater }) {
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16, borderTop: '1px solid #f1f5f9', paddingTop: 14 }}>
               <button className="btn" onClick={() => setVisModal(false)}>Avbryt</button>
               <button className="btn btn-primary" disabled={valgte.size === 0} onClick={bekreft}>
-                ✅ Legg til {valgte.size} sjekklister
+                <Ikon ikon={Check} size={15} /> Legg til {valgte.size} sjekklister
               </button>
             </div>
           </div>
@@ -1229,7 +1237,7 @@ export default function Prosjekter({ onNavigate = null }) {
   }
 
   // ═══ Slå sammen duplikater (SPEC-merge-prosjekter.md) ═══
-  // 🔒 Ingen slette-kode: kopierer til hoved + arkiverer sekundær. Alt angres.
+  // Ingen slette-kode: kopierer til hoved + arkiverer sekundær. Alt angres.
   const [mergeFor, setMergeFor] = useState(null);      // {prosjekt, forslagId}
   const [mergeToast, setMergeToast] = useState(null);  // {tekst, hovedId, sekundarId}
   useEffect(() => {
@@ -1285,7 +1293,7 @@ export default function Prosjekter({ onNavigate = null }) {
     setMergeFor(null);
     setValgtId(null);
     setMergeToast({
-      tekst: `🔗 Slo sammen «${sekundar.adresse || sekundar.navn}» inn i «${hoved.adresse || hoved.navn}»`,
+      tekst: `Slo sammen «${sekundar.adresse || sekundar.navn}» inn i «${hoved.adresse || hoved.navn}»`,
       hovedId: hoved.id, sekundarId: sekundar.id,
     });
   }
@@ -1401,12 +1409,12 @@ export default function Prosjekter({ onNavigate = null }) {
       return { key, label, ikon, farge, dempet, teller: arr.length, sum: dempet ? 0 : sum(arr) };
     };
     return [
-      lag('aktiv', 'Pågående', '🔨', STATUS_COLORS.aktiv),
-      lag('godkjent', 'Godkjent', '✅', STATUS_COLORS.godkjent),
-      lag('jobber_med', 'Vi jobber med', '📋', STATUS_COLORS.jobber_med),
-      lag('fullfort', 'Fullført', '🏁', '#5d6b80', true),
+      lag('aktiv', 'Pågående', <Ikon ikon={Hammer} size={14} />, STATUS_COLORS.aktiv),
+      lag('godkjent', 'Godkjent', <Ikon ikon={CircleCheck} size={14} />, STATUS_COLORS.godkjent),
+      lag('jobber_med', 'Vi jobber med', <Ikon ikon={ClipboardList} size={14} />, STATUS_COLORS.jobber_med),
+      lag('fullfort', 'Fullført', <Ikon ikon={Flag} size={14} />, '#5d6b80', true),
       {
-        key: 'arkivert', label: 'Arkivert', ikon: '🗄', farge: '#5d6b80', dempet: true,
+        key: 'arkivert', label: 'Arkivert', ikon: <Ikon ikon={Archive} size={14} />, farge: '#5d6b80', dempet: true,
         teller: alleProsjekter.filter(p => p.arkivert).length, sum: 0,
       },
     ];
@@ -1592,7 +1600,7 @@ export default function Prosjekter({ onNavigate = null }) {
         <h2>Prosjekter <span className="count-badge">{state.prosjekter.length}</span></h2>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={() => setFullscreen(f => !f)} title={fullscreen ? 'Avslutt fullskjerm' : 'Fullskjerm'}>
-            {fullscreen ? '✕ Lukk' : '⛶ Fullskjerm'}
+            {fullscreen ? <><Ikon ikon={X} size={14} /> Lukk</> : <><Ikon ikon={Maximize} size={14} /> Fullskjerm</>}
           </button>
           {/* Dedup-knappen er SKJULT per SPEC (sletter fysisk = farlig).
               Koden beholdes — endre `false` til `isAdmin` for å vise igjen. */}
@@ -1602,7 +1610,7 @@ export default function Prosjekter({ onNavigate = null }) {
               onClick={() => dedupPanel ? setDedupPanel(null) : kjorDedup(true)}
               title="Finn og rydd opp duplikate prosjekter"
             >
-              🔧 Dedup
+              <Ikon ikon={Wrench} size={14} /> Dedup
             </button>
           )}
           <button className="btn btn-primary" onClick={openNew}>+ Nytt prosjekt</button>
@@ -1613,14 +1621,14 @@ export default function Prosjekter({ onNavigate = null }) {
       {isAdmin && dedupPanel && (
         <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 16px', margin: '0 0 12px 0', fontSize: 13 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <strong style={{ color: '#1e293b' }}>🔧 Dedup prosjekter</strong>
-            <button onClick={() => setDedupPanel(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#5d6b80' }}>✕</button>
+            <strong style={{ color: '#1e293b' }}>Dedup prosjekter</strong>
+            <button onClick={() => setDedupPanel(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#5d6b80' }}><Ikon ikon={X} size={14} /></button>
           </div>
 
           {dedupPanel.loading && <div style={{ color: '#5d6b80' }}>⏳ Henter duplikater...</div>}
-          {dedupPanel.error && <div style={{ color: '#dc2626' }}>⚠️ Feil: {dedupPanel.error}</div>}
+          {dedupPanel.error && <div style={{ color: '#dc2626' }}>Feil: {dedupPanel.error}</div>}
           {!dedupPanel.loading && !dedupPanel.error && dedupPanel.funnetDuplikater === 0 && (
-            <div style={{ color: '#15803d' }}>✅ Ingen duplikater funnet</div>
+            <div style={{ color: '#15803d' }}>Ingen duplikater funnet</div>
           )}
 
           {!dedupPanel.loading && !dedupPanel.error && dedupPanel.duplikatGrupper > 0 && (
@@ -1641,7 +1649,7 @@ export default function Prosjekter({ onNavigate = null }) {
                     </div>
                     {g.slett.map(s => (
                       <div key={s.id} style={{ color: '#dc2626', fontSize: 12, paddingLeft: 10 }}>
-                        🗑 {s.navn} ({s.id}) · {s.status} · {s.refs} ref{s.harFramdrift ? ' · framdrift' : ''}
+                        {s.navn} ({s.id}) · {s.status} · {s.refs} ref{s.harFramdrift ? ' · framdrift' : ''}
                       </div>
                     ))}
                   </div>
@@ -1655,11 +1663,11 @@ export default function Prosjekter({ onNavigate = null }) {
                   }}
                   style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 14px', cursor: 'pointer', fontWeight: 500 }}
                 >
-                  🗑 Slett {dedupPanel.skalSlettes} duplikater
+                  Slett {dedupPanel.skalSlettes} duplikater
                 </button>
               )}
               {dedupPanel.dry === false && (
-                <div style={{ color: '#15803d', fontWeight: 500 }}>✅ Slettet {dedupPanel.slettet} duplikater · {dedupPanel.gjenværende} prosjekter igjen</div>
+                <div style={{ color: '#15803d', fontWeight: 500 }}>Slettet {dedupPanel.slettet} duplikater · {dedupPanel.gjenværende} prosjekter igjen</div>
               )}
             </>
           )}
@@ -1672,14 +1680,14 @@ export default function Prosjekter({ onNavigate = null }) {
       <div>
         {overFristIds.size > 0 && (
           <VarselBanner
-            ikon="⚠" tone="roed" aktiv={varselFilter === 'frist'}
+            tone="roed" aktiv={varselFilter === 'frist'}
             tekst={`${overFristIds.size} over frist`}
             onClick={() => setVarselFilter(f => f === 'frist' ? null : 'frist')}
           />
         )}
         {utenBemanningIds.size > 0 && (
           <VarselBanner
-            ikon="👷" tone="gul" aktiv={varselFilter === 'bemanning'}
+            ikon={Users} tone="gul" aktiv={varselFilter === 'bemanning'}
             tekst={`${utenBemanningIds.size} uten bemanning neste uke`}
             onClick={() => setVarselFilter(f => f === 'bemanning' ? null : 'bemanning')}
           />
@@ -1693,7 +1701,7 @@ export default function Prosjekter({ onNavigate = null }) {
       <div className="toolbar" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
         <input
           className="search-input"
-          placeholder="🔍 Søk navn, adresse, type, leder..."
+          placeholder="Søk navn, adresse, type, leder…"
           value={search}
           onChange={e => setSearch(e.target.value)}
           style={{ maxWidth: 280 }}
@@ -1717,7 +1725,7 @@ export default function Prosjekter({ onNavigate = null }) {
           );
         })()}
         <span style={{ fontSize: 12, color: '#5d6b80' }}>Sorter:</span>
-        {[['handling', '⚠ Trenger handling'], ['tittel', 'A–Å'], ['frist', 'Frist'], ['sum', 'Sum']].map(([key, label]) => (
+        {[['handling', 'Trenger handling'], ['tittel', 'A–Å'], ['frist', 'Frist'], ['sum', 'Sum']].map(([key, label]) => (
           <button
             key={key}
             className="btn btn-sm"
@@ -1728,7 +1736,7 @@ export default function Prosjekter({ onNavigate = null }) {
           </button>
         ))}
         <span style={{ fontSize: 12, color: '#5d6b80', marginLeft: 8 }}>Visning:</span>
-        {[['liste', '☰ Liste'], ['gantt', '📊 Gantt']].map(([key, label]) => (
+        {[['liste', <><Ikon ikon={List} size={13} /> Liste</>], ['gantt', <><Ikon ikon={ChartGantt} size={13} /> Gantt</>]].map(([key, label]) => (
           <button
             key={key}
             className="btn btn-sm"
@@ -1774,7 +1782,7 @@ export default function Prosjekter({ onNavigate = null }) {
             </div>
             {(() => {
               // ALLE prosjekter i fanen vises — samme utvalg som Liste-visningen.
-              // Datoer utenfor vinduet klemmes til kanten med ◂/▸-markør;
+              // Datoer utenfor vinduet klemmes til kanten med pil-markør;
               // mangler én av datoene brukes den andre for begge.
               return (
                 <>
@@ -1800,25 +1808,25 @@ export default function Prosjekter({ onNavigate = null }) {
                         <div style={{ flex: 1, position: 'relative', height: '100%' }}>
                           <div style={{ position: 'absolute', left: iDagPct + '%', top: 0, bottom: 0, width: 2, background: '#dc2626', opacity: .6 }} />
                           {utenDato && (
-                            <span style={{ position: 'absolute', left: 8, top: 9, fontSize: 11, color: '#5d6b80', fontStyle: 'italic' }}>
-                              🗓 ingen datoer — sett via Rediger
+                            <span style={{ position: 'absolute', left: 8, top: 9, fontSize: 11, color: '#5d6b80', fontStyle: 'italic', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <Ikon ikon={CalendarDays} size={12} /> ingen datoer — sett via Rediger
                             </span>
                           )}
                           {heltFoer && (
                             <span title={datoTittel} style={{ position: 'absolute', left: 4, top: 8, fontSize: 12, fontWeight: 500, color: p.farge || '#1d4ed8' }}>
-                              ◂ {formatDate(e)}
+                              <Ikon ikon={ChevronLeft} size={12} /> {formatDate(e)}
                             </span>
                           )}
                           {heltEtter && (
                             <span title={datoTittel} style={{ position: 'absolute', right: 4, top: 8, fontSize: 12, fontWeight: 500, color: p.farge || '#1d4ed8' }}>
-                              {formatDate(s)} ▸
+                              {formatDate(s)} <Ikon ikon={ChevronRight} size={12} />
                             </span>
                           )}
                           {!utenDato && !heltFoer && !heltEtter && (
                             <div title={datoTittel}
                               style={{ position: 'absolute', left: v + '%', width: b + '%', top: 7, height: 20, background: p.farge || '#2563eb', borderRadius: 5, opacity: .9 }}>
-                              {s < startIso && <span style={{ position: 'absolute', left: 3, top: 2, fontSize: 11, color: '#fff' }}>◂</span>}
-                              {e > sluttIso && <span style={{ position: 'absolute', right: 3, top: 2, fontSize: 11, color: '#fff' }}>▸</span>}
+                              {s < startIso && <span style={{ position: 'absolute', left: 3, top: 2, fontSize: 11, color: '#fff' }}><Ikon ikon={ChevronLeft} size={11} /></span>}
+                              {e > sluttIso && <span style={{ position: 'absolute', right: 3, top: 2, fontSize: 11, color: '#fff' }}><Ikon ikon={ChevronRight} size={11} /></span>}
                             </div>
                           )}
                         </div>
@@ -1863,19 +1871,19 @@ export default function Prosjekter({ onNavigate = null }) {
             <KompaktRad
               key={p.id}
               tittel={visAdresse}
-              undertittel={kundeNavn ? `👤 ${kundeNavn}` : null}
-              varsel={p.mergetInn ? `🔗 Slått sammen med ${mergetHoved ? (mergetHoved.adresse || mergetHoved.navn) : 'annet prosjekt'}` : null}
+              undertittel={kundeNavn || null}
+              varsel={p.mergetInn ? `Slått sammen med ${mergetHoved ? (mergetHoved.adresse || mergetHoved.navn) : 'annet prosjekt'}` : null}
               varselFarge={p.mergetInn ? '#0e7490' : null}
               meta={[
-                p.arkivertDato ? `🗄 Arkivert ${formatDate(p.arkivertDato.slice(0, 10))}` : '🗄 Arkivert',
+                p.arkivertDato ? `Arkivert ${formatDate(p.arkivertDato.slice(0, 10))}` : 'Arkivert',
                 p.arkivertAv ? `av ${p.arkivertAv}` : null,
               ]}
               hoyre={[belopVis]}
               meny={[
                 p.mergetInn
-                  ? { ikon: '↩', label: 'Angre sammenslåing', onClick: () => angreMerge(p.mergetInn.hovedId, p.id) }
-                  : { ikon: '↩', label: 'Gjenopprett', onClick: () => gjenopprettProsjekt(p) },
-                { ikon: '✏️', label: 'Rediger', onClick: () => openEdit(p) },
+                  ? { ikon: <Ikon ikon={Undo2} size={15} />, label: 'Angre sammenslåing', onClick: () => angreMerge(p.mergetInn.hovedId, p.id) }
+                  : { ikon: <Ikon ikon={Undo2} size={15} />, label: 'Gjenopprett', onClick: () => gjenopprettProsjekt(p) },
+                { ikon: <Ikon ikon={Pencil} size={15} />, label: 'Rediger', onClick: () => openEdit(p) },
               ]}
               onClick={() => openEdit(p)}
             />
@@ -1884,56 +1892,56 @@ export default function Prosjekter({ onNavigate = null }) {
 
         const manglerBemanning = utenBemanningIds.has(p.id);
         const hurtigknapp = overFristIds.has(p.id)
-          ? { label: '📅 Forleng frist', onClick: () => { setForlengFristId(p.id); setForlengDato(p.sluttDato || dateToIso(new Date())); } }
+          ? { label: 'Forleng frist', onClick: () => { setForlengFristId(p.id); setForlengDato(p.sluttDato || dateToIso(new Date())); } }
           : manglerBemanning && onNavigate
-            ? { label: '👷 + Bemann', onClick: () => onNavigate('bemanningsplan') }
+            ? { label: '+ Bemann', onClick: () => onNavigate('bemanningsplan') }
             : null;
 
         return (
           <div key={p.id}>
           <KompaktRad
             tittel={visAdresse}
-            undertittel={kundeNavn ? `👤 ${kundeNavn}` : null}
+            undertittel={kundeNavn || null}
             varsel={(() => {
               // Rød frist (over/≤7d) vinner alltid; underbemannet-mot-kalkyle er
               // mer handlingsrettet enn det gule «Xd igjen» og tar dets plass.
-              if (varsel && varsel.farge === '#dc2626') return `⚠ ${varsel.label}`;
-              if (underbemannetIds.has(p.id)) return '👷 underbemannet mot kalkyle';
-              if (varsel) return `⚠ ${varsel.label}`;
-              if (manglerBemanning) return '👷 ingen bemanning neste uke';
+              if (varsel && varsel.farge === '#dc2626') return varsel.label;
+              if (underbemannetIds.has(p.id)) return 'underbemannet mot kalkyle';
+              if (varsel) return varsel.label;
+              if (manglerBemanning) return 'ingen bemanning neste uke';
               return null;
             })()}
             varselFarge={varsel?.farge === '#dc2626' ? varsel.farge : underbemannetIds.has(p.id) ? '#b45309' : varsel ? varsel.farge : manglerBemanning ? '#b45309' : null}
-            hint={duplikatHint[p.id] ? `🔗 ligner på ${duplikatHint[p.id].label}` : null}
+            hint={duplikatHint[p.id] ? `ligner på ${duplikatHint[p.id].label}` : null}
             meta={[
-              p.startDato ? `📅 ${formatDate(p.startDato)}${p.sluttDato ? ` – ${formatDate(p.sluttDato)}` : ''}` : null,
+              p.startDato ? `${formatDate(p.startDato)}${p.sluttDato ? ` – ${formatDate(p.sluttDato)}` : ''}` : null,
               varighetUker(p.startDato, p.sluttDato),
-              pl ? `🧑‍💼 ${(pl.navn || '').split(' ')[0]}` : null,
+              pl ? (pl.navn || '').split(' ')[0] : null,
               p.jobbType || null,
             ]}
             hoyre={[
-              antallFolk > 0 ? `👷 ${antallFolk}` : null,
+              antallFolk > 0 ? <IkonTekst ikon={Users} size={13} gap={4}>{antallFolk}</IkonTekst> : null,
               belopVis,
-              ks ? `✅ ${ks}` : null,
+              ks ? <IkonTekst ikon={ClipboardCheck} size={13} gap={4}>{ks}</IkonTekst> : null,
             ]}
             fremdrift={fremgang}
             hurtigknapp={hurtigknapp}
             meny={[
-              { ikon: '✏️', label: 'Rediger', onClick: () => openEdit(p) },
+              { ikon: <Ikon ikon={Pencil} size={15} />, label: 'Rediger', onClick: () => openEdit(p) },
               duplikatHint[p.id]
-                ? { ikon: '🔗', label: `Slå sammen med ${duplikatHint[p.id].label}…`, onClick: () => setMergeFor({ prosjekt: p, forslagId: duplikatHint[p.id].id }) }
-                : { ikon: '🔗', label: 'Slå sammen med…', onClick: () => setMergeFor({ prosjekt: p, forslagId: null }) },
+                ? { ikon: <Ikon ikon={Link2} size={15} />, label: `Slå sammen med ${duplikatHint[p.id].label}…`, onClick: () => setMergeFor({ prosjekt: p, forslagId: duplikatHint[p.id].id }) }
+                : { ikon: <Ikon ikon={Link2} size={15} />, label: 'Slå sammen med…', onClick: () => setMergeFor({ prosjekt: p, forslagId: null }) },
               !(p.tilbudPayload || p.tilbudLink)
-                && { ikon: '📦', label: 'Koble til tilbud…', onClick: () => setKobleFor(p) },
+                && { ikon: <Ikon ikon={Package} size={15} />, label: 'Koble til tilbud…', onClick: () => setKobleFor(p) },
               p.tilbudsfelterFørKobling
-                && { ikon: '✂', label: 'Fjern tilbuds-kobling', onClick: () => fjernKobling(p) },
+                && { ikon: <Ikon ikon={Scissors} size={15} />, label: 'Fjern tilbuds-kobling', onClick: () => fjernKobling(p) },
               { skille: true },
               ...['jobber_med', 'godkjent', 'aktiv'].filter(s => normStatus(p.status) !== s).map(s => ({
-                ikon: '→', label: SAVE_LABELS[s], onClick: () => settProsjektStatus(p, s),
+                ikon: <Ikon ikon={ArrowRight} size={15} />, label: SAVE_LABELS[s], onClick: () => settProsjektStatus(p, s),
               })),
-              normStatus(p.status) !== 'fullfort' && { ikon: '🏁', label: 'Fullfør', onClick: () => settProsjektStatus(p, 'fullfort') },
+              normStatus(p.status) !== 'fullfort' && { ikon: <Ikon ikon={Flag} size={15} />, label: 'Fullfør', onClick: () => settProsjektStatus(p, 'fullfort') },
               { skille: true },
-              { ikon: '🗄', label: 'Arkiver', farlig: true, onClick: () => arkiverProsjekt(p) },
+              { ikon: <Ikon ikon={Archive} size={15} />, label: 'Arkiver', farlig: true, onClick: () => arkiverProsjekt(p) },
             ]}
             onClick={() => aapnePanel(p)}
           />
@@ -1960,13 +1968,13 @@ export default function Prosjekter({ onNavigate = null }) {
         return (
           <DetaljPanel
             tittel={panelTittel}
-            undertittel={[p.kunde?.navn && `👤 ${p.kunde.navn}`, p.kunde?.telefon && `📱 ${p.kunde.telefon}`, formaterBelop(p.belop)].filter(Boolean).join(' · ')}
+            undertittel={[p.kunde?.navn, p.kunde?.telefon, formaterBelop(p.belop)].filter(Boolean).join(' · ')}
             faner={[
-              { key: 'framdrift', label: '📊 Framdrift' },
-              { key: 'bemanning', label: '👷 Bemanning' },
-              { key: 'ks', label: '✅ KS' },
-              { key: 'tilbud', label: '📦 Tilbudsdata' },
-              { key: 'logg', label: '📜 Logg' },
+              { key: 'framdrift', label: <IkonTekst ikon={ChartGantt} size={13} gap={4}>Framdrift</IkonTekst> },
+              { key: 'bemanning', label: <IkonTekst ikon={Users} size={13} gap={4}>Bemanning</IkonTekst> },
+              { key: 'ks', label: <IkonTekst ikon={ClipboardCheck} size={13} gap={4}>KS</IkonTekst> },
+              { key: 'tilbud', label: <IkonTekst ikon={Package} size={13} gap={4}>Tilbudsdata</IkonTekst> },
+              { key: 'logg', label: <IkonTekst ikon={ScrollText} size={13} gap={4}>Logg</IkonTekst> },
             ]}
             aktivFane={panelFane}
             onFane={f => { setPanelFane(f); if (f === 'logg' && loggEntries === null) hentLogg(p); }}
@@ -1979,11 +1987,11 @@ export default function Prosjekter({ onNavigate = null }) {
               >
                 {Object.entries(SAVE_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
               </select>
-              <button className="btn btn-sm" onClick={() => { setValgtId(null); openEdit(p); }}>✏️ Rediger</button>
+              <button className="btn btn-sm" onClick={() => { setValgtId(null); openEdit(p); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={Pencil} size={14} /> Rediger</button>
               {normStatus(p.status) !== 'fullfort' && (
-                <button className="btn btn-sm" onClick={() => settProsjektStatus(p, 'fullfort')}>🏁 Fullfør</button>
+                <button className="btn btn-sm" onClick={() => settProsjektStatus(p, 'fullfort')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={Flag} size={14} /> Fullfør</button>
               )}
-              <button className="btn btn-sm" style={{ color: '#b45309' }} onClick={() => { setValgtId(null); arkiverProsjekt(p); }}>🗄 Arkiver</button>
+              <button className="btn btn-sm" style={{ color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => { setValgtId(null); arkiverProsjekt(p); }}><Ikon ikon={Archive} size={14} /> Arkiver</button>
             </>}
           >
             {panelFane === 'framdrift' && (
@@ -2008,7 +2016,7 @@ export default function Prosjekter({ onNavigate = null }) {
                   );
                 })}
                 {onNavigate && (
-                  <button className="btn btn-sm" style={{ marginTop: 12 }} onClick={() => onNavigate('bemanningsplan')}>👷 + Bemann i bemanningsplanen</button>
+                  <button className="btn btn-sm" style={{ marginTop: 12 }} onClick={() => onNavigate('bemanningsplan')}>+ Bemann i bemanningsplanen</button>
                 )}
               </div>
             )}
@@ -2018,7 +2026,7 @@ export default function Prosjekter({ onNavigate = null }) {
                 {!(p.ksSjekklister || []).length && <div style={{ color: '#5d6b80', fontSize: 13 }}>Ingen KS-sjekklister tildelt. Gå til KS / HMS-fanen for å legge til.</div>}
                 {(p.ksSjekklister || []).map((ks, i) => (
                   <div key={ks.id || i} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #f1f5f9', fontSize: 13 }}>
-                    <span>{ks.ikon || '✅'} {ks.navn || ks.malNavn || 'Sjekkliste'}</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={ClipboardCheck} size={14} /> {ks.navn || ks.malNavn || 'Sjekkliste'}</span>
                     <span style={{ color: '#5d6b80' }}>{ks.status || 'ikke startet'}</span>
                   </div>
                 ))}
@@ -2029,10 +2037,10 @@ export default function Prosjekter({ onNavigate = null }) {
                 ? <TilbudsdataVisning prosjekt={p} />
                 : (
                   <div style={{ textAlign: 'center', padding: '32px 16px', color: '#5d6b80', fontSize: 13 }}>
-                    <div style={{ fontSize: 28, marginBottom: 8 }}>📦</div>
+                    <TomIkon ikon={Package} size={34} />
                     <div style={{ marginBottom: 14 }}>Dette prosjektet har ingen tilbudsdata — det er trolig regnet manuelt.</div>
-                    <button className="btn btn-primary" onClick={() => { setValgtId(null); setKobleFor(p); }}>
-                      🔗 Koble til tilbud
+                    <button className="btn btn-primary" onClick={() => { setValgtId(null); setKobleFor(p); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <Ikon ikon={Link2} size={15} /> Koble til tilbud
                     </button>
                   </div>
                 )
@@ -2135,7 +2143,7 @@ export default function Prosjekter({ onNavigate = null }) {
                   setForm(f => ({ ...f, status: 'fullfort' }));
                   dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...form, id: editing.id, status: 'fullfort' } });
                   setShowModal(false);
-                }}>🏁 Prosjekt ferdig</button>
+                }}>Prosjekt ferdig</button>
               )}
               <button className="btn btn-primary" onClick={handleSave}>Lagre</button>
             </div>
@@ -2174,8 +2182,8 @@ export default function Prosjekter({ onNavigate = null }) {
           padding: '10px 16px', display: 'flex', gap: 12, alignItems: 'center', maxWidth: '90vw',
         }}>
           <span style={{ fontSize: 13 }}>{mergeToast.tekst}</span>
-          <button className="btn btn-sm" onClick={() => angreMerge(mergeToast.hovedId, mergeToast.sekundarId)}>↩ Angre</button>
-          <button className="btn-icon" onClick={() => setMergeToast(null)} title="Lukk">✕</button>
+          <button className="btn btn-sm" onClick={() => angreMerge(mergeToast.hovedId, mergeToast.sekundarId)} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}><Ikon ikon={Undo2} size={14} /> Angre</button>
+          <button className="btn-icon" onClick={() => setMergeToast(null)} title="Lukk"><Ikon ikon={X} size={14} /></button>
         </div>
       )}
     </div>
