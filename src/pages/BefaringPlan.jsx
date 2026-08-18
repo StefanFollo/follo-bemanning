@@ -14,6 +14,7 @@ import { StatusFaner } from '../komponenter/Designsystem';
 import {
   klassifiserKoblinger, forslagForSpokelse, beregnKobleTilbud, beregnStatusFix,
   beregnAngreSak, hentReparasjonHistorikk, leggTilReparasjonHistorikk, mapSalgsStatus,
+  rangerKandidater,
 } from '../reparasjonKoblinger';
 
 // ═══ Fase 3: «Reparer koblinger»-wizard (admin) ═══
@@ -139,8 +140,10 @@ function ReparerKoblinger({ state, dispatch, onLukk }) {
   const forslag = sak && sak.type === 'spokelse' ? forslagForSpokelse(sak, state.befaringer) : null;
   const mismatchBef = sak && sak.type === 'mismatch' ? state.befaringer.find(b => b.id === sak.befaringId) : null;
   const sokLav = sok.toLowerCase();
-  const kandidatListe = velgAnnen
-    ? state.befaringer.filter(b => !b.arkivert && (!sok || (b.adresse || '').toLowerCase().includes(sokLav) || (b.kontaktNavn || '').toLowerCase().includes(sokLav))).slice(0, 25)
+  // Alle ikke-arkiverte befaringer, alle statuser, beste fuzzy-kandidat øverst.
+  const kandidatListe = (velgAnnen && sak)
+    ? rangerKandidater(sak, state.befaringer).filter(({ befaring: b }) =>
+        !sok || (b.adresse || '').toLowerCase().includes(sokLav) || (b.kontaktNavn || '').toLowerCase().includes(sokLav))
     : [];
 
   return (
@@ -192,12 +195,19 @@ function ReparerKoblinger({ state, dispatch, onLukk }) {
                   {velgAnnen && (
                     <div style={{ marginBottom: 8 }}>
                       <input className="input" placeholder="Søk befaring…" value={sok} onChange={e => setSok(e.target.value)} style={{ width: '100%', marginBottom: 6 }} />
-                      <div style={{ maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        {kandidatListe.map(b => (
-                          <button key={b.id} className="btn" style={{ textAlign: 'left' }} onClick={() => kobleTil(b)}>
-                            {b.adresse || b.kontaktNavn} {b.kontaktNavn ? '· ' + b.kontaktNavn : ''} · {b.status}
-                          </button>
-                        ))}
+                      <div style={{ maxHeight: 260, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        {kandidatListe.map(({ befaring: b, score }) => {
+                          const st = BEF_STATUS[b.status] || BEF_STATUS.planlagt;
+                          return (
+                            <button key={b.id} className="btn" style={{ textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }} onClick={() => kobleTil(b)}>
+                              <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {b.adresse || b.kontaktNavn}{b.kontaktNavn ? ' · ' + b.kontaktNavn : ''}
+                              </span>
+                              {score > 0 && <span title="Fuzzy-treff på adresse/kundenavn" style={{ display: 'inline-flex' }}><Ikon ikon={Sparkles} size={13} farge="var(--header-accent)" /></span>}
+                              <span style={{ fontSize: 11, fontWeight: 500, color: st.farge, background: st.bg, borderRadius: 10, padding: '1px 8px', whiteSpace: 'nowrap' }}>{st.label}</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

@@ -3,7 +3,7 @@
 import http from 'http';
 import {
   klassifiserKoblinger, forslagForSpokelse, beregnKobleTilbud,
-  beregnStatusFix, beregnAngreSak, mapSalgsStatus,
+  beregnStatusFix, beregnAngreSak, mapSalgsStatus, rangerKandidater,
 } from '../src/reparasjonKoblinger.js';
 
 let feil = 0, ok = 0;
@@ -48,6 +48,29 @@ console.log('\n-- Fuzzy-forslag (husnummer må matche eksakt) --');
   sjekk('Spøkelse 2 → forslag B1 (adresse+kunde)', f1?.befaring.id === 'B1');
   const f2 = forslagForSpokelse(spokelser[1], befaringer); // Testveien 13
   sjekk('Spøkelse 4 → forslag B3 (13 matcher ALDRI 11)', f2?.befaring.id === 'B3');
+}
+
+console.log('\n-- «Velg annen…»: alle statuser med, fuzzy øverst (Stefans bug) --');
+{
+  // Stefans reelle sak: vunnet tilbud «Sameiet Søndre Moer B6» skal kunne
+  // kobles til GODKJENT befaring «Bjørkeveien 49 · Søndre Moer b6».
+  const alleBef = [
+    { id: 'G1', kontaktNavn: 'Søndre Moer b6', adresse: 'Bjørkeveien 49', status: 'godkjent' },
+    { id: 'P1', kontaktNavn: 'Planla Gt', adresse: 'Planveien 1', status: 'planlagt' },
+    { id: 'L1', kontaktNavn: 'Lead Ledesen', adresse: 'Leadveien 2', status: 'lead' },
+    { id: 'T1', kontaktNavn: 'Tapt Tapersen', adresse: 'Taptveien 3', status: 'tapt' },
+    { id: 'A1', kontaktNavn: 'Arkiv Arkivsen', adresse: 'Arkivveien 4', status: 'godkjent', arkivert: true },
+  ];
+  const sak = { tilbudId: 7, type: 'spokelse', kildeBefaringId: 'GHOST', salgsStatus: 'vunnet', kundenavn: 'Sameiet Søndre Moer B6', adresse: 'Søndre Moer' };
+  const liste = rangerKandidater(sak, alleBef);
+  sjekk('Alle 4 ikke-arkiverte med (godkjent/planlagt/lead/tapt)', liste.length === 4);
+  sjekk('Arkivert holdt utenfor', !liste.some(k => k.befaring.id === 'A1'));
+  sjekk('Godkjent befaring valgbar for vunnet tilbud', liste.some(k => k.befaring.id === 'G1' && k.befaring.status === 'godkjent'));
+  sjekk('Delvis kundenavn-treff løfter Bjørkeveien 49 øverst', liste[0].befaring.id === 'G1' && liste[0].score > 0);
+  sjekk('Resten alfabetisk på adresse', liste.slice(1).map(k => k.befaring.id).join(',') === 'L1,P1,T1');
+  // Uten navnetreff: ingen krasj, ren alfabetisk liste
+  const flat = rangerKandidater({ tilbudId: 8, kundenavn: 'Helt Annen', adresse: '' }, alleBef);
+  sjekk('Uten treff: 4 rader, alfabetisk, score 0', flat.length === 4 && flat.every(k => k.score === 0) && flat[0].befaring.adresse === 'Bjørkeveien 49');
 }
 
 console.log('\n-- Koble + angre: JSON-diff tom --');

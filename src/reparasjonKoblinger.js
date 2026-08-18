@@ -61,6 +61,33 @@ export function forslagForSpokelse(sak, befaringer) {
   return best; // null når ingenting matcher godt nok
 }
 
+// «Velg annen…»-listen: ALLE ikke-arkiverte befaringer uansett status —
+// status filtrerer ALDRI her (et vunnet tilbud hører typisk hjemme hos en
+// GODKJENT befaring). Sortert med beste fuzzy-kandidat øverst, også når
+// scoren er lav; delvis kundenavn-treff («Sameiet Søndre Moer B6» ↔
+// «Søndre Moer b6») løfter rader kandidatScore alene gir 0.
+function normNavnLokal(s) {
+  return (s || '').toLowerCase().replace(/[^a-zæøå0-9]/g, '');
+}
+function delvisNavnScore(a, b) {
+  const na = normNavnLokal(a), nb = normNavnLokal(b);
+  if (!na || !nb || na === nb) return 0; // eksakt treff scorer kandidatScore selv
+  return (na.includes(nb) || nb.includes(na)) ? 25 : 0;
+}
+export function rangerKandidater(sak, befaringer) {
+  const kilde = { adresse: sak.adresse || '', navn: sak.kundenavn || '', kunde: { navn: sak.kundenavn || '' } };
+  return (befaringer || [])
+    .filter(b => b && !b.arkivert)
+    .map(b => ({
+      befaring: b,
+      score: kandidatScore(kilde, { adresse: b.adresse, navn: b.kontaktNavn, kunde: { navn: b.kontaktNavn } })
+        + delvisNavnScore(sak.kundenavn, b.kontaktNavn),
+    }))
+    .sort((x, y) => y.score - x.score
+      || String(x.befaring.adresse || x.befaring.kontaktNavn || '').localeCompare(
+           String(y.befaring.adresse || y.befaring.kontaktNavn || ''), 'nb'));
+}
+
 // ── Sak-avgjørelser (rene — muterer ingenting) ──────────────────────
 
 // Spøkelse godkjent: koble tilbudet til valgt befaring.
