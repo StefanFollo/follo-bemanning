@@ -177,10 +177,21 @@ export function lagFristEpost(f, appUrl) {
   const html = `<p>Tilbudet til <b>${esc(b.kontaktNavn || b.adresse)}</b>${b.adresse ? ' (' + esc(b.adresse) + ')' : ''} har frist <b>${esc(b.tilbudFrist)}</b> — ring kunden før fristen går ut.</p><ul style="padding-left:18px">${sakLinje(f.sak, appUrl)}</ul>`;
   return { emne, html: ramme(emne, html, appUrl) };
 }
-export function lagEskaleringEpost(e, appUrl) {
-  const b = e.sak.befaring;
-  const emne = `Eskalering: ${b.kontaktNavn || b.adresse} — ${e.sak.tekst}`;
-  const html = `<p>Denne saken har vært forfalt i mer enn 7 dager${e.plNavn ? ` hos <b>${esc(e.plNavn)}</b>` : ' og mangler ansvarlig'}. Dette varselet sendes én gang, til PL og admin.</p><ul style="padding-left:18px">${sakLinje(e.sak, appUrl)}</ul>`;
+// Eskaleringer samles til ÉN e-post per mottaker per kjøring (første kjøring
+// i prod hadde 18 saker >7 d — 18 separate e-poster er pling-bombardement).
+// Hver sak varsles fortsatt bare én gang.
+export function grupperEskaleringer(eskaleringer) {
+  const per = {};
+  for (const e of eskaleringer || []) for (const til of e.til) (per[til] = per[til] || { til, saker: [] }).saker.push(e);
+  return Object.values(per);
+}
+export function lagEskaleringEpost(gruppe, appUrl) {
+  const saker = gruppe.saker || [gruppe];
+  const emne = saker.length === 1
+    ? `Eskalering: ${saker[0].sak.befaring.kontaktNavn || saker[0].sak.befaring.adresse} — ${saker[0].sak.tekst}`
+    : `Eskalering: ${saker.length} saker forfalt mer enn 7 dager`;
+  const html = `<p>${saker.length === 1 ? 'Denne saken har' : 'Disse sakene har'} vært forfalt i mer enn 7 dager. Varselet sendes én gang per sak, til ansvarlig PL og admin.</p>
+    <ul style="padding-left:18px">${saker.map(e => sakLinje(e.sak, appUrl).replace('</li>', `<br><i style="color:#9ca3af">${e.plNavn ? 'PL: ' + esc(e.plNavn) : 'mangler ansvarlig'}</i></li>`)).join('')}</ul>`;
   return { emne, html: ramme(emne, html, appUrl) };
 }
 export function lagUkesdigestEpost(u, appUrl) {

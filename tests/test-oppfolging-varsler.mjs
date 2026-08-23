@@ -1,7 +1,7 @@
 // Test av oppfølgings-varsler (SPEC §3–4): planlegger + digest-endepunkt.
 // Kjør: node tests/test-oppfolging-varsler.mjs
 import http from 'http';
-import { planleggVarsler, lagDigestEpost, lagUkesdigestEpost, erHverdag, erMandag, VARSEL_STATUS_TOM } from '../src/oppfolgingVarsler.js';
+import { planleggVarsler, lagDigestEpost, lagUkesdigestEpost, lagEskaleringEpost, grupperEskaleringer, erHverdag, erMandag, VARSEL_STATUS_TOM } from '../src/oppfolgingVarsler.js';
 import { leggTilDager } from '../src/oppfolging.js';
 
 let feil = 0, ok = 0;
@@ -99,6 +99,11 @@ console.log('\n-- Test 4: eskalering >7 d treffer PL + admin én gang --');
   const p2 = planleggVarsler({ befaringer, ansatte, brukere, varselStatus: p1.nyStatus, iDag: d(1) });
   sjekk('Dagen etter: ingen ny eskalering', p2.eskaleringer.length === 0);
   sjekk('Lars sin (1 d forfalt) eskaleres ikke', !esk.some(x => x.sak.befaringId === 'B5'));
+  const grupper = grupperEskaleringer(esk);
+  sjekk('Gruppert: én e-post per mottaker (Joachim 1 sak, Stefan 2 saker)', grupper.length === 2
+    && grupper.find(g => g.til === 'stefan@fbs.no').saker.length === 2 && grupper.find(g => g.til === 'joachim@fbs.no').saker.length === 1);
+  const ge = lagEskaleringEpost(grupper.find(g => g.til === 'stefan@fbs.no'), 'https://app');
+  sjekk('Samle-emne «2 saker forfalt mer enn 7 dager»', ge.emne === 'Eskalering: 2 saker forfalt mer enn 7 dager' && ge.html.includes('Eierløs') && ge.html.includes('Forfalt'));
   // Ny dato etter eskalering → ny syklus
   const ny = befaringer.map(b => b.id === 'B1' ? { ...b, nesteKontakt: d(-10) } : b);
   sjekk('Ny forfallsdato → kan eskaleres igjen', planleggVarsler({ befaringer: ny, ansatte, brukere, varselStatus: p1.nyStatus, iDag: d(1) }).eskaleringer.length === 1);
@@ -182,7 +187,8 @@ console.log('\n-- /api/oppfolging/digest --');
   r = await kall('GET', 'admintoken');
   sjekk('Admin GET = tørrkjøring: plan, ingen sending, ingen status', r._kode === 200 && r._body.torr && r._body.digester.length === 2 && resendKall.length === 0 && !store.has('fbs_oppfolging_varsler'));
   r = await kall('POST', 'cron-hemmelig');
-  sjekk('Cron POST sender: 2 digester + 1 frist + 2 eskaleringer + 1 ukesdigest = 6 e-poster', r._kode === 200 && r._body.ok && resendKall.length === 6, 'fikk ' + resendKall.length);
+  sjekk('Cron POST sender: 2 digester + 1 frist + 2 eskaleringsmailer (per mottaker) + 1 ukesdigest = 6 e-poster', r._kode === 200 && r._body.ok && resendKall.length === 6, 'fikk ' + resendKall.length);
+  sjekk('Eskaleringsmail til Stefan samler 2 saker', resendKall.some(k => k.to.join() === 'stefan@fbs.no' && k.subject === 'Eskalering: 2 saker forfalt mer enn 7 dager'));
   const emner = resendKall.map(k => k.subject);
   sjekk('Emner riktige', emner.some(e => e.startsWith('Du har 2 oppfølginger')) && emner.some(e => e.startsWith('Tilbudsfrist Frist')) && emner.some(e => e.startsWith('Eskalering:')) && emner.some(e => e.startsWith('Oppfølging sist uke')));
   const status = JSON.parse(store.get('fbs_oppfolging_varsler'));

@@ -8,7 +8,7 @@
 // (hvem har fått hva, hvilken dag). Rører aldri befaringer.
 
 import { Redis } from '@upstash/redis';
-import { planleggVarsler, lagDigestEpost, lagFristEpost, lagEskaleringEpost, lagUkesdigestEpost, iDagOslo, VARSEL_STATUS_TOM } from '../../src/oppfolgingVarsler.js';
+import { planleggVarsler, lagDigestEpost, lagFristEpost, lagEskaleringEpost, grupperEskaleringer, lagUkesdigestEpost, iDagOslo, VARSEL_STATUS_TOM } from '../../src/oppfolgingVarsler.js';
 import { sendEpost } from '../_epost.js';
 
 const redis = new Redis({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN });
@@ -65,6 +65,7 @@ export default async function handler(req, res) {
       iDag, torr, digester: plan.digester.map(d => ({ til: d.til, navn: d.navn, antall: d.antall, forfalt: d.forfalt, egne: d.egne.length, tilAdmin: d.tilAdmin.length })),
       fristVarsler: plan.fristVarsler.map(f => ({ til: f.til, kunde: f.sak.befaring.kontaktNavn, dager: f.dager })),
       eskaleringer: plan.eskaleringer.map(e => ({ til: e.til, kunde: e.sak.befaring.kontaktNavn, tekst: e.sak.tekst })),
+      eskaleringsEposter: grupperEskaleringer(plan.eskaleringer).map(g => ({ til: g.til, antall: g.saker.length })),
       ukesdigest: plan.ukesdigest ? { til: plan.ukesdigest.til, rader: plan.ukesdigest.rader } : null,
       hoppetOver: plan.hoppetOver, borteIds: plan.borteIds, adminEposter,
     };
@@ -83,7 +84,17 @@ export default async function handler(req, res) {
     const ny = { digest: { ...gammel.digest }, frist: { ...gammel.frist }, eskalert: { ...gammel.eskalert }, ukesdigest: gammel.ukesdigest || null };
     for (const d of plan.digester) await send(d.til, lagDigestEpost(d, appUrl), () => { ny.digest[d.til] = iDag; });
     for (const f of plan.fristVarsler) await send(f.til, lagFristEpost(f, appUrl), () => { ny.frist[`${f.sak.befaringId}:${f.sak.befaring.tilbudFrist}`] = iDag; });
-    for (const e of plan.eskaleringer) await send(e.til, lagEskaleringEpost(e, appUrl), () => { ny.eskalert[`${e.sak.befaringId}:${e.sak.forfallDato}`] = iDag; });
+    // Én eskaleringsmail per mottaker; en sak merkes når alle dens mottakere fikk den
+    const eskOk = new Map(); // nøkkel → antall vellykkede mottakere
+    for (const g of grupperEskaleringer(plan.eskaleringer)) {
+      await send(g.til, lagEskaleringEpost(g, appUrl), () => {
+        for (const e of g.saker) { const n = `${e.sak.befaringId}:${e.sak.forfallDato}`; eskOk.set(n, (eskOk.get(n) || 0) + 1); }
+      });
+    }
+    for (const e of plan.eskaleringer) {
+      const n = `${e.sak.befaringId}:${e.sak.forfallDato}`;
+      if ((eskOk.get(n) || 0) >= e.til.length) ny.eskalert[n] = iDag;
+    }
     if (plan.ukesdigest) await send(plan.ukesdigest.til, lagUkesdigestEpost(plan.ukesdigest, appUrl), () => { ny.ukesdigest = iDag; });
     ny.sistKjort = new Date().toISOString();
     await redis.set(VARSEL_NOKKEL, ny);
