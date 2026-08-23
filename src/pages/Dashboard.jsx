@@ -1,11 +1,12 @@
 import { useApp } from '../context/AppContext';
 import { dateToIso, addDays, weekStart, overlaps } from '../store';
 import {
-  Target, Clock, Link2, MapPin, Palmtree, CircleCheck, Search, Pin, PhoneCall,
-  Phone, Pencil, CircleX, TriangleAlert, ChartGantt, Rocket, CalendarDays,
+  Target, Clock, Link2, MapPin, Palmtree, CircleCheck, Search, Pin,
+  Pencil, CircleX, TriangleAlert, ChartGantt, Rocket, CalendarDays,
   Building2, ShieldAlert, MessageSquare, Eye,
 } from 'lucide-react';
 import { Ikon } from '../komponenter/Ikon';
+import RingIDag from '../komponenter/RingIDag';
 
 const FAG_COLORS = {
   'Bas Tømrer': '#b45309', 'Montør': '#3b82f6', 'Lærling Tømrer': '#15803d',
@@ -115,16 +116,8 @@ export default function Dashboard({ onNavigate }) {
     .sort((a, b) => a.tilbudFrist.localeCompare(b.tilbudFrist))
     .slice(0, 5);
 
-  // ── Oppfølging (neste kontakt) på leads/befaringer/tilbud ──
-  // Datoen skrives inn på befaringskortet, men var tidligere ikke synlig
-  // noe sted som påminnelse — leads ble glemt. Viser forfalte + de neste 3 dager.
-  const AKTIV_PIPELINE = new Set(['lead', 'planlagt', 'tilbud_arbeid', 'tilbud_sendt']);
-  const oppfolginger = (state.befaringer || [])
-    .filter(b => AKTIV_PIPELINE.has(b.status) && b.nesteKontakt)
-    .map(b => ({ ...b, dager: dagerTil(b.nesteKontakt) }))
-    .filter(b => b.dager <= 3)
-    .sort((a, b) => a.nesteKontakt.localeCompare(b.nesteKontakt))
-    .slice(0, 8);
+  // Oppfølging («Ring i dag») bor nå i komponenten RingIDag — kø-logikken
+  // i src/oppfolging.js (SPEC-oppfolgings-modul.md).
 
   const ukedagNavn = UKEDAGER[todayDate.getDay()];
 
@@ -369,41 +362,10 @@ export default function Dashboard({ onNavigate }) {
         {/* ── Høyre kolonne ── */}
         <div className="dash-kolonne">
 
-          {/* Oppfølging: neste kontakt på leads/tilbud */}
-          {oppfolginger.length > 0 && (
-            <div className="dash-seksjon">
-              <div className="dash-seksjon-header">
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={PhoneCall} size={15} /> Oppfølging — neste kontakt</span>
-                <span className="dash-seksjon-teller" style={{ color: oppfolginger.some(b => b.dager <= 0) ? '#dc2626' : undefined }}>
-                  {oppfolginger.length}
-                </span>
-              </div>
-              {oppfolginger.map(b => {
-                const s = BEF_STATUS[b.status] || BEF_STATUS.planlagt;
-                const farge = b.dager < 0 ? '#dc2626' : b.dager === 0 ? '#b45309' : '#15803d';
-                return (
-                  <div
-                    key={b.id}
-                    className="dash-frist-rad"
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => onNavigate && onNavigate('befaring')}
-                    title="Gå til Befaring"
-                  >
-                    <div className="dash-frist-info">
-                      <div className="dash-frist-navn"><Ikon ikon={s.ikon} size={13} /> {b.kontaktNavn || b.adresse}</div>
-                      <div className="dash-frist-adresse">{b.adresse}{b.telefon ? <> · <Ikon ikon={Phone} size={11} /> {b.telefon}</> : ''}</div>
-                      <div style={{ fontSize: 11, color: s.farge, marginTop: 2 }}>{s.label}</div>
-                    </div>
-                    <div className="dash-frist-badge" style={{ background: farge + '1a', color: farge }}>
-                      {b.dager < 0 ? `${Math.abs(b.dager)}d forfalt`
-                        : b.dager === 0 ? 'I dag!'
-                        : `om ${b.dager}d`}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          {/* Oppfølging: «Ring i dag» — PL-ens kø, admin ser alle + per-PL-filter */}
+          <div className="dash-seksjon">
+            <RingIDag onApneKort={id => onNavigate && onNavigate('befaring', id)} />
+          </div>
 
           {/* Tilbudsfrister */}
           {tilbudFrister.length > 0 && (

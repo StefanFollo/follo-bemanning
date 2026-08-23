@@ -293,10 +293,25 @@ function TekstNav({ TABS, activeTab, setActiveTab }) {
   );
 }
 
+function hjemmefaneFor(rolle) {
+  if (rolle === 'ansatt') return 'bemanningsplan';
+  if (rolle === 'rorlegger') return 'rorlegger';
+  if (rolle === 'befaring') return 'befaring';
+  return 'dashboard';
+}
+
 function App() {
   const resetToken = getResetToken();
   const [showReset] = useState(!!resetToken);
-  const [activeTab, setActiveTab] = useState('dashboard');
+  // Hjemmefane per rolle — også ved reload (PL-rollen har ikke Oversikt og
+  // landet tidligere på en tom side til de trykket i menyen).
+  const [activeTab, setActiveTab] = useState(() => hjemmefaneFor(localStorage.getItem('fbs_role')));
+  // Dyplenke: «Åpne kort» i Ring i dag-listen → Befaring-siden åpner kortet
+  const [apneBefaringId, setApneBefaringId] = useState(null);
+  function navigerTil(tab, befaringId) {
+    if (befaringId) setApneBefaringId(befaringId);
+    setActiveTab(tab);
+  }
   const [loggedIn, setLoggedIn] = useState(() => !!localStorage.getItem('fbs_token'));
   const [role, setRole] = useState(() => localStorage.getItem('fbs_role') || 'admin');
   const [userNavn, setUserNavn] = useState(() => localStorage.getItem('fbs_user_navn') || '');
@@ -353,10 +368,7 @@ function App() {
     setRole(r || 'admin');
     setUserNavn(namn || '');
     setLoggedIn(true);
-    if (r === 'ansatt') setActiveTab('bemanningsplan');
-    else if (r === 'rorlegger') setActiveTab('rorlegger');
-    else if (r === 'befaring') setActiveTab('befaring');
-    else setActiveTab('dashboard');
+    setActiveTab(hjemmefaneFor(r));
   }
 
   if (showReset && !resetDone) {
@@ -410,8 +422,8 @@ function App() {
         <main className="main">
           <FeilVern key={activeTab}>
           <Suspense fallback={<SideLaster />}>
-          {activeTab === 'dashboard' && (isAdmin || isKontor) && <Dashboard onNavigate={setActiveTab} />}
-          {activeTab === 'befaring' && (isAdmin || isKontor || isBefaring) && <BefaringPlan />}
+          {activeTab === 'dashboard' && (isAdmin || isKontor) && <Dashboard onNavigate={navigerTil} />}
+          {activeTab === 'befaring' && (isAdmin || isKontor || isBefaring) && <BefaringPlan apneBefaringId={apneBefaringId} onApnet={() => setApneBefaringId(null)} />}
           {activeTab === 'reklamasjon' && (isAdmin || isKontor || isBefaring) && <Reklamasjon />}
           {activeTab === 'service' && (isAdmin || isKontor || isBefaring) && <Service />}
           {activeTab === 'prosjekter' && (isAdmin || isKontor) && <Prosjekter onNavigate={setActiveTab} />}

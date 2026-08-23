@@ -3897,3 +3897,6 @@ body {
 
 /* Lucide Loader-animasjon (SaveButton m.fl.) */
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+/* Ring i dag øverst på Befaring-siden (PL-rollen) */
+.bef-ringidag { margin-bottom: 18px; padding: 14px 16px; background: #fff; border: 1px solid var(--border); border-radius: 10px; }

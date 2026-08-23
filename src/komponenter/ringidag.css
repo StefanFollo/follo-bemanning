@@ -1,0 +1,65 @@
+/* ═══ «Ring i dag» — PL-ens morgenliste (mobil først) ═══ */
+.rid { display: flex; flex-direction: column; gap: 8px; }
+.rid-header {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  font-size: 13px; font-weight: 500; color: var(--text-secondary);
+  padding-bottom: 8px; border-bottom: 2px solid var(--bg-subtle);
+}
+.rid-tittel { display: inline-flex; align-items: center; gap: 6px; color: var(--text-primary); }
+.rid-teller { font-weight: 500; }
+.rid-filter { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); }
+.rid-filter select { font-size: 12.5px; padding: 4px 8px; border: 1px solid var(--border); border-radius: var(--radius, 6px); background: #fff; color: var(--text-primary); }
+.rid-tom { display: flex; align-items: center; gap: 8px; padding: 14px 4px; font-size: 13px; color: var(--text-muted); }
+
+.rid-rad {
+  border: 1px solid var(--border); border-left: 3px solid var(--success);
+  border-radius: 8px; padding: 10px 12px; background: #fff;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.rid-rad--forfalt { background: color-mix(in srgb, var(--danger) 3%, #fff); }
+.rid-topp { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-size: 13.5px; }
+.rid-navn { font-weight: 500; color: var(--text-primary); }
+.rid-adresse { color: var(--text-secondary); }
+.rid-tel {
+  display: inline-flex; align-items: center; gap: 4px; color: var(--accent); text-decoration: none;
+  font-weight: 500; white-space: nowrap; padding: 2px 6px; margin: -2px 0; border-radius: 6px;
+}
+.rid-tel:hover { background: var(--accent-subtle); }
+.rid-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12px; }
+.rid-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 10px; font-weight: 500; white-space: nowrap; }
+.rid-badge--dempet { color: var(--text-muted); background: var(--bg-subtle); }
+.rid-badge--varsel { color: var(--warning); background: var(--warning-bg); border: 1px solid var(--warning-border); }
+.rid-ansvarlig { color: var(--text-muted); margin-left: auto; }
+.rid-notat {
+  display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text-secondary);
+  min-width: 0;
+}
+.rid-notat > span:first-of-type { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rid-notat-dato { color: var(--text-muted); font-size: 11.5px; white-space: nowrap; }
+.rid-knapper { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.rid-knapp { display: inline-flex; align-items: center; gap: 5px; font-size: 12.5px; padding: 5px 10px; }
+
+/* Dialog */
+.rid-dialog { max-width: 460px; }
+.rid-dialog-kropp { display: flex; flex-direction: column; gap: 12px; padding: 4px 4px 8px; font-size: 13px; }
+.rid-dialog-kunde { font-weight: 500; color: var(--text-primary); }
+.rid-dialog-forrige { font-weight: 400; color: var(--text-muted); }
+.rid-felt { display: flex; flex-direction: column; gap: 4px; }
+.rid-felt > span { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+.rid-felt textarea, .rid-felt input { width: 100%; font-size: 14px; }
+.rid-sjekk { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; }
+.rid-dialog-knapper { display: flex; gap: 8px; justify-content: flex-end; }
+.rid-dialog-knapper .btn { display: inline-flex; align-items: center; gap: 5px; }
+.rid-dialog-hint { font-size: 11.5px; color: var(--text-muted); }
+
+/* Mobil: store trykkflater, knapper på egen rad, ingen zoom på input */
+@media (max-width: 640px) {
+  .rid-rad { padding: 12px; }
+  .rid-tel { padding: 6px 10px; margin: 0; background: var(--accent-subtle); }
+  .rid-knapper { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .rid-knapper .rid-knapp:first-child { grid-column: 1 / -1; }
+  .rid-knapp { padding: 10px 12px; font-size: 14px; justify-content: center; }
+  .rid-ansvarlig { margin-left: 0; }
+  .rid-felt textarea, .rid-felt input, .rid-filter select { font-size: 16px; }
+  .rid-dialog-knapper .btn { flex: 1; justify-content: center; padding: 10px; }
+}

@@ -11,6 +11,7 @@ import {
 import { Ikon } from '../komponenter/Ikon';
 import TilbudsdataVisning from '../komponenter/Tilbudsdata';
 import { StatusFaner } from '../komponenter/Designsystem';
+import RingIDag from '../komponenter/RingIDag';
 import {
   klassifiserKoblinger, forslagForSpokelse, beregnKobleTilbud, beregnStatusFix,
   beregnAngreSak, hentReparasjonHistorikk, leggTilReparasjonHistorikk, mapSalgsStatus,
@@ -364,12 +365,14 @@ function tomModal() {
   };
 }
 
-export default function BefaringPlan() {
+export default function BefaringPlan({ apneBefaringId, onApnet }) {
   const { state, dispatch, friskOpp } = useApp();
   const befaringer = useMemo(() => state.befaringer || [], [state.befaringer]);
   const today = dateToIso(new Date());
 
   const isAdmin = localStorage.getItem('fbs_role') === 'admin';
+  // PL-rollen («befaring») har ikke Oversikt — morgenlisten ligger derfor her.
+  const visRingIDag = localStorage.getItem('fbs_role') === 'befaring';
   const [visModal, setVisModal] = useState(false);
   const [redigerer, setRedigerer] = useState(null);
   const [dedupPanel, setDedupPanel] = useState(null); // null | {loading} | {dry, plan, ...}
@@ -469,6 +472,14 @@ export default function BefaringPlan() {
     isFirstRender.current = true;
     setVisModal(true);
   }
+  // Dyplenke fra Ring i dag («Åpne kort»)
+  useEffect(() => {
+    if (!apneBefaringId) return;
+    const b = befaringer.find(x => x.id === apneBefaringId);
+    if (b) apneRediger(b);
+    if (onApnet) onApnet();
+  }, [apneBefaringId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function apneRediger(b) {
     setForm({ ...tomModal(), ...b });
     setRedigerer(b);
@@ -991,6 +1002,11 @@ export default function BefaringPlan() {
 
   return (
     <div className="bef-side">
+      {visRingIDag && (
+        <div className="bef-ringidag">
+          <RingIDag onApneKort={id => { const b = befaringer.find(x => x.id === id); if (b) apneRediger(b); }} />
+        </div>
+      )}
       {/* Header */}
       <div className="page-header">
         <h2>Befaring & Tilbud</h2>
