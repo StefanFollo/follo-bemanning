@@ -65,6 +65,19 @@ const p1 = planleggVarsler({ befaringer, ansatte, brukere, varselStatus: VARSEL_
   sjekk('Digest-emne «Du har 2 oppfølginger i dag (1 forfalt)»', e.emne === 'Du har 2 oppfølginger i dag (1 forfalt)' && e.html.includes('Forfalt') && e.html.includes('tel:') === false);
 }
 
+console.log('\n-- Admin-mottakere via eksplisitt liste (env) — ikke «alle med admin-rolle» --');
+{
+  const mange = [...brukere, { email: 'rytis@fbs.no', navn: 'Rytis', role: 'admin', ansattId: 'R1', active: true }];
+  const uten = planleggVarsler({ befaringer, ansatte, brukere: mange, varselStatus: VARSEL_STATUS_TOM, iDag: MANDAG });
+  sjekk('Uten liste: alle admin-kontoer får admin-saker (Rytis også)', uten.digester.some(x => x.til === 'rytis@fbs.no'));
+  const med = planleggVarsler({ befaringer, ansatte, brukere: mange, varselStatus: VARSEL_STATUS_TOM, iDag: MANDAG, adminEposter: ['Stefan@FBS.no'] });
+  sjekk('Med liste: kun Stefan får admin-saker, Rytis ingenting', !med.digester.some(x => x.til === 'rytis@fbs.no') && med.digester.find(x => x.til === 'stefan@fbs.no').tilAdmin.length === 3);
+  sjekk('Eskalering går til PL + kun listens admin', med.eskaleringer.every(e => e.til.every(t => t === 'joachim@fbs.no' || t === 'stefan@fbs.no')));
+  sjekk('Ukesdigest kun til listen', med.ukesdigest.til.join() === 'stefan@fbs.no');
+  const ukjent = planleggVarsler({ befaringer, ansatte, brukere: mange, varselStatus: VARSEL_STATUS_TOM, iDag: MANDAG, adminEposter: ['post@fbs.no'] });
+  sjekk('Adresse uten konto fungerer som admin-mottaker', ukjent.digester.some(x => x.til === 'post@fbs.no' && x.tilAdmin.length === 3));
+}
+
 console.log('\n-- Frist-varsel: én gang, 3 dager før --');
 {
   sjekk('1 frist-varsel til Joachim (3 d)', p1.fristVarsler.length === 1 && p1.fristVarsler[0].til.join() === 'joachim@fbs.no' && p1.fristVarsler[0].dager === 3);
@@ -137,6 +150,7 @@ await new Promise(r => server.listen(0, '127.0.0.1', r));
 process.env.KV_REST_API_URL = `http://127.0.0.1:${server.address().port}`;
 process.env.KV_REST_API_TOKEN = 'test';
 process.env.CRON_SECRET = 'cron-hemmelig';
+process.env.OPPFOLGING_ADMIN_EPOST = 'stefan@fbs.no';
 process.env.RESEND_API_KEY = 're_test';
 const resendKall = [];
 const origFetch = globalThis.fetch;

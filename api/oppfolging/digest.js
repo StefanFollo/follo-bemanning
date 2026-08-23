@@ -56,14 +56,17 @@ export default async function handler(req, res) {
     ]);
     const befaringer = (state && state.befaringer) || [];
     const ansatte = (state && state.ansatte) || [];
-    const plan = planleggVarsler({ befaringer, ansatte, brukere, varselStatus: varselStatus || VARSEL_STATUS_TOM, iDag });
+    // Admin-mottakere: OPPFOLGING_ADMIN_EPOST (kommaseparert). Standard = Stefan,
+    // siden mange kontoer har admin-rolle og speccen sier «PL + Stefan».
+    const adminEposter = String(process.env.OPPFOLGING_ADMIN_EPOST || 'stefan@follobyggservice.no').split(',').map(x => x.trim()).filter(Boolean);
+    const plan = planleggVarsler({ befaringer, ansatte, brukere, varselStatus: varselStatus || VARSEL_STATUS_TOM, iDag, adminEposter });
 
     const oppsummering = {
       iDag, torr, digester: plan.digester.map(d => ({ til: d.til, navn: d.navn, antall: d.antall, forfalt: d.forfalt, egne: d.egne.length, tilAdmin: d.tilAdmin.length })),
       fristVarsler: plan.fristVarsler.map(f => ({ til: f.til, kunde: f.sak.befaring.kontaktNavn, dager: f.dager })),
       eskaleringer: plan.eskaleringer.map(e => ({ til: e.til, kunde: e.sak.befaring.kontaktNavn, tekst: e.sak.tekst })),
       ukesdigest: plan.ukesdigest ? { til: plan.ukesdigest.til, rader: plan.ukesdigest.rader } : null,
-      hoppetOver: plan.hoppetOver, borteIds: plan.borteIds,
+      hoppetOver: plan.hoppetOver, borteIds: plan.borteIds, adminEposter,
     };
     if (torr) return res.status(200).json({ ok: true, ...oppsummering, sendt: [] });
 

@@ -33,11 +33,17 @@ export function iDagOslo(naa = new Date()) {
 function normEpost(e) { return (e || '').trim().toLowerCase(); }
 
 // Slå opp mottakere: bruker-konto (fbs_user) per ansattId, ellers ansatt.epost.
-export function byggMottakere({ ansatte = [], brukere = [], iDag }) {
+// adminEposter: eksplisitt liste (env OPPFOLGING_ADMIN_EPOST) — i prod har
+// mange brukere admin-rolle, og speccen sier «PL + Stefan», ikke «alle admins».
+// Uten liste: fall tilbake til brukere med admin-rolle.
+export function byggMottakere({ ansatte = [], brukere = [], iDag, adminEposter }) {
   const aktive = brukere.filter(u => u && u.active !== false && u.email);
   const perAnsatt = {};
   for (const u of aktive) if (u.ansattId) perAnsatt[u.ansattId] = perAnsatt[u.ansattId] || u;
-  const admins = aktive.filter(u => u.role === 'admin');
+  const eksplisitt = (adminEposter || []).map(normEpost).filter(Boolean);
+  const admins = eksplisitt.length
+    ? eksplisitt.map(e => aktive.find(u => normEpost(u.email) === e) || { email: e, navn: e, role: 'admin' })
+    : aktive.filter(u => u.role === 'admin');
   const mottakerFor = ansattId => {
     const u = perAnsatt[ansattId];
     const a = ansatte.find(x => x.id === ansattId);
@@ -54,7 +60,7 @@ export function byggMottakere({ ansatte = [], brukere = [], iDag }) {
 }
 
 // Hovedfunksjon. Returnerer { digester, fristVarsler, eskaleringer, ukesdigest, nyStatus, hoppetOver }
-export function planleggVarsler({ befaringer = [], ansatte = [], brukere = [], varselStatus, iDag, tvingHverdag = false }) {
+export function planleggVarsler({ befaringer = [], ansatte = [], brukere = [], varselStatus, iDag, tvingHverdag = false, adminEposter }) {
   const status = {
     digest: { ...((varselStatus && varselStatus.digest) || {}) },
     frist: { ...((varselStatus && varselStatus.frist) || {}) },
@@ -64,8 +70,8 @@ export function planleggVarsler({ befaringer = [], ansatte = [], brukere = [], v
   const ut = { digester: [], fristVarsler: [], eskaleringer: [], ukesdigest: null, nyStatus: status, hoppetOver: [] };
   if (!erHverdag(iDag) && !tvingHverdag) { ut.hoppetOver.push('helg'); return ut; }
 
-  const { admins, mottakerFor, borteIds } = byggMottakere({ ansatte, brukere, iDag });
-  const adminEposter = admins.map(a => a.epost);
+  const { admins, mottakerFor, borteIds } = byggMottakere({ ansatte, brukere, iDag, adminEposter });
+  const adminTil = admins.map(a => a.epost);
   const saker = byggOppfolgingsKo(befaringer, iDag);
   const navnFor = id => (ansatte.find(a => a.id === id) || {}).navn || 'Ukjent';
 
@@ -101,7 +107,7 @@ export function planleggVarsler({ befaringer = [], ansatte = [], brukere = [], v
     const nokkel = `${sak.befaringId}:${sak.befaring.tilbudFrist}`;
     if (status.frist[nokkel]) continue;
     const m = sak.ansvarligId ? mottakerFor(sak.ansvarligId) : null;
-    const til = m && !m.borte ? [m.epost] : adminEposter;
+    const til = m && !m.borte ? [m.epost] : adminTil;
     if (!til.length) continue;
     ut.fristVarsler.push({ til, sak, dager: fd });
     status.frist[nokkel] = iDag;
@@ -113,18 +119,18 @@ export function planleggVarsler({ befaringer = [], ansatte = [], brukere = [], v
     const nokkel = `${sak.befaringId}:${sak.forfallDato}`;
     if (status.eskalert[nokkel]) continue;
     const m = sak.ansvarligId ? mottakerFor(sak.ansvarligId) : null;
-    const til = [...new Set([...(m && !m.borte ? [m.epost] : []), ...adminEposter])];
+    const til = [...new Set([...(m && !m.borte ? [m.epost] : []), ...adminTil])];
     if (!til.length) continue;
     ut.eskaleringer.push({ til, sak, plNavn: m ? m.navn : null });
     status.eskalert[nokkel] = iDag;
   }
 
   // ── Mandag: ukesdigest til admin ──
-  if (erMandag(iDag) && status.ukesdigest !== iDag && adminEposter.length) {
+  if (erMandag(iDag) && status.ukesdigest !== iDag && adminTil.length) {
     const stat = ukesStatistikk(befaringer, { iDag });
     const rader = Object.values(stat.perPl).map(r => ({ ...r, navn: r.ansattId === '__ukjent__' ? 'Mangler ansvarlig' : navnFor(r.ansattId) }))
       .sort((a, b) => (b.forfalt - a.forfalt) || a.navn.localeCompare(b.navn, 'nb'));
-    ut.ukesdigest = { til: adminEposter, fra: stat.fra, til_dato: stat.til, rader };
+    ut.ukesdigest = { til: adminTil, fra: stat.fra, til_dato: stat.til, rader };
     status.ukesdigest = iDag;
   }
 
