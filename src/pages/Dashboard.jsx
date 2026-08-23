@@ -6,7 +6,8 @@ import {
   Building2, ShieldAlert, MessageSquare, Eye,
 } from 'lucide-react';
 import { Ikon } from '../komponenter/Ikon';
-import RingIDag from '../komponenter/RingIDag';
+import RingIDag, { OppfolgingUkeAdmin } from '../komponenter/RingIDag';
+import { useState } from 'react';
 
 const FAG_COLORS = {
   'Bas Tømrer': '#b45309', 'Montør': '#3b82f6', 'Lærling Tømrer': '#15803d',
@@ -37,6 +38,7 @@ function dagerTil(iso) {
 
 export default function Dashboard({ onNavigate }) {
   const { state, dispatch } = useApp();
+  const [oppfolgingPl, setOppfolgingPl] = useState('');
   const today = dateToIso(new Date());
   const todayDate = new Date(today + 'T00:00:00');
   const ukeStartI = weekStart(today);
@@ -364,7 +366,8 @@ export default function Dashboard({ onNavigate }) {
 
           {/* Oppfølging: «Ring i dag» — PL-ens kø, admin ser alle + per-PL-filter */}
           <div className="dash-seksjon">
-            <RingIDag onApneKort={id => onNavigate && onNavigate('befaring', id)} />
+            <OppfolgingUkeAdmin valgtPl={oppfolgingPl} onVelgPl={setOppfolgingPl} />
+            <RingIDag onApneKort={id => onNavigate && onNavigate('befaring', id)} plFilter={oppfolgingPl} onPlFilter={setOppfolgingPl} />
           </div>
 
           {/* Tilbudsfrister */}

@@ -199,6 +199,16 @@ export default function AdminUsers() {
     setUsers(u => u.map(x => x.email === email ? { ...x, role } : x));
   }
 
+  // Oppfølgings-modul: «borte til»-flagg + digest-kanal (SPEC §3)
+  async function handleOppfolgingFelt(email, felt, verdi) {
+    await fetch('/api/admin/users', {
+      method: 'PUT',
+      headers: authHeader(),
+      body: JSON.stringify({ email, [felt]: verdi }),
+    });
+    setUsers(u => u.map(x => x.email === email ? { ...x, [felt]: verdi } : x));
+  }
+
   async function handleToggleActive(email, active) {
     await fetch('/api/admin/users', {
       method: 'PUT',
@@ -461,6 +471,23 @@ export default function AdminUsers() {
                   {!u.hasPassword && (
                     <div style={{ fontSize: 12, color: '#b45309', marginTop: 2 }}><IkonTekst ikon={TriangleAlert} size={12} gap={4}>Passord ikke satt ennå</IkonTekst></div>
                   )}
+                  <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginTop: 6, fontSize: 12, color: '#6b7280' }}>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }} title="Oppfølging: sakene vises hos admin til og med denne datoen, og brukeren får ingen digest">
+                      Borte til
+                      <input type="date" value={u.borteTil || ''} onChange={e => handleOppfolgingFelt(u.email, 'borteTil', e.target.value || null)}
+                        style={{ fontSize: 12, padding: '2px 6px', borderRadius: 6, border: '1px solid #e5e7eb', color: u.borteTil ? '#b45309' : '#374151' }} />
+                      {u.borteTil && <button className="btn-icon" title="Fjern borte-flagg" onClick={() => handleOppfolgingFelt(u.email, 'borteTil', null)} style={{ padding: 2 }}><Ikon ikon={X} size={12} /></button>}
+                    </label>
+                    <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }} title="Daglig oppfølgings-digest (push kommer når push-infra er live — e-post brukes inntil da)">
+                      Digest
+                      <select value={u.digestKanal || 'epost'} onChange={e => handleOppfolgingFelt(u.email, 'digestKanal', e.target.value)}
+                        style={{ fontSize: 12, padding: '2px 6px', borderRadius: 6, border: '1px solid #e5e7eb' }}>
+                        <option value="epost">E-post</option>
+                        <option value="push">Push (når live)</option>
+                        <option value="begge">Begge</option>
+                      </select>
+                    </label>
+                  </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
                   <select

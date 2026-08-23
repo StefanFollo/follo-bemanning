@@ -75,6 +75,8 @@ export default async function handler(req, res) {
         active: u.active,
         hasPassword: !!u.passwordHash,
         createdAt: u.createdAt,
+        borteTil: u.borteTil || null,
+        digestKanal: u.digestKanal || 'epost',
       })));
     } catch (e) {
       return res.status(500).json({ error: e.message });
@@ -124,7 +126,7 @@ export default async function handler(req, res) {
   if (req.method === 'PUT') {
     let body = req.body;
     if (typeof body === 'string') try { body = JSON.parse(body); } catch { body = {}; }
-    const { email, role, navn, ansattId, active } = body || {};
+    const { email, role, navn, ansattId, active, borteTil, digestKanal } = body || {};
     if (!email) return res.status(400).json({ error: 'E-post er påkrevd.' });
 
     const emailKey = email.trim().toLowerCase();
@@ -136,6 +138,15 @@ export default async function handler(req, res) {
     if (navn !== undefined) updated.navn = navn;
     if (ansattId !== undefined) updated.ansattId = ansattId;
     if (active !== undefined) updated.active = active;
+    // Oppfølgings-modul: «borte til»-flagg + digest-kanal (kun tillegg)
+    if (borteTil !== undefined) {
+      if (borteTil && !/^\d{4}-\d{2}-\d{2}$/.test(borteTil)) return res.status(400).json({ error: 'borteTil må være YYYY-MM-DD' });
+      updated.borteTil = borteTil || null;
+    }
+    if (digestKanal !== undefined) {
+      if (!['epost', 'push', 'begge'].includes(digestKanal)) return res.status(400).json({ error: 'Ugyldig digestKanal' });
+      updated.digestKanal = digestKanal;
+    }
     await redis.set(`fbs_user:${emailKey}`, updated);
 
     // Oppdater ALLE aktive sesjoner for denne brukeren slik at ny rolle gjelder

@@ -13,7 +13,13 @@ export default async function handler(req, res) {
   const session = await redis.get(`fbs_session:${token}`);
   if (!session) return res.status(401).json({ error: 'Økt utløpt' });
 
+  // Oppfølgings-modul: egne flagg fra brukerkontoen (tåler manglende konto)
+  let user = null;
+  try { user = session.email ? await redis.get(`fbs_user:${String(session.email).toLowerCase()}`) : null; } catch { user = null; }
+
   res.status(200).json({
+    borteTil: (user && user.borteTil) || null,
+    digestKanal: (user && user.digestKanal) || 'epost',
     email: session.email,
     // Manglende rolle → laveste privilegium (aldri admin som standard)
     role: session.role || 'ansatt',

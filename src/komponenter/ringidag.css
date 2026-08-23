@@ -63,3 +63,25 @@
   .rid-felt textarea, .rid-felt input, .rid-filter select { font-size: 16px; }
   .rid-dialog-knapper .btn { flex: 1; justify-content: center; padding: 10px; }
 }
+
+/* Borte-flagg + admin-ukesseksjon */
+.rid-borte { display: inline-flex; align-items: center; gap: 6px; }
+.rid-liten { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 3px 9px; }
+.rid-borte-dato { font-size: 12px; padding: 3px 6px; width: auto; }
+.rid-uke { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; }
+.rid-uke-verktoy { margin-left: auto; display: inline-flex; gap: 6px; }
+.rid-uke-rad {
+  display: grid; grid-template-columns: 1fr auto auto auto; gap: 12px; align-items: center;
+  padding: 6px 10px; border: 1px solid transparent; border-radius: 8px; background: transparent;
+  font-size: 13px; text-align: left; cursor: pointer; color: var(--text-primary);
+}
+.rid-uke-rad:hover { background: var(--bg-subtle); }
+.rid-uke-rad--aktiv { background: var(--accent-subtle); border-color: var(--border); }
+.rid-uke-navn { font-weight: 500; }
+.rid-uke-tall { font-size: 12.5px; color: var(--text-secondary); white-space: nowrap; }
+.rid-digest-resultat { font-size: 12.5px; color: var(--text-secondary); background: var(--bg-subtle); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+@media (max-width: 640px) {
+  .rid-uke-rad { grid-template-columns: 1fr 1fr; }
+  .rid-uke-navn { grid-column: 1 / -1; }
+  .rid-uke-verktoy { margin-left: 0; width: 100%; }
+}
