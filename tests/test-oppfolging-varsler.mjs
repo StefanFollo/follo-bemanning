@@ -1,7 +1,11 @@
 // Test av oppfølgings-varsler (SPEC §3–4): planlegger + digest-endepunkt.
 // Kjør: node tests/test-oppfolging-varsler.mjs
 import http from 'http';
-import { planleggVarsler, lagDigestEpost, lagUkesdigestEpost, lagEskaleringEpost, grupperEskaleringer, erHverdag, erMandag, VARSEL_STATUS_TOM } from '../src/oppfolgingVarsler.js';
+import {
+  planleggVarsler, lagDigestEpost, lagUkesdigestEpost, lagEskaleringEpost, grupperEskaleringer,
+  erHverdag, erMandag, VARSEL_STATUS_TOM,
+  pushNokkelForNavn, byggPushIndeks, bestemKanaler, lagDigestPush, lagEskaleringPush, lagUkesdigestPush,
+} from '../src/oppfolgingVarsler.js';
 import { leggTilDager } from '../src/oppfolging.js';
 
 let feil = 0, ok = 0;
@@ -121,6 +125,36 @@ console.log('\n-- Mandag: ukesdigest til admin --');
   sjekk('Ukesdigest-epost har tabell', e.html.includes('håndtert') && e.html.includes('Joachim'));
 }
 
+console.log('\n-- Push-kanal: mapping, kanalvalg, payload-format --');
+{
+  sjekk('pushNokkelForNavn: fornavn i små bokstaver', pushNokkelForNavn('Joachim Norenberg') === 'joachim' && pushNokkelForNavn('  Lars Fagerli ') === 'lars' && pushNokkelForNavn('') === '');
+  const idx = byggPushIndeks({
+    abonnementer: [
+      { bruker: 'joachim', endpoint: 'https://p/1', keys: { p256dh: 'a', auth: 'b' }, enhet: 'mobil' },
+      { bruker: 'joachim', endpoint: 'https://p/2', keys: { p256dh: 'c', auth: 'd' } },
+      { bruker: 'stefan', endpoint: 'https://p/3', keys: { p256dh: 'e', auth: 'f' } },
+      { bruker: 'ukjentmann', endpoint: 'https://p/4', keys: { p256dh: 'g', auth: 'h' } },
+      { bruker: 'joachim', endpoint: '', keys: null }, // ugyldig — droppes
+    ],
+    innstillinger: { joachim: { epostFallback: false }, stefan: { alleVarsler: true } },
+  });
+  sjekk('Joachim har 2 enheter via navnet sitt', idx.subsFor('Joachim Norenberg').length === 2);
+  sjekk('Ukjent navn → 0 enheter', idx.subsFor('Kari Nordmann').length === 0);
+  sjekk('Innstillinger slås opp på fornavn', idx.innstillingFor('Joachim Norenberg').epostFallback === false && idx.innstillingFor('Stefan Norberg').alleVarsler === true);
+  sjekk('Kanal epost → kun epost', JSON.stringify(bestemKanaler({ kanal: 'epost', antallEnheter: 2 })) === JSON.stringify({ push: false, epost: true, kanal: 'epost', antallEnheter: 2 }));
+  sjekk('Kanal begge m/enheter → push + epost', bestemKanaler({ kanal: 'begge', antallEnheter: 1 }).push === true && bestemKanaler({ kanal: 'begge', antallEnheter: 1 }).epost === true);
+  sjekk('Kanal push m/enheter → kun push (epost er fallback ved feil)', bestemKanaler({ kanal: 'push', antallEnheter: 1 }).push === true && bestemKanaler({ kanal: 'push', antallEnheter: 1 }).epost === false);
+  sjekk('Kanal push UTEN enheter → epost', bestemKanaler({ kanal: 'push', antallEnheter: 0 }).epost === true);
+  sjekk('Ukjent kanal → epost', bestemKanaler({ kanal: 'tull', antallEnheter: 5 }).kanal === 'epost');
+  const dp = lagDigestPush(p1.digester.find(x => x.til === 'joachim@fbs.no'), 'https://app');
+  sjekk('Digest-push matcher sw.js-formatet (tittel/tekst/url/hendelse)',
+    dp.tittel === 'Du har 2 oppfølginger i dag (1 forfalt)' && dp.tekst.includes('Forfalt') && dp.url === 'https://app' && dp.hendelse === 'oppfolging-digest');
+  const ep = lagEskaleringPush(grupperEskaleringer(p1.eskaleringer).find(g => g.til === 'stefan@fbs.no'), 'https://app');
+  sjekk('Eskalering-push: samle-tittel + navneliste', ep.tittel === 'Eskalering: 2 saker forfalt >7 dager' && ep.hendelse === 'oppfolging-eskalering');
+  const up = lagUkesdigestPush(p1.ukesdigest, 'https://app');
+  sjekk('Ukesdigest-push: verstinger i teksten', up.hendelse === 'oppfolging-ukesdigest' && up.tekst.includes('forfalt'));
+}
+
 console.log('\n-- Test 5: planleggeren muterer ingenting --');
 {
   const før = JSON.stringify(befaringer);
@@ -140,6 +174,14 @@ function kjorKommando(cmd) {
   throw new Error('Ustøttet: ' + OP);
 }
 const server = http.createServer((req, res) => {
+  // Fake tilbuds-app: inter-app-abonnementer (Joachim har 1 enhet)
+  if (String(req.url).startsWith('/api/push')) {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    return res.end(JSON.stringify({
+      abonnementer: [{ bruker: 'joachim', endpoint: 'https://push.example/abc', keys: { p256dh: 'x', auth: 'y' }, enhet: 'test' }],
+      innstillinger: { joachim: { epostFallback: true } },
+    }));
+  }
   let body = '';
   req.on('data', c => { body += c; });
   req.on('end', () => {
@@ -156,6 +198,9 @@ process.env.KV_REST_API_URL = `http://127.0.0.1:${server.address().port}`;
 process.env.KV_REST_API_TOKEN = 'test';
 process.env.CRON_SECRET = 'cron-hemmelig';
 process.env.OPPFOLGING_ADMIN_EPOST = 'stefan@fbs.no';
+process.env.INTER_APP_TOKEN = 'inter-test';
+process.env.TILBUDSAPP_URL = `http://127.0.0.1:${server.address().port}`;
+delete process.env.VAPID_PUBLIC_KEY; delete process.env.VAPID_PRIVATE_KEY;
 process.env.RESEND_API_KEY = 're_test';
 const resendKall = [];
 const origFetch = globalThis.fetch;
@@ -199,6 +244,23 @@ console.log('\n-- /api/oppfolging/digest --');
   sjekk('fbs_state urørt av endepunktet', JSON.parse(store.get('fbs_state')).befaringer.length === 6 && !JSON.parse(store.get('fbs_state')).befaringer[0].oppfolgingsLogg);
   r = await kall('POST', 'cron-hemmelig', { dato: d(5) });
   sjekk('Lørdag via cron: 0 sendt, hoppet «helg»', r._body.sendt.length === 0 && r._body.hoppetOver.includes('helg'));
+
+  console.log('\n-- Push-kanal i endepunktet (VAPID mangler → e-post-fallback) --');
+  // Joachim går over til push-kanal; tirsdag gir nye digester
+  store.set('fbs_user:joachim@fbs.no', JSON.stringify({ email: 'joachim@fbs.no', navn: 'Joachim', role: 'befaring', ansattId: 'J1', active: true, digestKanal: 'push' }));
+  r = await kall('GET', 'admintoken', { dato: d(1) });
+  const jo = r._body.digester.find(x => x.til === 'joachim@fbs.no');
+  sjekk('Tørrkjøring viser kanal per mottaker (joachim: push, 1 enhet)', jo && jo.kanal === 'push' && jo.pushEnheter === 1);
+  sjekk('Tørrkjøring viser push-status (VAPID mangler, 1 abonnement)', r._body.push && r._body.push.vapidKlar === false && r._body.push.abonnementer === 1);
+  const førAntall = resendKall.length;
+  r = await kall('POST', 'cron-hemmelig', { dato: d(1) });
+  const joSendt = (r._body.sendt || []).find(x => x.til === 'joachim@fbs.no' && x.emne.startsWith('Du har'));
+  sjekk('VAPID mangler → digest levert som e-post-fallback', joSendt && joSendt.via.includes('epost') && !joSendt.via.some(v => v.startsWith('push:')));
+  sjekk('E-posten faktisk sendt via Resend', resendKall.length > førAntall && resendKall.slice(førAntall).some(k => k.to.join() === 'joachim@fbs.no'));
+  const status2 = JSON.parse(store.get('fbs_oppfolging_varsler'));
+  sjekk('Maks 1/dag på tvers av kanaler: merket én gang for tirsdag', status2.digest['joachim@fbs.no'] === d(1));
+  r = await kall('POST', 'cron-hemmelig', { dato: d(1) });
+  sjekk('Kjøring nr 2 tirsdag: ingen ny levering til Joachim', !(r._body.sendt || []).some(x => x.til === 'joachim@fbs.no'));
 }
 
 server.close();

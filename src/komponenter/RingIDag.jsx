@@ -302,8 +302,9 @@ export function OppfolgingUkeAdmin({ valgtPl, onVelgPl }) {
           {r && (
             <>
               <div><b>{digest.sendt ? 'Sendt nå' : 'Forhåndsvisning'} ({r.iDag}):</b> {r.digester.length} digest{r.digester.length === 1 ? '' : 'er'} · {r.fristVarsler.length} fristvarsel · {r.eskaleringer.length} eskalering{r.eskaleringer.length === 1 ? '' : 'er'}{r.ukesdigest ? ' · ukesdigest' : ''}</div>
-              {r.digester.map(d => <div key={d.til}>· {d.navn} ({d.til}): {d.antall} sak{d.antall === 1 ? '' : 'er'}, {d.forfalt} forfalt{d.tilAdmin ? ` (${d.tilAdmin} som admin)` : ''}</div>)}
+              {r.digester.map(d => <div key={d.til}>· {d.navn} ({d.til}): {d.antall} sak{d.antall === 1 ? '' : 'er'}, {d.forfalt} forfalt{d.tilAdmin ? ` (${d.tilAdmin} som admin)` : ''} — {d.kanal || 'epost'}{d.pushEnheter ? ` (${d.pushEnheter} enhet${d.pushEnheter === 1 ? '' : 'er'})` : ''}</div>)}
               {r.eskaleringer.map((e, i) => <div key={i}>· Eskalering: {e.kunde} → {e.til.join(', ')}</div>)}
+              {r.push && <div style={{ color: 'var(--text-muted)' }}>Push: {r.push.vapidKlar ? 'klar' : 'VAPID-nøkler mangler — e-post brukes'} · {r.push.abonnementer} abonnement{r.push.abonnementer === 1 ? '' : 'er'} fra tilbuds-appen{r.push.feil ? ' · ' + r.push.feil : ''}</div>}
               {r.hoppetOver && r.hoppetOver.length > 0 && <div style={{ color: 'var(--text-muted)' }}>Hoppet over: {r.hoppetOver.join('; ')}</div>}
               {digest.sendt && r.sendt && <div>{r.sendt.length} e-post{r.sendt.length === 1 ? '' : 'er'} sendt{r.sendt.some(x => x.skipped) ? ' (RESEND_API_KEY mangler — simulert)' : ''}{r.feilet && r.feilet.length ? `, ${r.feilet.length} feilet` : ''}</div>}
             </>

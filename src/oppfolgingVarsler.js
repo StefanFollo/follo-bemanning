@@ -205,3 +205,69 @@ export function lagUkesdigestEpost(u, appUrl) {
   const html = `<p>Per prosjektleder:</p><table style="border-collapse:collapse;width:100%;font-size:14px">${rader || '<tr><td>Ingen aktivitet registrert.</td></tr>'}</table>`;
   return { emne, html: ramme(emne, html, appUrl) };
 }
+
+// ── Push-kanal (SPEC §3, push-kobling — abonnementene bor i tilbuds-appen) ──
+// Tilbuds-appen nøkler abonnementer/innstillinger på FORNAVN i små bokstaver
+// («joachim», «stefan» …), ikke e-post — vi mapper via fornavnet i navnet.
+export function pushNokkelForNavn(navn) {
+  return String(navn || '').trim().split(/\s+/)[0].toLowerCase();
+}
+
+export function byggPushIndeks(interapp) {
+  const subs = {};
+  for (const a of (interapp && interapp.abonnementer) || []) {
+    if (!a || !a.endpoint || !a.keys) continue;
+    (subs[a.bruker] = subs[a.bruker] || []).push(a);
+  }
+  const innstillinger = (interapp && interapp.innstillinger) || {};
+  return {
+    subsFor: navn => subs[pushNokkelForNavn(navn)] || [],
+    innstillingFor: navn => innstillinger[pushNokkelForNavn(navn)] || {},
+    antall: ((interapp && interapp.abonnementer) || []).length,
+  };
+}
+
+// Kanalvalg per mottaker ut fra bemanning-brukerens digestKanal og hvorvidt
+// personen har push-enheter. E-post er alltid fallback:
+//  - 'epost'          → e-post
+//  - 'begge'          → push (hvis enheter) + e-post
+//  - 'push' m/enheter → push; e-post KUN hvis push feiler (styrt i digest.js,
+//                       og respekterer tilbuds-appens epostFallback=false)
+//  - 'push' u/enheter → e-post (ellers får personen stille ingenting)
+export function bestemKanaler({ kanal, antallEnheter }) {
+  const k = kanal === 'push' || kanal === 'begge' ? kanal : 'epost';
+  const vilPush = k !== 'epost' && antallEnheter > 0;
+  return { push: vilPush, epost: k === 'epost' || k === 'begge' || !vilPush, kanal: k, antallEnheter: antallEnheter || 0 };
+}
+
+// Push-payloader — MÅ matche tilbuds-appens sw.js: { tittel, tekst, url, hendelse }.
+function kortNavnListe(saker, maks = 3) {
+  const navn = saker.map(s => s.befaring.kontaktNavn || s.befaring.adresse || 'ukjent');
+  return navn.slice(0, maks).join(', ') + (navn.length > maks ? ` +${navn.length - maks} til` : '');
+}
+export function lagDigestPush(d, appUrl) {
+  return {
+    tittel: `Du har ${d.antall} oppfølging${d.antall === 1 ? '' : 'er'} i dag${d.forfalt ? ` (${d.forfalt} forfalt)` : ''}`,
+    tekst: kortNavnListe([...d.egne, ...d.tilAdmin.map(x => x.sak)]),
+    url: appUrl, hendelse: 'oppfolging-digest',
+  };
+}
+export function lagEskaleringPush(gruppe, appUrl) {
+  const saker = gruppe.saker || [];
+  return {
+    tittel: saker.length === 1
+      ? `Eskalering: ${saker[0].sak.befaring.kontaktNavn || saker[0].sak.befaring.adresse}`
+      : `Eskalering: ${saker.length} saker forfalt >7 dager`,
+    tekst: kortNavnListe(saker.map(e => e.sak)),
+    url: appUrl, hendelse: 'oppfolging-eskalering',
+  };
+}
+export function lagUkesdigestPush(u, appUrl) {
+  const verst = u.rader.filter(r => r.forfalt > 0).slice(0, 3)
+    .map(r => `${r.navn} ${r.forfalt} forfalt`).join(' · ');
+  return {
+    tittel: `Oppfølging sist uke (${u.fra} – ${u.til_dato})`,
+    tekst: verst || 'Ingen forfalte saker — godt jobbet.',
+    url: appUrl, hendelse: 'oppfolging-ukesdigest',
+  };
+}
