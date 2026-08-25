@@ -13,6 +13,7 @@
 
 import {
   byggOppfolgingsKo, ukesStatistikk, FRIST_VARSEL_DAGER, SAK_TYPER, sisteNotat,
+  AKTIV_PIPELINE, ansvarligFor, leggTilDager,
 } from './oppfolging.js';
 
 export const VARSEL_STATUS_TOM = { digest: {}, frist: {}, eskalert: {}, ukesdigest: null };
@@ -91,12 +92,22 @@ export function planleggVarsler({ befaringer = [], ansatte = [], brukere = [], v
   }
 
   // ── Daglig digest (maks 1/dag, kun de med saker) ──
+  // Hvert element beriket til morgenbrief (SPEC-morgenbrief-digest.md):
+  // varme signaler, dagens avtaler, frister og ukens tall — kun innhold,
+  // triggere/dedup er som før.
+  const ansattIdForEpost = epost => {
+    const a = admins.find(x => x.epost === epost && x.ansattId);
+    if (a) return a.ansattId;
+    const u = brukere.find(x => x && normEpost(x.email) === epost);
+    return (u && u.ansattId) || null;
+  };
   for (const p of Object.values(perEpost)) {
     const antall = p.egne.length + p.tilAdmin.length;
     if (antall === 0) continue;
     if (status.digest[p.epost] === iDag) { ut.hoppetOver.push(`digest allerede sendt i dag: ${p.epost}`); continue; }
     const forfalt = p.egne.filter(s => s.forfalt).length + p.tilAdmin.filter(x => x.sak.forfalt).length;
-    ut.digester.push({ til: p.epost, navn: p.navn, egne: p.egne, tilAdmin: p.tilAdmin, antall, forfalt });
+    const brief = morgenbriefData({ befaringer, ansattId: ansattIdForEpost(p.epost), egne: p.egne, iDag });
+    ut.digester.push({ til: p.epost, navn: p.navn, egne: p.egne, tilAdmin: p.tilAdmin, antall, forfalt, iDag, ...brief });
     status.digest[p.epost] = iDag;
   }
 
@@ -150,11 +161,11 @@ function sakLinje(sak, appUrl) {
     ${n ? `<br><span style="color:#6b7280">“${esc(n.tekst)}”</span>` : ''}
   </li>`;
 }
-function ramme(tittel, innhold, appUrl) {
+function ramme(tittel, innhold, appUrl, undertittel = 'FolloByggService · Oppfølging') {
   return `<div style="font-family:sans-serif;max-width:560px;margin:auto;padding:20px;background:#f8fafc;border-radius:12px">
     <div style="background:#0f2942;color:#fff;padding:14px 20px;border-radius:8px;margin-bottom:18px">
       <h1 style="margin:0;font-size:18px">${esc(tittel)}</h1>
-      <p style="margin:4px 0 0;opacity:.8;font-size:13px">FolloByggService · Oppfølging</p>
+      <p style="margin:4px 0 0;opacity:.8;font-size:13px">${esc(undertittel)}</p>
     </div>
     ${innhold}
     <div style="text-align:center;margin:22px 0 6px">
@@ -164,12 +175,130 @@ function ramme(tittel, innhold, appUrl) {
   </div>`;
 }
 
+// ── Morgenbrief (SPEC-morgenbrief-digest.md) ────────────────────────
+export const MORGENBRIEF_MAKS_RADER = 8;
+export function datoKortNo(iso) { return `${iso.slice(8, 10)}.${iso.slice(5, 7)}`; }
+
+function varmeTekst(b) {
+  const akt = Array.isArray(b.kundeAktivitet) ? b.kundeAktivitet : [];
+  const siste = akt[akt.length - 1] || {};
+  if (siste.handling === 'klikket-aksepter') return 'klikket Aksepter på tilbudet';
+  if (siste.handling === 'klikket-sporsmal') return 'klikket Spørsmål på tilbudet';
+  const antall = siste.antall || b.antallKundeAapninger;
+  return `åpnet tilbudet${antall ? ' ' + antall + 'x' : ''} siste døgn`;
+}
+
+// Seksjonsdata for én mottaker. Uten ansattId (ren admin-adresse) finnes
+// verken egne varme signaler, avtaler eller ukestall — seksjonene utelates.
+export function morgenbriefData({ befaringer = [], ansattId, egne = [], iDag }) {
+  const frister = egne.filter(s => {
+    const fd = s.fristDager !== undefined ? s.fristDager : (s.type === 'frist' ? s.dager : undefined);
+    return fd !== undefined && fd >= 0 && fd <= FRIST_VARSEL_DAGER;
+  });
+  if (!ansattId) return { ansattId: null, varme: [], avtaler: [], frister, uke: null };
+  const grense = leggTilDager(iDag, -1);
+  const varme = befaringer
+    .filter(b => b && !b.arkivert && AKTIV_PIPELINE.includes(b.status) && ansvarligFor(b) === ansattId
+      && b.sistKundeAktivitet && String(b.sistKundeAktivitet) >= grense)
+    .sort((a, b) => String(b.sistKundeAktivitet).localeCompare(String(a.sistKundeAktivitet)))
+    .map(b => ({ befaring: b, tekst: varmeTekst(b) }));
+  const avtaler = befaringer
+    .filter(b => b && !b.arkivert && b.status === 'planlagt' && b.dato === iDag
+      && (b.ansvarligBefaringId === ansattId || b.prosjektlederId === ansattId))
+    .sort((a, b) => String(a.tid || '99').localeCompare(String(b.tid || '99')));
+  const uke = ukesStatistikk(befaringer, { iDag }).perPl[ansattId] || { ansattId, handtert: 0, utsatt: 0, forfalt: 0, eskalert: 0 };
+  return { ansattId, varme, avtaler, frister, uke };
+}
+
+export function morgenbriefEmne(d) {
+  const deler = [`${d.antall} å ringe${d.forfalt ? ` (${d.forfalt} forfalt)` : ''}`];
+  if ((d.avtaler || []).length) deler.push(`${d.avtaler.length} befaring${d.avtaler.length === 1 ? '' : 'er'} i dag`);
+  return `Morgenbrief ${datoKortNo(d.iDag)}: ${deler.join(' · ')}`;
+}
+
+function telHtml(b) {
+  return b.telefon ? ` · <a href="tel:${esc(String(b.telefon).replace(/\s+/g, ''))}" style="color:#0f2942;font-weight:600">${esc(b.telefon)}</a>` : '';
+}
+function overskrift(tekst) {
+  return `<p style="margin:18px 0 8px;font-size:12px;font-weight:700;letter-spacing:.06em;color:#0f2942;border-bottom:2px solid #f59e0b;padding-bottom:4px">${tekst}</p>`;
+}
+
 export function lagDigestEpost(d, appUrl) {
-  const emne = `Du har ${d.antall} oppfølging${d.antall === 1 ? '' : 'er'} i dag${d.forfalt ? ` (${d.forfalt} forfalt)` : ''}`;
-  let html = `<p>Hei ${esc(d.navn)},</p>`;
-  if (d.egne.length) html += `<p>Dine saker (mest forfalt øverst):</p><ul style="padding-left:18px">${d.egne.map(s => sakLinje(s, appUrl)).join('')}</ul>`;
-  if (d.tilAdmin.length) html += `<p><b>Hos deg som admin i mellomtiden:</b></p><ul style="padding-left:18px">${d.tilAdmin.map(x => sakLinje(x.sak, appUrl).replace('</li>', `<br><i style="color:#9ca3af">${esc(x.grunn)}</i></li>`)).join('')}</ul>`;
-  return { emne, html: ramme(emne, html, appUrl) };
+  const emne = morgenbriefEmne(d);
+  const tekst = [emne, ''];
+  let html = `<p style="margin:0 0 6px">Hei ${esc(d.navn)},</p>`;
+
+  // A — varme signaler øverst: kunden sitter og leser tilbudet
+  if ((d.varme || []).length) {
+    html += overskrift('🔥 VARME NÅ — kundeaktivitet siste døgn');
+    tekst.push('VARME NÅ:');
+    for (const v of d.varme) {
+      const b = v.befaring;
+      html += `<p style="margin:0 0 8px"><b>${esc(b.kontaktNavn || b.adresse)}</b>${b.adresse && b.kontaktNavn ? ' — ' + esc(b.adresse) : ''} · ${esc(v.tekst)}${telHtml(b)}</p>`;
+      tekst.push(`- ${b.kontaktNavn || b.adresse}: ${v.tekst}${b.telefon ? ' · tlf ' + b.telefon : ''}`);
+    }
+    tekst.push('');
+  }
+
+  // B — hele køen, maks 8 rader + «og N til»
+  const rader = d.egne.slice(0, MORGENBRIEF_MAKS_RADER);
+  const rest = d.egne.length - rader.length;
+  if (d.egne.length) {
+    html += overskrift(`RING I DAG (${d.egne.length}${d.forfalt ? ' · ' + d.egne.filter(s => s.forfalt).length + ' forfalt' : ''})`);
+    tekst.push(`RING I DAG (${d.egne.length}):`);
+    html += rader.map((s, i) => {
+      const b = s.befaring;
+      const n = sisteNotat(b);
+      tekst.push(`${i + 1}. ${b.kontaktNavn || b.adresse} — ${s.tekst}${b.telefon ? ' · ' + b.telefon : ''}`);
+      return `<p style="margin:0 0 10px">${i + 1}. <b>${esc(b.kontaktNavn || b.adresse)}</b>${b.adresse && b.kontaktNavn ? ' — ' + esc(b.adresse) : ''}<br>
+        <span style="color:#6b7280">${esc(SAK_TYPER[s.type].label)}</span> · <span style="color:${s.forfalt ? '#b91c1c' : '#b45309'};font-weight:600">${esc(s.tekst)}</span>${telHtml(b)}<br>
+        ${n ? `<i style="color:#6b7280">«${esc(n.tekst)}»</i> · ` : ''}<a href="${esc(appUrl)}/?kort=${encodeURIComponent(b.id)}" style="color:#0f2942">Åpne kortet</a>
+      </p>`;
+    }).join('');
+    if (rest > 0) {
+      html += `<p style="margin:0 0 10px"><a href="${esc(appUrl)}" style="color:#0f2942">… og ${rest} til — åpne appen</a></p>`;
+      tekst.push(`… og ${rest} til — åpne appen`);
+    }
+    tekst.push('');
+  }
+
+  // Admin-saker (mangler ansvarlig / PL borte) — uendret logikk, ny drakt
+  if ((d.tilAdmin || []).length) {
+    html += overskrift(`HOS DEG SOM ADMIN (${d.tilAdmin.length})`);
+    tekst.push('HOS DEG SOM ADMIN:');
+    html += `<ul style="padding-left:18px;margin:0 0 10px">${d.tilAdmin.map(x => sakLinje(x.sak, appUrl).replace('</li>', `<br><i style="color:#9ca3af">${esc(x.grunn)}</i></li>`)).join('')}</ul>`;
+    for (const x of d.tilAdmin) tekst.push(`- ${x.sak.befaring.kontaktNavn || x.sak.befaring.adresse} — ${x.sak.tekst} (${x.grunn})`);
+    tekst.push('');
+  }
+
+  // C — dagens avtaler + frister (utelates helt hvis tom)
+  const cLinjer = [];
+  for (const b of d.avtaler || []) {
+    cLinjer.push({ html: `• Befaring${b.tid ? ' kl. ' + esc(b.tid) : ''} — ${esc(b.kontaktNavn || '')}${b.adresse ? ', ' + esc(b.adresse) : ''}${telHtml(b)}`,
+      tekst: `- Befaring${b.tid ? ' kl. ' + b.tid : ''} — ${b.kontaktNavn || ''}${b.adresse ? ', ' + b.adresse : ''}` });
+  }
+  for (const s of d.frister || []) {
+    const b = s.befaring;
+    const fd = s.fristDager !== undefined ? s.fristDager : s.dager;
+    cLinjer.push({ html: `• Tilbudsfrist løper ut: ${esc(b.kontaktNavn || b.adresse)} (${fd === 0 ? 'i dag!' : fd + ' dager igjen'})`,
+      tekst: `- Tilbudsfrist: ${b.kontaktNavn || b.adresse} (${fd === 0 ? 'i dag!' : fd + ' dager igjen'})` });
+  }
+  if (cLinjer.length) {
+    html += overskrift('I DAG');
+    tekst.push('I DAG:');
+    html += cLinjer.map(l => `<p style="margin:0 0 6px">${l.html}</p>`).join('');
+    for (const l of cLinjer) tekst.push(l.tekst);
+    tekst.push('');
+  }
+
+  // D — ukens tall som fot
+  if (d.uke) {
+    const fot = `Din uke så langt: ${d.uke.handtert} håndtert · ${d.uke.forfalt} forfalt igjen · ${d.uke.utsatt} utsatt`;
+    html += `<p style="margin:16px 0 0;padding-top:10px;border-top:1px solid #e5e7eb;color:#6b7280;font-size:13px">${esc(fot)}</p>`;
+    tekst.push(fot);
+  }
+
+  return { emne, html: ramme(emne, html, appUrl, 'Follo Byggservice · Morgenbrief'), tekst: tekst.join('\n') };
 }
 export function lagFristEpost(f, appUrl) {
   const b = f.sak.befaring;
@@ -246,10 +375,17 @@ function kortNavnListe(saker, maks = 3) {
   return navn.slice(0, maks).join(', ') + (navn.length > maks ? ` +${navn.length - maks} til` : '');
 }
 export function lagDigestPush(d, appUrl) {
+  const dagTekst = s => s.dager < 0 ? `${-s.dager} d` : s.dager === 0 ? 'i dag' : `om ${s.dager} d`;
+  const topp = d.egne.slice(0, 2).map(s => `${s.befaring.kontaktNavn || s.befaring.adresse} (${dagTekst(s)})`);
+  let tekst = topp.join(', ') + (d.egne.length > 2 ? ' …' : '');
+  if ((d.varme || []).length) {
+    const fornavn = String(d.varme[0].befaring.kontaktNavn || d.varme[0].befaring.adresse || 'Kunden').split(/\s+/)[0];
+    tekst = `🔥 ${fornavn} leser tilbudet ditt` + (tekst ? ' · ' + tekst : '');
+  }
+  if (!tekst) tekst = kortNavnListe(d.tilAdmin.map(x => x.sak));
   return {
-    tittel: `Du har ${d.antall} oppfølging${d.antall === 1 ? '' : 'er'} i dag${d.forfalt ? ` (${d.forfalt} forfalt)` : ''}`,
-    tekst: kortNavnListe([...d.egne, ...d.tilAdmin.map(x => x.sak)]),
-    url: appUrl, hendelse: 'oppfolging-digest',
+    tittel: `Morgenbrief: ${d.antall} å ringe${d.forfalt ? ` (${d.forfalt} forfalt)` : ''}`,
+    tekst, url: appUrl, hendelse: 'oppfolging-digest',
   };
 }
 export function lagEskaleringPush(gruppe, appUrl) {

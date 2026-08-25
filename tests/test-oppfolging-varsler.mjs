@@ -5,8 +5,9 @@ import {
   planleggVarsler, lagDigestEpost, lagUkesdigestEpost, lagEskaleringEpost, grupperEskaleringer,
   erHverdag, erMandag, VARSEL_STATUS_TOM,
   pushNokkelForNavn, byggPushIndeks, bestemKanaler, lagDigestPush, lagEskaleringPush, lagUkesdigestPush,
+  morgenbriefData, morgenbriefEmne, datoKortNo, MORGENBRIEF_MAKS_RADER,
 } from '../src/oppfolgingVarsler.js';
-import { leggTilDager } from '../src/oppfolging.js';
+import { leggTilDager, ukesStatistikk as ukesStatistikkRef } from '../src/oppfolging.js';
 
 let feil = 0, ok = 0;
 function sjekk(navn, betingelse, detalj = '') {
@@ -66,7 +67,7 @@ const p1 = planleggVarsler({ befaringer, ansatte, brukere, varselStatus: VARSEL_
   const p5 = planleggVarsler({ befaringer: [befaringer[5]], ansatte, brukere, varselStatus: VARSEL_STATUS_TOM, iDag: MANDAG });
   sjekk('Uten saker: ingen digester i det hele tatt', p5.digester.length === 0);
   const e = lagDigestEpost(p1.digester.find(x => x.til === 'joachim@fbs.no'), 'https://app');
-  sjekk('Digest-emne «Du har 2 oppfølginger i dag (1 forfalt)»', e.emne === 'Du har 2 oppfølginger i dag (1 forfalt)' && e.html.includes('Forfalt') && e.html.includes('tel:') === false);
+  sjekk('Morgenbrief-emne «Morgenbrief 24.08: 2 å ringe (1 forfalt)»', e.emne === 'Morgenbrief 24.08: 2 å ringe (1 forfalt)' && e.html.includes('Forfalt') && e.html.includes('tel:') === false, e.emne);
 }
 
 console.log('\n-- Admin-mottakere via eksplisitt liste (env) — ikke «alle med admin-rolle» --');
@@ -147,12 +148,54 @@ console.log('\n-- Push-kanal: mapping, kanalvalg, payload-format --');
   sjekk('Kanal push UTEN enheter → epost', bestemKanaler({ kanal: 'push', antallEnheter: 0 }).epost === true);
   sjekk('Ukjent kanal → epost', bestemKanaler({ kanal: 'tull', antallEnheter: 5 }).kanal === 'epost');
   const dp = lagDigestPush(p1.digester.find(x => x.til === 'joachim@fbs.no'), 'https://app');
-  sjekk('Digest-push matcher sw.js-formatet (tittel/tekst/url/hendelse)',
-    dp.tittel === 'Du har 2 oppfølginger i dag (1 forfalt)' && dp.tekst.includes('Forfalt') && dp.url === 'https://app' && dp.hendelse === 'oppfolging-digest');
+  sjekk('Digest-push: morgenbrief-tittel + to øverste med dager',
+    dp.tittel === 'Morgenbrief: 2 å ringe (1 forfalt)' && dp.tekst.includes('Forfalt (62 d)') && dp.url === 'https://app' && dp.hendelse === 'oppfolging-digest', dp.tittel + ' | ' + dp.tekst);
   const ep = lagEskaleringPush(grupperEskaleringer(p1.eskaleringer).find(g => g.til === 'stefan@fbs.no'), 'https://app');
   sjekk('Eskalering-push: samle-tittel + navneliste', ep.tittel === 'Eskalering: 2 saker forfalt >7 dager' && ep.hendelse === 'oppfolging-eskalering');
   const up = lagUkesdigestPush(p1.ukesdigest, 'https://app');
   sjekk('Ukesdigest-push: verstinger i teksten', up.hendelse === 'oppfolging-ukesdigest' && up.tekst.includes('forfalt'));
+}
+
+console.log('\n-- Morgenbrief: seksjoner A–D, maks 8, tomme utelates (SPEC-morgenbrief) --');
+{
+  const mb = [
+    ...befaringer,
+    { id: 'V1', kontaktNavn: 'Samuel Vigdal', adresse: 'Nybrottveien 38', telefon: '982 19 448', status: 'tilbud_sendt', nesteKontakt: d(2), prosjektlederId: 'J1',
+      sistKundeAktivitet: MANDAG + 'T05:00:00Z', kundeAktivitet: [{ handling: 'aapnet', tidspunkt: MANDAG + 'T05:00:00Z', antall: 3 }] },
+    { id: 'A1', kontaktNavn: 'Arja Hakala', adresse: 'Gydas vei 59', telefon: '90090090', status: 'planlagt', dato: MANDAG, tid: '11:00', ansvarligBefaringId: 'J1' },
+    { id: 'A2', kontaktNavn: 'Ikke min', status: 'planlagt', dato: MANDAG, tid: '09:00', ansvarligBefaringId: 'L1' },
+    { id: 'V2', kontaktNavn: 'Gammel Aktivitet', status: 'tilbud_sendt', nesteKontakt: d(3), prosjektlederId: 'J1', sistKundeAktivitet: d(-5) + 'T05:00:00Z' },
+  ];
+  const p = planleggVarsler({ befaringer: mb, ansatte, brukere, varselStatus: VARSEL_STATUS_TOM, iDag: MANDAG });
+  const j = p.digester.find(x => x.til === 'joachim@fbs.no');
+  sjekk('Emne med avtale-del: «… · 1 befaring i dag»', morgenbriefEmne(j) === 'Morgenbrief 24.08: 2 å ringe (1 forfalt) · 1 befaring i dag', morgenbriefEmne(j));
+  sjekk('A: varmt signal = Samuel (3x åpnet), gammel aktivitet utelatt', j.varme.length === 1 && j.varme[0].befaring.id === 'V1' && j.varme[0].tekst === 'åpnet tilbudet 3x siste døgn');
+  sjekk('C: kun egen avtale (Arja, ikke Lars sin)', j.avtaler.length === 1 && j.avtaler[0].id === 'A1');
+  sjekk('C: frist-sak med i I DAG', j.frister.length === 1 && j.frister[0].befaringId === 'B4');
+  sjekk('D: ukens tall matcher ukesStatistikk (testkrav 7)', j.uke && j.uke.forfalt === (ukesStatistikkRef(mb).perPl.J1 || {}).forfalt);
+  const ep = lagDigestEpost(j, 'https://app');
+  sjekk('HTML: VARME NÅ øverst før RING I DAG', ep.html.indexOf('VARME NÅ') > 0 && ep.html.indexOf('VARME NÅ') < ep.html.indexOf('RING I DAG'));
+  sjekk('HTML: tel:-lenke + dyplenke ?kort=', ep.html.includes('tel:98219448') && ep.html.includes('?kort=B1'));
+  sjekk('HTML: I DAG-seksjon med kl. 11:00 og frist', ep.html.includes('>I DAG</p>') && ep.html.includes('kl. 11:00') && ep.html.includes('Tilbudsfrist løper ut: Frist (3 dager igjen)'));
+  sjekk('HTML: fot med ukens tall', ep.html.includes('Din uke så langt: 0 håndtert · 1 forfalt igjen · 0 utsatt'));
+  sjekk('Morgenbrief-drakt i headeren', ep.html.includes('Follo Byggservice · Morgenbrief'));
+  sjekk('Ren tekst: seksjoner + emne', ep.tekst.startsWith(ep.emne) && ep.tekst.includes('VARME NÅ:') && ep.tekst.includes('RING I DAG (2):') && ep.tekst.includes('I DAG:'));
+  // Tomme seksjoner utelates (testkrav 2) — Stefan har verken varme eller avtaler
+  const s = p.digester.find(x => x.til === 'stefan@fbs.no');
+  const eps = lagDigestEpost(s, 'https://app');
+  sjekk('Tom A/C utelates helt hos Stefan', !eps.html.includes('VARME NÅ') && !eps.html.includes('>I DAG</p>') && eps.html.includes('HOS DEG SOM ADMIN'));
+  sjekk('Ansattløs mottaker får ingen ukesfot', lagDigestEpost({ ...s, uke: null, iDag: MANDAG }, 'https://app').html.includes('Din uke så langt') === false);
+  // Maks 8 + «og N til» (testkrav 4)
+  const mange = Array.from({ length: 10 }, (_, i) => ({ id: 'M' + i, kontaktNavn: 'Kunde ' + i, status: 'tilbud_sendt', nesteKontakt: d(-(i + 1)), prosjektlederId: 'J1' }));
+  const pm = planleggVarsler({ befaringer: mange, ansatte, brukere, varselStatus: VARSEL_STATUS_TOM, iDag: MANDAG });
+  const jm = lagDigestEpost(pm.digester.find(x => x.til === 'joachim@fbs.no'), 'https://app');
+  sjekk('Maks 8 rader + «og 2 til»', jm.html.includes('8. <b>') && !jm.html.includes('9. <b>') && jm.html.includes('og 2 til') && MORGENBRIEF_MAKS_RADER === 8);
+  // Push komprimert (SPEC §2)
+  const pp = lagDigestPush(j, 'https://app');
+  sjekk('Push: 🔥-signal først, så to øverste saker', pp.tittel === 'Morgenbrief: 2 å ringe (1 forfalt)' && pp.tekst.startsWith('🔥 Samuel leser tilbudet ditt') && pp.tekst.includes('Forfalt (62 d)'));
+  // Triggere uendret (🛑-rammen): tom kø → ingen digest selv med varme/avtaler
+  const kunVarm = [mb.find(b => b.id === 'V1'), mb.find(b => b.id === 'A1')];
+  sjekk('Trigger uendret: kun varme/avtaler uten kø-saker → ingen digest', planleggVarsler({ befaringer: kunVarm, ansatte, brukere, varselStatus: VARSEL_STATUS_TOM, iDag: MANDAG }).digester.filter(x => x.til === 'joachim@fbs.no').length === 0);
 }
 
 console.log('\n-- Test 5: planleggeren muterer ingenting --');
@@ -235,7 +278,8 @@ console.log('\n-- /api/oppfolging/digest --');
   sjekk('Cron POST sender: 2 digester + 1 frist + 2 eskaleringsmailer (per mottaker) + 1 ukesdigest = 6 e-poster', r._kode === 200 && r._body.ok && resendKall.length === 6, 'fikk ' + resendKall.length);
   sjekk('Eskaleringsmail til Stefan samler 2 saker', resendKall.some(k => k.to.join() === 'stefan@fbs.no' && k.subject === 'Eskalering: 2 saker forfalt mer enn 7 dager'));
   const emner = resendKall.map(k => k.subject);
-  sjekk('Emner riktige', emner.some(e => e.startsWith('Du har 2 oppfølginger')) && emner.some(e => e.startsWith('Tilbudsfrist Frist')) && emner.some(e => e.startsWith('Eskalering:')) && emner.some(e => e.startsWith('Oppfølging sist uke')));
+  sjekk('Emner riktige', emner.some(e => e.startsWith('Morgenbrief ' + datoKortNo(MANDAG) + ':')) && emner.some(e => e.startsWith('Tilbudsfrist Frist')) && emner.some(e => e.startsWith('Eskalering:')) && emner.some(e => e.startsWith('Oppfølging sist uke')));
+  sjekk('Morgenbrief-eposten har ren tekst-fallback', resendKall.filter(k => k.subject.startsWith('Morgenbrief')).every(k => typeof k.text === 'string' && (k.text.includes('RING I DAG') || k.text.includes('HOS DEG SOM ADMIN'))));
   const status = JSON.parse(store.get('fbs_oppfolging_varsler'));
   sjekk('Varselstatus lagret med dato per mottaker', status.digest['joachim@fbs.no'] === MANDAG && status.ukesdigest === MANDAG && Object.keys(status.eskalert).length === 2);
   const antallFør = resendKall.length;
@@ -254,7 +298,7 @@ console.log('\n-- /api/oppfolging/digest --');
   sjekk('Tørrkjøring viser push-status (VAPID mangler, 1 abonnement)', r._body.push && r._body.push.vapidKlar === false && r._body.push.abonnementer === 1);
   const førAntall = resendKall.length;
   r = await kall('POST', 'cron-hemmelig', { dato: d(1) });
-  const joSendt = (r._body.sendt || []).find(x => x.til === 'joachim@fbs.no' && x.emne.startsWith('Du har'));
+  const joSendt = (r._body.sendt || []).find(x => x.til === 'joachim@fbs.no' && x.emne.startsWith('Morgenbrief'));
   sjekk('VAPID mangler → digest levert som e-post-fallback', joSendt && joSendt.via.includes('epost') && !joSendt.via.some(v => v.startsWith('push:')));
   sjekk('E-posten faktisk sendt via Resend', resendKall.length > førAntall && resendKall.slice(førAntall).some(k => k.to.join() === 'joachim@fbs.no'));
   const status2 = JSON.parse(store.get('fbs_oppfolging_varsler'));

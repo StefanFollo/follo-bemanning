@@ -319,6 +319,20 @@ function App() {
   const [resetDone, setResetDone] = useState(false);
   useAutoOppdatering(loggedIn);
 
+  // Dyplenke fra morgenbrief-eposten: ?kort=<befaringId> åpner kortet direkte
+  // (kun roller som har Befaring-siden; parameteren fjernes fra URL-en etterpå).
+  useEffect(() => {
+    if (!localStorage.getItem('fbs_token')) return;
+    const kort = new URLSearchParams(window.location.search).get('kort');
+    if (!kort) return;
+    const r = localStorage.getItem('fbs_role');
+    if (['admin', 'kontor', 'befaring'].includes(r)) {
+      setApneBefaringId(kort);
+      setActiveTab('befaring');
+    }
+    window.history.replaceState({}, '', window.location.pathname);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Hent fersk rolle fra server ved oppstart — fanger opp rolle-endringer
   // gjort av admin uten at brukeren må logge ut og inn igjen.
   useEffect(() => {

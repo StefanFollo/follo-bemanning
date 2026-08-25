@@ -17,7 +17,7 @@
 import { Redis } from '@upstash/redis';
 import {
   planleggVarsler, lagDigestEpost, lagFristEpost, lagEskaleringEpost, grupperEskaleringer,
-  lagUkesdigestEpost, iDagOslo, VARSEL_STATUS_TOM,
+  lagUkesdigestEpost, iDagOslo, VARSEL_STATUS_TOM, morgenbriefEmne,
   byggPushIndeks, bestemKanaler, lagDigestPush, lagEskaleringPush, lagUkesdigestPush,
 } from '../../src/oppfolgingVarsler.js';
 import { sendEpost } from '../_epost.js';
@@ -94,7 +94,16 @@ export default async function handler(req, res) {
       iDag, torr,
       digester: plan.digester.map(d => {
         const k = kanalInfoFor(d.til);
-        return { til: d.til, navn: d.navn, antall: d.antall, forfalt: d.forfalt, egne: d.egne.length, tilAdmin: d.tilAdmin.length, kanal: k.kanal, pushEnheter: k.antallEnheter };
+        return {
+          til: d.til, navn: d.navn, antall: d.antall, forfalt: d.forfalt, egne: d.egne.length, tilAdmin: d.tilAdmin.length,
+          kanal: k.kanal, pushEnheter: k.antallEnheter,
+          // Morgenbrief-seksjonene (SPEC-morgenbrief-digest.md, testkrav 5)
+          emne: morgenbriefEmne(d),
+          varme: (d.varme || []).map(v => (v.befaring.kontaktNavn || v.befaring.adresse) + ' · ' + v.tekst),
+          avtaler: (d.avtaler || []).map(b => (b.tid ? 'kl. ' + b.tid + ' ' : '') + (b.kontaktNavn || b.adresse)),
+          frister: (d.frister || []).length,
+          uke: d.uke ? { handtert: d.uke.handtert, forfalt: d.uke.forfalt, utsatt: d.uke.utsatt } : null,
+        };
       }),
       fristVarsler: plan.fristVarsler.map(f => ({ til: f.til, kunde: f.sak.befaring.kontaktNavn, dager: f.dager })),
       eskaleringer: plan.eskaleringer.map(e => ({ til: e.til, kunde: e.sak.befaring.kontaktNavn, tekst: e.sak.tekst })),
