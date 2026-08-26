@@ -209,6 +209,20 @@ export default function AdminUsers() {
     setUsers(u => u.map(x => x.email === email ? { ...x, [felt]: verdi } : x));
   }
 
+  // Sikkerhetsrunden pkt 5: drep alle sesjoner uten å deaktivere kontoen.
+  async function handleLoggUtAlle(email) {
+    const egen = email === (localStorage.getItem('fbs_user_email') || '').toLowerCase();
+    if (!window.confirm(`Logge ut ${email} fra alle enheter?${egen ? ' (Dette er DIN konto — du blir logget ut nå.)' : ' Brukeren må logge inn på nytt.'}`)) return;
+    const r = await fetch('/api/admin/users', {
+      method: 'PUT',
+      headers: authHeader(),
+      body: JSON.stringify({ email, loggUtAlle: true }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.ok) alert(`${d.loggetUt || 0} sesjon${d.loggetUt === 1 ? '' : 'er'} logget ut.`);
+    else alert('Feil: ' + (d.error || r.status));
+  }
+
   async function handleToggleActive(email, active) {
     await fetch('/api/admin/users', {
       method: 'PUT',
@@ -510,6 +524,14 @@ export default function AdminUsers() {
                       Send invitasjon
                     </button>
                   )}
+                  <button
+                    className="btn-secondary"
+                    style={{ fontSize: 12, padding: '4px 10px' }}
+                    title="Sletter alle innloggings-sesjoner for brukeren — kontoen består, men alle enheter må logge inn på nytt"
+                    onClick={() => handleLoggUtAlle(u.email)}
+                  >
+                    Logg ut alle
+                  </button>
                   <button
                     className="btn-secondary"
                     style={{ fontSize: 12, padding: '4px 10px', color: u.active ? '#6b7280' : '#15803d' }}

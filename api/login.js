@@ -61,9 +61,11 @@ export default async function handler(req, res) {
     if (!ok) return res.status(401).json({ error: 'Feil e-post eller passord.' });
 
     const token = randomBytes(32).toString('hex');
+    // 7 dager med glidende forlengelse ved bruk (api/me + lagring forlenger) —
+    // aktive brukere merker ingenting, ubrukte tokens dør etter en uke.
     await redis.set(`fbs_session:${token}`, {
       email: emailKey, role: user.role, ansattId: user.ansattId || null, navn: user.navn,
-    }, { ex: 30 * 24 * 3600 });
+    }, { ex: 7 * 24 * 3600 });
     return res.status(200).json({ token, role: user.role, navn: user.navn });
   }
 
@@ -78,7 +80,7 @@ export default async function handler(req, res) {
     const token = randomBytes(32).toString('hex');
     await redis.set(`fbs_session:${token}`, {
       email: emailKey, role: 'admin', ansattId: null, navn: 'Admin',
-    }, { ex: 30 * 24 * 3600 });
+    }, { ex: 7 * 24 * 3600 });
     return res.status(200).json({ token, role: 'admin', navn: 'Admin' });
   }
 

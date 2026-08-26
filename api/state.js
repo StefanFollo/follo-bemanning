@@ -10,7 +10,11 @@ const redis = new Redis({
 async function getSession(req) {
   const token = (req.headers.authorization || '').replace('Bearer ', '').trim();
   if (!token) return null;
-  return await redis.get(`fbs_session:${token}`);
+  const session = await redis.get(`fbs_session:${token}`);
+  // Glidende 7-dagers sesjon (pkt 4): lagring/henting av state er selve
+  // aktivitetssignalet. Fire-and-forget — skal aldri blokkere requesten.
+  if (session) { try { await redis.expire(`fbs_session:${token}`, 7 * 24 * 3600); } catch { /* aldri blokker requesten */ } }
+  return session;
 }
 
 // Sammenlign to elementer uten _endret-stempelet, ufølsom for nøkkelrekkefølge

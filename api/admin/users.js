@@ -126,12 +126,24 @@ export default async function handler(req, res) {
   if (req.method === 'PUT') {
     let body = req.body;
     if (typeof body === 'string') try { body = JSON.parse(body); } catch { body = {}; }
-    const { email, role, navn, ansattId, active, borteTil, digestKanal } = body || {};
+    const { email, role, navn, ansattId, active, borteTil, digestKanal, loggUtAlle } = body || {};
     if (!email) return res.status(400).json({ error: 'E-post er påkrevd.' });
 
     const emailKey = email.trim().toLowerCase();
     const user = await redis.get(`fbs_user:${emailKey}`);
     if (!user) return res.status(404).json({ error: 'Bruker ikke funnet.' });
+
+    // «Logg ut alle enheter» (sikkerhetsrunden pkt 5): samme mekanisme som
+    // deaktivering, men uten å røre kontoen. Egen gren — endrer ingenting annet.
+    if (loggUtAlle === true) {
+      let slettet = 0;
+      const sessionKeys = await redis.keys('fbs_session:*');
+      for (const key of sessionKeys) {
+        const sess = await redis.get(key);
+        if (sess && sess.email === emailKey) { await redis.del(key); slettet++; }
+      }
+      return res.status(200).json({ ok: true, loggetUt: slettet });
+    }
 
     const updated = { ...user };
     if (role) updated.role = role;

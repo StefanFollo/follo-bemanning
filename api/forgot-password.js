@@ -1,6 +1,22 @@
 import { Redis } from '@upstash/redis';
 import { randomBytes } from 'crypto';
 
+// Samme mønster som login.js: x-real-ip kan ikke forfalskes av klienten.
+function klientIp(req) {
+  const xff = (req.headers['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(Boolean);
+  return req.headers['x-real-ip'] || xff[xff.length - 1] || 'unknown';
+}
+async function rateLimit(nokkel, maks) {
+  try {
+    const key = `fbs_attempts:${nokkel}`;
+    const attempts = await redis.incr(key);
+    if (attempts === 1) await redis.expire(key, 900);
+    return attempts > maks;
+  } catch {
+    return false;
+  }
+}
+
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,
   token: process.env.KV_REST_API_TOKEN,
@@ -60,6 +76,14 @@ export default async function handler(req, res) {
   if (!email) return res.status(400).json({ error: 'E-post er påkrevd.' });
 
   const emailKey = email.trim().toLowerCase();
+
+  // Endepunktet er uautentisert — uten sperre kan hvem som helst spamme
+  // reset-eposter til de ansatte (sikkerhetsrunden pkt 2). 3 per 15 min
+  // per e-post OG per IP; svarer 200 uansett så konto-eksistens ikke lekker.
+  if (await rateLimit(`reset-ip:${klientIp(req)}`, 3) || await rateLimit(`reset-epost:${emailKey}`, 3)) {
+    console.warn('[forgot-password] rate-limit truffet for', emailKey);
+    return res.status(200).json({ ok: true });
+  }
   const user = await redis.get(`fbs_user:${emailKey}`);
 
   // Always respond OK (don't reveal if email exists)

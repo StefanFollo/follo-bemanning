@@ -13,6 +13,10 @@ export default async function handler(req, res) {
   const session = await redis.get(`fbs_session:${token}`);
   if (!session) return res.status(401).json({ error: 'Økt utløpt' });
 
+  // Glidende sesjon: hver app-oppstart forlenger til 7 nye dager
+  // (sikkerhetsrunden pkt 4). Feiler stille — utløp er ikke kritisk her.
+  try { await redis.expire(`fbs_session:${token}`, 7 * 24 * 3600); } catch { /* utløp er ikke kritisk her */ }
+
   // Oppfølgings-modul: egne flagg fra brukerkontoen (tåler manglende konto)
   let user = null;
   try { user = session.email ? await redis.get(`fbs_user:${String(session.email).toLowerCase()}`) : null; } catch { user = null; }
