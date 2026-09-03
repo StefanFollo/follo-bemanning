@@ -339,7 +339,18 @@ function App() {
     const token = localStorage.getItem('fbs_token');
     if (!token) return;
     fetch('/api/me', { headers: { Authorization: `Bearer ${token}` } })
-      .then(r => r.ok ? r.json() : null)
+      .then(r => {
+        // Død/utløpt økt: vis innloggingssiden i stedet for en app som later
+        // som alt er OK (postkasse-oppdrag 3). Lokal data røres IKKE — kun
+        // sesjonsnøklene fjernes, så alt er der igjen etter innlogging.
+        if (r.status === 401) {
+          localStorage.removeItem('fbs_token');
+          localStorage.removeItem('fbs_auth');
+          setLoggedIn(false);
+          return null;
+        }
+        return r.ok ? r.json() : null;
+      })
       .then(data => {
         if (!data) return;
         if (data.role && data.role !== localStorage.getItem('fbs_role')) {
