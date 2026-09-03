@@ -7,21 +7,40 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   HardHat, CircleCheck, Circle, CircleSlash, MessageSquare, ChevronLeft,
-  Loader, TriangleAlert, Building2, RefreshCw,
+  Loader, TriangleAlert, Building2, RefreshCw, Camera, PenLine,
 } from 'lucide-react';
 import { Ikon } from '../komponenter/Ikon';
 import './ksflate.css';
 
 const STATUS_TEKST = { 'ikke-startet': 'Ikke startet', 'pagar': 'Påbegynt', 'ferdig': 'Ferdig' };
 
-async function api(metode, token, body) {
-  const r = await fetch(`/api/ks/flate${metode === 'GET' ? `?token=${encodeURIComponent(token)}` : ''}`, {
-    method: metode,
-    headers: { 'Content-Type': 'application/json' },
-    ...(metode === 'POST' ? { body: JSON.stringify({ token, ...body }) } : {}),
-  });
-  const data = await r.json().catch(() => ({}));
-  return { ok: r.ok, status: r.status, data };
+// Ett automatisk nytt forsøk ved nettverksfeil — byggeplass-nett er upålitelig.
+// Serveren tåler dobbeltkall per handling (idempotent skriving).
+async function api(metode, token, body, forsok = 0) {
+  try {
+    const r = await fetch(`/api/ks/flate${metode === 'GET' ? `?token=${encodeURIComponent(token)}` : ''}`, {
+      method: metode,
+      headers: { 'Content-Type': 'application/json' },
+      ...(metode === 'POST' ? { body: JSON.stringify({ token, ...body }) } : {}),
+    });
+    const data = await r.json().catch(() => ({}));
+    return { ok: r.ok, status: r.status, data };
+  } catch {
+    if (forsok < 1) { await new Promise(res => setTimeout(res, 800)); return api(metode, token, body, forsok + 1); }
+    return { ok: false, status: 0, data: { error: 'Ingen nettforbindelse — prøv igjen.' } };
+  }
+}
+
+// Klient-komprimering (spec test-krav 7): maks 1600 px lengste side, JPEG 0.8.
+async function komprimerBilde(fil) {
+  const bitmap = await createImageBitmap(fil).catch(() => null);
+  if (!bitmap) return null;
+  const skala = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(bitmap.width * skala);
+  c.height = Math.round(bitmap.height * skala);
+  c.getContext('2d').drawImage(bitmap, 0, 0, c.width, c.height);
+  return c.toDataURL('image/jpeg', 0.8);
 }
 
 function Verifisering({ token, fornavn, onOk }) {
@@ -95,7 +114,28 @@ function Punkt({ punkt, laast, onEndre }) {
               <Ikon ikon={MessageSquare} size={12} /> {punkt.kommentar ? 'Kommentar' : 'Legg til kommentar'}
             </button>
           )}
+          {!laast && (
+            <label className="ksf-lenkeknapp" style={{ cursor: lagrer ? 'wait' : 'pointer' }}>
+              <Ikon ikon={Camera} size={12} /> {punkt.krever_bilde && !(punkt.bilder || []).length ? 'Bilde (påkrevd)' : 'Ta bilde'}
+              <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} disabled={lagrer}
+                onChange={async e => {
+                  const fil = e.target.files && e.target.files[0];
+                  e.target.value = '';
+                  if (!fil) return;
+                  const dataUrl = await komprimerBilde(fil);
+                  if (!dataUrl) { setFeil(true); return; }
+                  await sett({ __bilde: dataUrl });
+                }} />
+            </label>
+          )}
         </div>
+        {(punkt.bilder || []).length > 0 && (
+          <div className="ksf-bilder">
+            {punkt.bilder.map((b, i) => (
+              <a key={i} href={b.url} target="_blank" rel="noreferrer"><img src={b.url} alt={'Bilde ' + (i + 1)} loading="lazy" /></a>
+            ))}
+          </div>
+        )}
         {visKommentar && (
           <div className="ksf-kommentar">
             <textarea rows={2} value={kommentar} disabled={laast} placeholder="Kort kommentar (valgfritt)…"
@@ -110,6 +150,31 @@ function Punkt({ punkt, laast, onEndre }) {
   );
 }
 
+// «Signer og lever» (spec §2): navn forhåndsutfylt fra ansattkortet,
+// dato/tid låses på serveren — etterpå er lista skrivebeskyttet for ansatt.
+function SignerOgLever({ navn: forhandsutfylt, onLever }) {
+  const [navn, setNavn] = useState(forhandsutfylt || '');
+  const [sender, setSender] = useState(false);
+  return (
+    <div className="ksf-kort ksf-signer">
+      <div className="ksf-signer-tittel"><Ikon ikon={PenLine} size={16} /> Signer og lever</div>
+      <p>Alle punkter er avklart. Når du leverer, låses listen med navn og tidspunkt — endringer etterpå må gå via prosjektleder.</p>
+      <label className="ksf-signer-felt">
+        <span>Navn</span>
+        <input value={navn} onChange={e => setNavn(e.target.value)} placeholder="Ditt navn" />
+      </label>
+      <button className="ksf-knapp ksf-knapp--primar" disabled={!navn.trim() || sender}
+        onClick={async () => {
+          if (!window.confirm('Levere og låse sjekklisten som «' + navn.trim() + '»?')) return;
+          setSender(true);
+          await onLever(navn.trim());
+          setSender(false);
+        }}>
+        {sender ? <Ikon ikon={Loader} size={16} className="ksf-spinn" /> : 'Signer og lever'}
+      </button>
+    </div>
+  );
+}
 export default function KsAnsattflate({ token }) {
   const [data, setData] = useState(null);
   const [feil, setFeil] = useState(null);
@@ -128,7 +193,9 @@ export default function KsAnsattflate({ token }) {
   useEffect(() => { hent(); }, [hent]);
 
   async function endrePunkt(sjekklisteId, punktId, felter) {
-    const r = await api('POST', token, { handling: 'punkt', sjekklisteId, punktId, ...felter });
+    const r = felter.__bilde
+      ? await api('POST', token, { handling: 'bilde', sjekklisteId, punktId, bildeData: felter.__bilde })
+      : await api('POST', token, { handling: 'punkt', sjekklisteId, punktId, ...felter });
     if (!r.ok) { if (r.data.laast || r.data.utlopt) hent(); return false; }
     // Oppdater lokalt (autolagret på server allerede)
     setData(d => ({
@@ -136,12 +203,19 @@ export default function KsAnsattflate({ token }) {
       prosjekter: d.prosjekter.map(p => ({
         ...p,
         sjekklister: p.sjekklister.map(sl => sl.id !== sjekklisteId ? sl : {
-          ...sl, status: r.data.sjekklisteStatus,
+          ...sl, status: r.data.sjekklisteStatus || sl.status,
           punkter: sl.punkter.map(pk => pk.id === punktId ? r.data.punkt : pk),
         }),
       })),
     }));
     return true;
+  }
+
+  async function leverListe(sjekklisteId, navn) {
+    const r = await api('POST', token, { handling: 'lever', sjekklisteId, navn });
+    if (!r.ok) { window.alert(r.data.error || 'Fikk ikke levert — prøv igjen.'); return; }
+    await hent();
+    setValgt(null);
   }
 
   const topp = (
@@ -177,7 +251,10 @@ export default function KsAnsattflate({ token }) {
           <Punkt key={p.id} punkt={p} laast={aktiv.levert}
             onEndre={felter => endrePunkt(aktiv.id, p.id, felter)} />
         ))}
-        <div className="ksf-fot">Alt lagres automatisk. Signering og bilder kommer i neste versjon — lever via prosjektleder inntil videre.</div>
+        {!aktiv.levert && gjort === aktiv.punkter.length && aktiv.punkter.length > 0 && (
+          <SignerOgLever navn={data.navn} onLever={navn => leverListe(aktiv.id, navn)} />
+        )}
+        <div className="ksf-fot">Alt lagres automatisk mens du fyller ut.</div>
       </div>
     );
   }

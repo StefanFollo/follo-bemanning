@@ -70,3 +70,13 @@
 .ksf-fot { text-align: center; color: #94a3b8; font-size: 12.5px; margin-top: 18px; line-height: 1.5; }
 .ksf-spinn { animation: ksf-spinn 1s linear infinite; }
 @keyframes ksf-spinn { to { transform: rotate(360deg); } }
+
+/* PR2: bilder + signering */
+.ksf-bilder { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.ksf-bilder img { width: 72px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid #e2e8f0; }
+.ksf-signer { border: 2px solid #f59e0b; }
+.ksf-signer-tittel { display: flex; align-items: center; gap: 7px; font-weight: 600; font-size: 15px; margin-bottom: 6px; }
+.ksf-signer p { font-size: 13.5px; color: #475569; line-height: 1.5; margin: 0 0 10px; }
+.ksf-signer-felt { display: block; margin-bottom: 12px; }
+.ksf-signer-felt span { display: block; font-size: 12.5px; font-weight: 600; color: #475569; margin-bottom: 4px; }
+.ksf-signer-felt input { width: 100%; font-size: 16px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 12px; }

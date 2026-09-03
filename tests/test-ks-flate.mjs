@@ -20,7 +20,20 @@ function kjorKommando(cmd) {
   if (OP === 'KEYS') { const pre = String(args[0]).replace('*', ''); return [...store.keys()].filter(k => k.startsWith(pre)); }
   throw new Error('Ustøttet: ' + OP);
 }
+const blobKall = [];
 const server = http.createServer((req, res) => {
+  if (String(req.url).startsWith('/blob/')) {
+    const u2 = new URL(req.url, 'http://x');
+    const pathname = decodeURIComponent(u2.pathname.slice('/blob/'.length)) || u2.searchParams.get('pathname') || '';
+    let n = 0;
+    req.on('data', c => { n += c.length; });
+    req.on('end', () => {
+      blobKall.push({ pathname, size: n });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ url: 'https://blob.example/' + pathname, downloadUrl: 'https://blob.example/' + pathname, pathname, contentType: 'image/jpeg', contentDisposition: 'inline' }));
+    });
+    return;
+  }
   let body = '';
   req.on('data', c => { body += c; });
   req.on('end', () => {
@@ -35,6 +48,22 @@ const server = http.createServer((req, res) => {
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 process.env.KV_REST_API_URL = `http://127.0.0.1:${server.address().port}`;
 process.env.KV_REST_API_TOKEN = 'test';
+process.env.BLOB_READ_WRITE_TOKEN = 'vercel_blob_rw_AbC123dEf456GhI7_x0x0x0x0x0x0x0x0x0x0x0x0x0';
+process.env.VERCEL_BLOB_API_URL = `http://127.0.0.1:${server.address().port}/blob`;
+process.env.TWILIO_ACCOUNT_SID = 'ACtest';
+process.env.TWILIO_AUTH_TOKEN = 'twiliohemmelig';
+process.env.TWILIO_SENDER = 'Follo Bygg';
+// Fang Twilio-kall — Blob går til fake-serveren via VERCEL_BLOB_API_URL
+const twilioKall = [];
+const origFetch = globalThis.fetch;
+globalThis.fetch = async (url, opts) => {
+  const u = String(url);
+  if (u.includes('api.twilio.com')) {
+    twilioKall.push({ url: u, body: String(opts.body), auth: opts.headers.Authorization });
+    return new Response(JSON.stringify({ sid: 'SM' + twilioKall.length }), { status: 201, headers: { 'Content-Type': 'application/json' } });
+  }
+  return origFetch(url, opts);
+};
 const { default: flate } = await import('../api/ks/flate.js');
 const { default: flateAdmin } = await import('../api/ks/flate-admin.js');
 
@@ -155,6 +184,65 @@ console.log('\n-- Utfylling: lagres på sjekklisten + historikk; låst når leve
   sjekk('Antall sjekklister uendret (4)', JSON.parse(store.get('fbs_ks_sjekklister')).length === 4);
 }
 
+console.log('\n-- PR2: bilde per punkt → Vercel Blob (testkrav 5/7 server-side) --');
+{
+  const pikselJpeg = 'data:image/jpeg;base64,' + Buffer.from('fake-jpeg-bytes-etter-klientkomprimering').toString('base64');
+  let r = await kall(flate, 'POST', { body: { token, handling: 'bilde', sjekklisteId: 'SL1', punktId: 'p1', bildeData: pikselJpeg } });
+  sjekk('Bilde lastes opp og festes på punktet', r._kode === 200 && r._body.punkt.bilder.length === 1 && r._body.punkt.bilder[0].url.startsWith('https://blob.example/ks-bilder/P1/SL1/flate-') && r._body.punkt.bilder[0].av === 'Tomas Snekker', JSON.stringify(r._body));
+  sjekk('Blob-kall gikk til riktig sti', blobKall.length === 1 && blobKall[0].pathname.includes('ks-bilder/P1/SL1/flate-') && blobKall[0].size > 10);
+  const lagretB = JSON.parse(store.get('fbs_ks_sjekklister')).find(s => s.id === 'SL1');
+  sjekk('Bildet lagret på sjekklisten (PL ser det — testkrav 5)', lagretB.punkter[0].bilder.length === 1);
+  r = await kall(flate, 'POST', { body: { token, handling: 'bilde', sjekklisteId: 'SL1', punktId: 'p1', bildeData: 'ikke-en-dataurl' } });
+  sjekk('Ugyldig bildeData avvises', r._kode === 400);
+  r = await kall(flate, 'POST', { body: { token, handling: 'bilde', sjekklisteId: 'SL2', punktId: 'x', bildeData: pikselJpeg } });
+  sjekk('Bilde på andres liste avvises', r._kode === 403 && blobKall.length === 1);
+  const histB = JSON.parse(store.get('fbs_ks_utfylling_historikk'));
+  sjekk('Bilde logget i historikk', histB.some(h => h.handling === 'bilde' && h.bildeUrl));
+}
+
+console.log('\n-- PR2: «Signer og lever» låser lista (testkrav 5) --');
+{
+  // SL1: p1 er nullstilt fra tidligere test — lever skal avvises
+  let r = await kall(flate, 'POST', { body: { token, handling: 'lever', sjekklisteId: 'SL1', navn: 'Tomas Snekker' } });
+  sjekk('Lever med uavklarte punkter avvises', r._kode === 400 && r._body.uavklarte >= 1);
+  await kall(flate, 'POST', { body: { token, handling: 'punkt', sjekklisteId: 'SL1', punktId: 'p1', status: 'ok' } });
+  r = await kall(flate, 'POST', { body: { token, handling: 'lever', sjekklisteId: 'SL1' } });
+  sjekk('Lever uten navn bruker ansattnavnet + låser', r._kode === 200 && r._body.signert_av === 'Tomas Snekker' && r._body.signert_dato);
+  const lev = JSON.parse(store.get('fbs_ks_sjekklister')).find(s => s.id === 'SL1');
+  sjekk('Lagret: signert_av/dato + levert_dato + status ferdig', lev.signert_av === 'Tomas Snekker' && lev.levert_dato && lev.status === 'ferdig');
+  r = await kall(flate, 'POST', { body: { token, handling: 'punkt', sjekklisteId: 'SL1', punktId: 'p1', status: '' } });
+  sjekk('Levert liste er låst for videre endring (testkrav 5)', r._kode === 409 && r._body.laast);
+  r = await kall(flate, 'GET', { query: { token } });
+  sjekk('Flaten viser lista som levert', r._body.prosjekter[0].sjekklister.find(s => s.id === 'SL1').levert === true);
+  const histL = JSON.parse(store.get('fbs_ks_utfylling_historikk'));
+  sjekk('Levering logget', histL.some(h => h.handling === 'levert' && h.signertAv === 'Tomas Snekker'));
+}
+
+console.log('\n-- PR2: SMS-utsending + gjenbruk av lenke --');
+{
+  // regenerer:false gjenbruker eksisterende (verifisert) token
+  let r = await kall(flateAdmin, 'POST', { auth: 'admintoken', body: { ansattId: 'A1', regenerer: false, sendSms: true } });
+  sjekk('Gjenbruk: samme lenke, ikke regenerert', r._kode === 200 && r._body.gjenbrukt === true && r._body.url.endsWith('/ks/' + token));
+  sjekk('SMS sendt via Twilio', r._body.sms && r._body.sms.sendt === true && twilioKall.length === 1);
+  const tw = twilioKall[0];
+  sjekk('Twilio-kall: riktig konto, normalisert nummer, lenke i meldingen',
+    tw.url.includes('ACtest') && tw.body.includes('To=%2B4791234567') && decodeURIComponent(tw.body.replace(/\+/g, ' ')).includes('/ks/' + token) && tw.auth.startsWith('Basic '));
+  r = await kall(flateAdmin, 'GET', { auth: 'admintoken' });
+  sjekk('Status viser sendtDato', !!r._body.perAnsatt.A1.sendtDato);
+  // Token fortsatt verifisert (gjenbruk nullstiller ikke)
+  r = await kall(flate, 'GET', { query: { token } });
+  sjekk('Gjenbrukt lenke er fortsatt verifisert', r._kode === 200 && !r._body.maaVerifisere);
+  // Uten Twilio-env: skipped, ikke feil
+  const sid = process.env.TWILIO_ACCOUNT_SID; delete process.env.TWILIO_ACCOUNT_SID;
+  r = await kall(flateAdmin, 'POST', { auth: 'admintoken', body: { ansattId: 'A1', regenerer: false, sendSms: true } });
+  sjekk('Uten TWILIO-env: hoppet over, ingen krasj', r._kode === 200 && r._body.sms.hoppet === true);
+  process.env.TWILIO_ACCOUNT_SID = sid;
+  // regenerer:true (standard) lager fortsatt ny
+  r = await kall(flateAdmin, 'POST', { auth: 'admintoken', body: { ansattId: 'A1' } });
+  sjekk('Standard regenererer fortsatt (PR1-oppførsel)', r._body.regenerert === true && !r._body.url.endsWith('/ks/' + token));
+}
+
+globalThis.fetch = origFetch;
 server.close();
 console.log(`\n=== ${ok} OK, ${feil} FEIL ===`);
 process.exit(feil > 0 ? 1 : 0);

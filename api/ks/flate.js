@@ -12,8 +12,13 @@
 // andre ansatte. Utfylling logges i fbs_ks_utfylling_historikk (ryddes aldri).
 
 import { Redis } from '@upstash/redis'
+import { put } from '@vercel/blob'
 
 const redis = new Redis({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN })
+
+// Bilder sendes som dataURL i JSON (klient-komprimert til maks ~1600px/0.8):
+// hev bodyParser-grensen — standard 1 MB er for lite for byggeplass-bilder.
+export const config = { api: { bodyParser: { sizeLimit: '6mb' } } }
 
 export const TOKENS_NOKKEL = 'fbs_ks_flate_tokens'
 export const HISTORIKK_NOKKEL = 'fbs_ks_utfylling_historikk'
@@ -58,7 +63,28 @@ function punktUt(p) {
     krever_bilde: !!p.krever_bilde, krever_signering: !!p.krever_signering,
     status: p.status || '', kommentar: p.kommentar || '', utfort_av: p.utfort_av || null, utfort_dato: p.utfort_dato || null,
     signert_av: p.signert_av || null,
+    bilder: (p.bilder || []).map(b => ({ url: b.url, opplastet: b.opplastet || null, av: b.av || null })),
   }
+}
+
+async function loggHistorikk(innslag) {
+  try {
+    const hist = (await redis.get(HISTORIKK_NOKKEL)) || []
+    hist.push(innslag)
+    await redis.set(HISTORIKK_NOKKEL, hist)
+  } catch { /* historikk-feil skal aldri stoppe utfyllingen */ }
+}
+
+// Felles vern for skrivende handlinger: eierskap + lås. Returnerer
+// { alle, idx, sl } eller skriver feilsvar og returnerer null.
+async function hentSkrivbarSjekkliste(res, sjekklisteId, ansatt) {
+  const alle = (await redis.get('fbs_ks_sjekklister')) || []
+  const idx = alle.findIndex(s => s && s.id === sjekklisteId)
+  if (idx < 0) { res.status(404).json({ error: 'Sjekklisten finnes ikke' }); return null }
+  const sl = alle[idx]
+  if (!erAnsvarlig(sl, ansatt.navn)) { res.status(403).json({ error: 'Du er ikke ansvarlig for denne sjekklisten' }); return null }
+  if (sl.signert_av || sl.levert_dato) { res.status(409).json({ laast: true, error: 'Sjekklisten er levert og kan ikke endres. Kontakt prosjektleder.' }); return null }
+  return { alle, idx, sl }
 }
 
 async function hentTokenInfo(token) {
@@ -128,12 +154,9 @@ export default async function handler(req, res) {
         // Avvik meldes via PL i PR1 — ansattflaten kan kun kvittere/ikke-aktuelt
         return res.status(400).json({ error: 'Ugyldig status for ansattflaten' })
       }
-      const alle = (await redis.get('fbs_ks_sjekklister')) || []
-      const idx = alle.findIndex(s => s && s.id === sjekklisteId)
-      if (idx < 0) return res.status(404).json({ error: 'Sjekklisten finnes ikke' })
-      const sl = alle[idx]
-      if (!erAnsvarlig(sl, ansatt.navn)) return res.status(403).json({ error: 'Du er ikke ansvarlig for denne sjekklisten' })
-      if (sl.signert_av || sl.levert_dato) return res.status(409).json({ laast: true, error: 'Sjekklisten er levert og kan ikke endres. Kontakt prosjektleder.' })
+      const funn2 = await hentSkrivbarSjekkliste(res, sjekklisteId, ansatt)
+      if (!funn2) return
+      const { alle, idx, sl } = funn2
       const pIdx = (sl.punkter || []).findIndex(p => p && p.id === punktId)
       if (pIdx < 0) return res.status(404).json({ error: 'Punktet finnes ikke' })
       const punkt = sl.punkter[pIdx]
@@ -152,15 +175,62 @@ export default async function handler(req, res) {
       alle[idx] = sl
       await redis.set('fbs_ks_sjekklister', alle)
 
-      // Historikk — ryddes aldri
-      try {
-        const hist = (await redis.get(HISTORIKK_NOKKEL)) || []
-        hist.push({ dato: new Date().toISOString(), ansattId: ansatt.id, navn: ansatt.navn, kilde: 'ansattflate',
-          sjekklisteId, prosjektId: sl.prosjektId, punktId, foer, etter: { status: ny.status || '', kommentar: ny.kommentar || '' } })
-        await redis.set(HISTORIKK_NOKKEL, hist)
-      } catch { /* historikk-feil skal aldri stoppe utfyllingen */ }
+      await loggHistorikk({ dato: new Date().toISOString(), ansattId: ansatt.id, navn: ansatt.navn, kilde: 'ansattflate',
+        sjekklisteId, prosjektId: sl.prosjektId, punktId, foer, etter: { status: ny.status || '', kommentar: ny.kommentar || '' } })
 
       return res.status(200).json({ ok: true, punkt: punktUt(ny), sjekklisteStatus: sl.status })
+    }
+
+    // ── PR2: bilde per punkt (klient-komprimert dataURL → Vercel Blob) ──
+    if (handling === 'bilde') {
+      if (!info.verifisert) return res.status(401).json({ maaVerifisere: true, error: 'Bekreft med de 4 siste sifrene i telefonnummeret ditt først.' })
+      const { sjekklisteId, punktId, bildeData } = body || {}
+      if (!sjekklisteId || !punktId || !bildeData) return res.status(400).json({ error: 'Mangler sjekklisteId, punktId eller bildeData' })
+      if (!process.env.BLOB_READ_WRITE_TOKEN) return res.status(503).json({ error: 'Bildelagring er ikke konfigurert (BLOB_READ_WRITE_TOKEN mangler).' })
+      const m = String(bildeData).match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/)
+      if (!m) return res.status(400).json({ error: 'bildeData må være en dataURL (jpeg/png/webp)' })
+      if (m[2].length > 5_500_000) return res.status(413).json({ error: 'Bildet er for stort — prøv igjen (komprimeres automatisk).' })
+      const funn3 = await hentSkrivbarSjekkliste(res, sjekklisteId, ansatt)
+      if (!funn3) return
+      const { alle, idx, sl } = funn3
+      const pIdx = (sl.punkter || []).findIndex(p => p && p.id === punktId)
+      if (pIdx < 0) return res.status(404).json({ error: 'Punktet finnes ikke' })
+      const buf = Buffer.from(m[2], 'base64')
+      const ext = m[1] === 'image/png' ? 'png' : m[1] === 'image/webp' ? 'webp' : 'jpg'
+      const blobNavn = `ks-bilder/${sl.prosjektId}/${sjekklisteId}/flate-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.${ext}`
+      let blob
+      try {
+        blob = await put(blobNavn, buf, { access: 'public', contentType: m[1] })
+      } catch (e) {
+        return res.status(502).json({ error: 'Opplasting feilet: ' + e.message })
+      }
+      const bilde = { url: blob.url, opplastet: new Date().toISOString(), av: ansatt.navn, kilde: 'ansattflate' }
+      const punkt = { ...sl.punkter[pIdx], bilder: [...(sl.punkter[pIdx].bilder || []), bilde] }
+      sl.punkter = sl.punkter.map((p, i) => (i === pIdx ? punkt : p))
+      alle[idx] = sl
+      await redis.set('fbs_ks_sjekklister', alle)
+      await loggHistorikk({ dato: bilde.opplastet, ansattId: ansatt.id, navn: ansatt.navn, kilde: 'ansattflate',
+        sjekklisteId, prosjektId: sl.prosjektId, punktId, handling: 'bilde', bildeUrl: blob.url })
+      return res.status(200).json({ ok: true, punkt: punktUt(punkt) })
+    }
+
+    // ── PR2: «Signer og lever» — låser lista for den ansatte ──
+    if (handling === 'lever') {
+      if (!info.verifisert) return res.status(401).json({ maaVerifisere: true, error: 'Bekreft med de 4 siste sifrene i telefonnummeret ditt først.' })
+      const { sjekklisteId } = body || {}
+      if (!sjekklisteId) return res.status(400).json({ error: 'Mangler sjekklisteId' })
+      const funn4 = await hentSkrivbarSjekkliste(res, sjekklisteId, ansatt)
+      if (!funn4) return
+      const { alle, idx, sl } = funn4
+      const uavklarte = (sl.punkter || []).filter(p => p && p.status !== 'ok' && p.status !== 'ikke-aktuelt')
+      if (uavklarte.length) return res.status(400).json({ uavklarte: uavklarte.length, error: `${uavklarte.length} punkt${uavklarte.length === 1 ? '' : 'er'} er ikke avklart ennå — kvitter eller marker «ikke aktuelt» først.` })
+      const navn = String((body.navn || '')).trim() || ansatt.navn
+      const naa = new Date().toISOString()
+      alle[idx] = { ...sl, signert_av: navn, signert_dato: naa, levert_dato: naa, status: 'ferdig' }
+      await redis.set('fbs_ks_sjekklister', alle)
+      await loggHistorikk({ dato: naa, ansattId: ansatt.id, navn: ansatt.navn, kilde: 'ansattflate',
+        sjekklisteId, prosjektId: sl.prosjektId, handling: 'levert', signertAv: navn })
+      return res.status(200).json({ ok: true, levert: true, signert_av: navn, signert_dato: naa })
     }
 
     return res.status(400).json({ error: 'Ukjent handling' })

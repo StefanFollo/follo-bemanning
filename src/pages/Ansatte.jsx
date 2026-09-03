@@ -88,18 +88,23 @@ export default function Ansatte() {
   // KS-ansattflate PR1: generer/regenerer personlig lenke (SMS kommer i PR2 —
   // inntil da kopieres lenken og sendes manuelt). Mangler telefon → tydelig varsel.
   async function hentKsLenke(ansatt) {
-    if (!window.confirm(`Lage ${ansatt.navn} sin personlige KS-lenke?\nEn eventuell gammel lenke slutter å virke.`)) return;
+    const harTlf = !!String(ansatt.telefon || '').replace(/\D/g, '').slice(-4);
+    // PR2: eksisterende lenke gjenbrukes (regenerer:false) — sperret lenke
+    // regenereres automatisk på serveren. SMS sendes når nummer finnes og
+    // det bekreftes; ellers kopieres lenken som før.
+    const sendSms = harTlf && window.confirm('Sende ' + ansatt.navn + ' sin personlige KS-lenke på SMS til ' + ansatt.telefon + '?\n\n(Avbryt = bare kopiér lenken)');
     try {
       const r = await fetch('/api/ks/flate-admin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (localStorage.getItem('fbs_token') || '') },
-        body: JSON.stringify({ ansattId: ansatt.id }),
+        body: JSON.stringify({ ansattId: ansatt.id, regenerer: false, sendSms }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || r.status);
-      let melding = `KS-lenke for ${ansatt.navn}:\n${d.url}`;
+      let melding = 'KS-lenke for ' + ansatt.navn + (d.gjenbrukt ? ' (samme som før)' : d.regenerert ? ' (NY — gammel lenke er død)' : ' (ny)') + ':\n' + d.url;
+      if (d.sms) melding += d.sms.sendt ? '\n\nSMS er sendt.' : d.sms.hoppet ? '\n\nSMS IKKE sendt: TWILIO_*-variablene mangler i Vercel.' : '\n\nSMS FEILET: ' + d.sms.feil;
       if (d.manglerTelefon) melding += '\n\nOBS: Ansatt mangler telefonnummer — 4-siffer-bekreftelsen vil ikke virke før nummeret er lagt inn på ansattkortet.';
-      try { await navigator.clipboard.writeText(d.url); melding += '\n\n(Lenken er kopiert til utklippstavlen — send den på SMS.)'; } catch { /* utklipp kan feile */ }
+      try { await navigator.clipboard.writeText(d.url); melding += '\n\n(Lenken er også kopiert til utklippstavlen.)'; } catch { /* utklipp kan feile */ }
       window.alert(melding);
     } catch (e) {
       window.alert('Kunne ikke lage KS-lenke: ' + e.message);
