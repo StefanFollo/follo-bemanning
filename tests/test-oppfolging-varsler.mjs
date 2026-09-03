@@ -172,7 +172,7 @@ console.log('\n-- Morgenbrief: seksjoner A–D, maks 8, tomme utelates (SPEC-mor
   sjekk('A: varmt signal = Samuel (3x åpnet), gammel aktivitet utelatt', j.varme.length === 1 && j.varme[0].befaring.id === 'V1' && j.varme[0].tekst === 'åpnet tilbudet 3x siste døgn');
   sjekk('C: kun egen avtale (Arja, ikke Lars sin)', j.avtaler.length === 1 && j.avtaler[0].id === 'A1');
   sjekk('C: frist-sak med i I DAG', j.frister.length === 1 && j.frister[0].befaringId === 'B4');
-  sjekk('D: ukens tall matcher ukesStatistikk (testkrav 7)', j.uke && j.uke.forfalt === (ukesStatistikkRef(mb).perPl.J1 || {}).forfalt);
+  sjekk('D: ukens tall matcher ukesStatistikk (testkrav 7)', j.uke && j.uke.forfalt === (ukesStatistikkRef(mb, { iDag: MANDAG }).perPl.J1 || {}).forfalt);
   const ep = lagDigestEpost(j, 'https://app');
   sjekk('HTML: VARME NÅ øverst før RING I DAG', ep.html.indexOf('VARME NÅ') > 0 && ep.html.indexOf('VARME NÅ') < ep.html.indexOf('RING I DAG'));
   sjekk('HTML: tel:-lenke + dyplenke ?kort=', ep.html.includes('tel:98219448') && ep.html.includes('?kort=B1'));
