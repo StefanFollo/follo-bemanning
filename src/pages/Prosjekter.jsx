@@ -6,6 +6,7 @@ import {
   List, ChartGantt, Loader, Pin, ChevronLeft, ChevronRight, ScrollText, ClipboardCheck, CircleAlert, Ban, RotateCw,
 } from 'lucide-react';
 import { Ikon, IkonTekst, TomIkon } from '../komponenter/Ikon';
+import { varsleFramdriftEksport } from '../framdriftEksportKlient';
 import { useApp } from '../context/AppContext';
 import { formatDate, PROSJEKT_PALETTE, isoToDate, dateToIso, daysBetween } from '../store';
 import { StatusFaner, KompaktRad, DetaljPanel, VarselBanner } from '../komponenter/Designsystem';
@@ -1578,6 +1579,8 @@ export default function Prosjekter({ onNavigate = null }) {
     dispatch({ type: 'UPDATE_PROSJEKT', payload: nyProsjekt });
     loggAudit(p.id, 'framdriftsplan', harEksisterende ? 'eksisterende plan (arkivert)' : null, `${utkast.faser?.length || 0} faser`,
       'Aktiverte AI-generert framdriftsplan fra tilbudskalkylen');
+    // Kundeportal fase 3: delte prosjekter sender oppdatert plan til kundesiden
+    if (p.framdriftDeltMedKunde) varsleFramdriftEksport(p.id);
   }
 
   function forkastUtkast(p) {

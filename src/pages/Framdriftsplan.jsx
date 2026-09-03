@@ -6,6 +6,7 @@ import {
   CircleAlert, Flame, Loader, TriangleAlert,
 } from 'lucide-react';
 import { Ikon, IkonTekst } from '../komponenter/Ikon';
+import { varsleFramdriftEksport, erFramdriftsEndring } from '../framdriftEksportKlient';
 import { useApp } from '../context/AppContext';
 import { kandidatScore } from '../mergeProsjekter';
 import { uid, mergeWithCloud } from '../store';
@@ -1159,6 +1160,35 @@ function ProjectDetail({ project, onBack, onUpdate, readOnly = false }) {
         </div>
       )}
 
+      {/* Kundeportal fase 3: opt-in-deling av framdriften til kundesiden.
+          Fase-titlene blir kundesynlige — derfor eksplisitt valg + forhåndsvisning. */}
+      {!readOnly && (
+        <div className="no-print" style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', margin: '0 0 10px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 500 }}>
+            <input type="checkbox" checked={project.framdriftDeltMedKunde === true}
+              onChange={e => onUpdate({ framdriftDeltMedKunde: e.target.checked })} />
+            Del framdriften med kunden
+          </label>
+          <span style={{ color: 'var(--text-muted)' }}>
+            {project.framdriftDeltMedKunde ? 'Milepæler (tittel, status, periode) sendes til kundesiden ved endringer — aldri navn eller timer.' : 'Ingenting sendes før du slår dette på.'}
+          </span>
+          <button className="btn" style={{ fontSize: 12, padding: '4px 10px', marginLeft: 'auto' }}
+            onClick={async () => {
+              try {
+                const r = await fetch('/api/prosjekter/framdrift-eksport?torr=1&prosjektId=' + encodeURIComponent(project.id), {
+                  headers: { Authorization: 'Bearer ' + (localStorage.getItem('fbs_token') || '') },
+                });
+                const d = await r.json();
+                if (!r.ok || !d.payload) { window.alert(d.grunn || d.error || 'Kunne ikke bygge forhåndsvisning.'); return; }
+                window.alert('Dette får kunden se (tilbud ' + d.payload.tilbudId + '):\n\n' +
+                  d.payload.framdrift.milepaler.map(m => '• ' + m.tittel + ' — ' + m.status + ' (' + m.periodeTekst + ')').join('\n'));
+              } catch (e) { window.alert('Feil: ' + e.message); }
+            }}>
+            Vis hva kunden får se
+          </button>
+        </div>
+      )}
+
       {/* Sticky header */}
       <div className="fd2-detail-header no-print">
         <button className="btn btn-sm" onClick={onBack}>← Tilbake</button>
@@ -1396,6 +1426,7 @@ function ProjectDetail({ project, onBack, onUpdate, readOnly = false }) {
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 export default function Framdriftsplan({ readOnly = false, ansattId = null }) {
+  // (kundeportal fase 3-importer brukes i updateProject over)
   const { state, dispatch } = useApp();
   const [selectedId, setSelectedId] = useState(null);
   const [filter,     setFilter]     = useState('Alle');
@@ -1425,8 +1456,13 @@ export default function Framdriftsplan({ readOnly = false, ansattId = null }) {
     finally { setSynker(false); }
   }
 
-  const updateProject = (proj, extra) =>
+  const updateProject = (proj, extra) => {
     dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...proj, ...extra } });
+    // Kundeportal fase 3: framdriftsendringer på delte prosjekter varsler
+    // eksport-endepunktet (debounced; serveren dedupper og krever delings-flagget)
+    const delt = extra.framdriftDeltMedKunde !== undefined ? extra.framdriftDeltMedKunde : proj.framdriftDeltMedKunde;
+    if (delt && erFramdriftsEndring(extra)) varsleFramdriftEksport(proj.id);
+  };
 
   // Ansatt (lesetilgang): kun prosjekter de er tildelt via bemanningsplanen
   const tildelteProsjektIds = useMemo(() => ansattId
