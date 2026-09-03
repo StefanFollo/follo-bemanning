@@ -1,4 +1,7 @@
 {
+  "rewrites": [
+    { "source": "/ks/:token", "destination": "/index.html" }
+  ],
   "crons": [
     {
       "path": "/api/admin/backup",

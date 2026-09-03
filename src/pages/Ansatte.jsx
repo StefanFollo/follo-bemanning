@@ -85,6 +85,27 @@ export default function Ansatte() {
     }
   }
 
+  // KS-ansattflate PR1: generer/regenerer personlig lenke (SMS kommer i PR2 —
+  // inntil da kopieres lenken og sendes manuelt). Mangler telefon → tydelig varsel.
+  async function hentKsLenke(ansatt) {
+    if (!window.confirm(`Lage ${ansatt.navn} sin personlige KS-lenke?\nEn eventuell gammel lenke slutter å virke.`)) return;
+    try {
+      const r = await fetch('/api/ks/flate-admin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (localStorage.getItem('fbs_token') || '') },
+        body: JSON.stringify({ ansattId: ansatt.id }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || r.status);
+      let melding = `KS-lenke for ${ansatt.navn}:\n${d.url}`;
+      if (d.manglerTelefon) melding += '\n\nOBS: Ansatt mangler telefonnummer — 4-siffer-bekreftelsen vil ikke virke før nummeret er lagt inn på ansattkortet.';
+      try { await navigator.clipboard.writeText(d.url); melding += '\n\n(Lenken er kopiert til utklippstavlen — send den på SMS.)'; } catch { /* utklipp kan feile */ }
+      window.alert(melding);
+    } catch (e) {
+      window.alert('Kunne ikke lage KS-lenke: ' + e.message);
+    }
+  }
+
   function arkiverAnsatt(a) {
     if (!confirm(`Arkivere ${a.navn}?\n\nPersonen skjules fra lister og bemanningsplan, men slettes IKKE — historiske tildelinger beholdes, og du kan gjenopprette når som helst.`)) return;
     dispatch({
@@ -255,6 +276,11 @@ export default function Ansatte() {
                   ><IkonTekst ikon={Thermometer} size={14} gap={4}>Syk</IkonTekst></button>
                 )}
                 <button className="btn btn-sm" onClick={() => openEdit(a)}>Rediger</button>
+                <button className="btn-icon" title="Lag/kopier personlig KS-lenke (ansattflaten på mobil)" onClick={() => hentKsLenke(a)}>
+
+                  <Ikon ikon={HardHat} size={15} />
+
+                </button>
                 <button className="btn btn-sm" style={{ color: 'var(--warning)' }} onClick={() => arkiverAnsatt(a)}>Arkiver</button>
               </div>
             </div>

@@ -103,3 +103,9 @@ Required in Vercel (and optionally `.env.local` for dev):
 - `KV_REST_API_TOKEN` — Upstash Redis token
 - `VITE_APP_USER` — login username
 - `VITE_APP_PASS` — login password
+
+## Postkasse fra Cowork-Claude
+
+Når Stefan sier «sjekk postkassen»: les `../follo-befaring/Ansatte/POSTKASSE-bemanning.md`,
+utfør oppdragene i rekkefølge, og flytt ferdige oppdrag til UTFØRT-seksjonen
+nederst i fila med dato + commit-hash.

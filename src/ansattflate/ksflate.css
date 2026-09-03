@@ -1,0 +1,72 @@
+/* ═══ KS-ansattflaten — mobil først, høy kontrast (solskinn på byggeplass) ═══ */
+.ksf {
+  max-width: 560px; margin: 0 auto; padding: 0 12px 40px;
+  font-size: 15px; color: var(--text-primary, #1e293b);
+  min-height: 100vh; background: var(--bg-subtle, #f1f5f9);
+}
+.ksf-topp {
+  display: flex; align-items: center; gap: 10px;
+  background: #0f2942; color: #fff; margin: 0 -12px 14px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-top, 0px) * 0);
+  position: sticky; top: 0; z-index: 10;
+}
+.ksf-logo { background: #f59e0b; color: #0f2942; font-weight: 800; border-radius: 8px; padding: 4px 8px; font-size: 14px; }
+.ksf-topp-tittel { display: inline-flex; align-items: center; gap: 7px; font-weight: 600; font-size: 15px; }
+.ksf-oppdater { margin-left: auto; background: none; border: none; color: #94a9bd; padding: 8px; cursor: pointer; border-radius: 8px; }
+.ksf-oppdater:active { background: rgba(255,255,255,.12); }
+
+.ksf-kort { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+.ksf-hilsen { font-size: 20px; font-weight: 600; margin: 4px 2px 12px; }
+.ksf-prosjekt-navn { display: flex; align-items: center; gap: 7px; font-weight: 600; font-size: 15px; margin-bottom: 10px; }
+.ksf-tom { color: #64748b; font-size: 13.5px; }
+
+.ksf-sl-rad {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px;
+  padding: 14px 12px; margin-bottom: 8px; cursor: pointer; text-align: left; font-size: 14.5px;
+}
+.ksf-sl-rad:active { background: #e8eef4; }
+.ksf-sl-rad-navn { flex: 1; min-width: 0; font-weight: 500; }
+.ksf-sl-rad-teller { color: #64748b; font-size: 13px; white-space: nowrap; }
+.ksf-badge { font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 10px; white-space: nowrap; }
+.ksf-badge--ikke-startet { background: #f1f5f9; color: #64748b; }
+.ksf-badge--pagar { background: #fef3c7; color: #92400e; }
+.ksf-badge--ferdig { background: #dcfce7; color: #15803d; }
+
+.ksf-tilbake { display: inline-flex; align-items: center; gap: 4px; background: none; border: none; color: #0f2942; font-weight: 600; font-size: 14px; padding: 8px 4px; cursor: pointer; }
+.ksf-sl-tittel { font-size: 17px; font-weight: 600; }
+.ksf-sl-under { color: #64748b; font-size: 13px; margin-top: 2px; }
+.ksf-framdrift { height: 8px; background: #e2e8f0; border-radius: 4px; margin-top: 12px; overflow: hidden; }
+.ksf-framdrift > span { display: block; height: 100%; background: #15803d; border-radius: 4px; transition: width .2s; }
+.ksf-framdrift-tekst { font-size: 12.5px; color: #64748b; margin-top: 5px; }
+.ksf-levert { display: inline-flex; align-items: center; gap: 6px; margin-top: 10px; color: #15803d; font-weight: 600; font-size: 13.5px; }
+
+.ksf-punkt { display: flex; gap: 12px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px; margin-bottom: 8px; }
+.ksf-punkt--ok { border-color: #bbf7d0; background: #f0fdf4; }
+.ksf-punkt--ia { opacity: .75; }
+.ksf-punkt-kvitter { background: none; border: none; padding: 6px; cursor: pointer; align-self: flex-start; min-width: 44px; min-height: 44px; }
+.ksf-punkt-innhold { flex: 1; min-width: 0; }
+.ksf-punkt-tekst { font-weight: 500; line-height: 1.4; }
+.ksf-punkt-veiledning { font-size: 13px; color: #64748b; margin-top: 3px; line-height: 1.4; }
+.ksf-punkt-meta { font-size: 12px; color: #15803d; margin-top: 4px; font-weight: 500; }
+.ksf-punkt-valg { display: flex; gap: 14px; margin-top: 8px; flex-wrap: wrap; }
+.ksf-lenkeknapp { display: inline-flex; align-items: center; gap: 4px; background: none; border: none; color: #0f2942; font-size: 13px; font-weight: 500; padding: 6px 0; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.ksf-kommentar { margin-top: 8px; }
+.ksf-kommentar textarea { width: 100%; font-size: 16px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; }
+.ksf-kommentar .ksf-knapp { margin-top: 6px; }
+
+.ksf-knapp { background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; padding: 10px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.ksf-knapp--primar { background: #f59e0b; border-color: #f59e0b; color: #0f2942; width: 100%; padding: 14px; font-size: 16px; }
+.ksf-knapp--primar:disabled { opacity: .5; }
+
+.ksf-verifiser { text-align: center; margin-top: 24px; }
+.ksf-verifiser p { font-size: 15px; line-height: 1.5; }
+.ksf-siffer { font-size: 30px; letter-spacing: 14px; text-align: center; width: 190px; margin: 14px auto; display: block; border: 2px solid #cbd5e1; border-radius: 12px; padding: 10px 0 10px 14px; }
+.ksf-siffer:focus { border-color: #f59e0b; outline: none; }
+
+.ksf-feil { display: flex; align-items: center; gap: 6px; color: #b91c1c; font-size: 13px; margin: 8px 0; justify-content: center; }
+.ksf-punkt .ksf-feil { justify-content: flex-start; }
+.ksf-feilkort { text-align: center; padding: 32px 16px; }
+.ksf-fot { text-align: center; color: #94a3b8; font-size: 12.5px; margin-top: 18px; line-height: 1.5; }
+.ksf-spinn { animation: ksf-spinn 1s linear infinite; }
+@keyframes ksf-spinn { to { transform: rotate(360deg); } }
