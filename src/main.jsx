@@ -6,7 +6,10 @@ import KsAnsattflate from './ansattflate/KsAnsattflate.jsx'
 
 // /ks/<token> er den lukkede ansattflaten (SPEC-ks-ansattflate.md) — egen
 // inngang uten innlogging/AppProvider, ingen nav til resten av appen.
-const ksMatch = window.location.pathname.match(/^\/ks\/([a-f0-9]{32,64})\/?$/);
+// Alt under /ks/ går til flaten — serveren avgjør om tokenet er gyldig.
+// Feil format skal gi «utløpt»-melding, aldri innloggingssiden
+// (postkasse-oppdrag 4: ikke-hex-tokens traff appen i stedet for flaten).
+const ksMatch = window.location.pathname.match(/^\/ks\/([^/]+)\/?$/);
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
