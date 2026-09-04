@@ -1,7 +1,7 @@
 import { createContext, useContext, useReducer, useEffect, useState, useRef, useCallback } from 'react';
 import {
   loadState, FIELD_MAP,
-  saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag, saveTeams, saveRorTimer, saveRorPlaner, saveBefaringer, saveReklamasjoner, saveServiceJobber, saveBiler,
+  saveAnsatte, saveProsjekter, saveTildelinger, saveOppgaver, saveFag, saveTeams, saveRorTimer, saveRorPlaner, saveBefaringer, saveReklamasjoner, saveServiceJobber, saveBiler, saveRutinerForAnsatte,
   loadFromCloud, saveToCloud, getLocalUpdatedAt, mergeWithCloud,
   registrerSletting,
   uid,
@@ -332,6 +332,13 @@ function reducer(state, action) {
       saveTeams(next);
       return { ...state, teams: next };
     }
+    // KS-ansattflate PR3: hvilke HMS-rutiner ansattflaten viser (id-array)
+    case 'SET_RUTINER_FOR_ANSATTE': {
+      const next = [...new Set(action.ids || [])];
+      saveRutinerForAnsatte(next);
+      return { ...state, rutinerForAnsatte: next };
+    }
+
     case 'SET_TEAMS': {
       saveTeams(action.teams);
       return { ...state, teams: action.teams };

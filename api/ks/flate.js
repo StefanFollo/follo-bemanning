@@ -264,5 +264,10 @@ export default async function handler(req, res) {
         })),
     }))
 
-  return res.status(200).json({ fornavn, navn: ansatt.navn, prosjekter, hmsRutiner: [] /* PR3 */ })
+  // PR3: rutine-IDer admin/PL har flagget «Vis for ansatte» — innholdet
+  // ligger i klient-bundlen (rutiner-holte), flaten viser kun disse IDene.
+  const hmsRutiner = Array.isArray(state.rutinerForAnsatte)
+    ? state.rutinerForAnsatte.filter(id => typeof id === 'string').slice(0, 500)
+    : []
+  return res.status(200).json({ fornavn, navn: ansatt.navn, prosjekter, hmsRutiner })
 }

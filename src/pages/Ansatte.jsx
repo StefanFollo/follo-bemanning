@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { HardHat, Wrench, Thermometer, Cake, CircleCheck, TriangleAlert, X, CalendarDays } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { HardHat, Wrench, Thermometer, Cake, CircleCheck, TriangleAlert, X, CalendarDays, Lock, Smartphone } from 'lucide-react';
 import { Ikon, IkonTekst } from '../komponenter/Ikon';
 import { useApp } from '../context/AppContext';
 
@@ -85,6 +85,19 @@ export default function Ansatte() {
     }
   }
 
+  // PR3: KS-lenke-status per ansatt (aldri sendt / sendt / åpnet / sperret).
+  // Én GET når siden åpnes; 401 (ikke admin/kontor) → kolonnen viser bare «–».
+  const [ksStatus, setKsStatus] = useState(null);
+  async function hentKsStatus() {
+    try {
+      const r = await fetch('/api/ks/flate-admin', {
+        headers: { Authorization: 'Bearer ' + (localStorage.getItem('fbs_token') || '') },
+      });
+      if (r.ok) setKsStatus((await r.json()).perAnsatt || {});
+    } catch { /* nettverksfeil → kolonnen viser – */ }
+  }
+  useEffect(() => { hentKsStatus(); }, []);
+
   // KS-ansattflate PR1: generer/regenerer personlig lenke (SMS kommer i PR2 —
   // inntil da kopieres lenken og sendes manuelt). Mangler telefon → tydelig varsel.
   async function hentKsLenke(ansatt) {
@@ -102,10 +115,16 @@ export default function Ansatte() {
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || r.status);
       let melding = 'KS-lenke for ' + ansatt.navn + (d.gjenbrukt ? ' (samme som før)' : d.regenerert ? ' (NY — gammel lenke er død)' : ' (ny)') + ':\n' + d.url;
-      if (d.sms) melding += d.sms.sendt ? '\n\nSMS er sendt.' : d.sms.hoppet ? '\n\nSMS IKKE sendt: TWILIO_*-variablene mangler i Vercel.' : '\n\nSMS FEILET: ' + d.sms.feil;
+      if (d.sms) {
+        melding += d.sms.sendt ? '\n\nSMS er sendt.'
+          : d.sms.ikkeKlar ? '\n\nSMS-tjeneste ikke klar ennå — kopiér lenken og send manuelt.'
+          : d.sms.hoppet ? '\n\nSMS IKKE sendt: ' + '(inter-app-oppsett mangler i Vercel)'
+          : '\n\nSMS FEILET: ' + d.sms.feil;
+      }
       if (d.manglerTelefon) melding += '\n\nOBS: Ansatt mangler telefonnummer — 4-siffer-bekreftelsen vil ikke virke før nummeret er lagt inn på ansattkortet.';
       try { await navigator.clipboard.writeText(d.url); melding += '\n\n(Lenken er også kopiert til utklippstavlen.)'; } catch { /* utklipp kan feile */ }
       window.alert(melding);
+      hentKsStatus();
     } catch (e) {
       window.alert('Kunne ikke lage KS-lenke: ' + e.message);
     }
@@ -226,6 +245,7 @@ export default function Ansatte() {
             <div className="ct-col ct-kontakt">Telefon</div>
             <div className="ct-col ct-kontakt">E-post</div>
             <div className="ct-col ct-kontakt">Bursdag</div>
+            <div className="ct-col ct-kontakt">KS-lenke</div>
             <div className="ct-col ct-actions"></div>
           </div>
           {ansatte.map(a => (
@@ -265,6 +285,30 @@ export default function Ansatte() {
                 {a.bursdag
                   ? <span style={{ color: '#ec4899' }}><Ikon ikon={Cake} size={14} style={{ marginRight: 4 }} />{bursdagLabel(a.bursdag)}</span>
                   : <span style={{ color: '#cbd5e1' }}>–</span>}
+              </div>
+              <div className="ct-col ct-kontakt" style={{ fontSize: 12 }}>
+                {(() => {
+                  // PR3: KS-lenke-status. Mangler telefon vises ALLTID tydelig —
+                  // 4-siffer-bekreftelsen i flaten krever nummeret.
+                  const manglerTlf = !String(a.telefon || '').replace(/\D/g, '').slice(-4);
+                  const s = ksStatus?.[a.id];
+                  const dato = iso => iso ? new Date(iso).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' }) : '';
+                  return (
+                    <span style={{ display: 'inline-flex', flexDirection: 'column', gap: 1 }}>
+                      {ksStatus === null ? <span style={{ color: '#cbd5e1' }}>–</span>
+                        : !s ? <span style={{ color: '#94a3b8' }}>Aldri sendt</span>
+                        : s.sperret ? <span style={{ color: 'var(--danger)', fontWeight: 500 }}><Ikon ikon={Lock} size={12} style={{ marginRight: 3 }} />Sperret</span>
+                        : s.sistApnet ? <span style={{ color: '#15803d' }}><Ikon ikon={Smartphone} size={12} style={{ marginRight: 3 }} />Åpnet {dato(s.sistApnet)}</span>
+                        : s.sendtDato ? <span style={{ color: '#2563eb' }}>Sendt {dato(s.sendtDato)}</span>
+                        : <span style={{ color: '#5d6b80' }}>Lenke laget</span>}
+                      {manglerTlf && (
+                        <span style={{ color: 'var(--warning)', fontWeight: 500, fontSize: 10.5, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                          <Ikon ikon={TriangleAlert} size={11} /> Mangler telefon
+                        </span>
+                      )}
+                    </span>
+                  );
+                })()}
               </div>
               <div className="ct-col ct-actions">
                 {a.sykmeldt ? (

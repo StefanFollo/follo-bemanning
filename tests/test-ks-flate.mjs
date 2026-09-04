@@ -50,17 +50,18 @@ process.env.KV_REST_API_URL = `http://127.0.0.1:${server.address().port}`;
 process.env.KV_REST_API_TOKEN = 'test';
 process.env.BLOB_READ_WRITE_TOKEN = 'vercel_blob_rw_AbC123dEf456GhI7_x0x0x0x0x0x0x0x0x0x0x0x0x0';
 process.env.VERCEL_BLOB_API_URL = `http://127.0.0.1:${server.address().port}/blob`;
-process.env.TWILIO_ACCOUNT_SID = 'ACtest';
-process.env.TWILIO_AUTH_TOKEN = 'twiliohemmelig';
-process.env.TWILIO_SENDER = 'Follo Bygg';
-// Fang Twilio-kall — Blob går til fake-serveren via VERCEL_BLOB_API_URL
-const twilioKall = [];
+// PR3: SMS går via tilbuds-appens /api/sms-interapp (ikke Twilio direkte)
+process.env.TILBUDSAPP_URL = 'http://tilbudsapp.fake';
+process.env.INTER_APP_TOKEN = 'inter-test';
+// Fang inter-app-SMS-kall — Blob går til fake-serveren via VERCEL_BLOB_API_URL
+const smsKall = [];
+let smsInterappSvar = { status: 200, body: { ok: true } };
 const origFetch = globalThis.fetch;
 globalThis.fetch = async (url, opts) => {
   const u = String(url);
-  if (u.includes('api.twilio.com')) {
-    twilioKall.push({ url: u, body: String(opts.body), auth: opts.headers.Authorization });
-    return new Response(JSON.stringify({ sid: 'SM' + twilioKall.length }), { status: 201, headers: { 'Content-Type': 'application/json' } });
+  if (u.includes('/api/sms-interapp')) {
+    smsKall.push({ url: u, body: JSON.parse(String(opts.body)), auth: opts.headers.Authorization });
+    return new Response(JSON.stringify(smsInterappSvar.body), { status: smsInterappSvar.status, headers: { 'Content-Type': 'application/json' } });
   }
   return origFetch(url, opts);
 };
@@ -218,28 +219,51 @@ console.log('\n-- PR2: «Signer og lever» låser lista (testkrav 5) --');
   sjekk('Levering logget', histL.some(h => h.handling === 'levert' && h.signertAv === 'Tomas Snekker'));
 }
 
-console.log('\n-- PR2: SMS-utsending + gjenbruk av lenke --');
+console.log('\n-- PR2/PR3: SMS-utsending (via tilbuds-appens sms-interapp) + gjenbruk --');
 {
   // regenerer:false gjenbruker eksisterende (verifisert) token
   let r = await kall(flateAdmin, 'POST', { auth: 'admintoken', body: { ansattId: 'A1', regenerer: false, sendSms: true } });
   sjekk('Gjenbruk: samme lenke, ikke regenerert', r._kode === 200 && r._body.gjenbrukt === true && r._body.url.endsWith('/ks/' + token));
-  sjekk('SMS sendt via Twilio', r._body.sms && r._body.sms.sendt === true && twilioKall.length === 1);
-  const tw = twilioKall[0];
-  sjekk('Twilio-kall: riktig konto, normalisert nummer, lenke i meldingen',
-    tw.url.includes('ACtest') && tw.body.includes('To=%2B4791234567') && decodeURIComponent(tw.body.replace(/\+/g, ' ')).includes('/ks/' + token) && tw.auth.startsWith('Basic '));
+  sjekk('SMS sendt via inter-app-endepunktet', r._body.sms && r._body.sms.sendt === true && smsKall.length === 1);
+  const sk = smsKall[0];
+  sjekk('sms-interapp-kall: Bearer-token, normalisert nummer, lenke og formaal',
+    sk.url === 'http://tilbudsapp.fake/api/sms-interapp' && sk.auth === 'Bearer inter-test'
+    && sk.body.til === '+4791234567' && sk.body.tekst.includes('/ks/' + token) && sk.body.formaal === 'ks-lenke');
   r = await kall(flateAdmin, 'GET', { auth: 'admintoken' });
   sjekk('Status viser sendtDato', !!r._body.perAnsatt.A1.sendtDato);
   // Token fortsatt verifisert (gjenbruk nullstiller ikke)
   r = await kall(flate, 'GET', { query: { token } });
   sjekk('Gjenbrukt lenke er fortsatt verifisert', r._kode === 200 && !r._body.maaVerifisere);
-  // Uten Twilio-env: skipped, ikke feil
-  const sid = process.env.TWILIO_ACCOUNT_SID; delete process.env.TWILIO_ACCOUNT_SID;
+  // Endepunktet ikke utrullet ennå (404) → ikkeKlar, ALDRI stille feil
+  smsInterappSvar = { status: 404, body: { error: 'Not found' } };
   r = await kall(flateAdmin, 'POST', { auth: 'admintoken', body: { ansattId: 'A1', regenerer: false, sendSms: true } });
-  sjekk('Uten TWILIO-env: hoppet over, ingen krasj', r._kode === 200 && r._body.sms.hoppet === true);
-  process.env.TWILIO_ACCOUNT_SID = sid;
+  sjekk('404 fra sms-interapp → ikkeKlar:true, ingen krasj', r._kode === 200 && r._body.sms.ikkeKlar === true && !r._body.sms.sendt);
+  smsInterappSvar = { status: 200, body: { ok: true } };
+  // Uten INTER_APP_TOKEN: skipped, ikke feil
+  const it = process.env.INTER_APP_TOKEN; delete process.env.INTER_APP_TOKEN;
+  r = await kall(flateAdmin, 'POST', { auth: 'admintoken', body: { ansattId: 'A1', regenerer: false, sendSms: true } });
+  sjekk('Uten INTER_APP_TOKEN: hoppet over, ingen krasj', r._kode === 200 && r._body.sms.hoppet === true);
+  process.env.INTER_APP_TOKEN = it;
   // regenerer:true (standard) lager fortsatt ny
   r = await kall(flateAdmin, 'POST', { auth: 'admintoken', body: { ansattId: 'A1' } });
   sjekk('Standard regenererer fortsatt (PR1-oppførsel)', r._body.regenerert === true && !r._body.url.endsWith('/ks/' + token));
+}
+
+console.log('\n-- PR3: HMS-rutiner i flate-svaret --');
+{
+  // Uten flagg-liste i state: tom array (feltet fantes ikke før PR3)
+  const nyToken = Object.keys(JSON.parse(store.get('fbs_ks_flate_tokens'))).find(t => JSON.parse(store.get('fbs_ks_flate_tokens'))[t].ansattId === 'A1');
+  // Ny lenke fra forrige test er uverifisert — verifiser med A1s 4 siste siffer
+  await kall(flate, 'POST', { body: { token: nyToken, handling: 'verifiser', siffer: '4567' } });
+  let r = await kall(flate, 'GET', { query: { token: nyToken } });
+  sjekk('Uten rutinerForAnsatte i state → tom hmsRutiner-liste', r._kode === 200 && Array.isArray(r._body.hmsRutiner) && r._body.hmsRutiner.length === 0);
+  // Med flaggede rutiner: IDene følger med flate-svaret
+  const st = JSON.parse(store.get('fbs_state'));
+  st.rutinerForAnsatte = ['rut-001', 'rut-042', 'rut-117'];
+  store.set('fbs_state', JSON.stringify(st));
+  r = await kall(flate, 'GET', { query: { token: nyToken } });
+  sjekk('Flaggede rutine-IDer leveres til flaten', JSON.stringify(r._body.hmsRutiner) === '["rut-001","rut-042","rut-117"]');
+  sjekk('Flate-svaret lekker fortsatt ingen kundedata', !JSON.stringify(r._body).includes('HEMMELIG'));
 }
 
 globalThis.fetch = origFetch;

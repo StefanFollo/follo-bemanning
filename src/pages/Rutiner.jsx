@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react';
-import { ClipboardList, TriangleAlert, ClipboardCheck, FilePen, FileText, BookOpen, Printer, Sprout } from 'lucide-react';
+import { ClipboardList, TriangleAlert, ClipboardCheck, FilePen, FileText, BookOpen, Printer, Sprout, HardHat } from 'lucide-react';
 import { Ikon, IkonTekst } from '../komponenter/Ikon';
+import { useApp } from '../context/AppContext';
+import { hentInnlogget } from '../komponenter/RingIDag';
 import { RUTINER_DATA } from '../data/rutiner-holte';
 
 // Rutiner: hele HMS/KS-håndboken (Mestergruppen/Holte) — søkbar og lesbar
@@ -44,10 +46,27 @@ function skrivUtDokument(dok) {
 
 export default function Rutiner() {
   const data = RUTINER_DATA;
+  const { state, dispatch } = useApp();
   const [sok, setSok] = useState('');
   const [kapFilter, setKapFilter] = useState(null);
   const [typeFilter, setTypeFilter] = useState(null);
   const [valgt, setValgt] = useState(null);
+
+  // KS-ansattflate PR3: «Vis for ansatte»-flagg per rutine (admin/PL huker av
+  // de viktigste — SJA, stillas, varmt arbeid osv. — så ansattflaten /ks/
+  // viser dem som lesevisning). Flagget bor i state, aldri i rutinedataene.
+  const kanFlagge = ['admin', 'kontor', 'befaring'].includes(hentInnlogget().rolle);
+  const flagget = useMemo(() => new Set(state.rutinerForAnsatte || []), [state.rutinerForAnsatte]);
+  const toggleFlagg = (id) => {
+    const neste = new Set(flagget);
+    if (neste.has(id)) neste.delete(id); else neste.add(id);
+    dispatch({ type: 'SET_RUTINER_FOR_ANSATTE', ids: [...neste] });
+  };
+  const bulkFlagg = (dokumenter, pa) => {
+    const neste = new Set(flagget);
+    for (const d of dokumenter) { if (pa) neste.add(d.id); else neste.delete(d.id); }
+    dispatch({ type: 'SET_RUTINER_FOR_ANSATTE', ids: [...neste] });
+  };
 
   const kapitler = useMemo(() => {
     const m = new Map();
@@ -136,6 +155,20 @@ export default function Rutiner() {
             <IkonTekst ikon={ti.ikon} size={14} gap={4}>{ti.label} ({typeTeller[key]})</IkonTekst>
           </button>
         ) : null)}
+        {kanFlagge && (
+          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: '#5d6b80' }}>
+            <Ikon ikon={HardHat} size={14} farge="#185FA5" />
+            <strong>{flagget.size}</strong> vises i ansattflaten
+            {(kapFilter || typeFilter || sok) && filtrert.length > 0 && (
+              <>
+                <button className="btn btn-sm" onClick={() => bulkFlagg(filtrert, true)}
+                  title="Huk av «Vis for ansatte» på alle i utvalget">+ Vis utvalget ({filtrert.length})</button>
+                <button className="btn btn-sm" onClick={() => bulkFlagg(filtrert, false)}
+                  title="Fjern «Vis for ansatte» fra alle i utvalget">− Skjul utvalget</button>
+              </>
+            )}
+          </span>
+        )}
       </div>
 
       <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
@@ -184,20 +217,33 @@ export default function Rutiner() {
                       {d.underkapittel}
                     </div>
                   )}
-                  <button
-                    onClick={() => setValgt(d)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                      textAlign: 'left', background: '#fff', border: '1px solid #e2e8f0',
-                      borderLeft: `4px solid ${ti.farge}`, borderRadius: 8,
-                      padding: '10px 14px', marginBottom: 6, cursor: 'pointer', fontSize: 13.5,
-                      minHeight: 44,
-                    }}
-                  >
-                    <Ikon ikon={ti.ikon} size={16} farge={ti.farge} />
-                    <span style={{ flex: 1, fontWeight: 500, color: '#1e293b' }}>{d.tittel}</span>
-                    <span style={{ fontSize: 11, color: '#5d6b80', flexShrink: 0 }}>{d.kapittel.slice(0, 2)}</span>
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'stretch', gap: 6, marginBottom: 6 }}>
+                    <button
+                      onClick={() => setValgt(d)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0,
+                        textAlign: 'left', background: '#fff', border: '1px solid #e2e8f0',
+                        borderLeft: `4px solid ${ti.farge}`, borderRadius: 8,
+                        padding: '10px 14px', cursor: 'pointer', fontSize: 13.5,
+                        minHeight: 44,
+                      }}
+                    >
+                      <Ikon ikon={ti.ikon} size={16} farge={ti.farge} />
+                      <span style={{ flex: 1, fontWeight: 500, color: '#1e293b' }}>{d.tittel}</span>
+                      {flagget.has(d.id) && (
+                        <span style={{ fontSize: 10.5, fontWeight: 500, color: '#185FA5', background: '#185FA51a', border: '1px solid #185FA544', borderRadius: 5, padding: '2px 7px', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                          <Ikon ikon={HardHat} size={11} /> Ansatte
+                        </span>
+                      )}
+                      <span style={{ fontSize: 11, color: '#5d6b80', flexShrink: 0 }}>{d.kapittel.slice(0, 2)}</span>
+                    </button>
+                    {kanFlagge && (
+                      <label title="Vis for ansatte i KS-ansattflaten (/ks/-lenken)"
+                        style={{ display: 'inline-flex', alignItems: 'center', padding: '0 10px', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, cursor: 'pointer' }}>
+                        <input type="checkbox" checked={flagget.has(d.id)} onChange={() => toggleFlagg(d.id)} />
+                      </label>
+                    )}
+                  </div>
                 </div>
               );
             });

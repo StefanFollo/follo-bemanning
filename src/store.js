@@ -36,6 +36,9 @@ export const FIELD_MAP = {
   reklamasjoner:'fbs_reklamasjoner',
   serviceJobber:'fbs_service_jobber',
   biler:        'fbs_biler',
+  // KS-ansattflate PR3: rutine-IDer flagget «Vis for ansatte» (flettes på
+  // felt-nivå som fag — enkel streng-array)
+  rutinerForAnsatte: 'fbs_rutiner_for_ansatte',
 };
 
 
@@ -174,6 +177,7 @@ export function loadState() {
     reklamasjoner: load('fbs_reklamasjoner', []),
     serviceJobber: load('fbs_service_jobber', []),
     biler: load('fbs_biler', []),
+    rutinerForAnsatte: load('fbs_rutiner_for_ansatte', []),
   };
 }
 
@@ -189,6 +193,7 @@ export function saveBefaringer(data)    { save('fbs_befaringer',     data, 'befa
 export function saveReklamasjoner(data) { save('fbs_reklamasjoner',  data, 'reklamasjoner'); }
 export function saveServiceJobber(data) { save('fbs_service_jobber', data, 'serviceJobber'); }
 export function saveBiler(data)         { save('fbs_biler',          data, 'biler'); }
+export function saveRutinerForAnsatte(data) { save('fbs_rutiner_for_ansatte', data, 'rutinerForAnsatte'); }
 
 // Brukes av "Lagre nå"-knappen for å garantere at brukerens lokale state
 // vinner over cloud-endringer fra event.js ved neste mergeWithCloud.

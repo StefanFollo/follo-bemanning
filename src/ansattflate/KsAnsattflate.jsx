@@ -7,7 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   HardHat, CircleCheck, Circle, CircleSlash, MessageSquare, ChevronLeft,
-  Loader, TriangleAlert, Building2, RefreshCw, Camera, PenLine,
+  Loader, TriangleAlert, Building2, RefreshCw, Camera, PenLine, BookOpen,
 } from 'lucide-react';
 import { Ikon } from '../komponenter/Ikon';
 import './ksflate.css';
@@ -175,11 +175,82 @@ function SignerOgLever({ navn: forhandsutfylt, onLever }) {
     </div>
   );
 }
+// ── PR3: HMS-rutiner — ren LESEVISNING av rutinene admin/PL har flagget
+// «Vis for ansatte». Innholdet ligger i den statiske håndbok-chunken og
+// lazy-lastes først når seksjonen åpnes (stor fil, trengs ikke ellers).
+function HmsRutiner({ ids, onTilbake }) {
+  const [dokumenter, setDokumenter] = useState(null);
+  const [sok, setSok] = useState('');
+  const [valgtDok, setValgtDok] = useState(null);
+
+  useEffect(() => {
+    let aktiv = true;
+    import('../data/rutiner-holte')
+      .then(m => {
+        if (!aktiv) return;
+        const flagget = new Set(ids || []);
+        setDokumenter(m.RUTINER_DATA.dokumenter.filter(d => flagget.has(d.id)));
+      })
+      .catch(() => { if (aktiv) setDokumenter([]); });
+    return () => { aktiv = false; };
+  }, [ids]);
+
+  if (valgtDok) {
+    return (
+      <>
+        <button className="ksf-tilbake" onClick={() => setValgtDok(null)}><Ikon ikon={ChevronLeft} size={16} /> HMS-rutiner</button>
+        <div className="ksf-kort">
+          <div className="ksf-sl-tittel">{valgtDok.tittel}</div>
+          <div className="ksf-sl-under">{valgtDok.kapittel}{valgtDok.underkapittel ? ` · ${valgtDok.underkapittel}` : ''}</div>
+          <div style={{ whiteSpace: 'pre-wrap', fontSize: 14, lineHeight: 1.6, marginTop: 10 }}>{valgtDok.innhold}</div>
+        </div>
+      </>
+    );
+  }
+
+  const q = sok.trim().toLowerCase();
+  const treff = (dokumenter || []).filter(d =>
+    !q || d.tittel.toLowerCase().includes(q) || (q.length >= 4 && d.innhold.toLowerCase().includes(q)));
+  const perKapittel = [];
+  for (const d of treff) {
+    const siste = perKapittel[perKapittel.length - 1];
+    if (siste && siste.kapittel === d.kapittel) siste.dokumenter.push(d);
+    else perKapittel.push({ kapittel: d.kapittel, dokumenter: [d] });
+  }
+
+  return (
+    <>
+      <button className="ksf-tilbake" onClick={onTilbake}><Ikon ikon={ChevronLeft} size={16} /> Mine sjekklister</button>
+      <div className="ksf-kort">
+        <div className="ksf-sl-tittel"><Ikon ikon={BookOpen} size={16} /> HMS-rutiner</div>
+        <input className="ksf-kommentar" style={{ marginTop: 8 }} placeholder="Søk i rutinene…"
+          value={sok} onChange={e => setSok(e.target.value)} />
+      </div>
+      {dokumenter === null && <div className="ksf-kort" style={{ textAlign: 'center' }}><Ikon ikon={Loader} size={20} className="ksf-spinn" /></div>}
+      {dokumenter !== null && treff.length === 0 && (
+        <div className="ksf-kort" style={{ color: 'var(--text-muted)' }}>{q ? 'Ingen rutiner matcher søket.' : 'Ingen rutiner er delt med ansatte ennå.'}</div>
+      )}
+      {perKapittel.map(gruppe => (
+        <div key={gruppe.kapittel} className="ksf-kort">
+          <div className="ksf-prosjekt-navn"><Ikon ikon={BookOpen} size={15} /> {gruppe.kapittel}</div>
+          {gruppe.dokumenter.map(d => (
+            <button key={d.id} className="ksf-sl-rad" onClick={() => setValgtDok(d)}>
+              <span className="ksf-sl-rad-navn">{d.tittel}</span>
+              <span className="ksf-sl-rad-teller">Les</span>
+            </button>
+          ))}
+        </div>
+      ))}
+    </>
+  );
+}
+
 export default function KsAnsattflate({ token }) {
   const [data, setData] = useState(null);
   const [feil, setFeil] = useState(null);
   const [laster, setLaster] = useState(true);
   const [valgt, setValgt] = useState(null); // { prosjektId, sjekklisteId }
+  const [visHms, setVisHms] = useState(false); // PR3: HMS-rutiner-seksjonen
 
   const hent = useCallback(async () => {
     setLaster(true);
@@ -233,6 +304,11 @@ export default function KsAnsattflate({ token }) {
 
   const alleSl = (data.prosjekter || []).flatMap(p => p.sjekklister.map(sl => ({ ...sl, prosjektId: p.id, prosjektNavn: p.navn })));
   const aktiv = valgt && alleSl.find(sl => sl.id === valgt.sjekklisteId);
+  const hmsIds = Array.isArray(data.hmsRutiner) ? data.hmsRutiner : [];
+
+  if (visHms) {
+    return <div className="ksf">{topp}<HmsRutiner ids={hmsIds} onTilbake={() => setVisHms(false)} /></div>;
+  }
 
   if (aktiv) {
     const gjort = aktiv.punkter.filter(p => p.status === 'ok' || p.status === 'ikke-aktuelt').length;
@@ -282,6 +358,14 @@ export default function KsAnsattflate({ token }) {
           })}
         </div>
       ))}
+      {hmsIds.length > 0 && (
+        <div className="ksf-kort">
+          <button className="ksf-sl-rad" onClick={() => setVisHms(true)}>
+            <span className="ksf-sl-rad-navn"><Ikon ikon={BookOpen} size={15} style={{ marginRight: 6 }} />HMS-rutiner</span>
+            <span className="ksf-sl-rad-teller">{hmsIds.length}</span>
+          </button>
+        </div>
+      )}
       <div className="ksf-fot">Din personlige lenke — ikke del den med andre. Trenger du ny? Spør prosjektleder.</div>
     </div>
   );

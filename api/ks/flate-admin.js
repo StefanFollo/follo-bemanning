@@ -79,16 +79,18 @@ export default async function handler(req, res) {
       til: ansatt.telefon,
       melding: `Hei ${fornavn}! Din personlige KS-lenke hos Follo Byggservice: ${url} — lagre denne meldingen, lenken er din faste inngang til sjekklistene.`,
     })
-    if (sms.sent || sms.skipped) {
+    // PR3: sendtDato kun ved FAKTISK sendt SMS — status-kolonnen på
+    // Ansatte-siden skal ikke vise «sendt» når tjenesten hoppet over.
+    if (sms.sent) {
       tokens[aktivToken] = { ...tokens[aktivToken], sendtDato: new Date().toISOString(), sendtTil: normaliserNorskTlf(ansatt.telefon), sendtAv: session.navn || session.email }
     }
   }
   await redis.set(TOKENS_NOKKEL, tokens)
 
-  console.log(`[ks/flate-admin] ${session.navn || session.email} ${fjernet ? 'regenererte' : (eksisterende && !regenerer ? 'gjenbrukte' : 'opprettet')} KS-lenke for ${ansatt.navn}${sms ? (sms.sent ? ' + SMS sendt' : sms.skipped ? ' (SMS hoppet: env mangler)' : ' (SMS FEILET)') : ''}`)
+  console.log(`[ks/flate-admin] ${session.navn || session.email} ${fjernet ? 'regenererte' : (eksisterende && !regenerer ? 'gjenbrukte' : 'opprettet')} KS-lenke for ${ansatt.navn}${sms ? (sms.sent ? ' + SMS sendt' : sms.ikkeKlar ? ' (SMS-tjeneste ikke klar)' : sms.skipped ? ' (SMS hoppet: env mangler)' : ' (SMS FEILET)') : ''}`)
   return res.status(200).json({
     ok: true, url, regenerert: fjernet > 0, gjenbrukt: !!(eksisterende && !regenerer && !fjernet),
     manglerTelefon: !String(ansatt.telefon || '').replace(/\D/g, '').slice(-4),
-    sms: sms ? { sendt: !!sms.sent, hoppet: !!sms.skipped, feil: sms.error || null } : null,
+    sms: sms ? { sendt: !!sms.sent, hoppet: !!sms.skipped, ikkeKlar: !!sms.ikkeKlar, feil: sms.error || null } : null,
   })
 }
