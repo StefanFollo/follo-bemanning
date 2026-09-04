@@ -14,6 +14,7 @@ import {
   byggOppfolgingsKo, filtrerForBruker, serAlle, beregnRingt, beregnNyDato,
   foreslaattNyDato, sisteNotat, isoDato, ukesStatistikk,
 } from '../oppfolging';
+import { kundeportalToken, kundeportalUrl } from '../kundeportal';
 import './ringidag.css';
 
 export function hentInnlogget() {
@@ -192,6 +193,17 @@ export default function RingIDag({ onApneKort, borteIds, plFilter: plFilterProp,
               <button className="btn btn-primary rid-knapp" onClick={() => apneDialog(sak, 'ringt')}><Ikon ikon={Check} size={14} /> Ringt</button>
               <button className="btn rid-knapp" onClick={() => apneDialog(sak, 'dato')}><Ikon ikon={CalendarDays} size={14} /> Ny dato</button>
               {onApneKort && <button className="btn rid-knapp" onClick={() => onApneKort(b.id)}><Ikon ikon={ExternalLink} size={14} /> Åpne kort</button>}
+              {(() => {
+                const pt = kundeportalToken(b);
+                return pt ? (
+                  <a className="btn rid-knapp" href={kundeportalUrl(pt, { intern: true })}
+                    target="_blank" rel="noopener noreferrer"
+                    title="Kundeportal — intern visning, telles ikke i kunde-statistikken"
+                    style={{ textDecoration: 'none' }}>
+                    <Ikon ikon={ExternalLink} size={14} /> Kundeportal
+                  </a>
+                ) : null;
+              })()}
             </div>
           </div>
         );

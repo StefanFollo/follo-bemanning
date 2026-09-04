@@ -4,7 +4,10 @@ import {
   Lightbulb, Check, CircleX, CircleCheck, CalendarDays, Package, Flag, Archive, Star,
   Users, Lock, ClipboardList, Hammer, Wrench, Eye, Pencil, Scissors, Undo2, Maximize,
   List, ChartGantt, Loader, Pin, ChevronLeft, ChevronRight, ScrollText, ClipboardCheck, CircleAlert, Ban, RotateCw,
+  ExternalLink, Copy,
 } from 'lucide-react';
+import KundeportalKnapp from '../komponenter/KundeportalKnapp';
+import { kundeportalToken, kundeportalUrl } from '../kundeportal';
 import { Ikon, IkonTekst, TomIkon } from '../komponenter/Ikon';
 import { varsleFramdriftEksport } from '../framdriftEksportKlient';
 import { useApp } from '../context/AppContext';
@@ -1947,6 +1950,7 @@ export default function Prosjekter({ onNavigate = null }) {
           : manglerBemanning && onNavigate
             ? { label: '+ Bemann', onClick: () => onNavigate('bemanningsplan') }
             : null;
+        const portalToken = kundeportalToken(p, state.befaringer);
 
         return (
           <div key={p.id}>
@@ -1971,6 +1975,14 @@ export default function Prosjekter({ onNavigate = null }) {
               p.jobbType || null,
             ]}
             hoyre={[
+              portalToken ? (
+                <a href={kundeportalUrl(portalToken, { intern: true })} target="_blank" rel="noopener noreferrer"
+                  onClick={e => e.stopPropagation()}
+                  title="Kundeportal — intern visning, telles ikke i kunde-statistikken"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>
+                  <Ikon ikon={ExternalLink} size={14} /> Kundeportal
+                </a>
+              ) : null,
               antallFolk > 0 ? <IkonTekst ikon={Users} size={13} gap={4}>{antallFolk}</IkonTekst> : null,
               belopVis,
               ks ? <IkonTekst ikon={ClipboardCheck} size={13} gap={4}>{ks}</IkonTekst> : null,
@@ -1979,6 +1991,10 @@ export default function Prosjekter({ onNavigate = null }) {
             hurtigknapp={hurtigknapp}
             meny={[
               { ikon: <Ikon ikon={Pencil} size={15} />, label: 'Rediger', onClick: () => openEdit(p) },
+              portalToken && { ikon: <Ikon ikon={ExternalLink} size={15} />, label: 'Kundeportal',
+                onClick: () => window.open(kundeportalUrl(portalToken, { intern: true }), '_blank', 'noopener') },
+              portalToken && { ikon: <Ikon ikon={Copy} size={15} />, label: 'Kopier kundelenke',
+                onClick: () => navigator.clipboard?.writeText(kundeportalUrl(portalToken, { intern: false })).catch(() => {}) },
               duplikatHint[p.id]
                 ? { ikon: <Ikon ikon={Link2} size={15} />, label: `Slå sammen med ${duplikatHint[p.id].label}…`, onClick: () => setMergeFor({ prosjekt: p, forslagId: duplikatHint[p.id].id }) }
                 : { ikon: <Ikon ikon={Link2} size={15} />, label: 'Slå sammen med…', onClick: () => setMergeFor({ prosjekt: p, forslagId: null }) },
@@ -2031,6 +2047,7 @@ export default function Prosjekter({ onNavigate = null }) {
             onFane={f => { setPanelFane(f); if (f === 'logg' && loggEntries === null) hentLogg(p); }}
             onLukk={() => setValgtId(null)}
             handlinger={<>
+              <KundeportalKnapp token={kundeportalToken(p, state.befaringer)} kompakt />
               <select
                 className="input" style={{ height: 34, fontSize: 13, width: 160 }}
                 value={normStatus(p.status)}

@@ -12,6 +12,8 @@ import { Ikon } from '../komponenter/Ikon';
 import TilbudsdataVisning from '../komponenter/Tilbudsdata';
 import { StatusFaner } from '../komponenter/Designsystem';
 import RingIDag from '../komponenter/RingIDag';
+import KundeportalKnapp from '../komponenter/KundeportalKnapp';
+import { kundeportalToken } from '../kundeportal';
 import {
   klassifiserKoblinger, forslagForSpokelse, beregnKobleTilbud, beregnStatusFix,
   beregnAngreSak, hentReparasjonHistorikk, leggTilReparasjonHistorikk, mapSalgsStatus,
@@ -830,23 +832,19 @@ export default function BefaringPlan({ apneBefaringId, onApnet }) {
             {(() => {
               // ALLE kundeside-lenker MÅ ha ?intern=1 — ellers forurenses
               // «Åpnet tilbudet Nx»-statistikken av interne PL-besøk.
-              const token = b.tilbudPayload?.publicToken || b.tilbudPayload?.public_token;
-              const url = token
-                ? `https://follo-befaring.vercel.app/t/${token}?intern=1`
-                : b.tilbudLink
-                  ? b.tilbudLink + (b.tilbudLink.includes('?') ? '&' : '?') + 'intern=1'
-                  : null;
-              if (!url) return null;
+              const token = kundeportalToken(b);
+              if (token) return <div style={{ marginTop: 2 }}><KundeportalKnapp token={token} kompakt /></div>;
+              if (!b.tilbudLink) return null;
               return (
                 <a
-                  href={url}
+                  href={b.tilbudLink + (b.tilbudLink.includes('?') ? '&' : '?') + 'intern=1'}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={e => e.stopPropagation()}
                   title="Intern visning — telles ikke i kunde-statistikken"
                   style={{ fontSize: 11, color: '#2874a6', fontWeight: 500, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 4, marginTop: 2 }}
                 >
-                  {token ? <><Ikon ikon={Eye} size={12} /> Se kundesiden ↗</> : <><Ikon ikon={Link2} size={12} /> Åpne kundens tilbudside ↗</>}
+                  <Ikon ikon={Link2} size={12} /> Åpne kundens tilbudside ↗
                 </a>
               );
             })()}

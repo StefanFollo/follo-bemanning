@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { Ikon, IkonTekst } from '../komponenter/Ikon';
 import { varsleFramdriftEksport, erFramdriftsEndring } from '../framdriftEksportKlient';
+import KundeportalKnapp from '../komponenter/KundeportalKnapp';
+import { kundeportalToken } from '../kundeportal';
 import { useApp } from '../context/AppContext';
 import { kandidatScore } from '../mergeProsjekter';
 import { uid, mergeWithCloud } from '../store';
@@ -1079,6 +1081,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
 // ─── ProjectDetail ────────────────────────────────────────────────────────────
 
 function ProjectDetail({ project, onBack, onUpdate, readOnly = false }) {
+  const { state: appState } = useApp();
   const [status,   setStatus]   = useState(project.fdStatus || 'Pågående');
   const [note,     setNote]     = useState(project.fdNote || '');
   const [startWk,  setStartWk]  = useState(() => projStartWY(project).week);
@@ -1190,6 +1193,7 @@ function ProjectDetail({ project, onBack, onUpdate, readOnly = false }) {
             }}>
             Vis hva kunden får se
           </button>
+          <KundeportalKnapp token={kundeportalToken(project, appState.befaringer)} fane="framdrift" kompakt />
         </div>
       )}
 
