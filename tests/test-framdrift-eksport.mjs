@@ -2,7 +2,7 @@
 // postkasse-oppdrag 6). Kjør: node tests/test-framdrift-eksport.mjs
 import http from 'http';
 import {
-  byggFramdriftPayload, payloadHash, periodeTekstForFase, tilbudIdForProsjekt, mandagIUke, isoUke,
+  byggFramdriftPayload, payloadHash, periodeTekstForFase, tilbudIdForProsjekt, mandagIUke, isoUke, startukeForProsjekt,
 } from '../src/framdriftEksport.js';
 
 let feil = 0, ok = 0;
@@ -55,6 +55,22 @@ console.log('\n-- Manglende grunnlag → null --');
   sjekk('Befaring uten tilbudId', byggFramdriftPayload(prosjekt, [{ id: 'B1' }]) === null);
   sjekk('Uten fdTasks', byggFramdriftPayload({ ...prosjekt, fdTasks: [] }, befaringer) === null);
   sjekk('tilbudIdForProsjekt-hjelperen', tilbudIdForProsjekt(prosjekt, befaringer) === 1787044631506 && tilbudIdForProsjekt({}, befaringer) === null);
+}
+
+console.log('\n-- BUG oppdrag 7: naturlig PL-flyt (Koble-dialog + standardfaser) --');
+{
+  // Som E2E-testprosjektet 04.09: kildeBefaringId (koblingsdialogen), INGEN
+  // fdStartWeek/fdStartYear (standardfase-knappen satte det ikke), men startDato.
+  const e2e = {
+    id: 'tc99', navn: 'RØYKTEST framdrift — Røykveien 1',
+    kildeBefaringId: 'B1', startDato: '2026-09-04',
+    fdTasks: [{ id: 's1', name: 'Grunnarbeider', start: 0, dur: 14, pct: 0 }],
+  };
+  const p = byggFramdriftPayload(e2e, befaringer, { iDag: '2026-09-04', naa: 'T' });
+  sjekk('kildeBefaringId alene gir tilbud-kobling', p && p.tilbudId === 1787044631506);
+  sjekk('startuke utledes fra startDato (04.09.2026 = uke 36)', p && p.framdrift.milepaler[0].periodeTekst === 'uke 36–38', p && p.framdrift.milepaler[0].periodeTekst);
+  sjekk('Eksplisitt fdStartWeek vinner over startDato', JSON.stringify(startukeForProsjekt({ fdStartWeek: 40, fdStartYear: 2026, startDato: '2026-09-04' })) === '{"uke":40,"aar":2026}');
+  sjekk('Uten både startuke og startDato → null', byggFramdriftPayload({ ...e2e, startDato: undefined }, befaringer) === null);
 }
 
 console.log('\n-- Hash: pct-kryp under 100 % koalesceres, statusskifte sender --');
@@ -143,6 +159,30 @@ console.log('\n-- /api/prosjekter/framdrift-eksport --');
   r = await kall('POST', 'admintoken', 'P2');
   sjekk('Milepæl fullført → sendes på nytt', r._body.sendt === true && mottatt.length === 3 && mottatt[2].body.framdrift.milepaler[1].status === 'ferdig');
   sjekk('fbs_state urørt av eksporten (leser kun)', JSON.parse(store.get('fbs_state')).prosjekter.length === 2);
+}
+
+console.log('\n-- Oppdrag 7: E2E-flyten ende-til-ende + spesifikke grunn-meldinger --');
+{
+  const st = JSON.parse(store.get('fbs_state'));
+  st.prosjekter.push(
+    { id: 'P3', navn: 'Røykveien 1', kildeBefaringId: 'B1', startDato: '2026-09-04', framdriftDeltMedKunde: true,
+      fdTasks: [{ id: 's1', name: 'Grunnarbeider', start: 0, dur: 14, pct: 0 }] },
+    { id: 'P4', navn: 'Uten kobling', startDato: '2026-09-04', fdTasks: [{ id: 'x', name: 'F', start: 0, dur: 5 }] },
+    { id: 'P5', navn: 'Uten faser', befaringId: 'B1', startDato: '2026-09-04' },
+    { id: 'P6', navn: 'Uten startuke', befaringId: 'B1', fdTasks: [{ id: 'x', name: 'F', start: 0, dur: 5 }] },
+    { id: 'P7', navn: 'Død befaring', befaringId: 'FINNES-IKKE', startDato: '2026-09-04', fdTasks: [{ id: 'x', name: 'F', start: 0, dur: 5 }] },
+  );
+  store.set('fbs_state', JSON.stringify(st));
+  let r = await kall('POST', 'admintoken', 'P3');
+  sjekk('Naturlig PL-flyt (kildeBefaringId + faser uten startuke) SENDER nå', r._kode === 200 && r._body.sendt === true && r._body.tilbudId === 1787044631506);
+  r = await kall('GET', 'admintoken', 'P4', true);
+  sjekk('Grunn uten kobling peker på «Koble til tilbud…»', r._body.manglerGrunnlag === true && /Koble til tilbud/.test(r._body.grunn));
+  r = await kall('GET', 'admintoken', 'P5', true);
+  sjekk('Grunn uten faser sier «ingen faser»', r._body.manglerGrunnlag === true && /ingen faser/.test(r._body.grunn));
+  r = await kall('GET', 'admintoken', 'P6', true);
+  sjekk('Grunn uten startuke/startdato sier «startuke»', r._body.manglerGrunnlag === true && /startuke/i.test(r._body.grunn));
+  r = await kall('GET', 'admintoken', 'P7', true);
+  sjekk('Grunn ved død befaring-peker', r._body.manglerGrunnlag === true && /ikke finnes/.test(r._body.grunn));
 }
 
 server.close();

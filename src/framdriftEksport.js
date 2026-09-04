@@ -50,11 +50,27 @@ function statusForFase(t, fdStartWeek, fdStartYear, iDagDato) {
   return 'kommer';
 }
 
-// Kobling: prosjekt.befaringId → befaring.tilbudId (samme kjede som resten av appen)
+// Kobling: prosjektets befaring → befaring.tilbudId. «Koble til tilbud…»
+// setter både befaringId og kildeBefaringId, men eldre/andre flyter kan ha
+// bare én av dem — godta begge.
 export function tilbudIdForProsjekt(prosjekt, befaringer) {
-  if (!prosjekt || !prosjekt.befaringId) return null;
-  const bef = (befaringer || []).find(b => b && b.id === prosjekt.befaringId);
+  if (!prosjekt) return null;
+  const befId = prosjekt.befaringId || prosjekt.kildeBefaringId;
+  if (!befId) return null;
+  const bef = (befaringer || []).find(b => b && b.id === befId);
   return (bef && bef.tilbudId) || null;
+}
+
+// Startuke for planen: eksplisitt fdStartWeek/fdStartYear, ellers utledet fra
+// prosjektets startDato — samme fallback som gantt-visningen bruker (den viser
+// uker selv om feltet aldri ble satt, f.eks. etter «Legg til standard byggefaser»).
+export function startukeForProsjekt(prosjekt) {
+  if (prosjekt.fdStartWeek && prosjekt.fdStartYear) return { uke: prosjekt.fdStartWeek, aar: prosjekt.fdStartYear };
+  if (prosjekt.startDato) {
+    const u = isoUke(new Date(prosjekt.startDato + 'T12:00:00Z'));
+    if (Number.isFinite(u.uke)) return u;
+  }
+  return null;
 }
 
 // Hovedfunksjon → { tilbudId, framdrift } eller null (mangler kobling/plan).
@@ -63,12 +79,13 @@ export function byggFramdriftPayload(prosjekt, befaringer, { iDag, naa } = {}) {
   const tilbudId = tilbudIdForProsjekt(prosjekt, befaringer);
   if (!tilbudId) return null;
   const tasks = Array.isArray(prosjekt.fdTasks) ? prosjekt.fdTasks : [];
-  if (!tasks.length || !prosjekt.fdStartWeek || !prosjekt.fdStartYear) return null;
+  const startuke = startukeForProsjekt(prosjekt);
+  if (!tasks.length || !startuke) return null;
   const iDagDato = iDag ? new Date(iDag + 'T12:00:00Z') : new Date();
   const milepaler = tasks.map(t => ({
     tittel: String(t.name || t.navn || 'Fase').slice(0, 200),
-    status: statusForFase(t, prosjekt.fdStartWeek, prosjekt.fdStartYear, iDagDato),
-    periodeTekst: periodeTekstForFase(prosjekt.fdStartWeek, prosjekt.fdStartYear, t.start || 0, t.dur || 1),
+    status: statusForFase(t, startuke.uke, startuke.aar, iDagDato),
+    periodeTekst: periodeTekstForFase(startuke.uke, startuke.aar, t.start || 0, t.dur || 1),
     ferdigDato: null, // spores ikke per fase i dag — kontrakten tillater null
   }));
   return {

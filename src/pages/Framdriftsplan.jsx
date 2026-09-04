@@ -552,11 +552,11 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
   const noff = (nowYr * 52 + nowWk) - (by * 52 + bw);
   const nowX = (noff >= 0 && noff * 7 <= totalDays) ? noff * 7 * dw : null;
 
-  const save = (next, nextCols) => {
+  const save = (next, nextCols, extra) => {
     if (readOnly) return;
     tasksRef.current = next; setTasks(next);
     const autoPct = calcAutoProgress(next);
-    onUpdate({ fdTasks: next, fdColColors: nextCols ?? colColors, ...(autoPct !== null ? { fdProgress: autoPct } : {}) });
+    onUpdate({ fdTasks: next, fdColColors: nextCols ?? colColors, ...(autoPct !== null ? { fdProgress: autoPct } : {}), ...(extra || {}) });
   };
   const saveCols = nc => { if (readOnly) return; setColColors(nc); onUpdate({ fdColColors: nc }); };
 
@@ -624,7 +624,11 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
       const t = { id: uid(), name: f.name, start: cursor, dur: f.dur, pct: 0, fag: f.fag };
       cursor += f.dur; return t;
     });
-    save([...tasks, ...newTasks]);
+    // Sett startuken eksplisitt (gantten VISER den via startDato-fallback, men
+    // f.eks. framdrift-eksporten trenger fdStartWeek/fdStartYear lagret)
+    const startuke = (project.fdStartWeek && project.fdStartYear) ? null
+      : (() => { const s = projStartWY(project); return { fdStartWeek: s.week, fdStartYear: s.year }; })();
+    save([...tasks, ...newTasks], undefined, startuke);
   };
 
   return (

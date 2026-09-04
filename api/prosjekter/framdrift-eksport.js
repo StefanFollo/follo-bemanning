@@ -16,7 +16,7 @@
 // uten å sende eller merke noe, uavhengig av delings-flagget.
 
 import { Redis } from '@upstash/redis';
-import { byggFramdriftPayload, payloadHash } from '../../src/framdriftEksport.js';
+import { byggFramdriftPayload, payloadHash, startukeForProsjekt } from '../../src/framdriftEksport.js';
 
 const redis = new Redis({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN });
 const STATUS_NOKKEL = 'fbs_framdrift_eksport';
@@ -46,9 +46,16 @@ export default async function handler(req, res) {
 
   const payload = byggFramdriftPayload(prosjekt, state.befaringer || []);
   if (!payload) {
-    return res.status(200).json({ ok: false, manglerGrunnlag: true,
-      grunn: !prosjekt.befaringId ? 'Prosjektet er ikke koblet til en befaring' :
-        'Mangler tilbud-kobling eller framdriftsplan (fdTasks/startuke)' });
+    // Spesifikk grunn så «Vis hva kunden får se» forklarer PL-en hva som mangler
+    const befId = prosjekt.befaringId || prosjekt.kildeBefaringId;
+    const bef = (state.befaringer || []).find(b => b && b.id === befId);
+    const grunn = !befId ? 'Prosjektet er ikke koblet til en befaring — bruk «Koble til tilbud…» på Prosjekter-siden'
+      : !bef ? 'Prosjektet peker på en befaring som ikke finnes — koble til tilbud på nytt'
+      : !bef.tilbudId ? 'Den koblede befaringen har ikke noe tilbud (mangler tilbudId)'
+      : !(Array.isArray(prosjekt.fdTasks) && prosjekt.fdTasks.length) ? 'Framdriftsplanen har ingen faser ennå'
+      : !startukeForProsjekt(prosjekt) ? 'Mangler startuke — sett startuke i Framdrift-fanen eller startdato på prosjektet'
+      : 'Mangler grunnlag for framdrifts-payload';
+    return res.status(200).json({ ok: false, manglerGrunnlag: true, grunn });
   }
 
   if (torr) {
