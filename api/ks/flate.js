@@ -469,7 +469,7 @@ export default async function handler(req, res) {
         // Oppdrag 11H/15: oppgavene mine — enkeltoppgaver på faser som pågår
         // denne dagen (eller med dag satt til akkurat denne datoen), med
         // id-er så Ferdig-avhukingen i «Din uke» kan treffe riktig oppgave.
-        const faserDenneDagen = byggInterneFaser(p, { iDag: dato }) || []
+        const faserDenneDagen = byggInterneFaser(p, { iDag: dato, fallbackIDag: iDag }) || []
         const oppgaver = (p.fdTasks || []).flatMap((f, i) => {
           if (!f) return []
           const synlige = oppgaverPaaFase(f).filter(o => (o.tildelt || []).includes(ansatt.id)
@@ -490,7 +490,7 @@ export default async function handler(req, res) {
       const dekket = new Set(mine.filter(t => t.prosjektId !== '__FERIE__').map(t => t.prosjektId))
       for (const p of (state.prosjekter || [])) {
         if (!p || p.arkivert || dekket.has(p.id)) continue
-        const faserDenneDagen = byggInterneFaser(p, { iDag: dato }) || []
+        const faserDenneDagen = byggInterneFaser(p, { iDag: dato, fallbackIDag: iDag }) || []
         const oppg = (p.fdTasks || []).flatMap((f, i) => !f ? [] : oppgaverPaaFase(f)
           .filter(o => (o.tildelt || []).includes(ansatt.id) && (o.dag ? o.dag === dato : faserDenneDagen[i]?.pagarNa))
           .map(o => ({ fase: f.name || 'Fase', tekst: o.tekst, oppgaveId: o.id, faseId: f.id, prosjektId: p.id, status: o.status })))

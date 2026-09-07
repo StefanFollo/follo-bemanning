@@ -77,6 +77,17 @@ console.log('\n-- BUG oppdrag 7: naturlig PL-flyt (Koble-dialog + standardfaser)
   sjekk('Uten både startuke og startDato → null', byggFramdriftPayload({ ...e2e, startDato: undefined }, befaringer) === null);
 }
 
+console.log('\n-- Oppdrag 15-oppfølging: fallbackIDag ankrer fasene for «pågår»-vurdering --');
+{
+  const { byggInterneFaser } = await import('../src/framdriftEksport.js');
+  // Prosjekt uten startuke/startdato: fase i «neste uke» (dag 5–9)
+  const uP = { fdTasks: [{ id: 'x', name: 'F', start: 5, dur: 5, pct: 0 }] };
+  const uten = byggInterneFaser(uP, { iDag: '2026-09-15' });
+  const med = byggInterneFaser(uP, { iDag: '2026-09-15', fallbackIDag: '2026-09-07' });
+  sjekk('Uten anker flytter fasen seg med datoen (pågår aldri)', uten[0].pagarNa === false);
+  sjekk('Med anker i dagens uke: fasen PÅGÅR på riktig framtidig dato', med[0].pagarNa === true);
+}
+
 console.log('\n-- Hash: pct-kryp under 100 % koalesceres, statusskifte sender --');
 {
   const a = payloadHash(byggFramdriftPayload(prosjekt, befaringer, { iDag: '2026-10-14', naa: 'T1' }));
