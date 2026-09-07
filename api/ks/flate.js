@@ -13,6 +13,7 @@
 
 import { Redis } from '@upstash/redis'
 import { put } from '@vercel/blob'
+import { byggInterneFaser } from '../../src/framdriftEksport.js'
 
 const redis = new Redis({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN })
 
@@ -246,15 +247,76 @@ export default async function handler(req, res) {
   if (!info.verifisert) return res.status(200).json({ maaVerifisere: true, fornavn })
 
   const iDag = iDagIso()
+
+  // ── Oppdrag 11E: Bemanning-fanen — egen gren (?bemanningUke=<offset>) ──
+  // Samme innhold som lesetilgang-rollen ser i appen, MEN med personvern-vern:
+  // andres FERIE-tildelinger utelates helt (de fremstår kun som «ikke satt
+  // opp»), sykmelding/fraværsårsak finnes ikke i svaret, og kolleger vises
+  // kun med navn — aldri telefon/e-post.
+  if ((req.query || {}).bemanningUke !== undefined) {
+    const offset = Math.max(-1, Math.min(8, parseInt(req.query.bemanningUke, 10) || 0))
+    const iDagD = new Date(iDag + 'T12:00:00Z')
+    const mandag = new Date(iDagD)
+    mandag.setUTCDate(mandag.getUTCDate() - ((mandag.getUTCDay() + 6) % 7) + offset * 7)
+    const dager = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(mandag); d.setUTCDate(d.getUTCDate() + i)
+      return d.toISOString().slice(0, 10)
+    })
+    const ukeStart = dager[0], ukeSlutt = dager[6]
+    const overlapper = t => (t.startDato || '0000') <= ukeSlutt && (t.sluttDato || '9999') >= ukeStart
+    const ansattNavn = {}
+    for (const a of state.ansatte || []) if (a && !a.arkivert) ansattNavn[a.id] = a.navn
+    const dagerFor = t => dager.map(d => (t.startDato || '0000') <= d && (t.sluttDato || '9999') >= d)
+
+    const prosjekter = (state.prosjekter || [])
+      .filter(p => p && !p.arkivert && !['fullfort', 'arkivert'].includes(String(p.status || '')))
+      .map(p => {
+        const rader = (state.tildelinger || [])
+          .filter(t => t && t.prosjektId === p.id && t.prosjektId !== '__FERIE__' && overlapper(t) && ansattNavn[t.ansattId])
+          .map(t => ({ navn: ansattNavn[t.ansattId], erDeg: t.ansattId === ansatt.id, dager: dagerFor(t) }))
+        return rader.length ? { navn: p.navn || p.adresse || 'Prosjekt', rader } : null
+      })
+      .filter(Boolean)
+      .sort((a, b) => (b.rader.some(r => r.erDeg) ? 1 : 0) - (a.rader.some(r => r.erDeg) ? 1 : 0))
+
+    // «Din uke»: egen rad per dag — prosjektnavn, egen ferie, eller ikke satt opp
+    const dinUke = dager.map(d => {
+      const mine = (state.tildelinger || []).filter(t => t && t.ansattId === ansatt.id
+        && (t.startDato || '0000') <= d && (t.sluttDato || '9999') >= d)
+      const ferie = mine.find(t => t.prosjektId === '__FERIE__')
+      if (ferie) return { dato: d, tekst: 'Ferie / fri' }
+      const jobb = mine.find(t => t.prosjektId !== '__FERIE__')
+      if (!jobb) return { dato: d, tekst: null }
+      const p = (state.prosjekter || []).find(x => x && x.id === jobb.prosjektId)
+      return { dato: d, tekst: (p && (p.navn || p.adresse)) || 'Prosjekt' }
+    })
+
+    return res.status(200).json({ bemanning: { ukeOffset: offset, dager, dinUke, prosjekter } })
+  }
+
   const mineTildelinger = (state.tildelinger || []).filter(t => t && t.ansattId === ansatt.id && (t.sluttDato || '9999') >= iDag)
   const prosjektIds = [...new Set(mineTildelinger.map(t => t.prosjektId))]
   const alleSjekklister = (await redis.get('fbs_ks_sjekklister')) || []
+  // Oppdrag 11A: PL-oppslag for Framdrift-fanen (navn + telefon — ansatte
+  // skal kunne ringe SIN prosjektleder; aldri kontaktinfo til andre kolleger)
+  const plFor = (p) => {
+    const pl = p.prosjektlederId ? (state.ansatte || []).find(a => a && a.id === p.prosjektlederId && !a.arkivert) : null
+    return pl ? { navn: pl.navn, telefon: pl.telefon || null } : null
+  }
+
   const prosjekter = prosjektIds
     .map(pid => (state.prosjekter || []).find(p => p && p.id === pid))
     .filter(p => p && !p.arkivert)
     .map(p => ({
       id: p.id,
       navn: p.navn || p.adresse || 'Prosjekt',
+      // Oppdrag 11A: intern framdriftsvisning — tittel/periode/status/pågår-nå,
+      // aldri pct/fag/timer/priser. null = «Ingen framdriftsplan ennå».
+      adresse: p.adresse || '',
+      startDato: p.startDato || null,
+      sluttDato: p.sluttDato || null,
+      pl: plFor(p),
+      framdrift: byggInterneFaser(p, { iDag }),
       sjekklister: alleSjekklister
         .filter(sl => sl && sl.prosjektId === p.id && erAnsvarlig(sl, ansatt.navn))
         .map(sl => ({

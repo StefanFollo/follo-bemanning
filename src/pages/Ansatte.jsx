@@ -130,6 +130,55 @@ export default function Ansatte() {
     }
   }
 
+  // ── Oppdrag 11C: masseutsending av KS-lenker ──
+  // Sekvensielt (aldri parallelt — sms-interapp har grenser: 3/time per
+  // mottaker, 50/døgn totalt). Ved rate-grense stoppes køen med tydelig
+  // beskjed — de som gjenstår sendes ved neste forsøk (status-kolonnen
+  // viser hvem som alt har fått).
+  const [masseModus, setMasseModus] = useState(false);
+  const [valgteKs, setValgteKs] = useState(() => new Set());
+  const [masseStatus, setMasseStatus] = useState(null); // { kjorer, sendt, totalt, melding }
+  const harTlf = a => !!String(a.telefon || '').replace(/\D/g, '').slice(-4);
+
+  async function sendKsLenkerTilValgte() {
+    const ids = [...valgteKs];
+    if (!ids.length) return;
+    if (!window.confirm(`Sende personlig KS-lenke på SMS til ${ids.length} ansatt${ids.length === 1 ? '' : 'e'}?`)) return;
+    let sendt = 0; const feilet = [];
+    setMasseStatus({ kjorer: true, sendt: 0, totalt: ids.length, melding: null });
+    for (let i = 0; i < ids.length; i++) {
+      const ansatt = state.ansatte.find(x => x.id === ids[i]);
+      try {
+        const r = await fetch('/api/ks/flate-admin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (localStorage.getItem('fbs_token') || '') },
+          body: JSON.stringify({ ansattId: ids[i], regenerer: false, sendSms: true }),
+        });
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || r.status);
+        if (d.sms?.sendt) {
+          sendt++;
+          setValgteKs(v => { const n = new Set(v); n.delete(ids[i]); return n; });
+        } else if (d.sms?.ikkeKlar) {
+          setMasseStatus({ kjorer: false, sendt, totalt: ids.length, melding: 'SMS-tjenesten er ikke klar ennå (tilbuds-appens endepunkt mangler). Ingen flere sendt — prøv igjen senere.' });
+          return;
+        } else if (d.sms?.rateGrense) {
+          setMasseStatus({ kjorer: false, sendt, totalt: ids.length, melding: `SMS-grensen er nådd: ${sendt} sendt, ${ids.length - i} gjenstår. Køen fortsetter når du trykker igjen (f.eks. i morgen) — de som alt har fått, står som «Sendt» i kolonnen.` });
+          hentKsStatus();
+          return;
+        } else {
+          feilet.push(`${ansatt?.navn || ids[i]}: ${d.sms?.feil || 'ukjent feil'}`);
+        }
+      } catch (e) {
+        feilet.push(`${ansatt?.navn || ids[i]}: ${e.message}`);
+      }
+      setMasseStatus({ kjorer: true, sendt, totalt: ids.length, melding: null });
+    }
+    setMasseStatus({ kjorer: false, sendt, totalt: ids.length,
+      melding: `${sendt} sendt` + (feilet.length ? ` · ${feilet.length} feilet:\n${feilet.join('\n')}` : ' — alle valgte har fått lenken.') });
+    hentKsStatus();
+  }
+
   function arkiverAnsatt(a) {
     if (!confirm(`Arkivere ${a.navn}?\n\nPersonen skjules fra lister og bemanningsplan, men slettes IKKE — historiske tildelinger beholdes, og du kan gjenopprette når som helst.`)) return;
     dispatch({
@@ -179,12 +228,42 @@ export default function Ansatte() {
       <div className="page-header">
         <h2>Ansatte <span className="count-badge">{sortedAnsatte.length}</span></h2>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn" onClick={() => { setMasseModus(m => !m); setValgteKs(new Set()); setMasseStatus(null); }}
+            style={masseModus ? { background: '#185FA5', color: '#fff', borderColor: '#185FA5' } : {}}>
+            <IkonTekst ikon={HardHat} size={14} gap={5}>{masseModus ? 'Avslutt utsending' : 'Send KS-lenker…'}</IkonTekst>
+          </button>
           <button className="btn" onClick={() => setShowFagModal(true)}>Administrer fag</button>
           <button className="btn btn-primary" onClick={openNew}>
             + {gruppe === 'innleie' ? 'Ny innleie' : 'Ny ansatt'}
           </button>
         </div>
       </div>
+
+      {/* Oppdrag 11C: velge-verktøylinje for masseutsending */}
+      {masseModus && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '10px 14px', marginBottom: 12, fontSize: 13 }}>
+          <button className="btn btn-sm" onClick={() => setValgteKs(new Set(ansatte.filter(harTlf).map(a => a.id)))}>
+            Velg alle med telefonnummer ({ansatte.filter(harTlf).length})
+          </button>
+          <button className="btn btn-sm" onClick={() => setValgteKs(new Set())}>Tøm valg</button>
+          <span style={{ color: '#1e40af', fontWeight: 500 }}>{valgteKs.size} valgt</span>
+          {ansatte.filter(a => !harTlf(a)).length > 0 && (
+            <span style={{ color: 'var(--warning)', fontWeight: 500 }}>
+              <Ikon ikon={TriangleAlert} size={13} style={{ marginRight: 3 }} />
+              Uten telefon (kan ikke få lenke): {ansatte.filter(a => !harTlf(a)).map(a => a.navn.split(' ')[0]).join(', ')}
+            </span>
+          )}
+          <button className="btn btn-sm btn-primary" style={{ marginLeft: 'auto' }}
+            disabled={!valgteKs.size || masseStatus?.kjorer} onClick={sendKsLenkerTilValgte}>
+            {masseStatus?.kjorer ? `Sender… ${masseStatus.sendt} av ${masseStatus.totalt}` : `Send KS-lenke til valgte (${valgteKs.size})`}
+          </button>
+          {masseStatus && !masseStatus.kjorer && masseStatus.melding && (
+            <div style={{ flexBasis: '100%', whiteSpace: 'pre-wrap', color: '#1e40af' }}>
+              {masseStatus.sendt} sendt · {Math.max(0, masseStatus.totalt - masseStatus.sendt)} gjenstår — {masseStatus.melding}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Gruppe-tabs */}
       <div className="tab-bar" style={{ marginBottom: 8 }}>
@@ -250,6 +329,13 @@ export default function Ansatte() {
           </div>
           {ansatte.map(a => (
             <div className="ct-row" key={a.id} style={a.sykmeldt ? { opacity: 0.55, background: '#f8fafc' } : {}}>
+              {masseModus && (
+                <div style={{ display: 'flex', alignItems: 'center', paddingRight: 8 }}>
+                  <input type="checkbox" checked={valgteKs.has(a.id)} disabled={!harTlf(a)}
+                    title={harTlf(a) ? 'Velg for KS-lenke på SMS' : 'Mangler telefonnummer'}
+                    onChange={() => setValgteKs(v => { const n = new Set(v); if (n.has(a.id)) n.delete(a.id); else n.add(a.id); return n; })} />
+                </div>
+              )}
               <div className="ct-col ct-ansatt-navn">
                 <div className="ct-avatar" style={{ background: a.sykmeldt ? '#5d6b80' : a.innleie ? '#f97316' : fagColor(a.fag) }}>
                   {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}

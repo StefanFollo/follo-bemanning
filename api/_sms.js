@@ -30,6 +30,7 @@ export async function sendSms({ til, melding, formaal = 'ks-lenke' }) {
     });
     const data = await r.json().catch(() => ({}));
     if (r.status === 404) return { ikkeKlar: true, til: tlf }; // endepunktet ikke utrullet ennå
+    if (r.status === 429) return { rateGrense: true, error: data.error || 'SMS-grensen er nådd — resten kan sendes senere/i morgen.', til: tlf };
     if (!r.ok || data.ok === false) return { error: data.error || `sms-interapp svarte ${r.status}`, til: tlf };
     return { sent: true, til: tlf };
   } catch (e) {

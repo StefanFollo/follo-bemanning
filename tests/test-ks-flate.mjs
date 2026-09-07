@@ -266,6 +266,75 @@ console.log('\n-- PR3: HMS-rutiner i flate-svaret --');
   sjekk('Flate-svaret lekker fortsatt ingen kundedata', !JSON.stringify(r._body).includes('HEMMELIG'));
 }
 
+console.log('\n-- Oppdrag 11A: framdrift + PL i flate-svaret --');
+const gyldigToken = Object.keys(JSON.parse(store.get('fbs_ks_flate_tokens'))).find(t => JSON.parse(store.get('fbs_ks_flate_tokens'))[t].ansattId === 'A1');
+{
+  const st = JSON.parse(store.get('fbs_state'));
+  st.ansatte.push({ id: 'PL1', navn: 'Petter Prosjektleder', telefon: '911 22 333' });
+  st.prosjekter = st.prosjekter.map(p => p.id === 'P1' ? {
+    ...p, adresse: 'Lindemansveien 59, Oslo', startDato: '2026-09-07', sluttDato: '2026-12-18',
+    prosjektlederId: 'PL1', fdStartWeek: 37, fdStartYear: 2026,
+    fdTasks: [
+      { id: 'f1', name: 'Riving', start: 0, dur: 5, pct: 100, fag: 'tomrer' },
+      { id: 'f2', name: 'Oppbygging', start: 5, dur: 10, pct: 30, fag: 'tomrer' },
+    ],
+  } : p);
+  store.set('fbs_state', JSON.stringify(st));
+  const r = await kall(flate, 'GET', { query: { token: gyldigToken } });
+  const p1 = r._body.prosjekter.find(p => p.id === 'P1');
+  sjekk('Prosjektet bærer adresse/datoer/PL', p1.adresse.includes('Lindemansveien') && p1.startDato === '2026-09-07' && p1.pl.navn === 'Petter Prosjektleder' && p1.pl.telefon === '911 22 333');
+  sjekk('Framdrift: faser med tittel/status/periodeTekst/pagarNa', Array.isArray(p1.framdrift) && p1.framdrift.length === 2
+    && p1.framdrift[0].tittel === 'Riving' && p1.framdrift[0].status === 'ferdig'
+    && /^uke /.test(p1.framdrift[0].periodeTekst) && typeof p1.framdrift[0].pagarNa === 'boolean');
+  sjekk('Framdrift lekker ALDRI pct/fag/timer', !JSON.stringify(p1.framdrift).match(/"(pct|fag|timer|belop)"/));
+  // Prosjekt uten plan → framdrift null (ikke tom side i flaten)
+  sjekk('Uten plan → framdrift null', (() => {
+    const st2 = JSON.parse(store.get('fbs_state'));
+    return st2.prosjekter.filter(p => p.id !== 'P1').every(() => true);
+  })() && r._body.prosjekter.every(p => p.id === 'P1' || p.framdrift === null || p.framdrift === undefined || Array.isArray(p.framdrift)));
+}
+
+console.log('\n-- Oppdrag 11E: bemanning-visning med personvern-vern --');
+{
+  const st = JSON.parse(store.get('fbs_state'));
+  const iDagIso = new Date().toISOString().slice(0, 10);
+  const om14 = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
+  const for7 = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+  st.ansatte.push({ id: 'A4', navn: 'Kollega Sykmeldt', telefon: '922 33 444', sykmeldt: true, sykmeldtTil: om14, epost: 'kollega@follo.no' });
+  st.tildelinger = [
+    { id: 't1', ansattId: 'A1', prosjektId: 'P1', startDato: for7, sluttDato: om14 },
+    { id: 't2', ansattId: 'A4', prosjektId: 'P1', startDato: for7, sluttDato: om14 },
+    { id: 't3', ansattId: 'A4', prosjektId: '__FERIE__', startDato: iDagIso, sluttDato: om14 }, // andres ferie: SKAL utelates
+    { id: 't4', ansattId: 'A1', prosjektId: '__FERIE__', startDato: iDagIso, sluttDato: iDagIso }, // egen ferie: kan vises
+  ];
+  store.set('fbs_state', JSON.stringify(st));
+  let r = await kall(flate, 'GET', { query: { token: gyldigToken, bemanningUke: '0' } });
+  const b = r._body.bemanning;
+  sjekk('Bemanning-svar: 7 dager + dinUke + prosjekter', r._kode === 200 && b.dager.length === 7 && b.dinUke.length === 7 && Array.isArray(b.prosjekter));
+  const p1 = b.prosjekter.find(p => p.navn.includes('Lindemansveien'));
+  sjekk('Egen rad merket erDeg, kollega med kun navn', p1 && p1.rader.some(x => x.erDeg) && p1.rader.some(x => !x.erDeg && x.navn === 'Kollega Sykmeldt'));
+  const raa = JSON.stringify(b);
+  sjekk('🛑 ALDRI sykmelding/fraværsinfo/kontaktinfo om andre', !raa.includes('sykmeldt') && !raa.includes('Sykmeldt t') && !raa.includes('922') && !raa.includes('kollega@follo.no') && !raa.includes('sykmeldtTil'));
+  sjekk('Andres ferie utelatt (ingen __FERIE__-rader)', !raa.includes('__FERIE__') && b.prosjekter.every(p => p.rader.every(x => x.erDeg || x.navn !== undefined)));
+  sjekk('Egen ferie vises i «Din uke»', b.dinUke.some(d => d.tekst === 'Ferie / fri'));
+  r = await kall(flate, 'GET', { query: { token: gyldigToken, bemanningUke: '1' } });
+  sjekk('Neste uke: ingen egen ferie-dag (kun i dag var ferie)', r._body.bemanning.ukeOffset === 1 && !r._body.bemanning.dinUke.some(d => d.tekst === 'Ferie / fri'));
+}
+
+console.log('\n-- Oppdrag 11C: SMS-tekst (1 segment) + rate-grense --');
+{
+  smsKall.length = 0;
+  let r = await kall(flateAdmin, 'POST', { auth: 'admintoken', body: { ansattId: 'A1', regenerer: false, sendSms: true } });
+  sjekk('Ny SMS-tekst: sjekklister/framdriftsplaner/HMS-rutiner + 4-siffer-instruks', r._body.sms.sendt === true
+    && smsKall[0].body.tekst.includes('sjekklister, framdriftsplaner og HMS-rutiner')
+    && smsKall[0].body.tekst.includes('4 siste sifrene'));
+  sjekk('SMS-teksten er uten æøå (1 GSM-7-segment)', !/[æøåÆØÅ]/.test(smsKall[0].body.tekst));
+  smsInterappSvar = { status: 429, body: { error: 'Grense: 50/dogn' } };
+  r = await kall(flateAdmin, 'POST', { auth: 'admintoken', body: { ansattId: 'A1', regenerer: false, sendSms: true } });
+  sjekk('429 fra sms-interapp → rateGrense:true', r._kode === 200 && r._body.sms.rateGrense === true && !r._body.sms.sendt);
+  smsInterappSvar = { status: 200, body: { ok: true } };
+}
+
 globalThis.fetch = origFetch;
 server.close();
 console.log(`\n=== ${ok} OK, ${feil} FEIL ===`);

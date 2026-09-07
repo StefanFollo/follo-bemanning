@@ -75,9 +75,10 @@ export default async function handler(req, res) {
   let sms = null
   if (skalSendeSms) {
     const fornavn = String(ansatt.navn || '').trim().split(/\s+/)[0]
+    // Oppdrag 11C: tekst uten æøå → 1 SMS-segment (GSM-7)
     sms = await sendSms({
       til: ansatt.telefon,
-      melding: `Hei ${fornavn}! Din personlige KS-lenke hos Follo Byggservice: ${url} — lagre denne meldingen, lenken er din faste inngang til sjekklistene.`,
+      melding: `Hei ${fornavn}! Her er din personlige lenke til Follo Byggservice sine sjekklister, framdriftsplaner og HMS-rutiner: ${url}. Lagre meldingen - lenken er din faste inngang. Forste gang bekrefter du med de 4 siste sifrene i ditt telefonnummer.`,
     })
     // PR3: sendtDato kun ved FAKTISK sendt SMS — status-kolonnen på
     // Ansatte-siden skal ikke vise «sendt» når tjenesten hoppet over.
@@ -87,10 +88,10 @@ export default async function handler(req, res) {
   }
   await redis.set(TOKENS_NOKKEL, tokens)
 
-  console.log(`[ks/flate-admin] ${session.navn || session.email} ${fjernet ? 'regenererte' : (eksisterende && !regenerer ? 'gjenbrukte' : 'opprettet')} KS-lenke for ${ansatt.navn}${sms ? (sms.sent ? ' + SMS sendt' : sms.ikkeKlar ? ' (SMS-tjeneste ikke klar)' : sms.skipped ? ' (SMS hoppet: env mangler)' : ' (SMS FEILET)') : ''}`)
+  console.log(`[ks/flate-admin] ${session.navn || session.email} ${fjernet ? 'regenererte' : (eksisterende && !regenerer ? 'gjenbrukte' : 'opprettet')} KS-lenke for ${ansatt.navn}${sms ? (sms.sent ? ' + SMS sendt' : sms.ikkeKlar ? ' (SMS-tjeneste ikke klar)' : sms.rateGrense ? ' (SMS-grense nådd)' : sms.skipped ? ' (SMS hoppet: env mangler)' : ' (SMS FEILET)') : ''}`)
   return res.status(200).json({
     ok: true, url, regenerert: fjernet > 0, gjenbrukt: !!(eksisterende && !regenerer && !fjernet),
     manglerTelefon: !String(ansatt.telefon || '').replace(/\D/g, '').slice(-4),
-    sms: sms ? { sendt: !!sms.sent, hoppet: !!sms.skipped, ikkeKlar: !!sms.ikkeKlar, feil: sms.error || null } : null,
+    sms: sms ? { sendt: !!sms.sent, hoppet: !!sms.skipped, ikkeKlar: !!sms.ikkeKlar, rateGrense: !!sms.rateGrense, feil: sms.error || null } : null,
   })
 }
