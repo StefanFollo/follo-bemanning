@@ -287,11 +287,17 @@ const gyldigToken = Object.keys(JSON.parse(store.get('fbs_ks_flate_tokens'))).fi
     && p1.framdrift[0].tittel === 'Riving' && p1.framdrift[0].status === 'ferdig'
     && /^uke /.test(p1.framdrift[0].periodeTekst) && typeof p1.framdrift[0].pagarNa === 'boolean');
   sjekk('Framdrift lekker ALDRI pct/fag/timer', !JSON.stringify(p1.framdrift).match(/"(pct|fag|timer|belop)"/));
-  // Prosjekt uten plan → framdrift null (ikke tom side i flaten)
-  sjekk('Uten plan → framdrift null', (() => {
-    const st2 = JSON.parse(store.get('fbs_state'));
-    return st2.prosjekter.filter(p => p.id !== 'P1').every(() => true);
-  })() && r._body.prosjekter.every(p => p.id === 'P1' || p.framdrift === null || p.framdrift === undefined || Array.isArray(p.framdrift)));
+  // Prosjekt uten faser → framdrift null (ikke tom side i flaten)
+  sjekk('Uten faser → framdrift null', r._body.prosjekter.every(p => p.id === 'P1' || p.framdrift === null));
+  // Faser men verken startuke eller startdato → gantt-fallbacken (dagens uke),
+  // slik at flaten viser det samme som PL-ens gantt
+  const st3 = JSON.parse(store.get('fbs_state'));
+  st3.prosjekter = st3.prosjekter.map(p => p.id === 'P1' ? { ...p, fdStartWeek: undefined, fdStartYear: undefined, startDato: '' } : p);
+  store.set('fbs_state', JSON.stringify(st3));
+  const r2 = await kall(flate, 'GET', { query: { token: gyldigToken } });
+  const p1b = r2._body.prosjekter.find(p => p.id === 'P1');
+  sjekk('Uten startuke/startdato → faser fra dagens uke (gantt-fallback)', Array.isArray(p1b.framdrift) && p1b.framdrift.length === 2 && /^uke \d+/.test(p1b.framdrift[0].periodeTekst));
+  store.set('fbs_state', JSON.stringify(st));
 }
 
 console.log('\n-- Oppdrag 11E: bemanning-visning med personvern-vern --');

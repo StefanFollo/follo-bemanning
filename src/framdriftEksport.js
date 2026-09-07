@@ -100,9 +100,12 @@ export function byggFramdriftPayload(prosjekt, befaringer, { iDag, naa } = {}) {
 // aldri pct, fag, timer eller bemanningsdata.
 export function byggInterneFaser(prosjekt, { iDag } = {}) {
   const tasks = Array.isArray(prosjekt.fdTasks) ? prosjekt.fdTasks : [];
-  const startuke = startukeForProsjekt(prosjekt);
-  if (!tasks.length || !startuke) return null;
+  if (!tasks.length) return null;
   const iDagDato = iDag ? new Date(iDag + 'T12:00:00Z') : new Date();
+  // Siste fallback = inneværende uke — NØYAKTIG det gantten viser PL-en for
+  // prosjekter uten startuke/startdato (nowWeekYear-fallbacken i Framdriftsplan).
+  // Kundeeksporten har IKKE denne fallbacken (den krever ekte startuke).
+  const startuke = startukeForProsjekt(prosjekt) || isoUke(iDagDato);
   return tasks.map(t => {
     const fra = fasedato(startuke.uke, startuke.aar, t.start || 0);
     const til = fasedato(startuke.uke, startuke.aar, (t.start || 0) + Math.max(1, t.dur || 1) - 1);
