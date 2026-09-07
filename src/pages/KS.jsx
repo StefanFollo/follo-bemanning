@@ -2453,11 +2453,16 @@ function ForslagModal({ prosjekt, maler, tildelteMalIds, onBekreft, onLukk }) {
   )
 }
 
-function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, onOppdaterProsjekt, onAapneProsjektSl }) {
+function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, onOppdaterProsjekt, onAapneProsjektSl, ansatte = [], onSjekklisteEndret = null }) {
   const [dragType, setDragType] = useState(null)   // 'mal' | 'fase' | 'subgruppe'
   const [dragData, setDragData] = useState(null)
   const [dragOver, setDragOver] = useState(false)
   const [toast, setToast] = useState(null)
+  // Oppdrag 13 (KS): Tildel-modal direkte fra oversikten — uten å åpne listen
+  const [tildelFor, setTildelFor] = useState(null) // API-instans (sl)
+  const ansatteIProsjNavn = useMemo(() => [...new Set(
+    (ansatte || []).filter(a => a.prosjekt === prosjekt.id || a.prosjekter?.includes(prosjekt.id)).map(a => a.navn)
+  )], [ansatte, prosjekt])
   const [soekBibliotek, setSoekBibliotek] = useState('')
   const [visForslagsModal, setVisForslagsModal] = useState(false)
   const [kollapset, setKollapset] = useState(() => {
@@ -2499,6 +2504,25 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
   function angreTillegg(malIds) {
     onOppdaterProsjekt({ ...prosjekt, ksSjekklister: ksSjekklister.filter(k => !malIds.includes(k.malId)) })
     setToast(null)
+  }
+
+  // Oppdrag 13: opprett (om nødvendig) API-instansen og åpne Tildel-modalen
+  // direkte fra kortet — PL skal ikke måtte inn i selve listen for å tildele.
+  async function tildelFraOversikt(ks) {
+    const existing = sjekklister.find(s => s.malId === ks.malId && s.prosjektId === prosjekt.id)
+    if (existing) { setTildelFor(existing); return }
+    const mal = maler.find(m => m.id === ks.malId)
+    if (!mal) return
+    try {
+      const ny = await apiFetch('/api/ks/sjekklister', { method: 'POST', body: {
+        malId: mal.id, navn: mal.navn, prosjektId: prosjekt.id,
+        gruppe: mal.gruppe || 'Annet', kategori: mal.kategori || 'annet',
+        punkter: (mal.punkter || []).map(p => ({ ...p, status: 'ikke-utfort', kommentar: '', bilder: [] })),
+        status: 'ikke-startet', ansvarlig: [], frist: '',
+      }})
+      if (onSjekklisteEndret) onSjekklisteEndret(ny)
+      setTildelFor(ny)
+    } catch { visToast('Fikk ikke åpnet tildeling — prøv igjen.', 'warn') }
   }
 
   async function aapneKSSjekkliste(ks) {
@@ -2572,6 +2596,20 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
           </div>
           {harAvvik && <span style={{ fontSize: 11, fontWeight: 500, color: '#dc2626', background: '#fee2e2', borderRadius: 8, padding: '1px 7px', flexShrink: 0 }}><Ikon ikon={TriangleAlert} size={11} /> {avvikAntall}</span>}
           {pst === 100 && !harAvvik && <span style={{ fontSize: 11, color: '#15803d' }}><Ikon ikon={Check} size={12} /></span>}
+          {/* Oppdrag 13: tildelt-person synlig på kortet — chip eller Tildel-knapp */}
+          {(instans?.ansvarlig || []).length > 0 ? (
+            <button title={'Ansvarlig: ' + instans.ansvarlig.join(', ') + ' — klikk for å endre'}
+              onClick={e => { e.stopPropagation(); setTildelFor(instans) }}
+              style={{ flexShrink: 0, fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 10, border: '1px solid #bfdbfe', background: '#eff6ff', color: '#1d4ed8', cursor: 'pointer', maxWidth: 130, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <Ikon ikon={Users} size={11} /> {instans.ansvarlig.map(n => n.split(' ')[0]).join(', ')}
+            </button>
+          ) : (
+            <button title="Tildel ansvarlig person"
+              onClick={e => { e.stopPropagation(); tildelFraOversikt(ks) }}
+              style={{ flexShrink: 0, fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 10, border: '1px dashed #cbd5e1', background: '#fff', color: '#5d6b80', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+              + Tildel
+            </button>
+          )}
           <button title="Fjern fra prosjektet"
             onClick={e => { e.stopPropagation(); fjernTildeling(ks) }}
             style={{ flexShrink: 0, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'transparent', color: '#5d6b80', cursor: 'pointer', fontSize: 13, borderRadius: 6 }}
@@ -2645,6 +2683,13 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
         </div>
       )}
 
+      {/* Oppdrag 13: Tildel ansvarlig direkte fra oversikten */}
+      {tildelFor && (
+        <TildelModal sl={tildelFor} ansatteIProsj={ansatteIProsjNavn}
+          onLagre={opp => { if (onSjekklisteEndret) onSjekklisteEndret(opp); setTildelFor(null); visToast(`Ansvarlig satt: ${(opp.ansvarlig || []).join(', ') || 'ingen'}`, 'ok') }}
+          onLukk={() => setTildelFor(null)} />
+      )}
+
       {/* Forslags-modal */}
       {visForslagsModal && (
         <ForslagModal
@@ -2664,9 +2709,26 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
 
         {/* VENSTRE: Tildelte — grupprt etter fase */}
         <div style={{ flex: 1, overflow: 'auto', padding: 16, borderRight: '2px solid #e2e8f0', minWidth: 0 }}>
-          <div style={{ fontWeight: 500, fontSize: 13, color: '#475569', marginBottom: 12 }}>
-            <IkonTekst ikon={ClipboardList} size={14}>Tildelte ({ksSjekklister.length + (prosjekt.sjekklister?.length || 0)})</IkonTekst>
+          {/* Oppdrag 13: «Tildelte» betydde «lagt til prosjektet» — omdøpt;
+              «Tildelt» brukes nå kun om PERSONER. + ansvarlig-oppsummering. */}
+          <div style={{ fontWeight: 500, fontSize: 13, color: '#475569', marginBottom: 4 }}>
+            <IkonTekst ikon={ClipboardList} size={14}>Sjekklister på prosjektet ({ksSjekklister.length + (prosjekt.sjekklister?.length || 0)})</IkonTekst>
           </div>
+          {(() => {
+            const alleLister = [
+              ...ksSjekklister.map(ks => sjekklister.find(s => s.malId === ks.malId && s.prosjektId === prosjekt.id)),
+              ...(prosjekt.sjekklister || []),
+            ]
+            const totalt = alleLister.length
+            const medAnsvarlig = alleLister.filter(sl => (sl?.ansvarlig || []).length > 0).length
+            if (!totalt) return null
+            return (
+              <div style={{ fontSize: 12, marginBottom: 12, color: medAnsvarlig === totalt ? '#15803d' : '#b45309', fontWeight: 500 }}>
+                <Ikon ikon={Users} size={12} style={{ marginRight: 4 }} />
+                {medAnsvarlig} av {totalt} lister har ansvarlig{medAnsvarlig < totalt ? ' — tildel resten før utrulling' : ''}
+              </div>
+            )
+          })()}
 
           {/* 4a: Forslag fra tilbudets fag — samme komponent som prosjektpanelet */}
           <KSFagForslag
@@ -2705,6 +2767,12 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
                     </div>
                     {harAvvik && <span style={{ fontSize: 11, color: '#dc2626' }}><Ikon ikon={TriangleAlert} size={12} /></span>}
                     {pst === 100 && !harAvvik && <span style={{ fontSize: 11, color: '#15803d' }}><Ikon ikon={Check} size={12} /></span>}
+                    {(sl.ansvarlig || []).length > 0 && (
+                      <span title={'Ansvarlig: ' + sl.ansvarlig.join(', ')}
+                        style={{ fontSize: 11, fontWeight: 500, padding: '2px 8px', borderRadius: 10, border: '1px solid #bfdbfe', background: '#eff6ff', color: '#1d4ed8', flexShrink: 0, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <Ikon ikon={Users} size={11} /> {sl.ansvarlig.map(n => n.split(' ')[0]).join(', ')}
+                      </span>
+                    )}
                     <span style={{ color: '#cbd5e1', fontSize: 14 }}>›</span>
                   </div>
                 )
@@ -3183,6 +3251,8 @@ export default function KS({ readOnly = false, ansattId = null }) {
         }}
         onOppdaterProsjekt={oppdaterProsjektKS}
         onAapneProsjektSl={sl => { setValgtProsjektSl(sl); setView('prosjekt-sl') }}
+        ansatte={ansatte}
+        onSjekklisteEndret={opp => setSjekklister(prev => prev.some(s => s.id === opp.id) ? prev.map(s => s.id === opp.id ? opp : s) : [...prev, opp])}
       />
     )
   }
