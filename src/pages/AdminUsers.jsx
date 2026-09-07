@@ -13,8 +13,8 @@ function formatTs(ts) {
   return d.toLocaleString('nb-NO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-const ROLE_LABELS = { admin: 'Administrator', kontor: 'Kontor', rorlegger: 'Rørlegger', befaring: 'Befaring / Service', ansatt: 'Ansatt (lesetilgang)' };
-const ROLE_COLORS = { admin: '#1e3a5f', kontor: '#7c3aed', rorlegger: '#0891b2', befaring: '#d97706', ansatt: '#15803d' };
+const ROLE_LABELS = { admin: 'Administrator', kontor: 'Kontor', rorlegger: 'Rørlegger', befaring: 'Befaring / Service', anleggsleder: 'Anleggsleder', ansatt: 'Ansatt (lesetilgang)' };
+const ROLE_COLORS = { admin: '#1e3a5f', kontor: '#7c3aed', rorlegger: '#0891b2', befaring: '#d97706', anleggsleder: '#185FA5', ansatt: '#15803d' };
 
 function authHeader() {
   const token = localStorage.getItem('fbs_token') || '';
@@ -268,10 +268,13 @@ export default function AdminUsers() {
     }
   }
 
+  // Oppdrag 12: fag «Anleggsleder» → foreslå Anleggsleder-rollen automatisk
+  const foreslaattRolle = a => (String(a?.fag || '').trim().toLowerCase() === 'anleggsleder' ? 'anleggsleder' : 'befaring');
+
   async function inviterAnsatt(ansatt) {
     const epost = (ansatt.epost || '').trim();
     if (!epost) return;
-    const rolle = ansattRoller[ansatt.id] || 'befaring';
+    const rolle = ansattRoller[ansatt.id] || foreslaattRolle(ansatt);
     setInviterer(ansatt.id);
     setSaveMsg('');
     setInviteUrl('');
@@ -372,6 +375,7 @@ export default function AdminUsers() {
                       ansatt-kontoer beholdes og vises fortsatt i lista) */}
                   {form.role === 'ansatt' && <option value="ansatt">Ansatt – kun lesetilgang (utgått — bruk KS-lenke)</option>}
                   <option value="befaring">Befaring / Service – befaring, service og reklamasjon</option>
+                  <option value="anleggsleder">Anleggsleder – planlegger egne prosjekter (framdrift, KS, bemanning)</option>
                   <option value="kontor">Kontor – alt unntatt Bemanningsplan</option>
                   <option value="rorlegger">Rørlegger – kun Rørlegger-siden</option>
                   <option value="admin">Administrator – full tilgang</option>
@@ -381,6 +385,7 @@ export default function AdminUsers() {
                     : form.role === 'kontor' ? <IkonTekst ikon={Building2} size={13} gap={4}>Ser alt unntatt Bemanningsplan</IkonTekst>
                     : form.role === 'rorlegger' ? <IkonTekst ikon={Wrench} size={13} gap={4}>Kun tilgang til Rørlegger-siden</IkonTekst>
                     : form.role === 'befaring' ? <IkonTekst ikon={Search} size={13} gap={4}>Tilgang til Befaring, Service og Reklamasjon (lese + endre)</IkonTekst>
+                    : form.role === 'anleggsleder' ? <IkonTekst ikon={Building2} size={13} gap={4}>Oversikt, Prosjekter, Framdrift, KS/HMS, Bemanning (endre), Rutiner + Ansatte (kun lese)</IkonTekst>
                     : <IkonTekst ikon={Eye} size={13} gap={4}>Kan kun se Bemanningsplanen – vanlige ansatte</IkonTekst>}
                 </div>
               </div>
@@ -435,11 +440,12 @@ export default function AdminUsers() {
                           <div style={{ fontSize: 12, color: '#6b7280' }}>{a.epost}{a.fag ? ` · ${a.fag}` : ''}</div>
                         </div>
                         <select
-                          value={ansattRoller[a.id] || 'befaring'}
+                          value={ansattRoller[a.id] || foreslaattRolle(a)}
                           onChange={e => setAnsattRoller(r => ({ ...r, [a.id]: e.target.value }))}
                           disabled={sendt}
                           style={{ fontSize: 13, padding: '5px 8px', borderRadius: 6, border: '1px solid #e5e7eb', flexShrink: 0 }}>
                           <option value="befaring">Befaring / Service</option>
+                          <option value="anleggsleder">Anleggsleder</option>
                           <option value="kontor">Kontor</option>
                           <option value="rorlegger">Rørlegger</option>
                           <option value="admin">Administrator</option>
@@ -563,8 +569,9 @@ export default function AdminUsers() {
           <li><strong>Administrator</strong> – Full tilgang: alle sider inkl. Bemanningsplan og Brukerstyring</li>
           <li><strong>Kontor</strong> – Tilgang til alt unntatt Bemanningsplan (oversikt, befaring, reklamasjon, service, prosjekter, ansatte, framdrift)</li>
           <li><strong>Befaring / Service</strong> – Tilgang til Befaring, Service og Reklamasjon (lese og endre)</li>
+          <li><strong>Anleggsleder</strong> – Planlegger egne prosjekter på PC: Oversikt, Prosjekter, Framdrift, KS/HMS, Bemanning (lese og endre) og Rutiner, pluss Ansatte-lista (kun lese). Ikke Befaring/Reklamasjon/Service eller Brukere/Sikkerhetskopier. Har i tillegg sin personlige KS-lenke for bruk ute — koble kontoen til ansattkortet så begge er samme person.</li>
           <li><strong>Rørlegger</strong> – Kun tilgang til Rørlegger-siden</li>
-          <li><strong>Ansatt</strong> – Kun lesetilgang til Bemanningsplan (kan se hvem som jobber hvor)</li>
+          <li><strong>Ansatt</strong> – Utgått for nye: vanlige ansatte bruker den personlige KS-lenken (Ansatte-siden) i stedet for konto. Eksisterende kontoer virker som før (kun lese Bemanningsplan).</li>
         </ul>
         <p style={{ margin: '8px 0 0' }}>Nye brukere mottar en e-post med en lenke for å sette passordet sitt. Passordet krever minst 8 tegn, stor bokstav, tall og spesialtegn.</p>
       </div>

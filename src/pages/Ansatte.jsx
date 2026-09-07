@@ -41,7 +41,9 @@ function bursdagLabel(bursdag) {
   return `${parseInt(dd, 10)}. ${MND_NAVN[parseInt(mm, 10) - 1]}`;
 }
 
-export default function Ansatte() {
+// readOnly (oppdrag 12): anleggsleder-rollen ser lista (navn/fag/telefon)
+// men kan ikke endre noe — ingen rediger/arkiver/syk/KS-lenke/utsending.
+export default function Ansatte({ readOnly = false }) {
   const { state, dispatch } = useApp();
   const [showModal, setShowModal] = useState(false);
   const [showFagModal, setShowFagModal] = useState(false);
@@ -227,6 +229,7 @@ export default function Ansatte() {
     <div className="page">
       <div className="page-header">
         <h2>Ansatte <span className="count-badge">{sortedAnsatte.length}</span></h2>
+        {!readOnly && (
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={() => { setMasseModus(m => !m); setValgteKs(new Set()); setMasseStatus(null); }}
             style={masseModus ? { background: '#185FA5', color: '#fff', borderColor: '#185FA5' } : {}}>
@@ -237,6 +240,7 @@ export default function Ansatte() {
             + {gruppe === 'innleie' ? 'Ny innleie' : 'Ny ansatt'}
           </button>
         </div>
+        )}
       </div>
 
       {/* Oppdrag 11C: velge-verktøylinje for masseutsending */}
@@ -397,7 +401,7 @@ export default function Ansatte() {
                 })()}
               </div>
               <div className="ct-col ct-actions">
-                {a.sykmeldt ? (
+                {readOnly ? null : a.sykmeldt ? (
                   <button
                     className="btn btn-sm"
                     style={{ background: '#f0fdf4', color: '#15803d', borderColor: '#bbf7d0' }}
@@ -410,17 +414,17 @@ export default function Ansatte() {
                     onClick={() => { setSykmeldtForm({ fra: new Date().toISOString().slice(0, 10), til: '' }); setSykmeldtModal(a); }}
                   ><IkonTekst ikon={Thermometer} size={14} gap={4}>Syk</IkonTekst></button>
                 )}
-                <button className="btn btn-sm" onClick={() => openEdit(a)}>Rediger</button>
-                <button className="btn-icon" title="Lag/kopier personlig KS-lenke (ansattflaten på mobil)" onClick={() => hentKsLenke(a)}>
+                {!readOnly && <button className="btn btn-sm" onClick={() => openEdit(a)}>Rediger</button>}
+                {!readOnly && <button className="btn-icon" title="Lag/kopier personlig KS-lenke (ansattflaten på mobil)" onClick={() => hentKsLenke(a)}>
 
                   <Ikon ikon={HardHat} size={15} />
 
-                </button>
-                <button className="btn-icon" title={`Se flaten som ${a.navn} (forhåndsvisning, kun lesing)`}
+                </button>}
+                {!readOnly && <button className="btn-icon" title={`Se flaten som ${a.navn} (forhåndsvisning, kun lesing)`}
                   onClick={() => window.open('/?ksForhandsvisning=' + encodeURIComponent(a.id), '_blank', 'noopener')}>
                   <Ikon ikon={Smartphone} size={15} />
-                </button>
-                <button className="btn btn-sm" style={{ color: 'var(--warning)' }} onClick={() => arkiverAnsatt(a)}>Arkiver</button>
+                </button>}
+                {!readOnly && <button className="btn btn-sm" style={{ color: 'var(--warning)' }} onClick={() => arkiverAnsatt(a)}>Arkiver</button>}
               </div>
             </div>
           ))}
@@ -440,7 +444,7 @@ export default function Ansatte() {
               <span style={{ fontSize: 11 }}>
                 Arkivert {a.arkivertDato ? new Date(a.arkivertDato).toLocaleDateString('nb-NO') : ''}{a.arkivertAv ? ` av ${a.arkivertAv}` : ''}
               </span>
-              <button className="btn btn-sm" style={{ marginLeft: 'auto' }} onClick={() => gjenopprettAnsatt(a)}>Gjenopprett</button>
+              {!readOnly && <button className="btn btn-sm" style={{ marginLeft: 'auto' }} onClick={() => gjenopprettAnsatt(a)}>Gjenopprett</button>}
             </div>
           ))}
         </div>

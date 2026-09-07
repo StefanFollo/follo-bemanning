@@ -42,7 +42,8 @@ export default async function handler(req, res) {
       res.status(500).json({ error: e.message });
     }
   } else if (req.method === 'POST') {
-    const WRITE_ROLES = ['admin', 'kontor', 'befaring'];
+    // Oppdrag 12: anleggsleder lager framdriftsplan/KS/bemanning på PC
+    const WRITE_ROLES = ['admin', 'kontor', 'befaring', 'anleggsleder'];
     // Manglende rolle skal AVVISES, ikke slippes gjennom (fail-closed)
     if (!WRITE_ROLES.includes(session.role)) {
       return res.status(403).json({ error: 'Rollen din har ikke skrivetilgang.' });

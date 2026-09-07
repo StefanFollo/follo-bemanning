@@ -158,6 +158,18 @@ const ANSATT_TABS = [
   { id: 'rutiner', label: 'Rutiner', icon: BookOpen },
 ];
 
+// Oppdrag 12: anleggsleder — planlegger egne prosjekter på PC (framdrift,
+// KS, bemanning), leser Ansatte; aldri Befaring/Reklamasjon/Service/Brukere.
+const ANLEGGSLEDER_TABS = [
+  { id: 'dashboard', label: 'Oversikt', icon: House },
+  { id: 'prosjekter', label: 'Prosjekter', icon: Building2 },
+  { id: 'ansatte', label: 'Ansatte', icon: HardHat },
+  { id: 'bemanningsplan', label: 'Bemanning', icon: CalendarDays },
+  { id: 'framdrift', label: 'Framdrift', icon: ChartGantt },
+  { id: 'ks', label: 'KS/HMS', icon: ClipboardCheck },
+  { id: 'rutiner', label: 'Rutiner', icon: BookOpen },
+];
+
 const BEFARING_TABS = [
   { id: 'befaring', label: 'Befaring', icon: Search },
   { id: 'service', label: 'Service', icon: Zap },
@@ -416,10 +428,12 @@ function App() {
   const isKontor = role === 'kontor';
   const isRorlegger = role === 'rorlegger';
   const isBefaring = role === 'befaring';
+  const isAL = role === 'anleggsleder';
   const TABS = isAdmin ? ADMIN_TABS
              : isKontor ? KONTOR_TABS
              : isRorlegger ? RORLEGGER_TABS
              : isBefaring ? BEFARING_TABS
+             : isAL ? ANLEGGSLEDER_TABS
              : ANSATT_TABS;
 
   return (
@@ -434,10 +448,10 @@ function App() {
             <div className="nav-user">
               {userNavn && <span className="nav-user-name">{userNavn}</span>}
               <span className={`nav-role-badge nav-role-${role}`}>
-                {isAdmin ? 'Admin' : isKontor ? 'Kontor' : isRorlegger ? 'Rørlegger' : isBefaring ? 'Befaring' : 'Ansatt'}
+                {isAdmin ? 'Admin' : isKontor ? 'Kontor' : isRorlegger ? 'Rørlegger' : isBefaring ? 'Befaring' : isAL ? 'Anleggsleder' : 'Ansatt'}
               </span>
             </div>
-            {(isAdmin || isKontor || isBefaring) && <SaveButton />}
+            {(isAdmin || isKontor || isBefaring || isAL) && <SaveButton />}
             <button className="nav-btn logout-btn" onClick={handleLogout} title="Logg ut">
               Logg ut
             </button>
@@ -447,16 +461,16 @@ function App() {
         <main className="main">
           <FeilVern key={activeTab}>
           <Suspense fallback={<SideLaster />}>
-          {activeTab === 'dashboard' && (isAdmin || isKontor) && <Dashboard onNavigate={navigerTil} />}
+          {activeTab === 'dashboard' && (isAdmin || isKontor || isAL) && <Dashboard onNavigate={navigerTil} />}
           {activeTab === 'befaring' && (isAdmin || isKontor || isBefaring) && <BefaringPlan apneBefaringId={apneBefaringId} onApnet={() => setApneBefaringId(null)} />}
           {activeTab === 'reklamasjon' && (isAdmin || isKontor || isBefaring) && <Reklamasjon />}
           {activeTab === 'service' && (isAdmin || isKontor || isBefaring) && <Service />}
-          {activeTab === 'prosjekter' && (isAdmin || isKontor) && <Prosjekter onNavigate={setActiveTab} />}
-          {activeTab === 'ansatte' && (isAdmin || isKontor) && <Ansatte />}
-          {activeTab === 'bemanningsplan' && (isAdmin || role === 'ansatt') && <Bemanningsplan readOnly={!isAdmin} />}
+          {activeTab === 'prosjekter' && (isAdmin || isKontor || isAL) && <Prosjekter onNavigate={setActiveTab} />}
+          {activeTab === 'ansatte' && (isAdmin || isKontor || isAL) && <Ansatte readOnly={isAL} />}
+          {activeTab === 'bemanningsplan' && (isAdmin || isAL || role === 'ansatt') && <Bemanningsplan readOnly={!(isAdmin || isAL)} />}
           {activeTab === 'rorlegger' && (isAdmin || isKontor || isRorlegger) && <RorleggerPlan />}
-          {activeTab === 'framdrift' && (isAdmin || isKontor || role === 'ansatt') && <Framdriftsplan readOnly={role === 'ansatt'} ansattId={role === 'ansatt' ? ansattId : null} />}
-          {activeTab === 'ks' && (isAdmin || isKontor || role === 'ansatt') && <KS readOnly={role === 'ansatt'} ansattId={role === 'ansatt' ? ansattId : null} />}
+          {activeTab === 'framdrift' && (isAdmin || isKontor || isAL || role === 'ansatt') && <Framdriftsplan readOnly={role === 'ansatt'} ansattId={role === 'ansatt' ? ansattId : null} onNavigate={setActiveTab} />}
+          {activeTab === 'ks' && (isAdmin || isKontor || isAL || role === 'ansatt') && <KS readOnly={role === 'ansatt'} ansattId={role === 'ansatt' ? ansattId : null} />}
           {activeTab === 'biler' && (isAdmin || isKontor) && <Biler />}
           {activeTab === 'rutiner' && <Rutiner />}
           {activeTab === 'brukere' && isAdmin && <AdminUsers />}

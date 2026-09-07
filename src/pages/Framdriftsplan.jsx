@@ -480,7 +480,7 @@ function useFramdriftAI(project, onUpdate) {
 
 // ─── GanttChart ───────────────────────────────────────────────────────────────
 
-function GanttChart({ project, onUpdate, readOnly = false }) {
+function GanttChart({ project, onUpdate, readOnly = false, onNavigate = null }) {
   const [tasks, setTasks]     = useState(project.fdTasks || []);
   const [zoom, setZoom]       = useState(1);
   const [newTask, setNewTask] = useState('');
@@ -526,7 +526,8 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
     totalWeeks * 7
   );
 
-  const ROW = storskjerm ? 52 : 38, PAD = storskjerm ? 320 : 280;
+  // Oppdrag 13: +46 px til synlig «Tildelt»-kolonne i venstre-lista
+  const ROW = storskjerm ? 52 : 38, PAD = storskjerm ? 366 : 326;
   const MILE_H = (project.fdMilepaler?.length > 0) ? (storskjerm ? 28 : 22) : 0;
   const TASK_TOP = 40 + MILE_H;
   // Dag-modus: bredere dager (som mannskapsplan). Storskjerm: enda bredere.
@@ -706,8 +707,9 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
           <svg width={PAD} height={svgH} viewBox={`0 0 ${PAD} ${svgH}`} style={{ display: 'block' }}>
             <rect x={0} y={0} width={PAD} height={40} fill="#f8fafc" />
             <text x={10} y={26} fontSize={11} fontWeight="500" fill="#5d6b80">Fase</text>
-            <text x={PAD - 132} y={26} fontSize={10} fill="#5d6b80" textAnchor="middle">Lengde</text>
-            <text x={PAD - 91} y={26} fontSize={10} fill="#5d6b80" textAnchor="middle">Ferdig</text>
+            <text x={PAD - 178} y={26} fontSize={10} fill="#5d6b80" textAnchor="middle">Lengde</text>
+            <text x={PAD - 137} y={26} fontSize={10} fill="#5d6b80" textAnchor="middle">Ferdig</text>
+            <text x={PAD - 94} y={26} fontSize={10} fill="#5d6b80" textAnchor="middle">Tildelt</text>
             <text x={PAD - 34} y={26} fontSize={10} fill="#5d6b80" textAnchor="middle">{'\u2713'}</text>
             {MILE_H > 0 && (
               <rect x={0} y={40} width={PAD} height={MILE_H} fill="#faf5ff" />
@@ -743,9 +745,9 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                     className="fd2-g-ctrl" style={{ cursor: 'pointer' }}
                     onClick={e => { e.stopPropagation(); setPickerMode('row'); setPickerTaskId(pickerTaskId === t.id ? null : t.id); }}
                     title="Klikk for å sette radfarge" />
-                  <clipPath id={`nc${t.id}`}><rect x={24} y={y} width={PAD - 158} height={ROW} /></clipPath>
+                  <clipPath id={`nc${t.id}`}><rect x={24} y={y} width={PAD - 204} height={ROW} /></clipPath>
                   {editingTaskId === t.id ? (
-                    <foreignObject x={22} y={y + 6} width={PAD - 160} height={ROW - 12}>
+                    <foreignObject x={22} y={y + 6} width={PAD - 206} height={ROW - 12}>
                       <input
                         autoFocus
                         defaultValue={t.name}
@@ -766,9 +768,9 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                   {/* Lengde/varighet (klikkbar) */}
                   <g className="fd2-g-ctrl" style={{ cursor: 'pointer' }}
                     onClick={e => { e.stopPropagation(); setPickerMode('lengde'); setPickerTaskId(pickerTaskId === t.id ? null : t.id); }}>
-                    <rect x={PAD - 152} y={y + ROW / 2 - 9} width={40} height={18} rx={5}
+                    <rect x={PAD - 198} y={y + ROW / 2 - 9} width={40} height={18} rx={5}
                       fill="#f1f5f9" stroke="#e2e8f0" strokeWidth={1} />
-                    <text x={PAD - 132} y={y + ROW / 2 + 4} fontSize={10} fontWeight="500" textAnchor="middle"
+                    <text x={PAD - 178} y={y + ROW / 2 + 4} fontSize={10} fontWeight="500" textAnchor="middle"
                       fill="#475569" style={{ userSelect: 'none', pointerEvents: 'none' }}>
                       {t.dur}d
                     </text>
@@ -776,12 +778,25 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                   {/* Fremdrift-prosent (klikkbar) */}
                   <g className="fd2-g-ctrl" style={{ cursor: 'pointer' }}
                     onClick={e => { e.stopPropagation(); setPickerMode('pct'); setPickerTaskId(pickerTaskId === t.id ? null : t.id); }}>
-                    <rect x={PAD - 110} y={y + ROW / 2 - 9} width={38} height={18} rx={9}
+                    <rect x={PAD - 156} y={y + ROW / 2 - 9} width={38} height={18} rx={9}
                       fill={done ? '#15803d' : (t.pct ?? 0) > 0 ? '#dbeafe' : '#f1f5f9'} />
-                    <text x={PAD - 91} y={y + ROW / 2 + 4} fontSize={10} fontWeight="500" textAnchor="middle"
+                    <text x={PAD - 137} y={y + ROW / 2 + 4} fontSize={10} fontWeight="500" textAnchor="middle"
                       fill={done ? '#fff' : (t.pct ?? 0) > 0 ? '#1d4ed8' : '#5d6b80'}
                       style={{ userSelect: 'none', pointerEvents: 'none' }}>
                       {t.pct ?? 0}%
+                    </text>
+                  </g>
+                  {/* Oppdrag 13: synlig Tildelt-kolonne — initial-chips eller «+» */}
+                  <g className="fd2-g-ctrl" style={{ cursor: 'pointer' }}
+                    onClick={e => { e.stopPropagation(); setPickerMode('tildel'); setPickerTaskId(pickerTaskId === t.id ? null : t.id); }}>
+                    <title>{(t.tildelt || []).length ? 'Tildelt: ' + initialerFor(t.tildelt) + ' — klikk for å endre' : 'Klikk for å tildele fasen til folk fra laget'}</title>
+                    <rect x={PAD - 114} y={y + ROW / 2 - 9} width={40} height={18} rx={9}
+                      fill={(t.tildelt || []).length ? '#185FA5' : '#f1f5f9'}
+                      stroke={(t.tildelt || []).length ? '#185FA5' : '#cbd5e1'} strokeWidth={1} />
+                    <text x={PAD - 94} y={y + ROW / 2 + 4} fontSize={9.5} fontWeight="600" textAnchor="middle"
+                      fill={(t.tildelt || []).length ? '#fff' : '#5d6b80'}
+                      style={{ userSelect: 'none', pointerEvents: 'none' }}>
+                      {(t.tildelt || []).length ? initialerFor(t.tildelt).split(' ').slice(0, 2).join(' ') + ((t.tildelt || []).length > 2 ? '+' : '') : '+'}
                     </text>
                   </g>
                   {/* Merge/split rad-knapper */}
@@ -950,6 +965,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
         if (!t) return null
         const isModeRow = pickerMode === 'row'
         const isModePct = pickerMode === 'pct'
+        const isModeTildel = pickerMode === 'tildel'
         const isModeLengde = pickerMode === 'lengde'
 
         // ── Lengde-velger (varighet + startdag, iPad-vennlig) ──
@@ -999,45 +1015,71 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
           )
         }
 
-        // ── Prosent-velger ──
-        if (isModePct) {
+        // ── Prosent-/Tildelt-velger (samme boks fra begge kolonner; oppdrag 13:
+        // fra Tildelt-kolonnen står Tildelt-delen øverst) ──
+        if (isModePct || isModeTildel) {
           const curPct = t.pct ?? 0
+          const pctDel = (
+            <div key="pct" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, color: '#94a3b8', whiteSpace: 'nowrap' }}>Ferdig:</span>
+              {[0, 10, 25, 50, 75, 90, 100].map(p => (
+                <button key={p}
+                  style={{ background: curPct === p ? '#15803d' : 'rgba(255,255,255,.1)', border: '1px solid ' + (curPct === p ? '#15803d' : 'rgba(255,255,255,.25)'), borderRadius: 6, color: '#fff', fontSize: 12, fontWeight: 500, cursor: 'pointer', padding: '4px 9px' }}
+                  onClick={() => setPct(t.id, p)}>{p}%</button>
+              ))}
+              <input type="number" min={0} max={100} defaultValue={curPct}
+                style={{ width: 56, padding: '3px 6px', border: 'none', borderRadius: 6, fontSize: 13, textAlign: 'center' }}
+                onClick={e => e.stopPropagation()}
+                onChange={e => setPct(t.id, parseInt(e.target.value || '0', 10))}
+                title="Skriv inn egen prosent" />
+              <span style={{ fontSize: 12, color: '#5d6b80' }}>%</span>
+            </div>
+          )
+          const tildelDel = (
+            <div key="tildel" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 11, color: '#94a3b8' }}>Tildelt:</span>
+                {lagPaaProsjekt.map(a => {
+                  const valgt = (t.tildelt || []).includes(a.id);
+                  return (
+                    <button key={a.id}
+                      style={{ background: valgt ? '#185FA5' : 'rgba(255,255,255,.1)', border: '1px solid ' + (valgt ? '#185FA5' : 'rgba(255,255,255,.25)'), borderRadius: 12, color: '#fff', fontSize: 11.5, cursor: 'pointer', padding: '3px 9px' }}
+                      onClick={() => setTildelt(t.id, valgt ? (t.tildelt || []).filter(x => x !== a.id) : [...(t.tildelt || []), a.id])}>
+                      {a.navn.split(' ')[0]}
+                    </button>
+                  );
+                })}
+                {lagPaaProsjekt.length === 0 && (
+                  // Oppdrag 13: tomt lag → forklaring + vei til Bemanning-fanen
+                  <span style={{ fontSize: 12, color: '#fbbf24', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                    Sett opp bemanning på prosjektet først
+                    {onNavigate && (
+                      <button style={{ background: 'rgba(255,255,255,.12)', border: '1px solid rgba(255,255,255,.3)', borderRadius: 6, color: '#fff', fontSize: 11.5, cursor: 'pointer', padding: '3px 9px' }}
+                        onClick={() => onNavigate('bemanningsplan')}>Åpne Bemanning →</button>
+                    )}
+                  </span>
+                )}
+              </div>
+              {/* Oppdrag 13: oppgavetekst også tilgjengelig på PC */}
+              <input defaultValue={t.oppgaveTekst || ''} maxLength={300}
+                placeholder="Hva skal gjøres? (vises hos de tildelte, valgfritt)"
+                style={{ border: 'none', borderRadius: 6, fontSize: 12.5, padding: '5px 8px', minWidth: 260 }}
+                onClick={e => e.stopPropagation()}
+                onBlur={e => { if (e.target.value !== (t.oppgaveTekst || '')) save(tasks.map(tt => tt.id === t.id ? { ...tt, oppgaveTekst: e.target.value.slice(0, 300) } : tt)); }}
+                onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }} />
+            </div>
+          )
           return (
             <div style={{ position: 'relative', zIndex: 50, margin: '4px 0' }} onClick={e => e.stopPropagation()}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#1e293b', borderRadius: 10, padding: '8px 12px', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: 11, color: '#5d6b80', whiteSpace: 'nowrap' }}>
-                  <Ikon ikon={ChartGantt} size={13} style={{ marginRight: 4 }} />Ferdig: <strong style={{ color: '#e2e8f0' }}>{t.name.slice(0, 20)}</strong>
-                </span>
-                {[0, 10, 25, 50, 75, 90, 100].map(p => (
-                  <button key={p}
-                    style={{ background: curPct === p ? '#15803d' : 'rgba(255,255,255,.1)', border: '1px solid ' + (curPct === p ? '#15803d' : 'rgba(255,255,255,.25)'), borderRadius: 6, color: '#fff', fontSize: 12, fontWeight: 500, cursor: 'pointer', padding: '4px 9px' }}
-                    onClick={() => setPct(t.id, p)}>{p}%</button>
-                ))}
-                <input type="number" min={0} max={100} defaultValue={curPct}
-                  style={{ width: 56, padding: '3px 6px', border: 'none', borderRadius: 6, fontSize: 13, textAlign: 'center' }}
-                  onClick={e => e.stopPropagation()}
-                  onChange={e => setPct(t.id, parseInt(e.target.value || '0', 10))}
-                  title="Skriv inn egen prosent" />
-                <span style={{ fontSize: 12, color: '#5d6b80' }}>%</span>
-                <button style={{ background: 'none', border: 'none', color: '#5d6b80', cursor: 'pointer', fontSize: 14, padding: '0 4px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                  onClick={() => setPickerTaskId(null)}><Ikon ikon={X} size={13} /> Lukk</button>
-                {/* Oppdrag 11H: PL tildeler fasen til folk fra laget (samme
-                    felt som anleggslederen bruker i ansattflaten) */}
-                {lagPaaProsjekt.length > 0 && (
-                  <div style={{ flexBasis: '100%', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', paddingTop: 6, borderTop: '1px solid rgba(255,255,255,.15)' }}>
-                    <span style={{ fontSize: 11, color: '#94a3b8' }}>Tildelt:</span>
-                    {lagPaaProsjekt.map(a => {
-                      const valgt = (t.tildelt || []).includes(a.id);
-                      return (
-                        <button key={a.id}
-                          style={{ background: valgt ? '#185FA5' : 'rgba(255,255,255,.1)', border: '1px solid ' + (valgt ? '#185FA5' : 'rgba(255,255,255,.25)'), borderRadius: 12, color: '#fff', fontSize: 11.5, cursor: 'pointer', padding: '3px 9px' }}
-                          onClick={() => setTildelt(t.id, valgt ? (t.tildelt || []).filter(x => x !== a.id) : [...(t.tildelt || []), a.id])}>
-                          {a.navn.split(' ')[0]}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, background: '#1e293b', borderRadius: 10, padding: '10px 12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 11, color: '#5d6b80', flex: 1 }}>
+                    <Ikon ikon={ChartGantt} size={13} style={{ marginRight: 4 }} /><strong style={{ color: '#e2e8f0' }}>{t.name.slice(0, 28)}</strong>
+                  </span>
+                  <button style={{ background: 'none', border: 'none', color: '#5d6b80', cursor: 'pointer', fontSize: 14, padding: '0 4px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                    onClick={() => setPickerTaskId(null)}><Ikon ikon={X} size={13} /> Lukk</button>
+                </div>
+                {isModeTildel ? [tildelDel, pctDel] : [pctDel, tildelDel]}
               </div>
             </div>
           )
@@ -1112,7 +1154,7 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
 
 // ─── ProjectDetail ────────────────────────────────────────────────────────────
 
-function ProjectDetail({ project, onBack, onUpdate, readOnly = false }) {
+function ProjectDetail({ project, onBack, onUpdate, readOnly = false, onNavigate = null }) {
   const { state: appState } = useApp();
   const [status,   setStatus]   = useState(project.fdStatus || 'Pågående');
   const [note,     setNote]     = useState(project.fdNote || '');
@@ -1322,7 +1364,7 @@ function ProjectDetail({ project, onBack, onUpdate, readOnly = false }) {
       {/* Gantt-tab */}
       {aktTab === 'gantt' && (
         <div className="fd2-tab-innhold">
-          <GanttChart project={project} onUpdate={onUpdate} readOnly={readOnly} />
+          <GanttChart project={project} onUpdate={onUpdate} readOnly={readOnly} onNavigate={onNavigate} />
 
           {/* Print-only faseoversikt-tabell */}
           {(project.fdTasks || []).length > 0 && (
@@ -1465,7 +1507,7 @@ function ProjectDetail({ project, onBack, onUpdate, readOnly = false }) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export default function Framdriftsplan({ readOnly = false, ansattId = null }) {
+export default function Framdriftsplan({ readOnly = false, ansattId = null, onNavigate = null }) {
   // (kundeportal fase 3-importer brukes i updateProject over)
   const { state, dispatch } = useApp();
   const [selectedId, setSelectedId] = useState(null);
@@ -1583,6 +1625,7 @@ export default function Framdriftsplan({ readOnly = false, ansattId = null }) {
             onBack={() => setSelectedId(null)}
             onUpdate={readOnly ? () => {} : (extra => updateProject(live, extra))}
             readOnly={readOnly}
+            onNavigate={onNavigate}
           />
         </div>
       );
