@@ -413,7 +413,10 @@ function BemanningFane({ token, somAnsatt }) {
                 {d.egenFerie && <div style={{ fontSize: 13.5, fontWeight: 500, color: '#0e7490' }}>Ferie / fri</div>}
                 {d.oppdrag.map((o, i) => (
                   <div key={i} style={{ marginTop: 2 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 600 }}>{o.prosjekt}</div>
+                    <div style={{ fontSize: 13.5, fontWeight: 600 }}>
+                      {o.prosjekt}
+                      {o.kunOppgaver && <span style={{ marginLeft: 6, fontSize: 10.5, fontWeight: 500, color: '#c2410c' }}>(oppgaver — ikke i bemanningen)</span>}
+                    </div>
                     {o.adresse && o.adresse !== o.prosjekt && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{o.adresse}</div>}
                     {o.plNavn && (
                       <div style={{ fontSize: 12.5 }}>

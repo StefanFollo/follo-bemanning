@@ -483,6 +483,22 @@ export default async function handler(req, res) {
         })
         return { prosjekt: p.navn || p.adresse || 'Prosjekt', adresse: p.adresse || '', plNavn: pl?.navn || null, plTelefon: pl?.telefon || null, lag, oppgaver }
       }).filter(Boolean)
+
+      // Oppdrag 15: oppgaver skal vises SELV OM du ikke er bemannet den dagen
+      // (AL kan sette deg på en fase utenfor bemanningsperioden din) — egne
+      // «kun oppgaver»-oppføringer for slike prosjekter
+      const dekket = new Set(mine.filter(t => t.prosjektId !== '__FERIE__').map(t => t.prosjektId))
+      for (const p of (state.prosjekter || [])) {
+        if (!p || p.arkivert || dekket.has(p.id)) continue
+        const faserDenneDagen = byggInterneFaser(p, { iDag: dato }) || []
+        const oppg = (p.fdTasks || []).flatMap((f, i) => !f ? [] : oppgaverPaaFase(f)
+          .filter(o => (o.tildelt || []).includes(ansatt.id) && (o.dag ? o.dag === dato : faserDenneDagen[i]?.pagarNa))
+          .map(o => ({ fase: f.name || 'Fase', tekst: o.tekst, oppgaveId: o.id, faseId: f.id, prosjektId: p.id, status: o.status })))
+        if (oppg.length) {
+          const pl = plForState(state, p)
+          oppdrag.push({ prosjekt: p.navn || p.adresse || 'Prosjekt', adresse: p.adresse || '', plNavn: pl?.navn || null, plTelefon: pl?.telefon || null, lag: [], oppgaver: oppg, kunOppgaver: true })
+        }
+      }
       return { dato, egenFerie, oppdrag }
     })
     return res.status(200).json({ dinUke: { dager: dagListe } })

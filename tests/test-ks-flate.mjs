@@ -448,6 +448,16 @@ console.log('\n-- Oppdrag 15: oppgaver under faser --');
   r = await kall(flate, 'GET', { query: { token: gyldigToken, dinUke: '1' } });
   const alleOpp = r._body.dinUke.dager.flatMap(d => d.oppdrag.flatMap(o => o.oppgaver || []));
   sjekk('«Din uke»: egne oppgaver med id-er og status', alleOpp.some(o => o.oppgaveId === oppgaveId && o.status === 'ferdig' && o.prosjektId === 'P1'));
+  // Oppgaver vises SELV uten bemanning den dagen (kunOppgaver-oppføring)
+  const st15u = JSON.parse(store.get('fbs_state'));
+  const gamleTild = st15u.tildelinger;
+  st15u.tildelinger = st15u.tildelinger.filter(t => !(t.ansattId === 'A1' && t.prosjektId === 'P1'));
+  store.set('fbs_state', JSON.stringify(st15u));
+  r = await kall(flate, 'GET', { query: { token: gyldigToken, dinUke: '1' } });
+  const kunOpp = r._body.dinUke.dager.flatMap(d => d.oppdrag).filter(o => o.kunOppgaver);
+  sjekk('Ubemannet dag: oppgavene vises likevel (kunOppgaver-merket)', kunOpp.length > 0 && kunOpp[0].oppgaver.some(o => o.oppgaveId === oppgaveId));
+  st15u.tildelinger = gamleTild;
+  store.set('fbs_state', JSON.stringify(st15u));
   // Fjernet skjules
   const st15c = JSON.parse(store.get('fbs_state'));
   st15c.ansatte = st15c.ansatte.map(a => a.id === 'A1' ? { ...a, fag: 'Anleggsleder' } : a);
