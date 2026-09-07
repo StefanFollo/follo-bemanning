@@ -306,8 +306,9 @@ export default async function handler(req, res) {
       const fase = { ...prosjekt.fdTasks[fIdx] }
       let loggTekst = ''
       if (handling === 'fase-tildel') {
-        // Kun folk fra laget (bemannet på prosjektet) kan tildeles
-        const lagIds = new Set((state.tildelinger || []).filter(t => t && t.prosjektId === prosjektId && t.prosjektId !== '__FERIE__' && (t.sluttDato || '9999') >= iDagN).map(t => t.ansattId))
+        // Kun folk fra laget (bemannet på prosjektet) kan tildeles.
+        // Oppdrag 14: HELE prosjektperioden — samme lag-oppslag som klienten.
+        const lagIds = new Set((state.tildelinger || []).filter(t => t && t.prosjektId === prosjektId).map(t => t.ansattId))
         const onsket = Array.isArray(body.ansattIds) ? body.ansattIds.filter(id => lagIds.has(id)) : []
         loggTekst = `Tildelte fasen «${fase.name}» til ${onsket.length} person(er)`
         fase.tildelt = onsket
@@ -344,7 +345,7 @@ export default async function handler(req, res) {
       const staarPaa = (state.tildelinger || []).some(t => t && t.ansattId === ansatt.id && t.prosjektId === sl.prosjektId && (t.sluttDato || '9999') >= iDagN)
       if (!staarPaa) return res.status(403).json({ error: 'Du står ikke på dette prosjektet' })
       if (sl.signert_av || sl.levert_dato) return res.status(409).json({ laast: true, error: 'Sjekklisten er levert og kan ikke endres.' })
-      const lagNavn = new Set((state.tildelinger || []).filter(t => t && t.prosjektId === sl.prosjektId && t.prosjektId !== '__FERIE__' && (t.sluttDato || '9999') >= iDagN)
+      const lagNavn = new Set((state.tildelinger || []).filter(t => t && t.prosjektId === sl.prosjektId)
         .map(t => (state.ansatte || []).find(a => a && a.id === t.ansattId)).filter(a => a && !a.arkivert).map(a => a.navn))
       const ansvarlig = (Array.isArray(navnListe) ? navnListe : []).map(n => String(n)).filter(n => lagNavn.has(n))
       alle[idx] = { ...sl, ansvarlig }
@@ -442,7 +443,7 @@ export default async function handler(req, res) {
       })
       // AL: laget (bemannede på prosjektet) til Tildel-velgeren — id/navn/fag
       const lag = al ? (state.tildelinger || [])
-        .filter(t => t && t.prosjektId === p.id && t.prosjektId !== '__FERIE__' && (t.sluttDato || '9999') >= iDag)
+        .filter(t => t && t.prosjektId === p.id)
         .map(t => (state.ansatte || []).find(a => a && a.id === t.ansattId)).filter(a => a && !a.arkivert)
         .filter((a, i, arr) => arr.findIndex(x => x.id === a.id) === i)
         .map(a => ({ id: a.id, navn: a.navn, fag: a.fag || '' })) : undefined

@@ -11,6 +11,7 @@ import KundeportalKnapp from '../komponenter/KundeportalKnapp';
 import { kundeportalToken } from '../kundeportal';
 import { useApp } from '../context/AppContext';
 import { kandidatScore } from '../mergeProsjekter';
+import { lagForProsjekt } from '../prosjektLag';
 import { uid, mergeWithCloud } from '../store';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -557,12 +558,10 @@ function GanttChart({ project, onUpdate, readOnly = false, onNavigate = null }) 
 
   // Oppdrag 11H: laget (bemannede på prosjektet) til PL-ens fase-tildeling +
   // initialer på stolpene. Anleggslederen gjør det samme fra ansattflaten.
+  // Oppdrag 14: FELLES lag-oppslag med KS-fanens TildelModal — hele
+  // prosjektperioden, aldri bare dagens dato.
   const { state: appState } = useApp();
-  const iDagIsoH = new Date().toISOString().slice(0, 10);
-  const lagPaaProsjekt = (appState.tildelinger || [])
-    .filter(td => td && td.prosjektId === project.id && td.prosjektId !== '__FERIE__' && (td.sluttDato || '9999') >= iDagIsoH)
-    .map(td => (appState.ansatte || []).find(a => a && a.id === td.ansattId)).filter(a => a && !a.arkivert)
-    .filter((a, i, arr) => arr.findIndex(x => x.id === a.id) === i);
+  const lagPaaProsjekt = lagForProsjekt(project.id, appState.tildelinger, appState.ansatte);
   const initialerFor = ids => (ids || [])
     .map(id => (appState.ansatte || []).find(a => a && a.id === id)).filter(Boolean)
     .map(a => a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()).join(' ');

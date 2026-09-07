@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef, startTransition } from 'react'
 import { useApp } from '../context/AppContext'
+import { lagNavnForProsjekt } from '../prosjektLag'
 import KSFagForslag from '../komponenter/KSFagForslag'
 import {
   TriangleAlert, CircleCheck, Check, X, ClipboardList, FileText, Sparkles, Package, Loader, Clock,
@@ -272,9 +273,19 @@ function AiModal({ modus, mal, onFerdig, onLukk }) {
 // ── Tildel-modal ──────────────────────────────────────────────────────────────
 
 function TildelModal({ sl, ansatteIProsj, onLagre, onLukk }) {
+  const { state: alleState } = useApp()
   const [valgte, setValgte] = useState(sl.ansvarlig || [])
   const [frist, setFrist] = useState(sl.frist || '')
   const [lagrer, setLagrer] = useState(false)
+  // Oppdrag 14: fallback — søk i HELE ansattlisten når noen ikke står i
+  // bemanningen (ennå). Vises alltid, men er hovedveien når laget er tomt.
+  const [sokAnnen, setSokAnnen] = useState('')
+  const lagSet = new Set(ansatteIProsj)
+  const andreTreff = sokAnnen.trim().length >= 2
+    ? (alleState.ansatte || [])
+        .filter(a => a && !a.arkivert && !lagSet.has(a.navn) && a.navn.toLowerCase().includes(sokAnnen.trim().toLowerCase()))
+        .slice(0, 8)
+    : []
 
   const toggle = navn => setValgte(v => v.includes(navn) ? v.filter(n => n !== navn) : [...v, navn])
 
@@ -292,13 +303,33 @@ function TildelModal({ sl, ansatteIProsj, onLagre, onLukk }) {
           <div style={{ fontSize: 13, color: '#5d6b80', marginBottom: 12 }}>Sjekkliste: <strong>{sl.navn}</strong></div>
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 12, fontWeight: 500, color: '#475569', marginBottom: 6 }}>Mannskap på prosjektet:</div>
-            {ansatteIProsj.length === 0 && <div style={{ fontSize: 13, color: '#5d6b80' }}>Ingen ansatte satt av til dette prosjektet i bemanningsplanleggeren.</div>}
+            {ansatteIProsj.length === 0 && <div style={{ fontSize: 13, color: '#5d6b80', marginBottom: 6 }}>Ingen er bemannet på prosjektet ennå — søk opp en ansatt under.</div>}
             {ansatteIProsj.map(a => (
               <label key={a} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', background: valgte.includes(a) ? '#eff6ff' : '#f8fafc', border: `1px solid ${valgte.includes(a) ? '#3b82f6' : '#e2e8f0'}`, marginBottom: 4 }}>
                 <input type="checkbox" checked={valgte.includes(a)} onChange={() => toggle(a)} />
                 <span style={{ fontSize: 13, fontWeight: 500 }}>{a}</span>
                 {valgte.includes(a) && <span style={{ marginLeft: 'auto', fontSize: 10, color: '#3b82f6', fontWeight: 500 }}>Ansvarlig</span>}
               </label>
+            ))}
+            {/* Valgte utenfor laget (fra søket) vises så de kan fjernes igjen */}
+            {valgte.filter(n => !lagSet.has(n)).map(n => (
+              <label key={n} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8, cursor: 'pointer', background: '#eff6ff', border: '1px solid #3b82f6', marginBottom: 4 }}>
+                <input type="checkbox" checked onChange={() => toggle(n)} />
+                <span style={{ fontSize: 13, fontWeight: 500 }}>{n}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 10, color: '#b45309', fontWeight: 500 }}>Ikke i bemanningen ennå</span>
+              </label>
+            ))}
+          </div>
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 12, fontWeight: 500, color: '#475569', display: 'block', marginBottom: 6 }}>Velg annen ansatt</label>
+            <input className="input" placeholder="Søk i hele ansattlisten…" value={sokAnnen} onChange={e => setSokAnnen(e.target.value)} />
+            {andreTreff.map(a => (
+              <button key={a.id} type="button" onClick={() => { toggle(a.navn); setSokAnnen('') }}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left', padding: '7px 10px', border: '1px solid #e2e8f0', borderRadius: 8, background: '#fff', cursor: 'pointer', marginTop: 4, fontSize: 13 }}>
+                <span style={{ fontWeight: 500 }}>{a.navn}</span>
+                <span style={{ fontSize: 11, color: '#5d6b80' }}>{a.fag || ''}</span>
+                <span style={{ marginLeft: 'auto', fontSize: 10, color: '#b45309', fontWeight: 500 }}>Ikke i bemanningen ennå</span>
+              </button>
             ))}
           </div>
           <div style={{ marginBottom: 14 }}>
@@ -307,8 +338,10 @@ function TildelModal({ sl, ansatteIProsj, onLagre, onLukk }) {
           </div>
           <div className="modal-actions">
             <button className="btn" onClick={onLukk}>Avbryt</button>
-            <button className="btn btn-primary" onClick={lagre} disabled={lagrer}>
-              {lagrer ? 'Lagrer...' : <IkonTekst ikon={Send} size={14}>{`Tildel${valgte.length ? ` til ${valgte.join(', ')}` : ''}`}</IkonTekst>}
+            {/* Oppdrag 14: aldri mulig å «tildele ingen» */}
+            <button className="btn btn-primary" onClick={lagre} disabled={lagrer || valgte.length === 0}
+              title={valgte.length === 0 ? 'Velg minst én ansvarlig først' : undefined}>
+              {lagrer ? 'Lagrer...' : <IkonTekst ikon={Send} size={14}>{valgte.length ? `Tildel til ${valgte.join(', ')}` : 'Velg ansvarlig først'}</IkonTekst>}
             </button>
           </div>
         </div>
@@ -951,15 +984,14 @@ function ProsjektVisning({ prosjekt, sjekklister, maler, ansatte, alleProsjekter
     return () => document.removeEventListener('mousedown', lukk)
   }, [visBytt])
 
-  // Mannskap på dette prosjektet fra bemanningsplanleggeren
-  const ansatteIProsj = useMemo(() => [...new Set(
-    (ansatte || [])
-      .filter(a => {
-        // ansatt er på prosjektet hvis de har en uke koblet til prosjektet
-        return a.prosjekt === prosjekt.id || a.prosjekter?.includes(prosjekt.id)
-      })
-      .map(a => a.navn)
-  )], [ansatte, prosjekt])
+  // Mannskap fra bemanningsplanleggeren — FELLES lag-oppslag (oppdrag 14):
+  // hele prosjektperioden via tildelinger, aldri «a.prosjekt»-felter som
+  // ikke finnes i datamodellen.
+  const { state: lagState } = useApp()
+  const ansatteIProsj = useMemo(
+    () => lagNavnForProsjekt(prosjekt.id, lagState.tildelinger, lagState.ansatte),
+    [lagState.tildelinger, lagState.ansatte, prosjekt]
+  )
 
   const mine = useMemo(() => sjekklister.filter(s => s.prosjektId === prosjekt.id), [sjekklister, prosjekt])
   const eksisterendeMalIds = useMemo(() => new Set(mine.map(s => s.malId)), [mine])
@@ -2458,11 +2490,14 @@ function KSProsjektDetalj({ prosjekt, maler, sjekklister, onTilbake, onAapneSl, 
   const [dragData, setDragData] = useState(null)
   const [dragOver, setDragOver] = useState(false)
   const [toast, setToast] = useState(null)
-  // Oppdrag 13 (KS): Tildel-modal direkte fra oversikten — uten å åpne listen
+  // Oppdrag 13 (KS): Tildel-modal direkte fra oversikten — uten å åpne listen.
+  // Oppdrag 14: lag-oppslaget er FELLES med Framdrift-boksen (hele perioden).
+  const { state: lagState } = useApp()
   const [tildelFor, setTildelFor] = useState(null) // API-instans (sl)
-  const ansatteIProsjNavn = useMemo(() => [...new Set(
-    (ansatte || []).filter(a => a.prosjekt === prosjekt.id || a.prosjekter?.includes(prosjekt.id)).map(a => a.navn)
-  )], [ansatte, prosjekt])
+  const ansatteIProsjNavn = useMemo(
+    () => lagNavnForProsjekt(prosjekt.id, lagState.tildelinger, lagState.ansatte),
+    [lagState.tildelinger, lagState.ansatte, prosjekt]
+  )
   const [soekBibliotek, setSoekBibliotek] = useState('')
   const [visForslagsModal, setVisForslagsModal] = useState(false)
   const [kollapset, setKollapset] = useState(() => {
@@ -3172,9 +3207,7 @@ export default function KS({ readOnly = false, ansattId = null }) {
 
   // ── Sjekkliste-detalj ────────────────────────────────────────────────────────
   if (view === 'sjekkliste' && valgtSl) {
-    const ansatteIProsj = [...new Set(
-      (ansatte).filter(a => a.prosjekt === valgtProsjekt?.id || a.prosjekter?.includes(valgtProsjekt?.id)).map(a => a.navn)
-    )]
+    const ansatteIProsj = lagNavnForProsjekt(valgtProsjekt?.id, state.tildelinger, state.ansatte)
     return (
       <SjekklisteDetalj
         sl={valgtSl}
