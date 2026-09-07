@@ -210,6 +210,41 @@ const FASE_STATUS = {
 function datoKortKsf(iso) {
   return iso ? new Date(iso + 'T00:00:00').toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' }) : null;
 }
+// Oppdrag 15: AL legger til oppgave fra mobilen — tekst + velg fra laget
+function NyOppgaveFelt({ lag, lagrer, onNy }) {
+  const [tekst, setTekst] = useState('');
+  const [tildelt, setTildelt] = useState([]);
+  const [apen, setApen] = useState(false);
+  if (!apen) {
+    return <button className="ksf-lenkeknapp" style={{ marginTop: 4 }} onClick={() => setApen(true)}>+ Ny oppgave</button>;
+  }
+  return (
+    <div style={{ marginTop: 6, padding: 8, background: '#f8fafc', borderRadius: 8 }}>
+      <input className="ksf-kommentar" placeholder="Hva skal gjøres?" value={tekst} maxLength={300}
+        onChange={e => setTekst(e.target.value)} autoFocus />
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, margin: '6px 0' }}>
+        {(lag || []).map(a => {
+          const valgt = tildelt.includes(a.id);
+          return (
+            <button key={a.id} disabled={lagrer}
+              style={{ fontSize: 13, padding: '7px 12px', borderRadius: 16, minHeight: 36, cursor: 'pointer', border: '1px solid ' + (valgt ? '#185FA5' : '#e2e8f0'), background: valgt ? '#185FA5' : '#fff', color: valgt ? '#fff' : '#1e293b' }}
+              onClick={() => setTildelt(v => valgt ? v.filter(x => x !== a.id) : [...v, a.id])}>
+              {a.navn.split(' ')[0]}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button className="ksf-knapp ksf-knapp--primar" disabled={!tekst.trim() || lagrer}
+          onClick={async () => { await onNy(tekst.trim(), tildelt); setTekst(''); setTildelt([]); setApen(false); }}>
+          Legg til
+        </button>
+        <button className="ksf-knapp" onClick={() => setApen(false)}>Avbryt</button>
+      </div>
+    </div>
+  );
+}
+
 // Én fase-rad — for AL (oppdrag 11H) med Tildel/tekst/Ferdig; ellers lesevisning.
 function FaseRad({ fase, forste, erAL, lag, onAL }) {
   const [visTildel, setVisTildel] = useState(false);
@@ -231,7 +266,28 @@ function FaseRad({ fase, forste, erAL, lag, onAL }) {
       {(fase.tildelt || []).length > 0 && (
         <div style={{ fontSize: 12, color: '#185FA5', marginTop: 2 }}>→ {fase.tildelt.join(', ')}</div>
       )}
-      {fase.oppgaveTekst && !erAL && <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 2, fontStyle: 'italic' }}>«{fase.oppgaveTekst}»</div>}
+      {fase.oppgaveTekst && !erAL && !(fase.oppgaver || []).length && <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 2, fontStyle: 'italic' }}>«{fase.oppgaveTekst}»</div>}
+      {/* Oppdrag 15: oppgavelisten — mine uthevet med avhuking, andres dempet */}
+      {(fase.oppgaver || []).map(o => (
+        <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3, padding: '4px 8px', borderRadius: 6, background: o.min ? '#eff6ff' : 'transparent', opacity: o.min || erAL ? 1 : 0.65 }}>
+          {(o.min || erAL) ? (
+            <input type="checkbox" checked={o.status === 'ferdig'} disabled={lagrer}
+              style={{ width: 20, height: 20 }}
+              onChange={e => kjor('oppgave-status', { oppgaveId: o.id, ferdig: e.target.checked })} />
+          ) : (
+            <span style={{ width: 20, textAlign: 'center', color: o.status === 'ferdig' ? '#15803d' : '#cbd5e1' }}>{o.status === 'ferdig' ? '✓' : '·'}</span>
+          )}
+          <span style={{ flex: 1, minWidth: 0, fontSize: 13, fontWeight: o.min ? 600 : 400, textDecoration: o.status === 'ferdig' ? 'line-through' : 'none' }}>
+            {o.tekst}
+          </span>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{(o.tildelt || []).join(', ')}</span>
+          {erAL && (
+            <button className="ksf-lenkeknapp" disabled={lagrer} title="Fjern oppgaven (skjules, slettes aldri)"
+              onClick={() => { if (window.confirm('Fjerne oppgaven «' + o.tekst.slice(0, 50) + '»?')) kjor('oppgave-endre', { oppgaveId: o.id, fjernet: true }); }}>✕</button>
+          )}
+        </div>
+      ))}
+      {erAL && <NyOppgaveFelt lag={lag} lagrer={lagrer} onNy={(tekst, tildelt) => kjor('oppgave-ny', { tekster: [tekst], tildelt })} />}
       {erAL && (
         <div style={{ marginTop: 4 }}>
           <button className="ksf-lenkeknapp" disabled={lagrer} onClick={() => setVisTildel(v => !v)}>
@@ -309,15 +365,22 @@ function BemanningFane({ token, somAnsatt }) {
   const [data, setData] = useState(null);
   const [feil, setFeil] = useState(false);
   const [visLag, setVisLag] = useState(false);
-  useEffect(() => {
-    let aktiv = true;
-    (async () => {
-      const r = await api('GET', token, { query: '&dinUke=1' }, 0, somAnsatt);
-      if (!aktiv) return;
-      if (r.ok && r.data.dinUke) setData(r.data.dinUke); else setFeil(true);
-    })();
-    return () => { aktiv = false; };
+  const [kvitterer, setKvitterer] = useState(false);
+  const hentUke = useCallback(async () => {
+    const r = await api('GET', token, { query: '&dinUke=1' }, 0, somAnsatt);
+    if (r.ok && r.data.dinUke) setData(r.data.dinUke); else setFeil(true);
   }, [token, somAnsatt]);
+  useEffect(() => { hentUke(); }, [hentUke]);
+
+  // Oppdrag 15: huk av egen oppgave rett fra «Din uke»
+  async function kvitterOppgave(opp, ferdig) {
+    if (somAnsatt || !opp.oppgaveId) return; // forhåndsvisning er kun lesing
+    setKvitterer(true);
+    const r = await api('POST', token, { handling: 'oppgave-status', prosjektId: opp.prosjektId, faseId: opp.faseId, oppgaveId: opp.oppgaveId, ferdig });
+    if (!r.ok) window.alert(r.data.error || 'Fikk ikke lagret — prøv igjen.');
+    await hentUke();
+    setKvitterer(false);
+  }
 
   if (feil) return <div className="ksf-kort ksf-feilkort"><p>Fikk ikke hentet uka di — prøv igjen.</p></div>;
   if (!data) return <div className="ksf-kort" style={{ textAlign: 'center' }}><Ikon ikon={Loader} size={20} className="ksf-spinn" /></div>;
@@ -358,9 +421,17 @@ function BemanningFane({ token, somAnsatt }) {
                         {o.plTelefon && <a href={`tel:${String(o.plTelefon).replace(/\s+/g, '')}`} style={{ marginLeft: 6, color: '#185FA5', fontWeight: 500, textDecoration: 'none' }}><Ikon ikon={Phone} size={12} /> {o.plTelefon}</a>}
                       </div>
                     )}
+                    {(o.oppgaver || []).length > 0 && <div style={{ fontSize: 11.5, color: 'var(--text-muted)', fontWeight: 500, marginTop: 2 }}>Dine oppgaver:</div>}
                     {(o.oppgaver || []).map((opp, j) => (
-                      <div key={j} style={{ fontSize: 12.5, color: '#c2410c', fontWeight: 500, marginTop: 1 }}>
-                        <Ikon ikon={HardHat} size={12} /> {opp.fase}{opp.tekst ? `: ${opp.tekst}` : ' — du er satt på denne fasen'}
+                      <div key={opp.oppgaveId || j} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: '#c2410c', fontWeight: 500, marginTop: 2 }}>
+                        {opp.oppgaveId ? (
+                          <input type="checkbox" checked={opp.status === 'ferdig'} disabled={kvitterer || !!somAnsatt}
+                            style={{ width: 19, height: 19 }}
+                            onChange={e => kvitterOppgave(opp, e.target.checked)} />
+                        ) : <Ikon ikon={HardHat} size={12} />}
+                        <span style={{ textDecoration: opp.status === 'ferdig' ? 'line-through' : 'none', opacity: opp.status === 'ferdig' ? 0.6 : 1 }}>
+                          {opp.fase}{opp.tekst ? `: ${opp.tekst}` : ' — du er satt på denne fasen'}
+                        </span>
                       </div>
                     ))}
                     {visLag && (

@@ -12,6 +12,7 @@ import { kundeportalToken } from '../kundeportal';
 import { useApp } from '../context/AppContext';
 import { kandidatScore } from '../mergeProsjekter';
 import { lagForProsjekt } from '../prosjektLag';
+import { leggTilOppgaver, endreOppgave, oppgaverPaaFase, oppgaveStat } from '../faseOppgaver';
 import { uid, mergeWithCloud } from '../store';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -567,6 +568,26 @@ function GanttChart({ project, onUpdate, readOnly = false, onNavigate = null }) 
     .map(a => a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()).join(' ');
   const setTildelt = (tid, ansattIds) => save(tasks.map(t => t.id === tid ? { ...t, tildelt: ansattIds } : t));
 
+  // Oppdrag 15: oppgaver under fasen — klient-endringer via samme save-vei,
+  // loggført i prosjektets endringslogg (fire-and-forget, som Prosjekter-siden)
+  const brukerNavn = () => localStorage.getItem('fbs_user_navn') || localStorage.getItem('fbs_role') || 'ukjent';
+  const loggOppgave = tekst => {
+    fetch('/api/befaringer/audit-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (localStorage.getItem('fbs_token') || '') },
+      body: JSON.stringify({ objektId: project.id, felt: 'framdriftsplan', fraVerdi: null, tilVerdi: tekst, kilde: 'gantt-oppgaver' }),
+    }).catch(() => {});
+  };
+  const nyeOppgaver = (tid, tekster) => {
+    const fase = tasks.find(t => t.id === tid);
+    save(tasks.map(t => t.id === tid ? leggTilOppgaver(t, tekster, { av: brukerNavn() }) : t));
+    loggOppgave(`La til ${tekster.length} oppgave(r) på «${fase?.name}»`);
+  };
+  const endreFaseOppgave = (tid, oppgaveId, endring, loggTekst) => {
+    save(tasks.map(t => t.id === tid ? (endreOppgave(t, oppgaveId, endring, { av: brukerNavn() }) || t) : t));
+    if (loggTekst) loggOppgave(loggTekst);
+  };
+
   const save = (next, nextCols, extra) => {
     if (readOnly) return;
     tasksRef.current = next; setTasks(next);
@@ -795,7 +816,11 @@ function GanttChart({ project, onUpdate, readOnly = false, onNavigate = null }) 
                     <text x={PAD - 94} y={y + ROW / 2 + 4} fontSize={9.5} fontWeight="600" textAnchor="middle"
                       fill={(t.tildelt || []).length ? '#fff' : '#5d6b80'}
                       style={{ userSelect: 'none', pointerEvents: 'none' }}>
-                      {(t.tildelt || []).length ? initialerFor(t.tildelt).split(' ').slice(0, 2).join(' ') + ((t.tildelt || []).length > 2 ? '+' : '') : '+'}
+                      {(() => {
+                        const s = oppgaveStat(t);
+                        if (s.totalt) return `${s.ferdig}/${s.totalt}${(t.tildelt || []).length ? ' ' + initialerFor(t.tildelt).split(' ')[0] + ((t.tildelt || []).length > 1 ? '+' : '') : ''}`;
+                        return (t.tildelt || []).length ? initialerFor(t.tildelt).split(' ').slice(0, 2).join(' ') + ((t.tildelt || []).length > 2 ? '+' : '') : '+';
+                      })()}
                     </text>
                   </g>
                   {/* Merge/split rad-knapper */}
@@ -1059,13 +1084,72 @@ function GanttChart({ project, onUpdate, readOnly = false, onNavigate = null }) 
                   </span>
                 )}
               </div>
-              {/* Oppdrag 13: oppgavetekst også tilgjengelig på PC */}
-              <input defaultValue={t.oppgaveTekst || ''} maxLength={300}
-                placeholder="Hva skal gjøres? (vises hos de tildelte, valgfritt)"
-                style={{ border: 'none', borderRadius: 6, fontSize: 12.5, padding: '5px 8px', minWidth: 260 }}
-                onClick={e => e.stopPropagation()}
-                onBlur={e => { if (e.target.value !== (t.oppgaveTekst || '')) save(tasks.map(tt => tt.id === t.id ? { ...tt, oppgaveTekst: e.target.value.slice(0, 300) } : tt)); }}
-                onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }} />
+              {/* Oppdrag 15: oppgaveliste under fasen — én rad per oppgave med
+                  navne-chips, Ferdig-avhuking og fjern (skjules, aldri slettes) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, paddingTop: 6, borderTop: '1px solid rgba(255,255,255,.15)' }}>
+                <span style={{ fontSize: 11, color: '#94a3b8' }}>
+                  Oppgaver{(() => { const s = oppgaveStat(t); return s.totalt ? ` — ${s.ferdig}/${s.totalt} ferdig` : ''; })()}
+                </span>
+                {oppgaverPaaFase(t).map(o => (
+                  <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <input type="checkbox" checked={o.status === 'ferdig'}
+                      title={o.status === 'ferdig' ? `Ferdig · ${o.ferdigAv || ''}` : 'Marker ferdig'}
+                      onChange={e => endreFaseOppgave(t.id, o.id, { ferdig: e.target.checked }, `Oppgave «${o.tekst.slice(0, 50)}»: ${e.target.checked ? 'FERDIG' : 'gjenåpnet'}`)} />
+                    <input defaultValue={o.tekst} maxLength={300}
+                      style={{ flex: 1, minWidth: 140, border: 'none', borderRadius: 5, fontSize: 12, padding: '3px 7px', textDecoration: o.status === 'ferdig' ? 'line-through' : 'none', opacity: o.status === 'ferdig' ? 0.65 : 1 }}
+                      onClick={e => e.stopPropagation()}
+                      onBlur={e => { if (e.target.value.trim() && e.target.value !== o.tekst) endreFaseOppgave(t.id, o.id, { tekst: e.target.value }, null); }}
+                      onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }} />
+                    {lagPaaProsjekt.map(a => {
+                      const valgt = (o.tildelt || []).includes(a.id);
+                      return (
+                        <button key={a.id} title={valgt ? `Fjern ${a.navn}` : `Tildel ${a.navn}`}
+                          style={{ background: valgt ? '#185FA5' : 'rgba(255,255,255,.1)', border: '1px solid ' + (valgt ? '#185FA5' : 'rgba(255,255,255,.2)'), borderRadius: 10, color: '#fff', fontSize: 10.5, cursor: 'pointer', padding: '2px 7px' }}
+                          onClick={() => endreFaseOppgave(t.id, o.id, { tildelt: valgt ? (o.tildelt || []).filter(x => x !== a.id) : [...(o.tildelt || []), a.id] }, `Oppgave «${o.tekst.slice(0, 40)}» ${valgt ? 'fjernet fra' : 'tildelt'} ${a.navn}`)}>
+                          {a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
+                        </button>
+                      );
+                    })}
+                    <button title="Fjern oppgaven (skjules, slettes aldri)"
+                      style={{ background: 'none', border: 'none', color: '#5d6b80', cursor: 'pointer', fontSize: 13, padding: '0 3px' }}
+                      onClick={() => { if (window.confirm('Fjerne oppgaven «' + o.tekst.slice(0, 60) + '»?')) endreFaseOppgave(t.id, o.id, { fjernet: true }, `Fjernet (skjulte) oppgave «${o.tekst.slice(0, 50)}»`); }}>✕</button>
+                  </div>
+                ))}
+                <textarea rows={1} placeholder="Skriv oppgave og trykk Enter — lim inn flere linjer for én oppgave per linje"
+                  style={{ border: 'none', borderRadius: 6, fontSize: 12.5, padding: '5px 8px', minWidth: 260, resize: 'vertical' }}
+                  onClick={e => e.stopPropagation()}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      const linjer = e.target.value.split('\n').map(s => s.trim()).filter(Boolean);
+                      if (linjer.length) { nyeOppgaver(t.id, linjer); e.target.value = ''; }
+                    }
+                  }}
+                  onPaste={e => {
+                    const tekst = e.clipboardData.getData('text');
+                    if (tekst.includes('\n')) {
+                      e.preventDefault();
+                      const linjer = tekst.split('\n').map(s => s.trim()).filter(Boolean);
+                      if (linjer.length) nyeOppgaver(t.id, linjer);
+                    }
+                  }} />
+                {(() => { const s = oppgaveStat(t); return s.totalt > 0 ? (
+                  <button style={{ alignSelf: 'flex-start', background: 'rgba(255,255,255,.1)', border: '1px solid rgba(255,255,255,.25)', borderRadius: 6, color: '#fff', fontSize: 11.5, cursor: 'pointer', padding: '3px 9px' }}
+                    title="Sett fasens prosent til andelen ferdige oppgaver"
+                    onClick={() => setPct(t.id, Math.round(s.ferdig / s.totalt * 100))}>
+                    Sett % fra oppgaver ({s.ferdig}/{s.totalt})
+                  </button>
+                ) : null; })()}
+              </div>
+              {/* Gammelt fritekstfelt beholdes for faser uten oppgaveliste */}
+              {oppgaverPaaFase(t).length === 0 && (
+                <input defaultValue={t.oppgaveTekst || ''} maxLength={300}
+                  placeholder="Hva skal gjøres? (vises hos de tildelte, valgfritt)"
+                  style={{ border: 'none', borderRadius: 6, fontSize: 12.5, padding: '5px 8px', minWidth: 260 }}
+                  onClick={e => e.stopPropagation()}
+                  onBlur={e => { if (e.target.value !== (t.oppgaveTekst || '')) save(tasks.map(tt => tt.id === t.id ? { ...tt, oppgaveTekst: e.target.value.slice(0, 300) } : tt)); }}
+                  onKeyDown={e => { if (e.key === 'Enter') e.target.blur(); }} />
+              )}
             </div>
           )
           return (

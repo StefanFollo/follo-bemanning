@@ -30,6 +30,10 @@ console.log('\n-- Payload: hvitliste, status-avledning, kobling --');
   sjekk('4 milepæler med KUN kontraktsfeltene', p.framdrift.milepaler.length === 4
     && p.framdrift.milepaler.every(m => JSON.stringify(Object.keys(m).sort()) === '["ferdigDato","periodeTekst","status","tittel"]'));
   sjekk('ALDRI fag/pct/navn-nøkler eller kundedata i payloaden', !JSON.stringify(p).match(/"(fag|pct|navn|kontaktNavn|timer)"/) && !JSON.stringify(p).includes('HEMMELIG'));
+  // Oppdrag 15: oppgaver/tildelinger under faser holdes HELT utenfor kundepayloaden
+  const medOppgaver = { ...prosjekt, fdTasks: prosjekt.fdTasks.map(t => ({ ...t, tildelt: ['A1'], oppgaveTekst: 'HEMMELIG-OPPGAVE', oppgaver: [{ id: 'o1', tekst: 'HEMMELIG-OPPGAVE', tildelt: ['A1'], status: 'apen' }] })) };
+  const p15 = byggFramdriftPayload(medOppgaver, befaringer, { iDag: '2026-10-14', naa: 'T' });
+  sjekk('Oppgaver/tildelt/oppgaveTekst sendes ALDRI til kunden', !JSON.stringify(p15).match(/"(oppgaver|tildelt|oppgaveTekst)"/) && !JSON.stringify(p15).includes('HEMMELIG-OPPGAVE'));
   const [f1, f2, f3, f4] = p.framdrift.milepaler;
   sjekk('pct 100 → ferdig', f1.status === 'ferdig' && f1.tittel === 'Grunnarbeid');
   sjekk('pct 40 → pagar', f2.status === 'pagar');

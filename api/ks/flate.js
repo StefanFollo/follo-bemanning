@@ -14,6 +14,7 @@
 import { Redis } from '@upstash/redis'
 import { put } from '@vercel/blob'
 import { byggInterneFaser } from '../../src/framdriftEksport.js'
+import { leggTilOppgaver, endreOppgave, oppgaverPaaFase, migrerFase } from '../../src/faseOppgaver.js'
 import { appendAuditLog, byggAuditEntry } from '../_dataIntegritet.js'
 
 const redis = new Redis({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN })
@@ -331,6 +332,72 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, fase: { id: fase.id, tildelt: fase.tildelt || [], oppgaveTekst: fase.oppgaveTekst || '', ferdig: (fase.pct || 0) >= 100 } })
     }
 
+    // ── Oppdrag 15: oppgaver under faser ──
+    // 'oppgave-ny' og 'oppgave-endre' krever AL på eget prosjekt.
+    // 'oppgave-status' (huk av/på ferdig) tillates OGSÅ for den oppgaven er
+    // tildelt — ansatte kvitterer sine egne oppgaver. Alt auditlogges.
+    if (['oppgave-ny', 'oppgave-endre', 'oppgave-status'].includes(handling)) {
+      if (!enhetOk(info, enhetsId)) return res.status(401).json({ maaVerifisere: true, error: 'Bekreft med de 4 siste sifrene i telefonnummeret ditt først.' })
+      const { prosjektId, faseId, oppgaveId } = body || {}
+      const pIdx3 = (state.prosjekter || []).findIndex(p => p && p.id === prosjektId)
+      if (pIdx3 < 0) return res.status(404).json({ error: 'Prosjektet finnes ikke' })
+      const prosjekt3 = state.prosjekter[pIdx3]
+      const fIdx3 = (prosjekt3.fdTasks || []).findIndex(t => t && t.id === faseId)
+      if (fIdx3 < 0) return res.status(404).json({ error: 'Fasen finnes ikke' })
+      const fase3 = prosjekt3.fdTasks[fIdx3]
+      const al3 = erAnleggsleder(ansatt)
+      const iDag3 = iDagIso()
+      const staarPaa3 = (state.tildelinger || []).some(t => t && t.ansattId === ansatt.id && t.prosjektId === prosjektId && (t.sluttDato || '9999') >= iDag3)
+      const lagIds3 = new Set((state.tildelinger || []).filter(t => t && t.prosjektId === prosjektId).map(t => t.ansattId))
+
+      let nyFase = null, loggTekst3 = ''
+      if (handling === 'oppgave-ny') {
+        if (!al3 || !staarPaa3) return res.status(403).json({ error: 'Kun anleggsleder på prosjektet kan legge til oppgaver' })
+        const tekster = Array.isArray(body.tekster) ? body.tekster : [body.tekst]
+        const tildelt = (Array.isArray(body.tildelt) ? body.tildelt : []).filter(id => lagIds3.has(id))
+        nyFase = leggTilOppgaver(fase3, tekster, { tildelt, av: ansatt.navn, dag: body.dag || null })
+        loggTekst3 = `La til ${oppgaverPaaFase(nyFase).length - oppgaverPaaFase(fase3).length} oppgave(r) på «${fase3.name}»`
+      } else if (handling === 'oppgave-endre') {
+        if (!al3 || !staarPaa3) return res.status(403).json({ error: 'Kun anleggsleder på prosjektet kan endre oppgaver' })
+        const endring = {}
+        if (body.tekst !== undefined) endring.tekst = body.tekst
+        if (body.tildelt !== undefined) endring.tildelt = (Array.isArray(body.tildelt) ? body.tildelt : []).filter(id => lagIds3.has(id))
+        if (body.dag !== undefined) endring.dag = body.dag
+        if (body.fjernet !== undefined) endring.fjernet = body.fjernet
+        nyFase = endreOppgave(fase3, oppgaveId, endring, { av: ansatt.navn })
+        if (!nyFase) return res.status(404).json({ error: 'Oppgaven finnes ikke' })
+        loggTekst3 = `${body.fjernet ? 'Fjernet (skjulte)' : 'Endret'} oppgave på «${fase3.name}»`
+      } else {
+        const oppgave = oppgaverPaaFase(migrerFase(fase3, { av: ansatt.navn })).find(o => o.id === oppgaveId)
+        if (!oppgave) return res.status(404).json({ error: 'Oppgaven finnes ikke' })
+        const erMin = (oppgave.tildelt || []).includes(ansatt.id)
+        if (!erMin && !(al3 && staarPaa3)) return res.status(403).json({ error: 'Du kan kun kvittere dine egne oppgaver' })
+        nyFase = endreOppgave(fase3, oppgaveId, { ferdig: !!body.ferdig }, { av: ansatt.navn })
+        loggTekst3 = `Oppgave «${oppgave.tekst.slice(0, 60)}» på «${fase3.name}»: ${body.ferdig ? 'FERDIG' : 'gjenåpnet'}`
+      }
+
+      state.prosjekter[pIdx3] = {
+        ...prosjekt3,
+        fdTasks: prosjekt3.fdTasks.map((t, i) => (i === fIdx3 ? nyFase : t)),
+        _endret: Math.max(Date.now(), (prosjekt3._endret || 0) + 1),
+      }
+      await redis.set('fbs_state', state)
+      try {
+        await appendAuditLog(redis, byggAuditEntry({
+          objekt: 'prosjekt', objektId: prosjektId, felt: 'framdriftsplan',
+          fraVerdi: null, tilVerdi: loggTekst3, endretAv: ansatt.navn,
+          kilde: al3 ? 'ansattflate-anleggsleder' : 'ansattflate',
+        }))
+      } catch { /* logg-feil stopper ikke handlingen */ }
+      const navnFor3 = id => { const a = (state.ansatte || []).find(x => x && x.id === id && !x.arkivert); return a ? a.navn : null }
+      return res.status(200).json({ ok: true, oppgaver: oppgaverPaaFase(nyFase).map(o => ({
+        id: o.id, tekst: o.tekst, status: o.status, dag: o.dag || null,
+        tildelt: (o.tildelt || []).map(navnFor3).filter(Boolean),
+        tildeltIds: al3 ? (o.tildelt || []) : undefined,
+        ferdigAv: o.ferdigAv || null, min: (o.tildelt || []).includes(ansatt.id),
+      })), faseTildelt: nyFase.tildelt || [] })
+    }
+
     // AL: sett ansvarlige på en sjekkliste i eget prosjekt (samme modell som
     // KS-fanens TildelModal — ansvarlig er NAVN-liste; levert liste er låst)
     if (handling === 'sjekkliste-ansvarlig') {
@@ -399,13 +466,21 @@ export default async function handler(req, res) {
             && (k.startDato || '0000') <= dato && (k.sluttDato || '9999') >= dato)
           .map(k => ansattVed(k.ansattId)).filter(Boolean)
           .map(a => ({ navn: a.navn, fag: a.fag || '' }))
-        // Oppdrag 11H: oppgaver anleggsleder har satt deg på — vises den dagen
-        // fasen pågår («Tommy har satt deg på: …»)
+        // Oppdrag 11H/15: oppgavene mine — enkeltoppgaver på faser som pågår
+        // denne dagen (eller med dag satt til akkurat denne datoen), med
+        // id-er så Ferdig-avhukingen i «Din uke» kan treffe riktig oppgave.
         const faserDenneDagen = byggInterneFaser(p, { iDag: dato }) || []
-        const oppgaver = (p.fdTasks || [])
-          .map((f, i) => (f && Array.isArray(f.tildelt) && f.tildelt.includes(ansatt.id) && faserDenneDagen[i]?.pagarNa)
-            ? { fase: f.name || 'Fase', tekst: f.oppgaveTekst || '' } : null)
-          .filter(Boolean)
+        const oppgaver = (p.fdTasks || []).flatMap((f, i) => {
+          if (!f) return []
+          const synlige = oppgaverPaaFase(f).filter(o => (o.tildelt || []).includes(ansatt.id)
+            && (o.dag ? o.dag === dato : faserDenneDagen[i]?.pagarNa))
+          if (synlige.length) {
+            return synlige.map(o => ({ fase: f.name || 'Fase', tekst: o.tekst, oppgaveId: o.id, faseId: f.id, prosjektId: p.id, status: o.status }))
+          }
+          // Bakoverkomp: gammel oppgaveTekst-modell uten oppgaveliste
+          return (Array.isArray(f.tildelt) && f.tildelt.includes(ansatt.id) && faserDenneDagen[i]?.pagarNa)
+            ? [{ fase: f.name || 'Fase', tekst: f.oppgaveTekst || '' }] : []
+        })
         return { prosjekt: p.navn || p.adresse || 'Prosjekt', adresse: p.adresse || '', plNavn: pl?.navn || null, plTelefon: pl?.telefon || null, lag, oppgaver }
       }).filter(Boolean)
       return { dato, egenFerie, oppdrag }
@@ -440,6 +515,15 @@ export default async function handler(req, res) {
         f.tildeltIds = al ? (Array.isArray(t.tildelt) ? t.tildelt : []) : undefined
         f.oppgaveTekst = t.oppgaveTekst || ''
         f.deg = (Array.isArray(t.tildelt) ? t.tildelt : []).includes(ansatt.id)
+        // Oppdrag 15: oppgavelisten under fasen — mine markeres, andres har
+        // kun tekst + fornavn (aldri kontaktinfo)
+        f.oppgaver = oppgaverPaaFase(t).map(o => ({
+          id: o.id, tekst: o.tekst, status: o.status, dag: o.dag || null,
+          tildelt: (o.tildelt || []).map(navnFor).filter(Boolean).map(n => al ? n : n.split(/\s+/)[0]),
+          tildeltIds: al ? (o.tildelt || []) : undefined,
+          ferdigAv: o.ferdigAv || null,
+          min: (o.tildelt || []).includes(ansatt.id),
+        }))
       })
       // AL: laget (bemannede på prosjektet) til Tildel-velgeren — id/navn/fag
       const lag = al ? (state.tildelinger || [])

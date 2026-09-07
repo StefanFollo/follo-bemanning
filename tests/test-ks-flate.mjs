@@ -406,6 +406,57 @@ console.log('\n-- Oppdrag 11H: anleggsleder-modus --');
   store.set('fbs_state', JSON.stringify(st3));
 }
 
+console.log('\n-- Oppdrag 15: oppgaver under faser --');
+{
+  // A1 er Anleggsleder igjen (satt på slutten av 11H-blokken) og står på P1
+  let r = await kall(flate, 'POST', { body: { token: gyldigToken, handling: 'oppgave-ny', prosjektId: 'P1', faseId: 'f2',
+    tekster: ['Kapp lekter til gavl', 'Skru gips nordvegg', '', 'Rydd etter riving'], tildelt: ['A4', 'A5'] } });
+  // 3 nye + 1 MIGRERT fra 11H-testens oppgaveTekst («Kapp lekter til gavl»
+  // på fasen fra før) — migreringen arver fasens tildelt ['A4']
+  sjekk('AL lager 3 oppgaver + gammel oppgaveTekst migreres (4 totalt, kun laget tildeles)', r._kode === 200
+    && r._body.oppgaver.length === 4 && r._body.oppgaver.every(o => JSON.stringify(o.tildeltIds) === '["A4"]'));
+  const oppgaveId = r._body.oppgaver.find(o => o.tekst === 'Skru gips nordvegg').id;
+  sjekk('Fasens tildelt = union av oppgavene', JSON.stringify(r._body.faseTildelt) === '["A4"]');
+  // Vanlig ansatt (A4) kan kvittere SIN oppgave — bruk forhåndsvisning? Nei:
+  // skrivende kall krever token. Test via A1 som IKKE-AL med egen oppgave:
+  const st15 = JSON.parse(store.get('fbs_state'));
+  st15.ansatte = st15.ansatte.map(a => a.id === 'A1' ? { ...a, fag: 'Tømrer' } : a);
+  store.set('fbs_state', JSON.stringify(st15));
+  r = await kall(flate, 'POST', { body: { token: gyldigToken, handling: 'oppgave-ny', prosjektId: 'P1', faseId: 'f2', tekster: ['X'] } });
+  sjekk('Ikke-AL kan IKKE lage oppgaver', r._kode === 403);
+  r = await kall(flate, 'POST', { body: { token: gyldigToken, handling: 'oppgave-status', prosjektId: 'P1', faseId: 'f2', oppgaveId, ferdig: true } });
+  sjekk('Ikke-AL kan ikke kvittere ANDRES oppgave', r._kode === 403);
+  // Gi A1 (Tomas) en egen oppgave via AL (A4-fag byttes midlertidig)... enklere:
+  // gjør A1 til AL, tildel oppgave til A1 selv, bytt tilbake, kvitter som vanlig ansatt
+  st15.ansatte = st15.ansatte.map(a => a.id === 'A1' ? { ...a, fag: 'Anleggsleder' } : a);
+  store.set('fbs_state', JSON.stringify(st15));
+  r = await kall(flate, 'POST', { body: { token: gyldigToken, handling: 'oppgave-endre', prosjektId: 'P1', faseId: 'f2', oppgaveId, tildelt: ['A1', 'A4'] } });
+  sjekk('AL om-tildeler oppgaven (A1 + A4)', r._kode === 200 && r._body.oppgaver.find(o => o.id === oppgaveId).tildeltIds.length === 2);
+  const st15b = JSON.parse(store.get('fbs_state'));
+  st15b.ansatte = st15b.ansatte.map(a => a.id === 'A1' ? { ...a, fag: 'Tømrer' } : a);
+  store.set('fbs_state', JSON.stringify(st15b));
+  r = await kall(flate, 'POST', { body: { token: gyldigToken, handling: 'oppgave-status', prosjektId: 'P1', faseId: 'f2', oppgaveId, ferdig: true } });
+  sjekk('Ansatt kvitterer EGEN oppgave', r._kode === 200 && r._body.oppgaver.find(o => o.id === oppgaveId).status === 'ferdig');
+  const lagretO = JSON.parse(store.get('fbs_state')).prosjekter.find(p => p.id === 'P1').fdTasks.find(t => t.id === 'f2').oppgaver.find(o => o.id === oppgaveId);
+  sjekk('Ferdig logget med hvem/når i fbs_state', lagretO.ferdigAv === 'Tomas Snekker' && !!lagretO.ferdigDato);
+  // GET: oppgavene følger fasene (min-markering) og «Din uke»
+  r = await kall(flate, 'GET', { query: { token: gyldigToken } });
+  const fase15 = r._body.prosjekter.find(p => p.id === 'P1').framdrift.find(f => f.id === 'f2');
+  sjekk('GET: oppgaveliste med min-markering og fornavn', fase15.oppgaver.length === 4
+    && fase15.oppgaver.find(o => o.id === oppgaveId).min === true
+    && fase15.oppgaver.find(o => o.id === oppgaveId).tildelt.includes('Tomas'));
+  r = await kall(flate, 'GET', { query: { token: gyldigToken, dinUke: '1' } });
+  const alleOpp = r._body.dinUke.dager.flatMap(d => d.oppdrag.flatMap(o => o.oppgaver || []));
+  sjekk('«Din uke»: egne oppgaver med id-er og status', alleOpp.some(o => o.oppgaveId === oppgaveId && o.status === 'ferdig' && o.prosjektId === 'P1'));
+  // Fjernet skjules
+  const st15c = JSON.parse(store.get('fbs_state'));
+  st15c.ansatte = st15c.ansatte.map(a => a.id === 'A1' ? { ...a, fag: 'Anleggsleder' } : a);
+  store.set('fbs_state', JSON.stringify(st15c));
+  r = await kall(flate, 'POST', { body: { token: gyldigToken, handling: 'oppgave-endre', prosjektId: 'P1', faseId: 'f2', oppgaveId, fjernet: true } });
+  sjekk('Fjernet oppgave skjules (men slettes aldri)', r._kode === 200 && r._body.oppgaver.length === 3
+    && JSON.parse(store.get('fbs_state')).prosjekter.find(p => p.id === 'P1').fdTasks.find(t => t.id === 'f2').oppgaver.length === 4);
+}
+
 console.log('\n-- Oppdrag 11C: SMS-tekst (1 segment) + rate-grense --');
 {
   smsKall.length = 0;
