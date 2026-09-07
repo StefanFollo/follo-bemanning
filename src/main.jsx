@@ -11,8 +11,15 @@ import KsAnsattflate from './ansattflate/KsAnsattflate.jsx'
 // (postkasse-oppdrag 4: ikke-hex-tokens traff appen i stedet for flaten).
 const ksMatch = window.location.pathname.match(/^\/ks\/([^/]+)\/?$/);
 
+// Oppdrag 11F: PL-forhåndsvisning — ?ksForhandsvisning=<ansattId> viser
+// ansattflaten slik den ansatte ser den (krever admin/kontor-sesjon i
+// samme nettleser; serveren håndhever, kun lesing).
+const forhandsvisning = new URLSearchParams(window.location.search).get('ksForhandsvisning');
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    {ksMatch ? <KsAnsattflate token={ksMatch[1]} /> : <App />}
+    {ksMatch ? <KsAnsattflate token={ksMatch[1]} />
+      : forhandsvisning ? <KsAnsattflate token="" somAnsatt={forhandsvisning} />
+      : <App />}
   </StrictMode>,
 )

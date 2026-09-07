@@ -554,6 +554,19 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
   const noff = (nowYr * 52 + nowWk) - (by * 52 + bw);
   const nowX = (noff >= 0 && noff * 7 <= totalDays) ? noff * 7 * dw : null;
 
+  // Oppdrag 11H: laget (bemannede på prosjektet) til PL-ens fase-tildeling +
+  // initialer på stolpene. Anleggslederen gjør det samme fra ansattflaten.
+  const { state: appState } = useApp();
+  const iDagIsoH = new Date().toISOString().slice(0, 10);
+  const lagPaaProsjekt = (appState.tildelinger || [])
+    .filter(td => td && td.prosjektId === project.id && td.prosjektId !== '__FERIE__' && (td.sluttDato || '9999') >= iDagIsoH)
+    .map(td => (appState.ansatte || []).find(a => a && a.id === td.ansattId)).filter(a => a && !a.arkivert)
+    .filter((a, i, arr) => arr.findIndex(x => x.id === a.id) === i);
+  const initialerFor = ids => (ids || [])
+    .map(id => (appState.ansatte || []).find(a => a && a.id === id)).filter(Boolean)
+    .map(a => a.navn.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()).join(' ');
+  const setTildelt = (tid, ansattIds) => save(tasks.map(t => t.id === tid ? { ...t, tildelt: ansattIds } : t));
+
   const save = (next, nextCols, extra) => {
     if (readOnly) return;
     tasksRef.current = next; setTasks(next);
@@ -889,7 +902,9 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                   )}
                   <clipPath id={`bc${t.id}`}><rect x={x + 4} y={y + 6} width={Math.max(w - 22, 0)} height={22} /></clipPath>
                   <text x={x + 6} y={y + 21} fontSize={10} fill="white" fontWeight="500"
-                    style={{ pointerEvents: 'none' }} clipPath={`url(#bc${t.id})`}>{t.dur}d</text>
+                    style={{ pointerEvents: 'none' }} clipPath={`url(#bc${t.id})`}>
+                    {t.dur}d{(t.tildelt || []).length ? ` · ${initialerFor(t.tildelt)}` : ''}
+                  </text>
                   {done && w > 24 && (
                     <text x={x + w / 2} y={y + 21} fontSize={12} fill="white" textAnchor="middle"
                       style={{ pointerEvents: 'none' }}>{'\u2713'}</text>
@@ -1006,6 +1021,23 @@ function GanttChart({ project, onUpdate, readOnly = false }) {
                 <span style={{ fontSize: 12, color: '#5d6b80' }}>%</span>
                 <button style={{ background: 'none', border: 'none', color: '#5d6b80', cursor: 'pointer', fontSize: 14, padding: '0 4px', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                   onClick={() => setPickerTaskId(null)}><Ikon ikon={X} size={13} /> Lukk</button>
+                {/* Oppdrag 11H: PL tildeler fasen til folk fra laget (samme
+                    felt som anleggslederen bruker i ansattflaten) */}
+                {lagPaaProsjekt.length > 0 && (
+                  <div style={{ flexBasis: '100%', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', paddingTop: 6, borderTop: '1px solid rgba(255,255,255,.15)' }}>
+                    <span style={{ fontSize: 11, color: '#94a3b8' }}>Tildelt:</span>
+                    {lagPaaProsjekt.map(a => {
+                      const valgt = (t.tildelt || []).includes(a.id);
+                      return (
+                        <button key={a.id}
+                          style={{ background: valgt ? '#185FA5' : 'rgba(255,255,255,.1)', border: '1px solid ' + (valgt ? '#185FA5' : 'rgba(255,255,255,.25)'), borderRadius: 12, color: '#fff', fontSize: 11.5, cursor: 'pointer', padding: '3px 9px' }}
+                          onClick={() => setTildelt(t.id, valgt ? (t.tildelt || []).filter(x => x !== a.id) : [...(t.tildelt || []), a.id])}>
+                          {a.navn.split(' ')[0]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           )

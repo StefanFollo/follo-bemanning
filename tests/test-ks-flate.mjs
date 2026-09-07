@@ -105,8 +105,16 @@ store.set('fbs_session:pltoken', JSON.stringify({ email: 'pl@fbs.no', role: 'bef
 
 function fakeRes() { return { _kode: null, _body: null, setHeader() {}, status(k) { this._kode = k; return this; }, json(b) { this._body = b; return this; }, end() { return this; } }; }
 let ipTeller = 0;
+// Oppdrag 11G: flate-kall bærer enhets-ID — testene bruker 'E1' som standard
+// enhet; tester for enhetsbinding sender egen enhet eksplisitt.
 async function kall(handler, method, { auth, body, query, ip } = {}) {
-  const req = { method, headers: { ...(auth ? { authorization: 'Bearer ' + auth } : {}), 'x-real-ip': ip || ('10.0.0.' + (++ipTeller % 200)) }, body: body || {}, query: query || {} };
+  const q = { ...(query || {}) };
+  const b = { ...(body || {}) };
+  if (handler === flate) {
+    if (method === 'GET' && q.enhet === undefined) q.enhet = 'E1';
+    if (method === 'POST' && b.enhet === undefined) b.enhet = 'E1';
+  }
+  const req = { method, headers: { ...(auth ? { authorization: 'Bearer ' + auth } : {}), 'x-real-ip': ip || ('10.0.0.' + (++ipTeller % 200)) }, body: b, query: q };
   const res = fakeRes(); await handler(req, res); return res;
 }
 
@@ -155,8 +163,11 @@ console.log('\n-- Testkrav 1 + 6: ser KUN egne prosjekter/sjekklister, aldri kun
   const r = await kall(flate, 'GET', { query: { token } });
   sjekk('Flaten åpner etter verifisering', r._kode === 200 && r._body.fornavn === 'Tomas');
   const p = r._body.prosjekter;
-  sjekk('Kun aktive egne prosjekter (P1, ikke utløpt P3 eller andres P2)', p.length === 1 && p[0].id === 'P1');
-  sjekk('Kun egne sjekklister (SL1 + levert SL4, ikke Andres SL2)', p[0].sjekklister.map(s => s.id).sort().join(',') === 'SL1,SL4');
+  // Oppdrag 11F endret dette: P2 vises OGSÅ fordi SL3 er tildelt Tomas på
+  // NAVN der (union bemannet ∪ navnetildelt). Utløpt P3 vises fortsatt ikke.
+  sjekk('Union: bemannet P1 + navnetildelt P2, aldri utløpt P3', p.map(x => x.id).sort().join(',') === 'P1,P2');
+  const p1 = p.find(x => x.id === 'P1');
+  sjekk('Kun egne sjekklister (SL1 + levert SL4, ikke Andres SL2)', p1.sjekklister.map(s => s.id).sort().join(',') === 'SL1,SL4');
   const tekst = JSON.stringify(r._body);
   sjekk('Aldri kundenavn/beløp/interne felter i svaret', !tekst.includes('HEMMELIG') && !tekst.includes('999999') && !tekst.includes('hemmeligAIFelt'));
   sjekk('Levert liste er merket levert', p[0].sjekklister.find(s => s.id === 'SL4').levert === true);
@@ -300,31 +311,99 @@ const gyldigToken = Object.keys(JSON.parse(store.get('fbs_ks_flate_tokens'))).fi
   store.set('fbs_state', JSON.stringify(st));
 }
 
-console.log('\n-- Oppdrag 11E: bemanning-visning med personvern-vern --');
+console.log('\n-- Oppdrag 11E (presisert): «Din uke» + «Mitt lag» med personvern-vern --');
 {
   const st = JSON.parse(store.get('fbs_state'));
   const iDagIso = new Date().toISOString().slice(0, 10);
   const om14 = new Date(Date.now() + 14 * 86400000).toISOString().slice(0, 10);
   const for7 = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
-  st.ansatte.push({ id: 'A4', navn: 'Kollega Sykmeldt', telefon: '922 33 444', sykmeldt: true, sykmeldtTil: om14, epost: 'kollega@follo.no' });
+  st.ansatte.push({ id: 'A4', navn: 'Kollega Sykmeldt', fag: 'Tømrer', telefon: '922 33 444', sykmeldt: true, sykmeldtTil: om14, epost: 'kollega@follo.no' });
+  st.ansatte.push({ id: 'A5', navn: 'Annen Prosjektmann', fag: 'Murer', telefon: '933 44 555' });
   st.tildelinger = [
     { id: 't1', ansattId: 'A1', prosjektId: 'P1', startDato: for7, sluttDato: om14 },
-    { id: 't2', ansattId: 'A4', prosjektId: 'P1', startDato: for7, sluttDato: om14 },
-    { id: 't3', ansattId: 'A4', prosjektId: '__FERIE__', startDato: iDagIso, sluttDato: om14 }, // andres ferie: SKAL utelates
-    { id: 't4', ansattId: 'A1', prosjektId: '__FERIE__', startDato: iDagIso, sluttDato: iDagIso }, // egen ferie: kan vises
+    { id: 't2', ansattId: 'A4', prosjektId: 'P1', startDato: for7, sluttDato: om14 },   // lag-kollega
+    { id: 't5', ansattId: 'A5', prosjektId: 'P2', startDato: for7, sluttDato: om14 },   // ANNET prosjekt — skal ALDRI vises
+    { id: 't3', ansattId: 'A4', prosjektId: '__FERIE__', startDato: iDagIso, sluttDato: om14 }, // andres ferie: utelates
+    { id: 't4', ansattId: 'A1', prosjektId: '__FERIE__', startDato: iDagIso, sluttDato: iDagIso }, // egen ferie: vises
   ];
   store.set('fbs_state', JSON.stringify(st));
-  let r = await kall(flate, 'GET', { query: { token: gyldigToken, bemanningUke: '0' } });
-  const b = r._body.bemanning;
-  sjekk('Bemanning-svar: 7 dager + dinUke + prosjekter', r._kode === 200 && b.dager.length === 7 && b.dinUke.length === 7 && Array.isArray(b.prosjekter));
-  const p1 = b.prosjekter.find(p => p.navn.includes('Lindemansveien'));
-  sjekk('Egen rad merket erDeg, kollega med kun navn', p1 && p1.rader.some(x => x.erDeg) && p1.rader.some(x => !x.erDeg && x.navn === 'Kollega Sykmeldt'));
-  const raa = JSON.stringify(b);
-  sjekk('🛑 ALDRI sykmelding/fraværsinfo/kontaktinfo om andre', !raa.includes('sykmeldt') && !raa.includes('Sykmeldt t') && !raa.includes('922') && !raa.includes('kollega@follo.no') && !raa.includes('sykmeldtTil'));
-  sjekk('Andres ferie utelatt (ingen __FERIE__-rader)', !raa.includes('__FERIE__') && b.prosjekter.every(p => p.rader.every(x => x.erDeg || x.navn !== undefined)));
-  sjekk('Egen ferie vises i «Din uke»', b.dinUke.some(d => d.tekst === 'Ferie / fri'));
-  r = await kall(flate, 'GET', { query: { token: gyldigToken, bemanningUke: '1' } });
-  sjekk('Neste uke: ingen egen ferie-dag (kun i dag var ferie)', r._body.bemanning.ukeOffset === 1 && !r._body.bemanning.dinUke.some(d => d.tekst === 'Ferie / fri'));
+  const r = await kall(flate, 'GET', { query: { token: gyldigToken, dinUke: '1' } });
+  const d = r._body.dinUke;
+  sjekk('Din uke: 21 dager (denne + 2 neste uker)', r._kode === 200 && d.dager.length === 21);
+  const medOppdrag = d.dager.filter(x => x.oppdrag.length);
+  sjekk('Oppdrag bærer prosjekt/adresse/PL med telefon', medOppdrag.length > 0
+    && medOppdrag[0].oppdrag[0].prosjekt.includes('Lindemansveien')
+    && medOppdrag[0].oppdrag[0].plNavn === 'Petter Prosjektleder' && medOppdrag[0].oppdrag[0].plTelefon === '911 22 333');
+  sjekk('«Mitt lag»: kollega på SAMME prosjekt med navn + fag', medOppdrag[0].oppdrag[0].lag.some(k => k.navn === 'Kollega Sykmeldt' && k.fag === 'Tømrer'));
+  const raa = JSON.stringify(d);
+  sjekk('🛑 ALDRI folk fra andre prosjekter', !raa.includes('Annen Prosjektmann'));
+  sjekk('🛑 ALDRI sykmelding/kontaktinfo om andre', !raa.includes('sykmeldt') && !raa.includes('922') && !raa.includes('933') && !raa.includes('kollega@follo.no'));
+  sjekk('Egen ferie-dag markert', d.dager.some(x => x.egenFerie === true));
+  sjekk('Andres ferie finnes ikke i svaret', !raa.includes('__FERIE__'));
+}
+
+console.log('\n-- Oppdrag 11G: enhetsbundet 4-siffer-bekreftelse --');
+{
+  // Samme lenke på NY enhet → maaVerifisere; etter verifisering på ny enhet → inne
+  let r = await kall(flate, 'GET', { query: { token: gyldigToken, enhet: 'NY-TELEFON' } });
+  sjekk('Ny enhet → må bekrefte på nytt', r._kode === 200 && r._body.maaVerifisere === true);
+  r = await kall(flate, 'POST', { body: { token: gyldigToken, enhet: 'NY-TELEFON', handling: 'verifiser', siffer: '4567' } });
+  sjekk('4 siffer på ny enhet godtas', r._kode === 200 && r._body.verifisert === true);
+  r = await kall(flate, 'GET', { query: { token: gyldigToken, enhet: 'NY-TELEFON' } });
+  sjekk('Ny enhet er nå inne', r._kode === 200 && Array.isArray(r._body.prosjekter));
+  r = await kall(flate, 'POST', { body: { token: gyldigToken, enhet: 'UVERIFISERT', handling: 'punkt', sjekklisteId: 'SL1', punktId: 'p1', status: 'ok' } });
+  sjekk('Skriving fra uverifisert enhet avvises', r._kode === 401 && r._body.maaVerifisere === true);
+}
+
+console.log('\n-- Oppdrag 11F: forhåndsvisning + union-prosjektliste --');
+{
+  let r = await kall(flate, 'GET', { auth: 'admintoken', query: { somAnsatt: 'A1' } });
+  sjekk('Admin kan forhåndsvise flaten som A1', r._kode === 200 && r._body.forhandsvisning === true && Array.isArray(r._body.prosjekter) && r._body.navn === 'Tomas Snekker');
+  r = await kall(flate, 'GET', { auth: 'pltoken', query: { somAnsatt: 'A1' } });
+  sjekk('Befaring-rollen kan IKKE forhåndsvise', r._kode === 401);
+  r = await kall(flate, 'GET', { query: { somAnsatt: 'A1' } });
+  sjekk('Uten sesjon: 401', r._kode === 401);
+  // Union: A5 er IKKE bemannet på P1, men får sjekkliste tildelt på navn → P1 vises
+  const sjekklister = JSON.parse(store.get('fbs_ks_sjekklister'));
+  sjekklister.push({ id: 'SL9', prosjektId: 'P1', navn: 'Navnetildelt liste', ansvarlig: ['Annen Prosjektmann'], punkter: [{ id: 'q', tekst: 'Q', status: '' }] });
+  store.set('fbs_ks_sjekklister', JSON.stringify(sjekklister));
+  r = await kall(flate, 'GET', { auth: 'admintoken', query: { somAnsatt: 'A5' } });
+  sjekk('Union: liste tildelt på NAVN gir prosjektet i flaten uansett bemanning',
+    r._body.prosjekter.some(p => p.id === 'P1' && p.sjekklister.some(sl => sl.id === 'SL9' && sl.min === true)));
+}
+
+console.log('\n-- Oppdrag 11H: anleggsleder-modus --');
+{
+  const st = JSON.parse(store.get('fbs_state'));
+  st.ansatte = st.ansatte.map(a => a.id === 'A1' ? { ...a, fag: 'Anleggsleder' } : a);
+  store.set('fbs_state', JSON.stringify(st));
+  let r = await kall(flate, 'GET', { query: { token: gyldigToken } });
+  sjekk('AL-flagg + lag i flate-svaret', r._body.erAnleggsleder === true
+    && r._body.prosjekter.find(p => p.id === 'P1').lag.some(a => a.navn === 'Kollega Sykmeldt' && a.fag === 'Tømrer'));
+  const p1 = r._body.prosjekter.find(p => p.id === 'P1');
+  const fase = p1.framdrift[1];
+  r = await kall(flate, 'POST', { body: { token: gyldigToken, handling: 'fase-tildel', prosjektId: 'P1', faseId: fase.id, ansattIds: ['A4', 'A5'] } });
+  sjekk('Fase-tildeling: kun laget godtas (A5 er på annet prosjekt)', r._kode === 200 && JSON.stringify(r._body.fase.tildelt) === '["A4"]');
+  r = await kall(flate, 'POST', { body: { token: gyldigToken, handling: 'fase-tekst', prosjektId: 'P1', faseId: fase.id, tekst: 'Kapp lekter til gavl' } });
+  sjekk('Oppgavetekst lagres', r._kode === 200 && r._body.fase.oppgaveTekst === 'Kapp lekter til gavl');
+  r = await kall(flate, 'POST', { body: { token: gyldigToken, handling: 'fase-ferdig', prosjektId: 'P1', faseId: fase.id, ferdig: true } });
+  sjekk('AL kan markere fasen ferdig', r._kode === 200 && r._body.fase.ferdig === true);
+  const st2 = JSON.parse(store.get('fbs_state'));
+  const lagretFase = st2.prosjekter.find(p => p.id === 'P1').fdTasks.find(t => t.id === fase.id);
+  sjekk('Lagret i fbs_state med _endret-stempel', lagretFase.pct === 100 && lagretFase.oppgaveTekst === 'Kapp lekter til gavl'
+    && JSON.stringify(lagretFase.tildelt) === '["A4"]' && st2.prosjekter.find(p => p.id === 'P1')._endret > 0);
+  // Vern: vanlig ansatt (ikke AL) avvises
+  const st3 = JSON.parse(store.get('fbs_state'));
+  st3.ansatte = st3.ansatte.map(a => a.id === 'A1' ? { ...a, fag: 'Tømrer' } : a);
+  store.set('fbs_state', JSON.stringify(st3));
+  r = await kall(flate, 'POST', { body: { token: gyldigToken, handling: 'fase-tildel', prosjektId: 'P1', faseId: fase.id, ansattIds: [] } });
+  sjekk('Uten Anleggsleder-fag: 403', r._kode === 403);
+  // Tildelt oppgave vises i «Din uke» hos den tildelte (A4 sett via forhåndsvisning)
+  r = await kall(flate, 'GET', { auth: 'admintoken', query: { somAnsatt: 'A4', dinUke: '1' } });
+  const harOppgave = r._body.dinUke.dager.some(dg => dg.oppdrag.some(o => (o.oppgaver || []).some(x => x.tekst === 'Kapp lekter til gavl')));
+  sjekk('Den tildelte ser oppgaven i «Din uke» når fasen pågår', harOppgave);
+  st3.ansatte = st3.ansatte.map(a => a.id === 'A1' ? { ...a, fag: 'Anleggsleder' } : a);
+  store.set('fbs_state', JSON.stringify(st3));
 }
 
 console.log('\n-- Oppdrag 11C: SMS-tekst (1 segment) + rate-grense --');

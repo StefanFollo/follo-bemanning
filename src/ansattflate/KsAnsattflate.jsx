@@ -15,19 +15,41 @@ import './ksflate.css';
 
 const STATUS_TEKST = { 'ikke-startet': 'Ikke startet', 'pagar': 'Påbegynt', 'ferdig': 'Ferdig' };
 
+// Oppdrag 11G: enhets-ID — 4-siffer-bekreftelsen bindes til enheten, så en
+// videresendt lenke krever ny bekreftelse på ny telefon.
+function hentEnhetsId() {
+  try {
+    let id = localStorage.getItem('fbs_ks_enhet');
+    if (!id) {
+      id = Date.now().toString(36) + Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+      localStorage.setItem('fbs_ks_enhet', id);
+    }
+    return id;
+  } catch { return 'ukjent-enhet'; }
+}
+
 // Ett automatisk nytt forsøk ved nettverksfeil — byggeplass-nett er upålitelig.
 // Serveren tåler dobbeltkall per handling (idempotent skriving).
-async function api(metode, token, body, forsok = 0) {
+// somAnsatt (oppdrag 11F): PL-forhåndsvisning — admin-sesjon i stedet for token.
+async function api(metode, token, body, forsok = 0, somAnsatt = null) {
   try {
-    const r = await fetch(`/api/ks/flate${metode === 'GET' ? `?token=${encodeURIComponent(token)}` : ''}`, {
+    const query = metode === 'GET'
+      ? (somAnsatt
+        ? `?somAnsatt=${encodeURIComponent(somAnsatt)}${body?.query || ''}`
+        : `?token=${encodeURIComponent(token)}&enhet=${encodeURIComponent(hentEnhetsId())}${body?.query || ''}`)
+      : '';
+    const r = await fetch(`/api/ks/flate${query}`, {
       method: metode,
-      headers: { 'Content-Type': 'application/json' },
-      ...(metode === 'POST' ? { body: JSON.stringify({ token, ...body }) } : {}),
+      headers: {
+        'Content-Type': 'application/json',
+        ...(somAnsatt ? { Authorization: 'Bearer ' + (localStorage.getItem('fbs_token') || '') } : {}),
+      },
+      ...(metode === 'POST' ? { body: JSON.stringify({ token, enhet: hentEnhetsId(), ...body }) } : {}),
     });
     const data = await r.json().catch(() => ({}));
     return { ok: r.ok, status: r.status, data };
   } catch {
-    if (forsok < 1) { await new Promise(res => setTimeout(res, 800)); return api(metode, token, body, forsok + 1); }
+    if (forsok < 1) { await new Promise(res => setTimeout(res, 800)); return api(metode, token, body, forsok + 1, somAnsatt); }
     return { ok: false, status: 0, data: { error: 'Ingen nettforbindelse — prøv igjen.' } };
   }
 }
@@ -116,8 +138,8 @@ function Punkt({ punkt, laast, onEndre }) {
             </button>
           )}
           {!laast && (
-            <label className="ksf-lenkeknapp" style={{ cursor: lagrer ? 'wait' : 'pointer' }}>
-              <Ikon ikon={Camera} size={12} /> {punkt.krever_bilde && !(punkt.bilder || []).length ? 'Bilde (påkrevd)' : 'Ta bilde'}
+            <label className="ksf-bildeknapp" style={{ cursor: lagrer ? 'wait' : 'pointer' }}>
+              <Ikon ikon={Camera} size={16} /> {punkt.krever_bilde && !(punkt.bilder || []).length ? 'Ta bilde (påkrevd)' : 'Ta bilde'}
               <input type="file" accept="image/*" capture="environment" style={{ display: 'none' }} disabled={lagrer}
                 onChange={async e => {
                   const fil = e.target.files && e.target.files[0];
@@ -188,8 +210,70 @@ const FASE_STATUS = {
 function datoKortKsf(iso) {
   return iso ? new Date(iso + 'T00:00:00').toLocaleDateString('nb-NO', { day: 'numeric', month: 'short' }) : null;
 }
-function FramdriftFane({ prosjekter }) {
-  if (!prosjekter.length) return <div className="ksf-kort" style={{ color: 'var(--text-muted)' }}>Du står ikke på noen aktive prosjekter akkurat nå.</div>;
+// Én fase-rad — for AL (oppdrag 11H) med Tildel/tekst/Ferdig; ellers lesevisning.
+function FaseRad({ fase, forste, erAL, lag, onAL }) {
+  const [visTildel, setVisTildel] = useState(false);
+  const [tekst, setTekst] = useState(fase.oppgaveTekst || '');
+  const [lagrer, setLagrer] = useState(false);
+  const st = FASE_STATUS[fase.status] || FASE_STATUS.kommer;
+  const kjor = async (handling, felter) => { setLagrer(true); await onAL(handling, { faseId: fase.id, ...felter }); setLagrer(false); };
+  return (
+    <div style={{ padding: '7px 0', borderTop: forste ? 'none' : '1px solid #f1f5f9', background: fase.deg ? '#eff6ff' : 'transparent', borderRadius: fase.deg ? 6 : 0, ...(fase.deg ? { padding: '7px 8px', margin: '2px -8px' } : {}) }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: (fase.pagarNa || fase.deg) ? 600 : 400 }}>
+          {fase.tittel}
+          {fase.pagarNa && <span style={{ marginLeft: 6, fontSize: 10.5, color: '#c2410c', fontWeight: 600 }}><Ikon ikon={Flame} size={11} /> Pågår nå</span>}
+          {fase.deg && <span style={{ marginLeft: 6, fontSize: 10.5, color: '#185FA5', fontWeight: 700 }}>DIN</span>}
+        </span>
+        <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{fase.periodeTekst}</span>
+        <span style={{ fontSize: 11, fontWeight: 500, color: st.farge, background: st.bg, borderRadius: 5, padding: '2px 7px', whiteSpace: 'nowrap' }}>{st.tekst}</span>
+      </div>
+      {(fase.tildelt || []).length > 0 && (
+        <div style={{ fontSize: 12, color: '#185FA5', marginTop: 2 }}>→ {fase.tildelt.join(', ')}</div>
+      )}
+      {fase.oppgaveTekst && !erAL && <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 2, fontStyle: 'italic' }}>«{fase.oppgaveTekst}»</div>}
+      {erAL && (
+        <div style={{ marginTop: 4 }}>
+          <button className="ksf-lenkeknapp" disabled={lagrer} onClick={() => setVisTildel(v => !v)}>
+            {visTildel ? 'Lukk tildeling' : 'Tildel'}
+          </button>
+          <label className="ksf-lenkeknapp" style={{ marginLeft: 10 }}>
+            <input type="checkbox" checked={fase.status === 'ferdig'} disabled={lagrer}
+              onChange={e => kjor('fase-ferdig', { ferdig: e.target.checked })} style={{ marginRight: 4 }} />
+            Ferdig
+          </label>
+          {visTildel && (
+            <div style={{ marginTop: 6 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {(lag || []).map(a => {
+                  const valgt = (fase.tildeltIds || []).includes(a.id);
+                  return (
+                    <button key={a.id} disabled={lagrer}
+                      style={{ fontSize: 12, padding: '4px 10px', borderRadius: 14, cursor: 'pointer', border: '1px solid ' + (valgt ? '#185FA5' : '#e2e8f0'), background: valgt ? '#185FA5' : '#fff', color: valgt ? '#fff' : '#1e293b' }}
+                      onClick={() => kjor('fase-tildel', { ansattIds: valgt ? (fase.tildeltIds || []).filter(x => x !== a.id) : [...(fase.tildeltIds || []), a.id] })}>
+                      {a.navn.split(' ')[0]}{a.fag ? ` · ${a.fag}` : ''}
+                    </button>
+                  );
+                })}
+                {!(lag || []).length && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Ingen er bemannet på prosjektet ennå.</span>}
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                <input className="ksf-kommentar" style={{ flex: 1 }} placeholder="Hva skal gjøres? (valgfritt)" value={tekst} maxLength={300}
+                  onChange={e => setTekst(e.target.value)} />
+                {tekst !== (fase.oppgaveTekst || '') && (
+                  <button className="ksf-knapp" disabled={lagrer} onClick={() => kjor('fase-tekst', { tekst })}>Lagre</button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FramdriftFane({ prosjekter, erAL, onAL }) {
+  if (!prosjekter.length) return <div className="ksf-kort" style={{ color: 'var(--text-muted)' }}>Du er ikke satt opp på noen prosjekter ennå — spør prosjektlederen din.</div>;
   return prosjekter.map(p => (
     <div key={p.id} className="ksf-kort">
       <div className="ksf-prosjekt-navn"><Ikon ikon={Building2} size={15} /> {p.navn}</div>
@@ -208,89 +292,91 @@ function FramdriftFane({ prosjekter }) {
           )}
         </div>
       )}
-      {!p.framdrift && <div className="ksf-tom">Ingen framdriftsplan ennå.</div>}
-      {(p.framdrift || []).map((f, i) => {
-        const st = FASE_STATUS[f.status] || FASE_STATUS.kommer;
-        return (
-          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderTop: i ? '1px solid var(--bg-subtle, #f1f5f9)' : 'none' }}>
-            <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: f.pagarNa ? 600 : 400 }}>
-              {f.tittel}
-              {f.pagarNa && <span style={{ marginLeft: 6, fontSize: 10.5, color: '#c2410c', fontWeight: 600 }}><Ikon ikon={Flame} size={11} /> Pågår nå</span>}
-            </span>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{f.periodeTekst}</span>
-            <span style={{ fontSize: 11, fontWeight: 500, color: st.farge, background: st.bg, borderRadius: 5, padding: '2px 7px', whiteSpace: 'nowrap' }}>{st.tekst}</span>
-          </div>
-        );
-      })}
+      {!p.framdrift && <div className="ksf-tom">Ingen framdriftsplan for dette prosjektet ennå.</div>}
+      {(p.framdrift || []).map((f, i) => (
+        <FaseRad key={f.id || i} fase={f} forste={i === 0} erAL={erAL} lag={p.lag}
+          onAL={(handling, felter) => onAL(handling, { prosjektId: p.id, ...felter })} />
+      ))}
     </div>
   ));
 }
 
-// ── Oppdrag 11E: Bemanning — lesevisning av bemanningsplanen ──
-// Serveren filtrerer (aldri sykmelding/fraværsårsak/kontaktinfo om andre;
-// andres ferie er utelatt). Egen rad utheves; «Din uke» øverst.
-const DAG_BOKSTAV = ['M', 'T', 'O', 'T', 'F', 'L', 'S'];
-function BemanningFane({ token }) {
-  const [uke, setUke] = useState(0);
+// ── Oppdrag 11E (PRESISERT): Bemanning = «Din uke» + «Mitt lag»-bryter ──
+// KUN egne oppdrag denne + 2 neste uker; laget = kollegene på SAMME prosjekt
+// SAMME dag (navn + fag). Serveren sender aldri sykmelding/fravær/kontaktinfo
+// om andre — og aldri folk på andre prosjekter.
+function BemanningFane({ token, somAnsatt }) {
   const [data, setData] = useState(null);
   const [feil, setFeil] = useState(false);
+  const [visLag, setVisLag] = useState(false);
   useEffect(() => {
     let aktiv = true;
-    setData(null); setFeil(false);
     (async () => {
-      try {
-        const r = await fetch(`/api/ks/flate?token=${encodeURIComponent(token)}&bemanningUke=${uke}`);
-        const d = await r.json().catch(() => ({}));
-        if (!aktiv) return;
-        if (r.ok && d.bemanning) setData(d.bemanning); else setFeil(true);
-      } catch { if (aktiv) setFeil(true); }
+      const r = await api('GET', token, { query: '&dinUke=1' }, 0, somAnsatt);
+      if (!aktiv) return;
+      if (r.ok && r.data.dinUke) setData(r.data.dinUke); else setFeil(true);
     })();
     return () => { aktiv = false; };
-  }, [token, uke]);
+  }, [token, somAnsatt]);
 
-  const ukeTekst = data ? `Uke ${(() => { const d = new Date(data.dager[3] + 'T12:00:00Z'); const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())); t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7)); return Math.ceil(((t - Date.UTC(t.getUTCFullYear(), 0, 1)) / 86400000 + 1) / 7); })()}` : '';
+  if (feil) return <div className="ksf-kort ksf-feilkort"><p>Fikk ikke hentet uka di — prøv igjen.</p></div>;
+  if (!data) return <div className="ksf-kort" style={{ textAlign: 'center' }}><Ikon ikon={Loader} size={20} className="ksf-spinn" /></div>;
+
+  const harNoe = data.dager.some(d => d.oppdrag.length || d.egenFerie);
+  const uker = [data.dager.slice(0, 7), data.dager.slice(7, 14), data.dager.slice(14, 21)];
+  const ukeNavn = ['Denne uka', 'Neste uke', 'Uka etter'];
 
   return (
     <>
-      <div className="ksf-kort" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <button className="ksf-knapp" style={{ padding: '4px 10px' }} disabled={uke <= -1} onClick={() => setUke(u => u - 1)}><Ikon ikon={ChevronLeft} size={15} /></button>
-        <span style={{ flex: 1, textAlign: 'center', fontWeight: 600, fontSize: 14 }}>
-          {ukeTekst}{uke === 0 ? ' (denne uka)' : uke === 1 ? ' (neste uke)' : ''}
-        </span>
-        <button className="ksf-knapp" style={{ padding: '4px 10px' }} disabled={uke >= 8} onClick={() => setUke(u => u + 1)}><Ikon ikon={ChevronRight} size={15} /></button>
+      <div className="ksf-kort" style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ flex: 1, fontWeight: 600, fontSize: 14 }}><Ikon ikon={CalendarDays} size={15} /> Din uke</span>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, cursor: 'pointer', fontWeight: 500 }}>
+          <input type="checkbox" checked={visLag} onChange={e => setVisLag(e.target.checked)} />
+          Vis mitt lag
+        </label>
       </div>
-      {feil && <div className="ksf-kort ksf-feilkort"><p>Fikk ikke hentet bemanningen — prøv igjen.</p></div>}
-      {!data && !feil && <div className="ksf-kort" style={{ textAlign: 'center' }}><Ikon ikon={Loader} size={20} className="ksf-spinn" /></div>}
-      {data && (
-        <>
-          <div className="ksf-kort" style={{ borderLeft: '3px solid #185FA5' }}>
-            <div className="ksf-prosjekt-navn">Din uke</div>
-            {data.dinUke.map(d => (
-              <div key={d.dato} style={{ display: 'flex', gap: 8, fontSize: 13, padding: '3px 0' }}>
-                <span style={{ width: 92, color: 'var(--text-muted)' }}>{new Date(d.dato + 'T00:00:00').toLocaleDateString('nb-NO', { weekday: 'short', day: 'numeric', month: 'short' })}</span>
-                <span style={{ fontWeight: d.tekst ? 500 : 400, color: d.tekst ? 'inherit' : 'var(--text-muted)' }}>{d.tekst || 'Ikke satt opp'}</span>
+      {!harNoe && <div className="ksf-kort" style={{ color: 'var(--text-muted)' }}>Du er ikke satt opp på noen prosjekter ennå — spør prosjektlederen din.</div>}
+      {uker.map((uke, u) => {
+        const dagerMedInnhold = uke.filter(d => d.oppdrag.length || d.egenFerie);
+        return (
+          <div key={u} className="ksf-kort" style={u === 0 ? { borderLeft: '3px solid #185FA5' } : {}}>
+            <div className="ksf-prosjekt-navn">{ukeNavn[u]}</div>
+            {dagerMedInnhold.length === 0 && <div className="ksf-tom">Ikke satt opp.</div>}
+            {dagerMedInnhold.map(d => (
+              <div key={d.dato} style={{ padding: '5px 0', borderTop: '1px solid #f1f5f9' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>
+                  {new Date(d.dato + 'T00:00:00').toLocaleDateString('nb-NO', { weekday: 'long', day: 'numeric', month: 'short' })}
+                </div>
+                {d.egenFerie && <div style={{ fontSize: 13.5, fontWeight: 500, color: '#0e7490' }}>Ferie / fri</div>}
+                {d.oppdrag.map((o, i) => (
+                  <div key={i} style={{ marginTop: 2 }}>
+                    <div style={{ fontSize: 13.5, fontWeight: 600 }}>{o.prosjekt}</div>
+                    {o.adresse && o.adresse !== o.prosjekt && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{o.adresse}</div>}
+                    {o.plNavn && (
+                      <div style={{ fontSize: 12.5 }}>
+                        PL: {o.plNavn}
+                        {o.plTelefon && <a href={`tel:${String(o.plTelefon).replace(/\s+/g, '')}`} style={{ marginLeft: 6, color: '#185FA5', fontWeight: 500, textDecoration: 'none' }}><Ikon ikon={Phone} size={12} /> {o.plTelefon}</a>}
+                      </div>
+                    )}
+                    {(o.oppgaver || []).map((opp, j) => (
+                      <div key={j} style={{ fontSize: 12.5, color: '#c2410c', fontWeight: 500, marginTop: 1 }}>
+                        <Ikon ikon={HardHat} size={12} /> {opp.fase}{opp.tekst ? `: ${opp.tekst}` : ' — du er satt på denne fasen'}
+                      </div>
+                    ))}
+                    {visLag && (
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 1 }}>
+                        {o.lag.length
+                          ? <>Laget: {o.lag.map(k => `${k.navn.split(' ')[0]}${k.fag ? ' (' + k.fag + ')' : ''}`).join(', ')}</>
+                          : 'Ingen andre på prosjektet denne dagen.'}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             ))}
           </div>
-          {data.prosjekter.map((p, i) => (
-            <div key={i} className="ksf-kort">
-              <div className="ksf-prosjekt-navn"><Ikon ikon={Building2} size={15} /> {p.navn}</div>
-              <div style={{ display: 'flex', gap: 0, fontSize: 10.5, color: 'var(--text-muted)', padding: '2px 0 4px', marginLeft: 110 }}>
-                {DAG_BOKSTAV.map((b, j) => <span key={j} style={{ width: 22, textAlign: 'center' }}>{b}</span>)}
-              </div>
-              {p.rader.map((r, j) => (
-                <div key={j} style={{ display: 'flex', alignItems: 'center', fontSize: 12.5, padding: '2px 0', fontWeight: r.erDeg ? 600 : 400, color: r.erDeg ? '#185FA5' : 'inherit' }}>
-                  <span style={{ width: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.erDeg ? 'Deg' : r.navn}</span>
-                  {r.dager.map((på, k) => (
-                    <span key={k} style={{ width: 22, textAlign: 'center', color: på ? (r.erDeg ? '#185FA5' : '#15803d') : '#e2e8f0' }}>{på ? '●' : '·'}</span>
-                  ))}
-                </div>
-              ))}
-            </div>
-          ))}
-          {data.prosjekter.length === 0 && <div className="ksf-kort" style={{ color: 'var(--text-muted)' }}>Ingen bemanning registrert denne uka.</div>}
-        </>
-      )}
+        );
+      })}
     </>
   );
 }
@@ -365,7 +451,46 @@ function HmsRutiner({ ids, onTilbake }) {
   );
 }
 
-export default function KsAnsattflate({ token }) {
+// Oppdrag 11G: «Legg til på hjemskjerm» — dynamisk manifest (Android/Chrome
+// bruker start_url = ansattens lenke) + hint-kort første gang.
+function settOppHjemskjerm(token) {
+  try {
+    if (document.getElementById('ksf-manifest')) return;
+    const manifest = {
+      name: 'FBS Ansatt', short_name: 'FBS', display: 'standalone',
+      start_url: window.location.origin + '/ks/' + token,
+      background_color: '#f4f6f9', theme_color: '#185FA5',
+      icons: [{ src: window.location.origin + '/favicon.svg', sizes: 'any', type: 'image/svg+xml' }],
+    };
+    const url = URL.createObjectURL(new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' }));
+    const l = document.createElement('link'); l.id = 'ksf-manifest'; l.rel = 'manifest'; l.href = url;
+    document.head.appendChild(l);
+    const m = document.createElement('meta'); m.name = 'apple-mobile-web-app-capable'; m.content = 'yes';
+    document.head.appendChild(m);
+  } catch { /* hjemskjerm-støtte er best-effort */ }
+}
+
+function HjemskjermHint() {
+  const [skjult, setSkjult] = useState(() => {
+    try { return localStorage.getItem('fbs_ks_hjemskjerm_hint') === 'vist'; } catch { return true; }
+  });
+  if (skjult || window.matchMedia?.('(display-mode: standalone)')?.matches) return null;
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  return (
+    <div className="ksf-kort" style={{ background: '#eff6ff', border: '1px solid #bfdbfe', fontSize: 12.5 }}>
+      <b>Tips: legg meg på hjemskjermen!</b>{' '}
+      {ios
+        ? 'Trykk del-knappen (firkant med pil) nederst i Safari og velg «Legg til på Hjem-skjerm».'
+        : 'Trykk ⋮-menyen i nettleseren og velg «Legg til på startsiden».'}
+      <button className="ksf-lenkeknapp" style={{ marginLeft: 8 }}
+        onClick={() => { try { localStorage.setItem('fbs_ks_hjemskjerm_hint', 'vist'); } catch { /* noop */ } setSkjult(true); }}>
+        Skjønner
+      </button>
+    </div>
+  );
+}
+
+export default function KsAnsattflate({ token, somAnsatt = null }) {
   const [data, setData] = useState(null);
   const [feil, setFeil] = useState(null);
   const [laster, setLaster] = useState(true);
@@ -374,14 +499,23 @@ export default function KsAnsattflate({ token }) {
 
   const hent = useCallback(async () => {
     setLaster(true);
-    const r = await api('GET', token);
+    const r = await api('GET', token, null, 0, somAnsatt);
     setLaster(false);
     // Godta kun svar med kjent form — alt annet (proxy-HTML, nettverksfeil,
     // tomme svar) vises som feil i stedet for å krasje flaten.
     if (r.data && (r.data.maaVerifisere || Array.isArray(r.data.prosjekter))) { setFeil(null); setData(r.data); }
     else setFeil((r.data && r.data.error) || 'Fikk ikke kontakt — sjekk nettet og prøv igjen.');
-  }, [token]);
+  }, [token, somAnsatt]);
   useEffect(() => { hent(); }, [hent]);
+  useEffect(() => { if (token && !somAnsatt) settOppHjemskjerm(token); }, [token, somAnsatt]);
+
+  // Oppdrag 11H: anleggsleder-handling → server → friske data
+  async function alHandling(handling, felter) {
+    if (somAnsatt) return; // forhåndsvisning er kun lesing
+    const r = await api('POST', token, { handling, ...felter });
+    if (!r.ok) { window.alert(r.data.error || 'Fikk ikke lagret — prøv igjen.'); return; }
+    await hent();
+  }
 
   async function endrePunkt(sjekklisteId, punktId, felter) {
     const r = felter.__bilde
@@ -410,11 +544,18 @@ export default function KsAnsattflate({ token }) {
   }
 
   const topp = (
-    <header className="ksf-topp">
-      <span className="ksf-logo">FBS</span>
-      <span className="ksf-topp-tittel"><Ikon ikon={HardHat} size={16} /> KS-sjekklister</span>
-      <button className="ksf-oppdater" onClick={hent} title="Oppdater"><Ikon ikon={RefreshCw} size={15} /></button>
-    </header>
+    <>
+      <header className="ksf-topp">
+        <span className="ksf-logo">FBS</span>
+        <span className="ksf-topp-tittel"><Ikon ikon={HardHat} size={16} /> {somAnsatt ? 'Ansattflaten' : 'KS-sjekklister'}</span>
+        <button className="ksf-oppdater" onClick={hent} title="Oppdater"><Ikon ikon={RefreshCw} size={15} /></button>
+      </header>
+      {somAnsatt && (
+        <div style={{ background: '#c2410c', color: '#fff', fontSize: 12.5, fontWeight: 600, padding: '6px 14px', textAlign: 'center' }}>
+          FORHÅNDSVISNING — slik ser {data?.navn || 'den ansatte'} flaten (kun lesing)
+        </div>
+      )}
+    </>
   );
 
   if (feil) return <div className="ksf">{topp}<div className="ksf-kort ksf-feilkort"><Ikon ikon={TriangleAlert} size={28} farge="var(--warning)" /><p>{feil}</p><button className="ksf-knapp ksf-knapp--primar" onClick={hent}>Prøv igjen</button></div></div>;
@@ -445,10 +586,10 @@ export default function KsAnsattflate({ token }) {
   );
 
   if (fane === 'framdrift') {
-    return <div className="ksf ksf--medMeny">{topp}<div className="ksf-hilsen">Hei {data.fornavn}!</div><FramdriftFane prosjekter={data.prosjekter || []} />{bunnmeny}</div>;
+    return <div className="ksf ksf--medMeny">{topp}<div className="ksf-hilsen">Hei {data.fornavn}!</div><FramdriftFane prosjekter={data.prosjekter || []} erAL={!!data.erAnleggsleder && !somAnsatt} onAL={alHandling} />{bunnmeny}</div>;
   }
   if (fane === 'bemanning') {
-    return <div className="ksf ksf--medMeny">{topp}<BemanningFane token={token} />{bunnmeny}</div>;
+    return <div className="ksf ksf--medMeny">{topp}<BemanningFane token={token} somAnsatt={somAnsatt} />{bunnmeny}</div>;
   }
   if (fane === 'rutiner') {
     return <div className="ksf ksf--medMeny">{topp}<HmsRutiner ids={hmsIds} onTilbake={null} />{bunnmeny}</div>;
@@ -468,10 +609,10 @@ export default function KsAnsattflate({ token }) {
           {aktiv.levert && <div className="ksf-levert"><Ikon ikon={CircleCheck} size={14} /> Levert — skrivebeskyttet</div>}
         </div>
         {aktiv.punkter.map(p => (
-          <Punkt key={p.id} punkt={p} laast={aktiv.levert}
+          <Punkt key={p.id} punkt={p} laast={aktiv.levert || !!somAnsatt || aktiv.min === false}
             onEndre={felter => endrePunkt(aktiv.id, p.id, felter)} />
         ))}
-        {!aktiv.levert && gjort === aktiv.punkter.length && aktiv.punkter.length > 0 && (
+        {!aktiv.levert && !somAnsatt && aktiv.min !== false && gjort === aktiv.punkter.length && aktiv.punkter.length > 0 && (
           <SignerOgLever navn={data.navn} onLever={navn => leverListe(aktiv.id, navn)} />
         )}
         <div className="ksf-fot">Alt lagres automatisk mens du fyller ut.</div>
@@ -480,29 +621,56 @@ export default function KsAnsattflate({ token }) {
     );
   }
 
+  const erAL = !!data.erAnleggsleder && !somAnsatt;
   return (
     <div className="ksf ksf--medMeny">
       {topp}
       <div className="ksf-hilsen">Hei {data.fornavn}!</div>
+      {!somAnsatt && <HjemskjermHint />}
       {(data.prosjekter || []).length === 0 && (
-        <div className="ksf-kort" style={{ color: 'var(--text-muted)' }}>Du står ikke på noen aktive prosjekter i bemanningsplanen akkurat nå.</div>
-      )}
-      {(data.prosjekter || []).map(p => (
-        <div key={p.id} className="ksf-kort">
-          <div className="ksf-prosjekt-navn"><Ikon ikon={Building2} size={15} /> {p.navn}</div>
-          {p.sjekklister.length === 0 && <div className="ksf-tom">Ingen sjekklister tildelt deg her ennå.</div>}
-          {p.sjekklister.map(sl => {
-            const gjort = sl.punkter.filter(x => x.status === 'ok' || x.status === 'ikke-aktuelt').length;
-            return (
-              <button key={sl.id} className="ksf-sl-rad" onClick={() => setValgt({ prosjektId: p.id, sjekklisteId: sl.id })}>
-                <span className="ksf-sl-rad-navn">{sl.navn}</span>
-                <span className={`ksf-badge ksf-badge--${sl.status}`}>{sl.levert ? 'Levert' : STATUS_TEKST[sl.status] || sl.status}</span>
-                <span className="ksf-sl-rad-teller">{gjort}/{sl.punkter.length}</span>
-              </button>
-            );
-          })}
+        <div className="ksf-kort" style={{ color: 'var(--text-muted)' }}>
+          Du er ikke satt opp på noen prosjekter ennå, og ingen sjekklister er
+          tildelt deg — spør prosjektlederen din. Rutinene finner du i
+          Rutiner-fanen nederst.
         </div>
-      ))}
+      )}
+      {(data.prosjekter || []).map(p => {
+        // Vanlige ansatte ser egne lister; AL ser alle på prosjektet (for tildeling)
+        const lister = p.sjekklister.filter(sl => sl.min !== false || erAL);
+        return (
+          <div key={p.id} className="ksf-kort">
+            <div className="ksf-prosjekt-navn"><Ikon ikon={Building2} size={15} /> {p.navn}</div>
+            {lister.length === 0 && <div className="ksf-tom">Ingen sjekklister er tildelt deg her ennå.</div>}
+            {lister.map(sl => {
+              const gjort = sl.punkter.filter(x => x.status === 'ok' || x.status === 'ikke-aktuelt').length;
+              return (
+                <div key={sl.id} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button className="ksf-sl-rad" style={{ flex: 1, minWidth: 0 }} onClick={() => setValgt({ prosjektId: p.id, sjekklisteId: sl.id })}>
+                    <span className="ksf-sl-rad-navn">{sl.navn}{erAL && sl.min === false && (sl.ansvarlig || []).length > 0 && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>({(sl.ansvarlig || []).map(n => n.split(' ')[0]).join(', ')})</span>}</span>
+                    <span className={`ksf-badge ksf-badge--${sl.status}`}>{sl.levert ? 'Levert' : STATUS_TEKST[sl.status] || sl.status}</span>
+                    <span className="ksf-sl-rad-teller">{gjort}/{sl.punkter.length}</span>
+                  </button>
+                  {erAL && !sl.levert && (
+                    <button className="ksf-lenkeknapp" title="Tildel ansvarlige fra laget"
+                      onClick={() => {
+                        const lag = p.lag || [];
+                        if (!lag.length) { window.alert('Ingen er bemannet på prosjektet ennå.'); return; }
+                        const naa = new Set(sl.ansvarlig || []);
+                        const valg = lag.map((a, i) => `${naa.has(a.navn) ? '✓' : ' '} ${i + 1}. ${a.navn}${a.fag ? ' (' + a.fag + ')' : ''}`).join('\n');
+                        const svar = window.prompt('Hvem er ansvarlige for «' + sl.navn + '»?\nSkriv numrene atskilt med komma (tom = fjern alle):\n\n' + valg);
+                        if (svar === null) return;
+                        const idx = svar.split(',').map(s => parseInt(s.trim(), 10) - 1).filter(i => i >= 0 && i < lag.length);
+                        alHandling('sjekkliste-ansvarlig', { sjekklisteId: sl.id, navnListe: idx.map(i => lag[i].navn) });
+                      }}>
+                      Tildel
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })}
       <div className="ksf-fot">Din personlige lenke — ikke del den med andre. Trenger du ny? Spør prosjektleder.</div>
       {bunnmeny}
     </div>

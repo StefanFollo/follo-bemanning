@@ -96,3 +96,11 @@
 }
 .ksf-fane--aktiv { color: #185FA5; }
 .ksf-fane--aktiv span { font-weight: 700; }
+
+/* ── Oppdrag 11F: stor, tydelig bilde-knapp per punkt ── */
+.ksf-bildeknapp {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 600; color: #185FA5;
+  background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px;
+  padding: 8px 14px; min-height: 38px;
+}

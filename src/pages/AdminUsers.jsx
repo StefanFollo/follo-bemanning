@@ -27,7 +27,8 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ email: '', navn: '', role: 'ansatt', ansattId: '' });
+  // Oppdrag 11G: standardrolle er ikke lenger 'ansatt' — de bruker KS-lenken
+  const [form, setForm] = useState({ email: '', navn: '', role: 'befaring', ansattId: '' });
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
   const [inviteUrl, setInviteUrl] = useState('');
@@ -181,7 +182,7 @@ export default function AdminUsers() {
       if (!res.ok) throw new Error(data.error);
       setSaveMsg(data.emailSent ? 'Invitasjon sendt på e-post!' : 'Bruker opprettet.');
       if (data.inviteUrl) setInviteUrl(data.inviteUrl);
-      setForm({ email: '', navn: '', role: 'ansatt', ansattId: '' });
+      setForm({ email: '', navn: '', role: 'befaring', ansattId: '' });
       setShowForm(false);
       await loadUsers();
     } catch (e) {
@@ -270,7 +271,7 @@ export default function AdminUsers() {
   async function inviterAnsatt(ansatt) {
     const epost = (ansatt.epost || '').trim();
     if (!epost) return;
-    const rolle = ansattRoller[ansatt.id] || 'ansatt';
+    const rolle = ansattRoller[ansatt.id] || 'befaring';
     setInviterer(ansatt.id);
     setSaveMsg('');
     setInviteUrl('');
@@ -366,7 +367,10 @@ export default function AdminUsers() {
               <div className="form-group">
                 <label>Rolle *</label>
                 <select value={form.role} onChange={e => setForm(f => ({ ...f, role: e.target.value }))}>
-                  <option value="ansatt">Ansatt – kun lesetilgang (Bemanningsplan)</option>
+                  {/* Oppdrag 11G: «Ansatt»-rollen tilbys IKKE lenger for nye —
+                      ansatte bruker den personlige KS-lenken (eksisterende
+                      ansatt-kontoer beholdes og vises fortsatt i lista) */}
+                  {form.role === 'ansatt' && <option value="ansatt">Ansatt – kun lesetilgang (utgått — bruk KS-lenke)</option>}
                   <option value="befaring">Befaring / Service – befaring, service og reklamasjon</option>
                   <option value="kontor">Kontor – alt unntatt Bemanningsplan</option>
                   <option value="rorlegger">Rørlegger – kun Rørlegger-siden</option>
@@ -431,11 +435,10 @@ export default function AdminUsers() {
                           <div style={{ fontSize: 12, color: '#6b7280' }}>{a.epost}{a.fag ? ` · ${a.fag}` : ''}</div>
                         </div>
                         <select
-                          value={ansattRoller[a.id] || 'ansatt'}
+                          value={ansattRoller[a.id] || 'befaring'}
                           onChange={e => setAnsattRoller(r => ({ ...r, [a.id]: e.target.value }))}
                           disabled={sendt}
                           style={{ fontSize: 13, padding: '5px 8px', borderRadius: 6, border: '1px solid #e5e7eb', flexShrink: 0 }}>
-                          <option value="ansatt">Ansatt</option>
                           <option value="befaring">Befaring / Service</option>
                           <option value="kontor">Kontor</option>
                           <option value="rorlegger">Rørlegger</option>

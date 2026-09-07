@@ -416,6 +416,10 @@ export default function Ansatte() {
                   <Ikon ikon={HardHat} size={15} />
 
                 </button>
+                <button className="btn-icon" title={`Se flaten som ${a.navn} (forhåndsvisning, kun lesing)`}
+                  onClick={() => window.open('/?ksForhandsvisning=' + encodeURIComponent(a.id), '_blank', 'noopener')}>
+                  <Ikon ikon={Smartphone} size={15} />
+                </button>
                 <button className="btn btn-sm" style={{ color: 'var(--warning)' }} onClick={() => arkiverAnsatt(a)}>Arkiver</button>
               </div>
             </div>

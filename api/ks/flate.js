@@ -14,6 +14,7 @@
 import { Redis } from '@upstash/redis'
 import { put } from '@vercel/blob'
 import { byggInterneFaser } from '../../src/framdriftEksport.js'
+import { appendAuditLog, byggAuditEntry } from '../_dataIntegritet.js'
 
 const redis = new Redis({ url: process.env.KV_REST_API_URL, token: process.env.KV_REST_API_TOKEN })
 
@@ -88,6 +89,35 @@ async function hentSkrivbarSjekkliste(res, sjekklisteId, ansatt) {
   return { alle, idx, sl }
 }
 
+// Oppdrag 11G: 4-siffer-bekreftelsen er bundet til ENHETEN. En videresendt
+// lenke er ubrukelig uten telefonnummerets 4 siste siffer på den nye enheten.
+// (info.verifisert beholdes som «minst én enhet bekreftet» for status-API-et.)
+function enhetOk(info, enhetsId) {
+  return !!(enhetsId && info.enheter && info.enheter[enhetsId])
+}
+
+// Oppdrag 11F: PL-forhåndsvisning — admin/kontor kan se flaten som en gitt
+// ansatt (kun GET, ingen skriving, sistApnet røres ikke).
+async function forhandsvisningsSesjon(req) {
+  const token = (req.headers.authorization || '').replace('Bearer ', '').trim()
+  if (!token) return null
+  const session = await redis.get(`fbs_session:${token}`)
+  return session && ['admin', 'kontor'].includes(session.role) ? session : null
+}
+
+// Oppdrag 11H: anleggsleder-modus — fag «Anleggsleder» på ansattkortet gir
+// tildelingsrett i flaten på prosjekter ansatt selv står på.
+function erAnleggsleder(ansatt) {
+  return normNavn(ansatt.fag) === 'anleggsleder'
+}
+
+// PL-oppslag (navn + telefon — ansatte skal kunne ringe SIN prosjektleder;
+// aldri kontaktinfo til andre kolleger)
+function plForState(state, p) {
+  const pl = p.prosjektlederId ? (state.ansatte || []).find(a => a && a.id === p.prosjektlederId && !a.arkivert) : null
+  return pl ? { navn: pl.navn, telefon: pl.telefon || null } : null
+}
+
 async function hentTokenInfo(token) {
   if (!token || !/^[a-f0-9]{32,64}$/.test(token)) return null
   const tokens = (await redis.get(TOKENS_NOKKEL)) || {}
@@ -101,18 +131,32 @@ export default async function handler(req, res) {
   }
 
   const token = String((req.method === 'GET' ? (req.query || {}).token : (req.body || {}).token) || '').trim()
-  const funn = await hentTokenInfo(token)
-  // Samme svar for ukjent og utgått token — ingen opplisting/probing
-  if (!funn) return res.status(404).json({ utlopt: true, error: 'Lenken er utløpt eller ugyldig. Kontakt din prosjektleder for ny lenke.' })
-  const { tokens, info } = funn
+  const enhetsId = String((req.method === 'GET' ? (req.query || {}).enhet : (req.body || {}).enhet) || '').trim().slice(0, 64)
 
+  // ── Oppdrag 11F: PL-forhåndsvisning (?somAnsatt=<id>, admin/kontor-sesjon,
+  // KUN GET — flaten bygges for den ansatte uten token og uten skriving) ──
+  const somAnsatt = req.method === 'GET' ? String((req.query || {}).somAnsatt || '').trim() : ''
+  let tokens = null, info = null, forhandsvisning = false
   const state = (await redis.get('fbs_state')) || {}
-  const ansatt = (state.ansatte || []).find(a => a && a.id === info.ansattId)
+  let ansatt
+  if (somAnsatt) {
+    const session = await forhandsvisningsSesjon(req)
+    if (!session) return res.status(401).json({ error: 'Forhåndsvisning krever admin/kontor-innlogging' })
+    ansatt = (state.ansatte || []).find(a => a && a.id === somAnsatt)
+    if (!ansatt || ansatt.arkivert) return res.status(404).json({ error: 'Ansatt ikke funnet' })
+    forhandsvisning = true
+  } else {
+    const funn = await hentTokenInfo(token)
+    // Samme svar for ukjent og utgått token — ingen opplisting/probing
+    if (!funn) return res.status(404).json({ utlopt: true, error: 'Lenken er utløpt eller ugyldig. Kontakt din prosjektleder for ny lenke.' })
+    tokens = funn.tokens; info = funn.info
+    ansatt = (state.ansatte || []).find(a => a && a.id === info.ansattId)
+  }
   // Arkivert/slettet ansatt → lenken er død (spec §1)
   if (!ansatt || ansatt.arkivert) {
     return res.status(404).json({ utlopt: true, error: 'Lenken er utløpt eller ugyldig. Kontakt din prosjektleder for ny lenke.' })
   }
-  if (info.sperret) {
+  if (info && info.sperret) {
     return res.status(423).json({ sperret: true, error: 'Lenken er sperret etter for mange feilforsøk. Be prosjektleder sende deg en ny.' })
   }
 
@@ -142,13 +186,22 @@ export default async function handler(req, res) {
       info.verifisert = true
       info.feilForsok = 0
       info.verifisertDato = new Date().toISOString()
+      // Oppdrag 11G: bind bekreftelsen til ENHETEN — ny telefon krever ny
+      // 4-siffer-bekreftelse (maks 10 enheter, eldste ryddes)
+      if (enhetsId) {
+        const enheter = info.enheter || {}
+        enheter[enhetsId] = { verifisert: new Date().toISOString() }
+        const nokler = Object.keys(enheter)
+        if (nokler.length > 10) delete enheter[nokler[0]]
+        info.enheter = enheter
+      }
       tokens[token] = info
       await redis.set(TOKENS_NOKKEL, tokens)
       return res.status(200).json({ ok: true, verifisert: true })
     }
 
     if (handling === 'punkt') {
-      if (!info.verifisert) return res.status(401).json({ maaVerifisere: true, error: 'Bekreft med de 4 siste sifrene i telefonnummeret ditt først.' })
+      if (!enhetOk(info, enhetsId)) return res.status(401).json({ maaVerifisere: true, error: 'Bekreft med de 4 siste sifrene i telefonnummeret ditt først.' })
       const { sjekklisteId, punktId, status, kommentar } = body || {}
       if (!sjekklisteId || !punktId) return res.status(400).json({ error: 'Mangler sjekklisteId eller punktId' })
       if (status !== undefined && !GYLDIGE_STATUSER.includes(status)) {
@@ -184,7 +237,7 @@ export default async function handler(req, res) {
 
     // ── PR2: bilde per punkt (klient-komprimert dataURL → Vercel Blob) ──
     if (handling === 'bilde') {
-      if (!info.verifisert) return res.status(401).json({ maaVerifisere: true, error: 'Bekreft med de 4 siste sifrene i telefonnummeret ditt først.' })
+      if (!enhetOk(info, enhetsId)) return res.status(401).json({ maaVerifisere: true, error: 'Bekreft med de 4 siste sifrene i telefonnummeret ditt først.' })
       const { sjekklisteId, punktId, bildeData } = body || {}
       if (!sjekklisteId || !punktId || !bildeData) return res.status(400).json({ error: 'Mangler sjekklisteId, punktId eller bildeData' })
       if (!process.env.BLOB_READ_WRITE_TOKEN) return res.status(503).json({ error: 'Bildelagring er ikke konfigurert (BLOB_READ_WRITE_TOKEN mangler).' })
@@ -217,7 +270,7 @@ export default async function handler(req, res) {
 
     // ── PR2: «Signer og lever» — låser lista for den ansatte ──
     if (handling === 'lever') {
-      if (!info.verifisert) return res.status(401).json({ maaVerifisere: true, error: 'Bekreft med de 4 siste sifrene i telefonnummeret ditt først.' })
+      if (!enhetOk(info, enhetsId)) return res.status(401).json({ maaVerifisere: true, error: 'Bekreft med de 4 siste sifrene i telefonnummeret ditt først.' })
       const { sjekklisteId } = body || {}
       if (!sjekklisteId) return res.status(400).json({ error: 'Mangler sjekklisteId' })
       const funn4 = await hentSkrivbarSjekkliste(res, sjekklisteId, ansatt)
@@ -234,102 +287,190 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, levert: true, signert_av: navn, signert_dato: naa })
     }
 
+    // ── Oppdrag 11H: anleggsleder-handlinger — fase-tildeling på eget prosjekt.
+    // Krav: fag «Anleggsleder», bemannet på prosjektet, enhet verifisert.
+    // Skriver fbs_state.prosjekter med _endret-stempel (samme flette-semantikk
+    // som en annen klient) + auditlogg — reversibelt, ingenting slettes.
+    if (['fase-tildel', 'fase-tekst', 'fase-ferdig'].includes(handling)) {
+      if (!enhetOk(info, enhetsId)) return res.status(401).json({ maaVerifisere: true, error: 'Bekreft med de 4 siste sifrene i telefonnummeret ditt først.' })
+      if (!erAnleggsleder(ansatt)) return res.status(403).json({ error: 'Kun anleggsleder kan tildele oppgaver' })
+      const { prosjektId, faseId } = body || {}
+      const iDagN = iDagIso()
+      const staarPaa = (state.tildelinger || []).some(t => t && t.ansattId === ansatt.id && t.prosjektId === prosjektId && (t.sluttDato || '9999') >= iDagN)
+      if (!staarPaa) return res.status(403).json({ error: 'Du står ikke på dette prosjektet' })
+      const pIdx2 = (state.prosjekter || []).findIndex(p => p && p.id === prosjektId)
+      if (pIdx2 < 0) return res.status(404).json({ error: 'Prosjektet finnes ikke' })
+      const prosjekt = state.prosjekter[pIdx2]
+      const fIdx = (prosjekt.fdTasks || []).findIndex(t => t && t.id === faseId)
+      if (fIdx < 0) return res.status(404).json({ error: 'Fasen finnes ikke' })
+      const fase = { ...prosjekt.fdTasks[fIdx] }
+      let loggTekst = ''
+      if (handling === 'fase-tildel') {
+        // Kun folk fra laget (bemannet på prosjektet) kan tildeles
+        const lagIds = new Set((state.tildelinger || []).filter(t => t && t.prosjektId === prosjektId && t.prosjektId !== '__FERIE__' && (t.sluttDato || '9999') >= iDagN).map(t => t.ansattId))
+        const onsket = Array.isArray(body.ansattIds) ? body.ansattIds.filter(id => lagIds.has(id)) : []
+        loggTekst = `Tildelte fasen «${fase.name}» til ${onsket.length} person(er)`
+        fase.tildelt = onsket
+      } else if (handling === 'fase-tekst') {
+        fase.oppgaveTekst = String(body.tekst || '').slice(0, 300)
+        loggTekst = `Oppgavetekst på «${fase.name}»: ${fase.oppgaveTekst || '(tom)'}`
+      } else {
+        fase.pct = body.ferdig ? 100 : 0
+        loggTekst = `Fasen «${fase.name}» markert ${body.ferdig ? 'FERDIG' : 'ikke ferdig'}`
+      }
+      const nyeTasks = prosjekt.fdTasks.map((t, i) => (i === fIdx ? fase : t))
+      state.prosjekter[pIdx2] = { ...prosjekt, fdTasks: nyeTasks, _endret: Math.max(Date.now(), (prosjekt._endret || 0) + 1) }
+      await redis.set('fbs_state', state)
+      try {
+        await appendAuditLog(redis, byggAuditEntry({
+          objekt: 'prosjekt', objektId: prosjektId, felt: 'framdriftsplan',
+          fraVerdi: null, tilVerdi: loggTekst, endretAv: ansatt.navn, kilde: 'ansattflate-anleggsleder',
+        }))
+      } catch { /* logg-feil stopper ikke handlingen */ }
+      return res.status(200).json({ ok: true, fase: { id: fase.id, tildelt: fase.tildelt || [], oppgaveTekst: fase.oppgaveTekst || '', ferdig: (fase.pct || 0) >= 100 } })
+    }
+
+    // AL: sett ansvarlige på en sjekkliste i eget prosjekt (samme modell som
+    // KS-fanens TildelModal — ansvarlig er NAVN-liste; levert liste er låst)
+    if (handling === 'sjekkliste-ansvarlig') {
+      if (!enhetOk(info, enhetsId)) return res.status(401).json({ maaVerifisere: true, error: 'Bekreft med de 4 siste sifrene i telefonnummeret ditt først.' })
+      if (!erAnleggsleder(ansatt)) return res.status(403).json({ error: 'Kun anleggsleder kan tildele sjekklister' })
+      const { sjekklisteId, navnListe } = body || {}
+      const alle = (await redis.get('fbs_ks_sjekklister')) || []
+      const idx = alle.findIndex(s => s && s.id === sjekklisteId)
+      if (idx < 0) return res.status(404).json({ error: 'Sjekklisten finnes ikke' })
+      const sl = alle[idx]
+      const iDagN = iDagIso()
+      const staarPaa = (state.tildelinger || []).some(t => t && t.ansattId === ansatt.id && t.prosjektId === sl.prosjektId && (t.sluttDato || '9999') >= iDagN)
+      if (!staarPaa) return res.status(403).json({ error: 'Du står ikke på dette prosjektet' })
+      if (sl.signert_av || sl.levert_dato) return res.status(409).json({ laast: true, error: 'Sjekklisten er levert og kan ikke endres.' })
+      const lagNavn = new Set((state.tildelinger || []).filter(t => t && t.prosjektId === sl.prosjektId && t.prosjektId !== '__FERIE__' && (t.sluttDato || '9999') >= iDagN)
+        .map(t => (state.ansatte || []).find(a => a && a.id === t.ansattId)).filter(a => a && !a.arkivert).map(a => a.navn))
+      const ansvarlig = (Array.isArray(navnListe) ? navnListe : []).map(n => String(n)).filter(n => lagNavn.has(n))
+      alle[idx] = { ...sl, ansvarlig }
+      await redis.set('fbs_ks_sjekklister', alle)
+      await loggHistorikk({ dato: new Date().toISOString(), ansattId: ansatt.id, navn: ansatt.navn, kilde: 'ansattflate-anleggsleder',
+        sjekklisteId, prosjektId: sl.prosjektId, handling: 'tildelt-ansvarlige', ansvarlig })
+      return res.status(200).json({ ok: true, ansvarlig })
+    }
+
     return res.status(400).json({ error: 'Ukjent handling' })
   }
 
   if (req.method !== 'GET') return res.status(405).end()
 
   // ── GET: flate-data ──
-  info.sistApnet = new Date().toISOString()
-  tokens[token] = info
-  await redis.set(TOKENS_NOKKEL, tokens)
-
-  if (!info.verifisert) return res.status(200).json({ maaVerifisere: true, fornavn })
+  if (!forhandsvisning) {
+    info.sistApnet = new Date().toISOString()
+    tokens[token] = info
+    await redis.set(TOKENS_NOKKEL, tokens)
+    if (!enhetOk(info, enhetsId)) return res.status(200).json({ maaVerifisere: true, fornavn })
+  }
 
   const iDag = iDagIso()
 
-  // ── Oppdrag 11E: Bemanning-fanen — egen gren (?bemanningUke=<offset>) ──
-  // Samme innhold som lesetilgang-rollen ser i appen, MEN med personvern-vern:
-  // andres FERIE-tildelinger utelates helt (de fremstår kun som «ikke satt
-  // opp»), sykmelding/fraværsårsak finnes ikke i svaret, og kolleger vises
-  // kun med navn — aldri telefon/e-post.
-  if ((req.query || {}).bemanningUke !== undefined) {
-    const offset = Math.max(-1, Math.min(8, parseInt(req.query.bemanningUke, 10) || 0))
+  // ── Oppdrag 11E (PRESISERT 07.09): «Din uke» + «Mitt lag» — IKKE hele
+  // firmaets plan. Egne oppdrag denne + 2 neste uker (dag, prosjekt, adresse,
+  // PL + tel:), og laget = kollegene på SAMME prosjekt SAMME dag (navn + fag,
+  // aldri telefon/e-post). ALDRI sykmelding/fravær om andre; andres ferie
+  // finnes ikke i svaret. Egen ferie vises på egen rad. ──
+  if ((req.query || {}).dinUke !== undefined) {
     const iDagD = new Date(iDag + 'T12:00:00Z')
     const mandag = new Date(iDagD)
-    mandag.setUTCDate(mandag.getUTCDate() - ((mandag.getUTCDay() + 6) % 7) + offset * 7)
-    const dager = Array.from({ length: 7 }, (_, i) => {
+    mandag.setUTCDate(mandag.getUTCDate() - ((mandag.getUTCDay() + 6) % 7))
+    const dager = Array.from({ length: 21 }, (_, i) => {
       const d = new Date(mandag); d.setUTCDate(d.getUTCDate() + i)
       return d.toISOString().slice(0, 10)
     })
-    const ukeStart = dager[0], ukeSlutt = dager[6]
-    const overlapper = t => (t.startDato || '0000') <= ukeSlutt && (t.sluttDato || '9999') >= ukeStart
-    const ansattNavn = {}
-    for (const a of state.ansatte || []) if (a && !a.arkivert) ansattNavn[a.id] = a.navn
-    const dagerFor = t => dager.map(d => (t.startDato || '0000') <= d && (t.sluttDato || '9999') >= d)
-
-    const prosjekter = (state.prosjekter || [])
-      .filter(p => p && !p.arkivert && !['fullfort', 'arkivert'].includes(String(p.status || '')))
-      .map(p => {
-        const rader = (state.tildelinger || [])
-          .filter(t => t && t.prosjektId === p.id && t.prosjektId !== '__FERIE__' && overlapper(t) && ansattNavn[t.ansattId])
-          .map(t => ({ navn: ansattNavn[t.ansattId], erDeg: t.ansattId === ansatt.id, dager: dagerFor(t) }))
-        return rader.length ? { navn: p.navn || p.adresse || 'Prosjekt', rader } : null
-      })
-      .filter(Boolean)
-      .sort((a, b) => (b.rader.some(r => r.erDeg) ? 1 : 0) - (a.rader.some(r => r.erDeg) ? 1 : 0))
-
-    // «Din uke»: egen rad per dag — prosjektnavn, egen ferie, eller ikke satt opp
-    const dinUke = dager.map(d => {
+    const ansattVed = id => (state.ansatte || []).find(a => a && a.id === id && !a.arkivert)
+    const pVed = id => (state.prosjekter || []).find(x => x && x.id === id)
+    const dagListe = dager.map(dato => {
       const mine = (state.tildelinger || []).filter(t => t && t.ansattId === ansatt.id
-        && (t.startDato || '0000') <= d && (t.sluttDato || '9999') >= d)
-      const ferie = mine.find(t => t.prosjektId === '__FERIE__')
-      if (ferie) return { dato: d, tekst: 'Ferie / fri' }
-      const jobb = mine.find(t => t.prosjektId !== '__FERIE__')
-      if (!jobb) return { dato: d, tekst: null }
-      const p = (state.prosjekter || []).find(x => x && x.id === jobb.prosjektId)
-      return { dato: d, tekst: (p && (p.navn || p.adresse)) || 'Prosjekt' }
+        && (t.startDato || '0000') <= dato && (t.sluttDato || '9999') >= dato)
+      const egenFerie = mine.some(t => t.prosjektId === '__FERIE__')
+      const oppdrag = mine.filter(t => t.prosjektId !== '__FERIE__').map(t => {
+        const p = pVed(t.prosjektId)
+        if (!p || p.arkivert) return null
+        const pl = plForState(state, p)
+        // «Mitt lag»: kollegene på samme prosjekt samme dag — navn + fag
+        const lag = (state.tildelinger || [])
+          .filter(k => k && k.prosjektId === t.prosjektId && k.ansattId !== ansatt.id && k.prosjektId !== '__FERIE__'
+            && (k.startDato || '0000') <= dato && (k.sluttDato || '9999') >= dato)
+          .map(k => ansattVed(k.ansattId)).filter(Boolean)
+          .map(a => ({ navn: a.navn, fag: a.fag || '' }))
+        // Oppdrag 11H: oppgaver anleggsleder har satt deg på — vises den dagen
+        // fasen pågår («Tommy har satt deg på: …»)
+        const faserDenneDagen = byggInterneFaser(p, { iDag: dato }) || []
+        const oppgaver = (p.fdTasks || [])
+          .map((f, i) => (f && Array.isArray(f.tildelt) && f.tildelt.includes(ansatt.id) && faserDenneDagen[i]?.pagarNa)
+            ? { fase: f.name || 'Fase', tekst: f.oppgaveTekst || '' } : null)
+          .filter(Boolean)
+        return { prosjekt: p.navn || p.adresse || 'Prosjekt', adresse: p.adresse || '', plNavn: pl?.navn || null, plTelefon: pl?.telefon || null, lag, oppgaver }
+      }).filter(Boolean)
+      return { dato, egenFerie, oppdrag }
     })
-
-    return res.status(200).json({ bemanning: { ukeOffset: offset, dager, dinUke, prosjekter } })
+    return res.status(200).json({ dinUke: { dager: dagListe } })
   }
 
   const mineTildelinger = (state.tildelinger || []).filter(t => t && t.ansattId === ansatt.id && (t.sluttDato || '9999') >= iDag)
-  const prosjektIds = [...new Set(mineTildelinger.map(t => t.prosjektId))]
   const alleSjekklister = (await redis.get('fbs_ks_sjekklister')) || []
-  // Oppdrag 11A: PL-oppslag for Framdrift-fanen (navn + telefon — ansatte
-  // skal kunne ringe SIN prosjektleder; aldri kontaktinfo til andre kolleger)
-  const plFor = (p) => {
-    const pl = p.prosjektlederId ? (state.ansatte || []).find(a => a && a.id === p.prosjektlederId && !a.arkivert) : null
-    return pl ? { navn: pl.navn, telefon: pl.telefon || null } : null
-  }
+  // Oppdrag 11F: prosjektlisten er UNION av (bemannet på) ∪ (har tildelt
+  // sjekkliste på) — PL-er/anleggsledere står sjelden i bemanningen men får
+  // ofte lister tildelt på navn. En liste tildelt «Stefan» skal alltid vises.
+  const prosjektIds = [...new Set([
+    ...mineTildelinger.map(t => t.prosjektId),
+    ...alleSjekklister.filter(sl => sl && erAnsvarlig(sl, ansatt.navn) && !(sl.signert_av || sl.levert_dato)).map(sl => sl.prosjektId),
+  ])]
+  const al = erAnleggsleder(ansatt)
+  const navnFor = id => { const a = (state.ansatte || []).find(x => x && x.id === id && !x.arkivert); return a ? a.navn : null }
 
   const prosjekter = prosjektIds
     .map(pid => (state.prosjekter || []).find(p => p && p.id === pid))
     .filter(p => p && !p.arkivert)
-    .map(p => ({
-      id: p.id,
-      navn: p.navn || p.adresse || 'Prosjekt',
+    .map(p => {
       // Oppdrag 11A: intern framdriftsvisning — tittel/periode/status/pågår-nå,
       // aldri pct/fag/timer/priser. null = «Ingen framdriftsplan ennå».
-      adresse: p.adresse || '',
-      startDato: p.startDato || null,
-      sluttDato: p.sluttDato || null,
-      pl: plFor(p),
-      framdrift: byggInterneFaser(p, { iDag }),
-      sjekklister: alleSjekklister
-        .filter(sl => sl && sl.prosjektId === p.id && erAnsvarlig(sl, ansatt.navn))
-        .map(sl => ({
-          id: sl.id, navn: sl.navn, kategori: sl.kategori || '', gruppe: sl.gruppe || '', frist: sl.frist || null,
-          status: beregnStatus(sl.punkter), levert: !!(sl.signert_av || sl.levert_dato),
-          punkter: (sl.punkter || []).map(punktUt),
-        })),
-    }))
+      const framdrift = byggInterneFaser(p, { iDag })
+      // Oppdrag 11H: fase-id + tildelte (navn) + oppgavetekst + «deg»-markør
+      if (framdrift) framdrift.forEach((f, i) => {
+        const t = (p.fdTasks || [])[i] || {}
+        f.id = t.id || null
+        f.tildelt = (Array.isArray(t.tildelt) ? t.tildelt : []).map(navnFor).filter(Boolean)
+        f.tildeltIds = al ? (Array.isArray(t.tildelt) ? t.tildelt : []) : undefined
+        f.oppgaveTekst = t.oppgaveTekst || ''
+        f.deg = (Array.isArray(t.tildelt) ? t.tildelt : []).includes(ansatt.id)
+      })
+      // AL: laget (bemannede på prosjektet) til Tildel-velgeren — id/navn/fag
+      const lag = al ? (state.tildelinger || [])
+        .filter(t => t && t.prosjektId === p.id && t.prosjektId !== '__FERIE__' && (t.sluttDato || '9999') >= iDag)
+        .map(t => (state.ansatte || []).find(a => a && a.id === t.ansattId)).filter(a => a && !a.arkivert)
+        .filter((a, i, arr) => arr.findIndex(x => x.id === a.id) === i)
+        .map(a => ({ id: a.id, navn: a.navn, fag: a.fag || '' })) : undefined
+      return {
+        id: p.id,
+        navn: p.navn || p.adresse || 'Prosjekt',
+        adresse: p.adresse || '',
+        startDato: p.startDato || null,
+        sluttDato: p.sluttDato || null,
+        pl: plForState(state, p),
+        framdrift,
+        lag,
+        sjekklister: alleSjekklister
+          .filter(sl => sl && sl.prosjektId === p.id && (erAnsvarlig(sl, ansatt.navn) || al))
+          .map(sl => ({
+            id: sl.id, navn: sl.navn, kategori: sl.kategori || '', gruppe: sl.gruppe || '', frist: sl.frist || null,
+            status: beregnStatus(sl.punkter), levert: !!(sl.signert_av || sl.levert_dato),
+            ansvarlig: al ? (sl.ansvarlig || []) : undefined,
+            min: erAnsvarlig(sl, ansatt.navn),
+            punkter: (sl.punkter || []).map(punktUt),
+          })),
+      }
+    })
 
   // PR3: rutine-IDer admin/PL har flagget «Vis for ansatte» — innholdet
   // ligger i klient-bundlen (rutiner-holte), flaten viser kun disse IDene.
   const hmsRutiner = Array.isArray(state.rutinerForAnsatte)
     ? state.rutinerForAnsatte.filter(id => typeof id === 'string').slice(0, 500)
     : []
-  return res.status(200).json({ fornavn, navn: ansatt.navn, prosjekter, hmsRutiner })
+  return res.status(200).json({ fornavn, navn: ansatt.navn, prosjekter, hmsRutiner, erAnleggsleder: al, forhandsvisning: forhandsvisning || undefined })
 }
