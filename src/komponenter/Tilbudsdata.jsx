@@ -8,6 +8,18 @@ import { Ikon } from './Ikon';
 
 const TILBUDSAPP_URL = 'https://follo-befaring.vercel.app';
 
+// Oppdrag 17.2: fag-nøklene lagres uten æøå — VISNINGS-mapping (nøklene røres aldri)
+const FAG_VISNING = {
+  tomrer: 'Tømrer', ror: 'Rør', rorlegger: 'Rørlegger', pl: 'PL', flis: 'Flis',
+  maler: 'Maler', maling: 'Maling', parkett: 'Parkett', rive: 'Riving',
+  riving: 'Riving', elektriker: 'Elektriker', ventilasjon: 'Ventilasjon',
+  graving: 'Graving', mur: 'Mur', membran: 'Membran', annet: 'Annet',
+};
+export function fagNavn(nokkel) {
+  const k = String(nokkel || '').toLowerCase();
+  return FAG_VISNING[k] || (k.charAt(0).toUpperCase() + k.slice(1));
+}
+
 function fmtKr(n) {
   const tall = Number(n);
   if (!tall && tall !== 0) return null;
@@ -54,10 +66,28 @@ export function TilbudLenkeRad({ prosjekt }) {
           <Ikon ikon={Eye} size={15} /> Se kundesiden
         </a>
       )}
+      {/* Oppdrag 17.5: tilbudPdfUrl peker på /t/<token>/pdf — en rute som
+          IKKE finnes i tilbuds-appen (404). Til den er utrullet der, går
+          knappen til kundeportalen (intern=1) hvor tilbudet kan skrives ut
+          som PDF. Andre (ekte) pdf-URL-er brukes som de er. */}
       {pdfUrl && (
-        <a style={knappStil} href={pdfUrl} target="_blank" rel="noopener noreferrer">
-          <Ikon ikon={FileText} size={15} /> Åpne tilbud-PDF
-        </a>
+        /\/t\/[a-f0-9]+\/pdf$/i.test(pdfUrl) ? (
+          publicToken ? (
+            <a style={knappStil} href={`${TILBUDSAPP_URL}/t/${publicToken}?intern=1`} target="_blank" rel="noopener noreferrer"
+              title="PDF-ruten er ikke utrullet i tilbuds-appen ennå — åpner kundesiden, som kan skrives ut som PDF">
+              <Ikon ikon={FileText} size={15} /> Åpne tilbudet (skriv ut som PDF)
+            </a>
+          ) : (
+            <span style={{ ...knappStil, cursor: 'default', color: 'var(--text-muted)' }}
+              title="Tilbuds-appens PDF-lenke virker ikke ennå, og kundeside-token mangler">
+              <Ikon ikon={FileText} size={15} /> PDF ikke tilgjengelig ennå
+            </span>
+          )
+        ) : (
+          <a style={knappStil} href={pdfUrl} target="_blank" rel="noopener noreferrer">
+            <Ikon ikon={FileText} size={15} /> Åpne tilbud-PDF
+          </a>
+        )
       )}
       {tilbudLink && (
         <a style={knappStil} href={tilbudLink} target="_blank" rel="noopener noreferrer">
@@ -88,11 +118,21 @@ export default function TilbudsdataVisning({ prosjekt }) {
   const notater = tp.befaringsnotater || tp.notater || tp.notat || null;
   const kundeKommentar = tp.kundeKommentar || null;
 
+  // Oppdrag 17.3: tydelige summer — Tilbudssum eks./inkl. mva fra tilbudet;
+  // «Estimert sum» (gammelt manuelt felt) skjules når tilbudet finnes;
+  // kontraktssummen merkes med kilde og varsler ved avvik (tilbudet gjelder).
+  const tilbudInkl = (totalSum != null && totalSum > 0) ? totalSum : null;
+  const tilbudEks = (totalEksMva != null && totalEksMva > 0) ? totalEksMva
+    : (tilbudInkl ? Math.round(tilbudInkl / 1.25) : null);
+  const kontrakt = p.belop ? Number(p.belop) : null;
+  const kontraktFraTilbud = kontrakt != null && (kontrakt === tilbudInkl || kontrakt === tilbudEks);
+  const kontraktAvviker = kontrakt != null && tilbudInkl != null && !kontraktFraTilbud;
+
   const nokkeltall = [
-    totalSum != null && totalSum > 0 && ['Totalsum (inkl. mva)', fmtKr(totalSum)],
-    totalEksMva != null && totalEksMva > 0 && ['Sum eks. mva', fmtKr(totalEksMva)],
-    (p.estimertSum || tp.estimertSum) && ['Estimert sum', fmtKr(p.estimertSum || tp.estimertSum)],
-    p.belop && ['Kontraktssum i prosjektet', fmtKr(p.belop)],
+    tilbudInkl && ['Tilbudssum (inkl. mva)', fmtKr(tilbudInkl)],
+    tilbudEks && ['Tilbudssum (eks. mva)' + (totalEksMva ? '' : ' – beregnet'), fmtKr(tilbudEks)],
+    !tilbudInkl && (p.estimertSum || tp.estimertSum) && ['Estimert sum (manuelt anslag)', fmtKr(p.estimertSum || tp.estimertSum)],
+    kontrakt != null && ['Kontraktssum i prosjektet' + (kontraktFraTilbud ? ' (fra tilbudet)' : ' (manuelt felt)'), fmtKr(kontrakt)],
     totalTimer && ['Totale timer', fmtTimer(totalTimer)],
     (p.pristype || tp.pristype) && ['Pristype', p.pristype || tp.pristype],
     (p.oppstartTekst || kd.oppstart) && ['Oppstart', p.oppstartTekst || kd.oppstart],
@@ -119,6 +159,12 @@ export default function TilbudsdataVisning({ prosjekt }) {
               <span style={{ fontWeight: 500 }}>{verdi}</span>
             </div>
           ))}
+          {kontraktAvviker && (
+            <div style={{ fontSize: 12, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '5px 9px', marginTop: 6 }}>
+              Kontraktssummen ({fmtKr(kontrakt)}) avviker fra tilbudssummen ({fmtKr(tilbudInkl)} inkl. mva)
+              — tilbudet gjelder. Oppdater kontraktssummen i prosjektet om den er utdatert.
+            </div>
+          )}
         </Seksjon>
       )}
 
@@ -129,7 +175,7 @@ export default function TilbudsdataVisning({ prosjekt }) {
             const kr = typeof info === 'object' ? (info.kr ?? info.sum ?? info.belop) : null;
             return (
               <div key={fag} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid var(--bg-subtle)' }}>
-                <span style={{ textTransform: 'capitalize' }}>{fag}</span>
+                <span>{fagNavn(fag)}</span>
                 <span style={{ color: '#5d6b80' }}>
                   {[fmtTimer(timer), fmtKr(kr)].filter(Boolean).join(' · ') || String(info)}
                 </span>
@@ -141,21 +187,27 @@ export default function TilbudsdataVisning({ prosjekt }) {
 
       {poster.length > 0 && (
         <Seksjon tittel={`Poster (${poster.length})`}>
-          {poster.map((post, i) => (
+          {poster.map((post, i) => {
+            // Oppdrag 17.4: pris eks. mva per post — vises når tilbudsdataene
+            // faktisk bærer den (aldri beregnet: kalkyle-komponentene mangler
+            // rabatt/justering, så en utregnet sum ville avvike fra tilbudet)
+            const postPris = post.kalkyle?.totalPris ?? post.sum ?? post.sumEksMva ?? post.pris ?? post.kalkyle?.sum ?? post.kalkyle?.sumEksMva ?? null;
+            return (
             <div key={i} style={{ padding: '5px 0', borderBottom: '1px solid var(--bg-subtle)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                 <span>{post.navn || post.tittel || post.beskrivelse || `Post ${i + 1}`}</span>
-                {(post.kalkyle?.totalPris ?? post.sum) != null && (
-                  <span style={{ color: '#5d6b80', whiteSpace: 'nowrap' }}>{fmtKr(post.kalkyle?.totalPris ?? post.sum)}</span>
+                {postPris != null && (
+                  <span style={{ color: '#5d6b80', whiteSpace: 'nowrap' }}>{fmtKr(postPris)} <span style={{ fontSize: 10 }}>eks. mva</span></span>
                 )}
               </div>
               {Array.isArray(post.kalkyle?.timer) && post.kalkyle.timer.length > 0 && (
                 <div style={{ fontSize: 12, color: '#5d6b80', paddingLeft: 8 }}>
-                  {post.kalkyle.timer.map(t => `${t.fag || 'annet'}: ${t.antall || 0} t`).join(' · ')}
+                  {post.kalkyle.timer.map(t => `${fagNavn(t.fag || 'annet')}: ${t.antall || 0} t`).join(' · ')}
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </Seksjon>
       )}
 
@@ -185,12 +237,19 @@ export default function TilbudsdataVisning({ prosjekt }) {
       {(byggInfo || soner) && (
         <Seksjon tittel="Bygg og soner">
           {byggInfo && (
+            /* Oppdrag 17.1: aldri rå JSON — kjente felter vises pent, tomme
+               skjules, og tilstandsnotatet får egen linje */
             <div style={{ whiteSpace: 'pre-wrap', color: 'var(--text-secondary)' }}>
               {typeof byggInfo === 'string'
                 ? byggInfo
-                : [byggInfo.byggeaar && `Byggeår: ${byggInfo.byggeaar}`, byggInfo.byggtype && `Byggtype: ${byggInfo.byggtype}`,
-                   byggInfo.bra && `BRA: ${byggInfo.bra} m²`, byggInfo.tilstand && `Tilstand: ${byggInfo.tilstand}`]
-                    .filter(Boolean).join(' · ') || JSON.stringify(byggInfo)}
+                : (() => {
+                    const rad = [byggInfo.byggeaar && `Byggeår: ${byggInfo.byggeaar}`, byggInfo.byggtype && `Byggtype: ${byggInfo.byggtype}`,
+                      byggInfo.bra && `BRA: ${byggInfo.bra} m²`, byggInfo.tilstand && `Tilstand: ${byggInfo.tilstand}`]
+                      .filter(Boolean).join(' · ');
+                    const notat = byggInfo.tilstandNotat || byggInfo.notat || '';
+                    if (!rad && !notat) return <span style={{ color: 'var(--text-muted)' }}>Ingen bygginfo registrert.</span>;
+                    return <>{rad}{rad && notat ? '\n' : ''}{notat}</>;
+                  })()}
             </div>
           )}
           {soner && soner.length > 0 && soner.map((s, i) => (
