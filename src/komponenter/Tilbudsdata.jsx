@@ -66,28 +66,13 @@ export function TilbudLenkeRad({ prosjekt }) {
           <Ikon ikon={Eye} size={15} /> Se kundesiden
         </a>
       )}
-      {/* Oppdrag 17.5: tilbudPdfUrl peker på /t/<token>/pdf — en rute som
-          IKKE finnes i tilbuds-appen (404). Til den er utrullet der, går
-          knappen til kundeportalen (intern=1) hvor tilbudet kan skrives ut
-          som PDF. Andre (ekte) pdf-URL-er brukes som de er. */}
+      {/* Oppdrag 18a: /t/<token>/pdf-ruten er UTRULLET i tilbuds-appen
+          (deres #13, commit 8abb81a) — tilbudPdfUrl brukes direkte igjen */}
       {pdfUrl && (
-        /\/t\/[a-f0-9]+\/pdf$/i.test(pdfUrl) ? (
-          publicToken ? (
-            <a style={knappStil} href={`${TILBUDSAPP_URL}/t/${publicToken}?intern=1`} target="_blank" rel="noopener noreferrer"
-              title="PDF-ruten er ikke utrullet i tilbuds-appen ennå — åpner kundesiden, som kan skrives ut som PDF">
-              <Ikon ikon={FileText} size={15} /> Åpne tilbudet (skriv ut som PDF)
-            </a>
-          ) : (
-            <span style={{ ...knappStil, cursor: 'default', color: 'var(--text-muted)' }}
-              title="Tilbuds-appens PDF-lenke virker ikke ennå, og kundeside-token mangler">
-              <Ikon ikon={FileText} size={15} /> PDF ikke tilgjengelig ennå
-            </span>
-          )
-        ) : (
-          <a style={knappStil} href={pdfUrl} target="_blank" rel="noopener noreferrer">
-            <Ikon ikon={FileText} size={15} /> Åpne tilbud-PDF
-          </a>
-        )
+        <a style={knappStil} href={pdfUrl} target="_blank" rel="noopener noreferrer"
+          title="Åpner tilbudet med automatisk «Lagre som PDF»">
+          <Ikon ikon={FileText} size={15} /> Åpne tilbud-PDF
+        </a>
       )}
       {tilbudLink && (
         <a style={knappStil} href={tilbudLink} target="_blank" rel="noopener noreferrer">
@@ -191,7 +176,7 @@ export default function TilbudsdataVisning({ prosjekt }) {
             // Oppdrag 17.4: pris eks. mva per post — vises når tilbudsdataene
             // faktisk bærer den (aldri beregnet: kalkyle-komponentene mangler
             // rabatt/justering, så en utregnet sum ville avvike fra tilbudet)
-            const postPris = post.kalkyle?.totalPris ?? post.sum ?? post.sumEksMva ?? post.pris ?? post.kalkyle?.sum ?? post.kalkyle?.sumEksMva ?? null;
+            const postPris = post.postPrisEksMva ?? post.kalkyle?.totalPris ?? post.sum ?? post.sumEksMva ?? post.pris ?? post.kalkyle?.sum ?? post.kalkyle?.sumEksMva ?? null;
             return (
             <div key={i} style={{ padding: '5px 0', borderBottom: '1px solid var(--bg-subtle)' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
@@ -208,6 +193,14 @@ export default function TilbudsdataVisning({ prosjekt }) {
             </div>
             );
           })}
+          {/* Oppdrag 18b: rabatt/justering fra tilbudet — slik at
+              Σ poster + justering = tilbudssum eks. mva */}
+          {Number(tp.justeringEksMva) !== 0 && tp.justeringEksMva != null && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', fontWeight: 500, color: Number(tp.justeringEksMva) < 0 ? '#15803d' : '#b45309' }}>
+              <span>{Number(tp.justeringEksMva) < 0 ? 'Rabatt/justering' : 'Justering/påslag'}</span>
+              <span>{fmtKr(tp.justeringEksMva)} <span style={{ fontSize: 10, fontWeight: 400 }}>eks. mva</span></span>
+            </div>
+          )}
         </Seksjon>
       )}
 
