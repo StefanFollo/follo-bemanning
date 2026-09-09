@@ -685,7 +685,7 @@ function UkeVisning({
   const holidayName = (iso) => HOLIDAYS[iso] || '';
   const prosjektColor = (pid) => state.prosjekter.find(p => p.id === pid)?.farge || '#6b8fc4';
   // Felles props som trés ned til GanttRowContainer via rad-komponentene
-  const gantt = { state, readOnly, dragRef, today, isHoliday, holidayName, prosjektColor, handleDrop, openAddTildeling, openBarMenu, deleteTildeling };
+  const gantt = { state, readOnly, dragRef, today, isHoliday, holidayName, prosjektColor, handleDrop, openAddTildeling, openBarMenu, deleteTildeling, fastProsjektId };
 
   // ---- DAG-MODUS ----
   const weekEnd = addDays(currentWeek, 52 * 7 - 1);
@@ -890,7 +890,7 @@ function UkeVisning({
       </div>
 
       {/* Kapasitetsmåler – kun i dagmodus */}
-      {ukeMode === 'dag' && kapTotal > 0 && (
+      {ukeMode === 'dag' && kapTotal > 0 && !fastProsjektId && (
         <div className="bplan-kap-banner">
           <span className="bplan-kap-tittel">Uke {getWeekNumber(currentWeek)}</span>
           <span className="bplan-kap-chip bplan-kap-chip--opptatt"><Ikon ikon={Hammer} size={12} style={{ marginRight: 3 }} />{kapOpptatt} opptatt</span>
@@ -951,7 +951,7 @@ function UkeVisning({
           )}
           <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(260, minmax(28px, 1fr))` }}>
             <UkeGridHeader WORK_DAYS_UKE={WORK_DAYS_UKE} TEN_WEEKS={TEN_WEEKS} today={today} HOLIDAYS={HOLIDAYS} />
-            {renderProsjektRader(ukeProsjekter, ukeLedige, 260, UkeAnsattRad, periodeStart, periodeEnd, { days: WORK_DAYS_UKE, gantt })}
+            {renderProsjektRader(ukeProsjekter, fastProsjektId ? [] : ukeLedige, 260, UkeAnsattRad, periodeStart, periodeEnd, { days: WORK_DAYS_UKE, gantt })}
             {!fagFilter && <RorleggerRader state={state} days={WORK_DAYS_UKE} unit="day" viewStart={periodeStart} viewEnd={periodeEnd} />}
           </div>
         </div>
@@ -978,6 +978,7 @@ function GanttRowContainer({
   ansatt, days, unit, prosjektId,
   state, readOnly, dragRef, today, isHoliday, holidayName, prosjektColor,
   handleDrop, openAddTildeling, openBarMenu, deleteTildeling,
+  fastProsjektId = null,
 }) {
   const [dragOverIdx, setDragOverIdx] = useState(null);
   const n = days.length;
@@ -987,11 +988,13 @@ function GanttRowContainer({
     t.ansattId === ansatt.id && overlaps(t.startDato, t.sluttDato, days[0], viewEnd)
   );
 
-  // Splitt i primær (dette prosjektet + ferie) og opptatt (andre prosjekter)
+  // Splitt i primær (dette prosjektet + ferie) og opptatt (andre prosjekter).
+  // Prosjektsiden (fastProsjektId): vis KUN prosjektets egne barer — aldri
+  // «opptatt på andre prosjekter»-støy (Stefans tilbakemelding 09.09).
   const primaryTil = prosjektId
     ? myTil.filter(t => t.prosjektId === prosjektId || t.prosjektId === FERIE_ID)
     : myTil;
-  const busyTil = prosjektId
+  const busyTil = (prosjektId && !fastProsjektId)
     ? myTil.filter(t => t.prosjektId !== prosjektId && t.prosjektId !== FERIE_ID)
     : [];
 
