@@ -695,7 +695,13 @@ function UkeVisning({
       .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd))
       .map(t => t.prosjektId)
   )];
-  const dagProsjekter = dagProsjektIds.map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  const dagProsjekter = dagProsjektIds
+    .filter(id => !fastProsjektId || id === fastProsjektId)
+    .map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  if (fastProsjektId && !dagProsjekter.length) {
+    const fp = state.prosjekter.find(p => p.id === fastProsjektId);
+    if (fp) dagProsjekter.push(fp);
+  }
   const dagTildeltIds = new Set(
     state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentWeek, weekEnd)).map(t => t.ansattId)
   );
@@ -773,7 +779,13 @@ function UkeVisning({
       .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentMonth, maanedPeriodeEnd))
       .map(t => t.prosjektId)
   )];
-  const maanedProsjekter = maanedProsjektIds.map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  const maanedProsjekter = maanedProsjektIds
+    .filter(id => !fastProsjektId || id === fastProsjektId)
+    .map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  if (fastProsjektId && !maanedProsjekter.length) {
+    const fp = state.prosjekter.find(p => p.id === fastProsjektId);
+    if (fp) maanedProsjekter.push(fp);
+  }
   const maanedTildeltIds = new Set(
     state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, currentMonth, maanedPeriodeEnd)).map(t => t.ansattId)
   );
@@ -929,7 +941,7 @@ function UkeVisning({
         <div className="uke-grid-wrap">
           <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(${weekDays.length}, minmax(36px, 1fr))` }}>
             <DagGridHeader weekDays={weekDays} HOLIDAYS={HOLIDAYS} today={today} />
-            {renderProsjektRader(dagProsjekter, dagLedige, weekDays.length, DagAnsattRad, currentWeek, weekEnd, { days: weekDays, gantt })}
+            {renderProsjektRader(dagProsjekter, fastProsjektId ? [] : dagLedige, weekDays.length, DagAnsattRad, currentWeek, weekEnd, { days: weekDays, gantt })}
             {!fagFilter && <RorleggerRader state={state} days={weekDays} unit="day" viewStart={currentWeek} viewEnd={weekEnd} />}
           </div>
         </div>
@@ -959,7 +971,7 @@ function UkeVisning({
         <div className="uke-grid-wrap">
           <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(18, minmax(80px, 1fr))` }}>
             <MaanedGridHeader SIX_MONTHS={SIX_MONTHS} today={today} />
-            {renderProsjektRader(maanedProsjekter, maanedLedige, 18, MaanedAnsattRad, currentMonth, maanedPeriodeEnd, { days: SIX_MONTHS, gantt })}
+            {renderProsjektRader(maanedProsjekter, fastProsjektId ? [] : maanedLedige, 18, MaanedAnsattRad, currentMonth, maanedPeriodeEnd, { days: SIX_MONTHS, gantt })}
             {!fagFilter && <RorleggerRader state={state} days={SIX_MONTHS} unit="month" viewStart={currentMonth} viewEnd={maanedPeriodeEnd} />}
           </div>
         </div>
