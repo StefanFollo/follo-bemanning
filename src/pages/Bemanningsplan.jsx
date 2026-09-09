@@ -438,6 +438,7 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
           <UkeVisning
             state={state}
             readOnly={readOnly}
+            fastProsjektId={fastProsjektId}
             planAnsatte={planAnsatte}
             currentWeek={currentWeek}
             currentMonth={currentMonth}
@@ -677,6 +678,7 @@ function UkeVisning({
   prevWeek, nextWeek, thisWeek,
   needleDay, setNeedleDay, draggingNeedle, gridWrapRef,
   dragRef, HOLIDAYS, handleDrop, openAddTildeling, openBarMenu, deleteTildeling,
+  fastProsjektId = null,
 }) {
   const today = dateToIso(new Date());
   const isHoliday = (iso) => !!HOLIDAYS[iso];
