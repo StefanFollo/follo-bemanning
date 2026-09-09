@@ -3104,7 +3104,7 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
 
 // fastProsjektId (oppdrag 16): prosjektsiden låser KS-fanen til ETT prosjekt —
 // hopper rett til prosjekt-detaljen, og «tilbake» går til prosjektsiden.
-export default function KS({ readOnly = false, ansattId = null, fastProsjektId = null, onFastTilbake = null }) {
+export default function KS({ readOnly = false, ansattId = null, fastProsjektId = null, onFastTilbake = null, onApneProsjektSide = null }) {
   const { state, dispatch } = useApp()
   const [maler, setMaler] = useState([])
   const [sjekklister, setSjekklister] = useState([])
@@ -3125,7 +3125,9 @@ export default function KS({ readOnly = false, ansattId = null, fastProsjektId =
   const [lasterProsjekt, setLasterProsjekt] = useState(false)
 
   function velgProsjekt(p) {
-    // Brukes fra KSProsjektVelger → ny to-kolonne-visning
+    // Oppdrag 16: velger man ETT prosjekt fra den globale KS-fanen, åpnes
+    // prosjektsiden (SPEC §1) — «på tvers»-visningene beholdes ellers.
+    if (onApneProsjektSide && !fastProsjektId) return onApneProsjektSide(p.id, 'sjekklister')
     startTransition(() => {
       setValgtProsjekt(p)
       setView('ks-prosjekt-detalj')

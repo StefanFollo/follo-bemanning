@@ -488,8 +488,8 @@ function App() {
           {activeTab === 'ansatte' && (isAdmin || isKontor || isAL) && <Ansatte readOnly={isAL} />}
           {activeTab === 'bemanningsplan' && (isAdmin || isAL || role === 'ansatt') && <Bemanningsplan readOnly={!(isAdmin || isAL)} />}
           {activeTab === 'rorlegger' && (isAdmin || isKontor || isRorlegger) && <RorleggerPlan />}
-          {activeTab === 'framdrift' && (isAdmin || isKontor || isAL || role === 'ansatt') && <Framdriftsplan readOnly={role === 'ansatt'} ansattId={role === 'ansatt' ? ansattId : null} onNavigate={setActiveTab} />}
-          {activeTab === 'ks' && (isAdmin || isKontor || isAL || role === 'ansatt') && <KS readOnly={role === 'ansatt'} ansattId={role === 'ansatt' ? ansattId : null} />}
+          {activeTab === 'framdrift' && (isAdmin || isKontor || isAL || role === 'ansatt') && <Framdriftsplan readOnly={role === 'ansatt'} ansattId={role === 'ansatt' ? ansattId : null} onNavigate={setActiveTab} onApneProsjektSide={role === 'ansatt' ? null : apneProsjektSide} />}
+          {activeTab === 'ks' && (isAdmin || isKontor || isAL || role === 'ansatt') && <KS readOnly={role === 'ansatt'} ansattId={role === 'ansatt' ? ansattId : null} onApneProsjektSide={role === 'ansatt' ? null : apneProsjektSide} />}
           {activeTab === 'biler' && (isAdmin || isKontor) && <Biler />}
           {activeTab === 'rutiner' && <Rutiner />}
           {activeTab === 'brukere' && isAdmin && <AdminUsers />}

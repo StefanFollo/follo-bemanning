@@ -1592,7 +1592,7 @@ function ProjectDetail({ project, onBack, onUpdate, readOnly = false, onNavigate
 
 // fastProsjektId (oppdrag 16): prosjektsiden låser Framdrift-fanen til ETT
 // prosjekt — gantten åpnes direkte, «← Tilbake» går til prosjektsiden.
-export default function Framdriftsplan({ readOnly = false, ansattId = null, onNavigate = null, fastProsjektId = null, onFastTilbake = null }) {
+export default function Framdriftsplan({ readOnly = false, ansattId = null, onNavigate = null, fastProsjektId = null, onFastTilbake = null, onApneProsjektSide = null }) {
   // (kundeportal fase 3-importer brukes i updateProject over)
   const { state, dispatch } = useApp();
   const [selectedId, setSelectedId] = useState(fastProsjektId || null);
@@ -1807,7 +1807,8 @@ export default function Framdriftsplan({ readOnly = false, ansattId = null, onNa
           const sc = STATUS_COLORS[p.fdStatus || 'Ikke startet'] ?? '#5d6b80';
           const harAI = p.fdGenAv === 'AI' && p.kildeTilbudData;
           return (
-            <div key={p.id} className="fd2-prosjekt-rad" onClick={() => setSelectedId(p.id)}>
+            <div key={p.id} className="fd2-prosjekt-rad"
+              onClick={() => onApneProsjektSide ? onApneProsjektSide(p.id, 'framdrift') : setSelectedId(p.id)}>
               <div className="fd2-rad-dot" style={{ background: sc }} />
               <div className="fd2-rad-navn">{p.navn}</div>
               <div className="fd2-rad-badges">

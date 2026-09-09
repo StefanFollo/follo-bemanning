@@ -20,6 +20,8 @@ import { varsleFramdriftEksport } from '../framdriftEksportKlient';
 import TilbudsdataVisning from '../komponenter/Tilbudsdata';
 import Framdriftsplan from './Framdriftsplan';
 import KS from './KS';
+import Bemanningsplan from './Bemanningsplan';
+import { byggInterneFaser } from '../framdriftEksport';
 
 const TILBUDSAPP_URL = 'https://follo-befaring.vercel.app';
 const STATUS_TEKST = { jobber_med: 'Jobber med', godkjent: 'Godkjent', aktiv: 'Aktiv', fullfort: 'Fullført' };
@@ -96,10 +98,26 @@ export default function Prosjektside({ prosjektId, fane: startFane = 'oversikt',
   const kundeAkt = (befaring?.kundeAktivitet || []).slice(-5).reverse();
   const nyKundeAkt = kundeAkt.some(a => a && (Date.now() - new Date(a.sistTidspunkt || a.tidspunkt || 0).getTime()) < 86400000);
 
+  // PR2: uke uten bemanning innenfor prosjektperioden (neste 2 uker)
+  const tommeUker = (() => {
+    if (!p.startDato || !p.sluttDato) return [];
+    const tomme = [];
+    for (let u = 0; u < 2; u++) {
+      const fra = new Date(Date.now() + u * 7 * 86400000).toISOString().slice(0, 10);
+      const til = new Date(Date.now() + (u * 7 + 6) * 86400000).toISOString().slice(0, 10);
+      if (til < p.startDato || fra > p.sluttDato) continue; // utenfor prosjektperioden
+      const dekket = (state.tildelinger || []).some(t => t && t.prosjektId === prosjektId && t.prosjektId !== '__FERIE__'
+        && (t.startDato || '0000') <= til && (t.sluttDato || '9999') >= fra);
+      if (!dekket) tomme.push(u === 0 ? 'denne uka' : 'neste uke');
+    }
+    return tomme;
+  })();
+
   const FANER = [
     { id: 'oversikt', label: 'Oversikt', ikon: House },
     { id: 'framdrift', label: 'Framdrift', ikon: ChartGantt, badge: tasks.length ? `${faserFerdig}/${tasks.length}` : null },
     { id: 'sjekklister', label: 'Sjekklister', ikon: ClipboardCheck, badge: utenAnsvarlig ? `${utenAnsvarlig} uten ansvarlig` : null, badgeGul: true },
+    { id: 'bemanning', label: 'Bemanning', ikon: Users, badge: tommeUker.length ? `${tommeUker[0]} tom` : null, badgeGul: true },
     { id: 'kunde', label: 'Kunde', ikon: MessageSquare, badge: nyKundeAkt ? 'ny aktivitet' : null },
     { id: 'tilbud', label: 'Tilbud', ikon: Package },
     { id: 'logg', label: 'Logg', ikon: ScrollText },
@@ -165,6 +183,9 @@ export default function Prosjektside({ prosjektId, fane: startFane = 'oversikt',
       {fane === 'sjekklister' && (
         <KS fastProsjektId={prosjektId} onFastTilbake={() => { setFane('oversikt'); hentKs(); }} />
       )}
+      {fane === 'bemanning' && (
+        <Bemanningsplan fastProsjektId={prosjektId} />
+      )}
       {fane === 'tilbud' && (
         (p.tilbudPayload || p.tilbudLink || p.kildeTilbudData || (Array.isArray(p.poster) && p.poster.length > 0))
           ? <TilbudsdataVisning prosjekt={p} />
@@ -211,6 +232,21 @@ export default function Prosjektside({ prosjektId, fane: startFane = 'oversikt',
             if (!tilbudId) linjer.push({ tekst: 'Ikke koblet til tilbud — kontrakt og kundeportal mangler', fane: 'kunde' });
             const snartFaser = tasks.filter(t => !(t.tildelt || []).length && (t.pct ?? 0) < 100);
             if (tasks.length && snartFaser.length === tasks.length) linjer.push({ tekst: 'Ingen faser har tildelte personer', fane: 'framdrift' });
+            // PR2-reglene:
+            for (const uke of tommeUker) linjer.push({ tekst: `Ingen bemanning ${uke}`, fane: 'bemanning' });
+            const omSju = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
+            const faserNaa = byggInterneFaser(p, { iDag }) || [];
+            const faserOmSju = byggInterneFaser(p, { iDag: omSju, fallbackIDag: iDag }) || [];
+            const starterSnart = tasks.filter((t, i) => !(t.tildelt || []).length && (t.pct ?? 0) < 100
+              && !faserNaa[i]?.pagarNa && faserOmSju[i]?.pagarNa);
+            for (const t of starterSnart) linjer.push({ tekst: `Fasen «${t.name}» starter innen 7 dager uten tildelte folk`, fane: 'framdrift' });
+            const ventendeEndringer = (tp.endringsmeldinger || []).filter(em => em && /venter/i.test(em.status || '')
+              && em.dato && (Date.now() - new Date(em.dato).getTime()) > 3 * 86400000);
+            for (const em of ventendeEndringer) linjer.push({ tekst: `Endringsmelding «${em.tittel || em.navn || ''}» har ventet på kunden i over 3 dager`, fane: 'kunde' });
+            const sisteSporsmal = (befaring?.kundeAktivitet || []).filter(a => a && a.handling === 'klikket-sporsmal').pop();
+            if (sisteSporsmal && (Date.now() - new Date(sisteSporsmal.sistTidspunkt || sisteSporsmal.tidspunkt || 0).getTime()) > 86400000) {
+              linjer.push({ tekst: 'Kunden klikket «Spørsmål» for over 1 dag siden — er de fulgt opp?', fane: 'kunde' });
+            }
             if (!linjer.length) return null;
             return (
               <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10, padding: '10px 14px', marginBottom: 14 }}>

@@ -73,7 +73,9 @@ function daysDiff(a, b) {
   return Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
 }
 
-export default function Bemanningsplan({ readOnly = false }) {
+// fastProsjektId (oppdrag 16 PR2): prosjektsiden viser ukesvisningen
+// filtrert til ETT prosjekt — samme komponent, samme legg til/fjern.
+export default function Bemanningsplan({ readOnly = false, fastProsjektId = null }) {
   const { state, dispatch } = useApp();
   // Ansatte som er med i bemanningsplan-kapasitetsberegningen
   const planAnsatte = state.ansatte.filter(a => !a.arkivert && !a.utenforBemanningsplan && a.fag !== 'Rørlegger');
@@ -405,6 +407,7 @@ export default function Bemanningsplan({ readOnly = false }) {
         </div>
       </div>
 
+      {!fastProsjektId && (
       <div className="tab-bar">
         <button className={`tab-btn ${tab === 'uke' ? 'active' : ''}`} onClick={() => setTab('uke')}>
           Ukeoversikt
@@ -428,6 +431,7 @@ export default function Bemanningsplan({ readOnly = false }) {
           <IkonTekst ikon={HardHat} size={15}>Team</IkonTekst> {(state.teams || []).length > 0 && <span className="count-badge" style={{ marginLeft: 4 }}>{(state.teams || []).length}</span>}
         </button>
       </div>
+      )}
 
       <div ref={storskjermContentRef}>
         {tab === 'uke' && (
@@ -718,7 +722,14 @@ function UkeVisning({
       .filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd))
       .map(t => t.prosjektId)
   )];
-  const ukeProsjekter = ukeProsjektIds.map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  const ukeProsjekter = ukeProsjektIds
+    .filter(id => !fastProsjektId || id === fastProsjektId)
+    .map(id => state.prosjekter.find(p => p.id === id)).filter(Boolean).sort((a, b) => a.navn.localeCompare(b.navn, 'nb'));
+  // Prosjektsiden: prosjektet skal vises selv uten tildelinger ennå
+  if (fastProsjektId && !ukeProsjekter.length) {
+    const fp = state.prosjekter.find(p => p.id === fastProsjektId);
+    if (fp) ukeProsjekter.push(fp);
+  }
   const ukeTildeltIds = new Set(
     state.tildelinger.filter(t => t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, periodeStart, periodeEnd)).map(t => t.ansattId)
   );
