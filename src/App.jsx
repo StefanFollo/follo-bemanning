@@ -10,6 +10,7 @@ import './App.css';
 // Sidene lastes ved behov (code-splitting): en ansatt laster ikke hele
 // admin-flaten, og førstelastingen på iPad/mobil blir vesentlig raskere.
 const Prosjekter = lazy(() => import('./pages/Prosjekter'));
+const Prosjektside = lazy(() => import('./pages/Prosjektside'));
 const Ansatte = lazy(() => import('./pages/Ansatte'));
 const Bemanningsplan = lazy(() => import('./pages/Bemanningsplan'));
 const Framdriftsplan = lazy(() => import('./pages/Framdriftsplan'));
@@ -324,6 +325,19 @@ function App() {
     if (befaringId) setApneBefaringId(befaringId);
     setActiveTab(tab);
   }
+  // Oppdrag 16: prosjektsiden — én arbeidsflate per prosjekt (over fanene)
+  const [prosjektSide, setProsjektSide] = useState(null); // { id, fane }
+  function apneProsjektSide(id, fane) { setProsjektSide({ id, fane: fane || 'oversikt' }); }
+  useEffect(() => {
+    if (!localStorage.getItem('fbs_token')) return;
+    const q = new URLSearchParams(window.location.search);
+    const pid = q.get('prosjekt');
+    if (!pid) return;
+    if (['admin', 'kontor', 'anleggsleder'].includes(localStorage.getItem('fbs_role'))) {
+      setProsjektSide({ id: pid, fane: q.get('fane') || 'oversikt' });
+    }
+    window.history.replaceState({}, '', window.location.pathname);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [loggedIn, setLoggedIn] = useState(() => !!localStorage.getItem('fbs_token'));
   const [role, setRole] = useState(() => localStorage.getItem('fbs_role') || 'admin');
   const [userNavn, setUserNavn] = useState(() => localStorage.getItem('fbs_user_navn') || '');
@@ -443,7 +457,7 @@ function App() {
           <div className="header-brand">
             <div className="brand-logo" title={`FolloByggService — Bemannings- og framdriftsplanlegger · v${FBS_VERSJON} (skal være lik på alle enheter)`}>FBS</div>
           </div>
-          <TekstNav TABS={TABS} activeTab={activeTab} setActiveTab={setActiveTab} />
+          <TekstNav TABS={TABS} activeTab={activeTab} setActiveTab={t => { setProsjektSide(null); setActiveTab(t); }} />
           <div className="nav-hoyre">
             <div className="nav-user">
               {userNavn && <span className="nav-user-name">{userNavn}</span>}
@@ -459,13 +473,18 @@ function App() {
         </header>
 
         <main className="main">
-          <FeilVern key={activeTab}>
+          <FeilVern key={prosjektSide ? 'prosjektside-' + prosjektSide.id : activeTab}>
           <Suspense fallback={<SideLaster />}>
+          {prosjektSide && (isAdmin || isKontor || isAL) ? (
+            <Prosjektside prosjektId={prosjektSide.id} fane={prosjektSide.fane}
+              onTilbake={() => { setProsjektSide(null); setActiveTab('prosjekter'); }}
+              onNavigate={setActiveTab} />
+          ) : (<>
           {activeTab === 'dashboard' && (isAdmin || isKontor || isAL) && <Dashboard onNavigate={navigerTil} />}
           {activeTab === 'befaring' && (isAdmin || isKontor || isBefaring) && <BefaringPlan apneBefaringId={apneBefaringId} onApnet={() => setApneBefaringId(null)} />}
           {activeTab === 'reklamasjon' && (isAdmin || isKontor || isBefaring) && <Reklamasjon />}
           {activeTab === 'service' && (isAdmin || isKontor || isBefaring) && <Service />}
-          {activeTab === 'prosjekter' && (isAdmin || isKontor || isAL) && <Prosjekter onNavigate={setActiveTab} />}
+          {activeTab === 'prosjekter' && (isAdmin || isKontor || isAL) && <Prosjekter onNavigate={setActiveTab} onApneProsjektSide={apneProsjektSide} />}
           {activeTab === 'ansatte' && (isAdmin || isKontor || isAL) && <Ansatte readOnly={isAL} />}
           {activeTab === 'bemanningsplan' && (isAdmin || isAL || role === 'ansatt') && <Bemanningsplan readOnly={!(isAdmin || isAL)} />}
           {activeTab === 'rorlegger' && (isAdmin || isKontor || isRorlegger) && <RorleggerPlan />}
@@ -474,6 +493,7 @@ function App() {
           {activeTab === 'biler' && (isAdmin || isKontor) && <Biler />}
           {activeTab === 'rutiner' && <Rutiner />}
           {activeTab === 'brukere' && isAdmin && <AdminUsers />}
+          </>)}
           </Suspense>
           </FeilVern>
         </main>
@@ -484,7 +504,7 @@ function App() {
               <button
                 key={tab.id}
                 className={`mobile-nav-btn ${activeTab === tab.id ? 'active' : ''}`}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => { setProsjektSide(null); setActiveTab(tab.id); }}
               >
                 <span className="mobile-nav-icon"><Ikon ikon={tab.icon} size={20} /></span>
                 <span>{tab.label}</span>

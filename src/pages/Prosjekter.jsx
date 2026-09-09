@@ -1180,8 +1180,11 @@ function ProsjektKSPlanKnapp({ project, onOppdater }) {
   )
 }
 
-export default function Prosjekter({ onNavigate = null }) {
+// onApneProsjektSide (oppdrag 16): klikk på et prosjekt åpner den fulle
+// prosjektsiden; detaljpanelet lever videre som «Hurtigvisning» i ⋯-menyen.
+export default function Prosjekter({ onNavigate = null, onApneProsjektSide = null }) {
   const { state, dispatch, friskOpp } = useApp();
+  const apneProsjekt = p => onApneProsjektSide ? onApneProsjektSide(p.id) : aapnePanel(p);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(EMPTY);
@@ -1855,7 +1858,7 @@ export default function Prosjekter({ onNavigate = null }) {
                     }
                     return (
                       <div key={p.id} style={{ display: 'flex', alignItems: 'center', height: 34, borderBottom: '1px solid #f8fafc', cursor: 'pointer' }}
-                        onClick={() => aapnePanel(p)}>
+                        onClick={() => apneProsjekt(p)}>
                         <div style={{ width: 180, flexShrink: 0, fontSize: 12.5, fontWeight: 500, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', paddingRight: 8 }}>
                           {visAdr}
                         </div>
@@ -1991,6 +1994,7 @@ export default function Prosjekter({ onNavigate = null }) {
             hurtigknapp={hurtigknapp}
             meny={[
               { ikon: <Ikon ikon={Pencil} size={15} />, label: 'Rediger', onClick: () => openEdit(p) },
+              onApneProsjektSide && { ikon: <Ikon ikon={Eye} size={15} />, label: 'Hurtigvisning (panel)', onClick: () => aapnePanel(p) },
               portalToken && { ikon: <Ikon ikon={ExternalLink} size={15} />, label: 'Kundeportal',
                 onClick: () => window.open(kundeportalUrl(portalToken, { intern: true }), '_blank', 'noopener') },
               portalToken && { ikon: <Ikon ikon={Copy} size={15} />, label: 'Kopier kundelenke',
@@ -2010,7 +2014,7 @@ export default function Prosjekter({ onNavigate = null }) {
               { skille: true },
               { ikon: <Ikon ikon={Archive} size={15} />, label: 'Arkiver', farlig: true, onClick: () => arkiverProsjekt(p) },
             ]}
-            onClick={() => aapnePanel(p)}
+            onClick={() => apneProsjekt(p)}
           />
           {forlengFristId === p.id && (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 14px', margin: '-4px 0 8px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10 }}>

@@ -1590,10 +1590,13 @@ function ProjectDetail({ project, onBack, onUpdate, readOnly = false, onNavigate
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export default function Framdriftsplan({ readOnly = false, ansattId = null, onNavigate = null }) {
+// fastProsjektId (oppdrag 16): prosjektsiden låser Framdrift-fanen til ETT
+// prosjekt — gantten åpnes direkte, «← Tilbake» går til prosjektsiden.
+export default function Framdriftsplan({ readOnly = false, ansattId = null, onNavigate = null, fastProsjektId = null, onFastTilbake = null }) {
   // (kundeportal fase 3-importer brukes i updateProject over)
   const { state, dispatch } = useApp();
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedId, setSelectedId] = useState(fastProsjektId || null);
+  useEffect(() => { if (fastProsjektId) setSelectedId(fastProsjektId); }, [fastProsjektId]);
   const [filter,     setFilter]     = useState('Alle');
   const [synker,     setSynker]     = useState(false);
   const [sistSynk,   setSistSynk]   = useState(null);
@@ -1705,7 +1708,7 @@ export default function Framdriftsplan({ readOnly = false, ansattId = null, onNa
         <div className="page">
           <ProjectDetail
             project={live}
-            onBack={() => setSelectedId(null)}
+            onBack={() => (fastProsjektId && onFastTilbake) ? onFastTilbake() : setSelectedId(null)}
             onUpdate={readOnly ? () => {} : (extra => updateProject(live, extra))}
             readOnly={readOnly}
             onNavigate={onNavigate}

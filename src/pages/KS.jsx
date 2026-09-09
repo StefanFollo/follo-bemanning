@@ -3102,7 +3102,9 @@ function Oversikt({ prosjekter, sjekklister, maler, onVelgProsjekt, onVisBibliot
 
 // ── Rot-komponent ─────────────────────────────────────────────────────────────
 
-export default function KS({ readOnly = false, ansattId = null }) {
+// fastProsjektId (oppdrag 16): prosjektsiden låser KS-fanen til ETT prosjekt —
+// hopper rett til prosjekt-detaljen, og «tilbake» går til prosjektsiden.
+export default function KS({ readOnly = false, ansattId = null, fastProsjektId = null, onFastTilbake = null }) {
   const { state, dispatch } = useApp()
   const [maler, setMaler] = useState([])
   const [sjekklister, setSjekklister] = useState([])
@@ -3110,6 +3112,13 @@ export default function KS({ readOnly = false, ansattId = null }) {
   const [feil, setFeil] = useState(null)
   const [view, setView] = useState('oversikt') // oversikt | prosjekt | sjekkliste | bibliotek | avvik | prosjekt-sl
   const [valgtProsjekt, setValgtProsjekt] = useState(null)
+
+  useEffect(() => {
+    if (!fastProsjektId) return
+    const p = (state.prosjekter || []).find(x => x && x.id === fastProsjektId)
+    if (p) { setValgtProsjekt(p); setView('ks-prosjekt-detalj') }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fastProsjektId])
   const [valgtSl, setValgtSl] = useState(null)
   const [valgtProsjektSl, setValgtProsjektSl] = useState(null)
   const [aiFlyt, setAiFlyt] = useState(false)
@@ -3276,7 +3285,7 @@ export default function KS({ readOnly = false, ansattId = null }) {
         prosjekt={oppdatertProsjekt}
         maler={maler}
         sjekklister={sjekklister}
-        onTilbake={() => setView('oversikt')}
+        onTilbake={() => (fastProsjektId && onFastTilbake) ? onFastTilbake() : setView('oversikt')}
         onAapneSl={sl => {
           setSjekklister(prev => prev.some(s => s.id === sl.id) ? prev : [...prev, sl])
           setValgtSl(sl)
