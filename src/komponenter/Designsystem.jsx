@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { Fragment, useState, useRef, useEffect } from 'react';
 import { MoreHorizontal, X, TriangleAlert } from 'lucide-react';
 import { Ikon } from './Ikon';
 import './designsystem.css';
@@ -86,6 +86,46 @@ export function RadMeny({ valg }) {
             ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── 1.2b Seksjonert tabell (oppdrag 19) ──
+// Ren tabell med faste kolonner. Generisk og gjenbrukbar (Prosjekter nå,
+// Befaring-listen senere). Seksjoner er valgfrie — én seksjon uten tittel
+// gir «alternativ A»: én sammenhengende tabell.
+// kolonner: [{ id, tittel, bredde ('1fr'/'120px'…), hoyre?: bool, skjulMobil?: bool }]
+// seksjoner: [{ tittel?, rader: [{ id, onClick?, celler: { [kolId]: node }, etter?: node }] }]
+// rad.etter rendres i full bredde rett under raden (f.eks. inline-redigering).
+export function SeksjonertTabell({ kolonner, seksjoner, tomTekst = 'Ingen rader.' }) {
+  const grid = kolonner.map(k => k.bredde || '1fr').join(' ');
+  const antallRader = seksjoner.reduce((s, x) => s + x.rader.length, 0);
+  return (
+    <div className="ds-tabell">
+      <div className="ds-tabell-header" style={{ gridTemplateColumns: grid }}>
+        {kolonner.map(k => (
+          <div key={k.id} className={`ds-tabell-hcelle${k.hoyre ? ' ds-tabell-celle--hoyre' : ''}${k.skjulMobil ? ' ds-tabell-celle--skjulbar' : ''}`}>{k.tittel}</div>
+        ))}
+      </div>
+      {antallRader === 0 && <div className="ds-tabell-tom">{tomTekst}</div>}
+      {seksjoner.map((sek, si) => (
+        <div key={si}>
+          {sek.tittel && <div className="ds-tabell-seksjon">{sek.tittel}</div>}
+          {sek.rader.map(rad => (
+            <Fragment key={rad.id}>
+              <div className={`ds-tabell-rad${rad.onClick ? ' ds-tabell-rad--klikkbar' : ''}`}
+                style={{ gridTemplateColumns: grid }} onClick={rad.onClick}>
+                {kolonner.map(k => (
+                  <div key={k.id} className={`ds-tabell-celle${k.hoyre ? ' ds-tabell-celle--hoyre' : ''}${k.skjulMobil ? ' ds-tabell-celle--skjulbar' : ''}`}>
+                    {rad.celler[k.id] ?? null}
+                  </div>
+                ))}
+              </div>
+              {rad.etter || null}
+            </Fragment>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }

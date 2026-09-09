@@ -12,7 +12,7 @@ import { Ikon, IkonTekst, TomIkon } from '../komponenter/Ikon';
 import { varsleFramdriftEksport } from '../framdriftEksportKlient';
 import { useApp } from '../context/AppContext';
 import { formatDate, PROSJEKT_PALETTE, isoToDate, dateToIso, daysBetween } from '../store';
-import { StatusFaner, KompaktRad, DetaljPanel, VarselBanner } from '../komponenter/Designsystem';
+import { StatusFaner, KompaktRad, DetaljPanel, VarselBanner, SeksjonertTabell, RadMeny } from '../komponenter/Designsystem';
 import {
   beregnMerge, beregnAngre, beregnPekerOppdatering, beregnAngrePekere,
   beregnKobling, beregnFjernKobling, tilbudsfelterFraBefaring,
@@ -22,21 +22,13 @@ import TilbudsdataVisning from '../komponenter/Tilbudsdata';
 import { beregnAktivering, beregnForkast, kalkyleSammendrag, harKalkyle } from '../framdriftUtkast';
 import KSFagForslag from '../komponenter/KSFagForslag';
 import { erForslagSkjult } from '../ksForslag';
-import { beregnKalkyleVsBemanning, erUnderbemannetMotKalkyle } from '../kalkyleBemanning';
+import { beregnKalkyleVsBemanning } from '../kalkyleBemanning';
 
 function formaterBelop(belop) {
   if (!belop && belop !== 0) return null;
   const n = Number(belop);
   if (isNaN(n)) return null;
   return new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(n);
-}
-
-function varighetUker(startDato, sluttDato) {
-  if (!startDato || !sluttDato) return null;
-  const dager = daysBetween(startDato, sluttDato);
-  if (dager < 0) return null;
-  const uker = Math.ceil(dager / 7);
-  return uker === 1 ? '1 uke' : `${uker} uker`;
 }
 
 const MND = ['Jan','Feb','Mar','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Des'];
@@ -1197,12 +1189,23 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
   const isAdmin = localStorage.getItem('fbs_role') === 'admin';
   // Ny liste (designsystem PR1): aktiv status-fane + sorteringsvalg
   const [aktivFane, setAktivFane] = useState('aktiv');
-  const [sortValg, setSortValg] = useState('handling'); // 'handling' (default) | 'tittel' | 'frist' | 'sum'
+  // Oppdrag 19: «Trenger handling» er standard, og valget huskes per enhet
+  const [sortValg, setSortValgState] = useState(() => localStorage.getItem('fbs_prosjekt_sort') || 'handling');
+  const setSortValg = v => { localStorage.setItem('fbs_prosjekt_sort', v); setSortValgState(v); };
   // PR2: detaljpanel, varselfilter, visning, gantt-zoom, forleng frist
   const [valgtId, setValgtId] = useState(null);
   const [panelFane, setPanelFane] = useState('framdrift');
   const [varselFilter, setVarselFilter] = useState(null); // null | 'frist' | 'bemanning'
-  const [visning, setVisning] = useState('liste');        // 'liste' | 'gantt'
+  const [visning, setVisningState] = useState(() => localStorage.getItem('fbs_prosjekt_visning') || 'liste'); // 'liste' | 'gantt' | 'kort'
+  const setVisning = v => { localStorage.setItem('fbs_prosjekt_visning', v); setVisningState(v); };
+  // Oppdrag 19: «N lister uten ansvarlig»-badgen trenger KS-instansene (én GET)
+  const [ksInstanser, setKsInstanser] = useState(null);
+  useEffect(() => {
+    fetch('/api/ks/sjekklister', { headers: { Authorization: 'Bearer ' + (localStorage.getItem('fbs_token') || '') } })
+      .then(r => r.ok ? r.json() : [])
+      .then(alle => setKsInstanser(Array.isArray(alle) ? alle : []))
+      .catch(() => setKsInstanser([]));
+  }, []);
   const [ganttMnd, setGanttMnd] = useState(6);            // 3 | 6 | 12
   const [forlengFristId, setForlengFristId] = useState(null);
   const [forlengDato, setForlengDato] = useState('');
@@ -1221,15 +1224,6 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
       if (sortValg === 'sum') return (Number(b.belop) || 0) - (Number(a.belop) || 0);
       return visTittel(a).localeCompare(visTittel(b), 'nb');
     });
-  }
-
-  function sluttDatoInfo(sluttDato, status) {
-    if (!sluttDato || status === 'fullfort') return null;
-    const dager = Math.round((new Date(sluttDato + 'T00:00:00') - new Date()) / 86400000);
-    if (dager < 0)    return { farge: '#dc2626', bg: '#fff5f5', label: `${Math.abs(dager)}d over` };
-    if (dager <= 7)   return { farge: '#dc2626', bg: '#fff5f5', label: `${dager}d igjen` };
-    if (dager <= 14)  return { farge: '#b45309', bg: '#fffbeb', label: `${dager}d igjen` };
-    return null;
   }
 
   function openNew() {
@@ -1423,11 +1417,6 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
     for (const a of state.ansatte) m[a.id] = a;
     return m;
   }, [state.ansatte]);
-  const oppgaverByProsjekt = useMemo(() => {
-    const m = {};
-    for (const o of state.oppgaver) (m[o.prosjektId] ||= []).push(o);
-    return m;
-  }, [state.oppgaver]);
   const tildelingerByProsjekt = useMemo(() => {
     const m = {};
     for (const t of state.tildelinger) (m[t.prosjektId] ||= []).push(t);
@@ -1498,17 +1487,6 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
     );
   }, [alleProsjekter, tildelingerByProsjekt]);
 
-  // ── 4c lett varsel: Pågående + kalkyle-fag <50 % bemannet + <2 uker til slutt ──
-  const underbemannetIds = useMemo(() => {
-    const iDag = dateToIso(new Date());
-    return new Set(
-      alleProsjekter
-        .filter(p => !p.arkivert && normStatus(p.status) === 'aktiv' && p.tilbudPayload?.fagBreakdown)
-        .filter(p => erUnderbemannetMotKalkyle(p, state.tildelinger, ansatteById, iDag))
-        .map(p => p.id)
-    );
-  }, [alleProsjekter, state.tildelinger, ansatteById]);
-
   // ── Duplikat-hint — fuzzy-motor fra mergeProsjekter (SPEC §2): Levenshtein ≤3
   // på gatenavn, husnummer må matche eksakt, kundenavn vekter sterkt.
   // KUN visning/hjelp — aldri auto-handling. hint[p.id] = { id, label }.
@@ -1527,6 +1505,41 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
     return hint;
   }, [alleProsjekter]);
 
+  // ── Oppdrag 19: ÉN status-badge per prosjekt, prioritert som prosjektsidens
+  // «Trenger handling» — og handlings-knappen matcher badgen.
+  const utenAnsvarligPer = useMemo(() => {
+    const per = {};
+    for (const sl of (ksInstanser || [])) {
+      if (sl && sl.prosjektId && !(sl.ansvarlig || []).length && !(sl.signert_av || sl.levert_dato)) {
+        per[sl.prosjektId] = (per[sl.prosjektId] || 0) + 1;
+      }
+    }
+    for (const p of alleProsjekter) {
+      for (const sl of (p.sjekklister || [])) {
+        if (sl && !(sl.ansvarlig || []).length && !(sl.signert_av || sl.levert_dato)) {
+          per[p.id] = (per[p.id] || 0) + 1;
+        }
+      }
+    }
+    return per;
+  }, [ksInstanser, alleProsjekter]);
+
+  const kortDato = iso => iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}` : null;
+  function badgeFor(p) {
+    const fristDager = p.sluttDato && normStatus(p.status) !== 'fullfort'
+      ? Math.round((new Date(p.sluttDato + 'T00:00:00') - new Date()) / 86400000) : null;
+    if (fristDager != null && fristDager < 0) return { type: 'frist-over', vekt: 0, tekst: `Frist ${Math.abs(fristDager)} d over`, farge: '#dc2626', bg: '#fee2e2' };
+    if (utenBemanningIds.has(p.id)) return { type: 'bemanning', vekt: 1, tekst: 'Ingen bemanning neste uke', farge: '#b45309', bg: '#fef3c7' };
+    if (fristDager != null && fristDager <= 14) return { type: 'frist-snart', vekt: 2, tekst: `Frist om ${fristDager} d`, farge: '#b45309', bg: '#fef3c7' };
+    const uA = utenAnsvarligPer[p.id] || 0;
+    if (uA > 0) return { type: 'ks', vekt: 3, tekst: `${uA} liste${uA === 1 ? '' : 'r'} uten ansvarlig`, farge: '#b45309', bg: '#fef3c7' };
+    const tasks = p.fdTasks || [];
+    if (tasks.length) return { type: 'plan', vekt: 4, tekst: `På plan · ${tasks.filter(t => (t.pct ?? 0) >= 100).length}/${tasks.length} faser`, farge: '#15803d', bg: '#dcfce7' };
+    const iDagB = dateToIso(new Date());
+    if (p.startDato && p.startDato > iDagB) return { type: 'starter', vekt: 4, tekst: `Starter ${kortDato(p.startDato)}`, farge: '#15803d', bg: '#dcfce7' };
+    return { type: 'ingen-plan', vekt: 5, tekst: 'Ingen plan ennå', farge: '#5d6b80', bg: '#f1f5f9' };
+  }
+
   const faneProsjekter = useMemo(() => {
     let arr = aktivFane === 'arkivert'
       ? alleProsjekter.filter(p => p.arkivert)
@@ -1534,14 +1547,75 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
     if (varselFilter === 'frist') arr = arr.filter(p => overFristIds.has(p.id));
     if (varselFilter === 'bemanning') arr = arr.filter(p => utenBemanningIds.has(p.id));
     if (sortValg === 'handling' && aktivFane !== 'arkivert') {
-      // «Trenger handling først»: over frist øverst, deretter uten bemanning,
-      // deretter resten — alfabetisk innen hver gruppe
-      const vekt = p => (overFristIds.has(p.id) ? 0 : utenBemanningIds.has(p.id) ? 1 : 2);
-      return [...arr].sort((a, b) => vekt(a) - vekt(b) || visTittel(a).localeCompare(visTittel(b), 'nb'));
+      // «Trenger handling først»: badge-prioriteten styrer (rød > gul > grønn/grå)
+      return [...arr].sort((a, b) => badgeFor(a).vekt - badgeFor(b).vekt || visTittel(a).localeCompare(visTittel(b), 'nb'));
     }
     return sorterFane(arr);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [alleProsjekter, aktivFane, sortValg, varselFilter, overFristIds, utenBemanningIds]);
+  }, [alleProsjekter, aktivFane, sortValg, varselFilter, overFristIds, utenBemanningIds, utenAnsvarligPer]);
+
+  // ── Oppdrag 19: delte rad-hjelpere for tabell- og kort-visningen ──
+  const tomCelle = <span style={{ color: '#cbd5e1' }}>—</span>;
+
+  function prosjektInfo(p) {
+    const visAdresse = p.adresse || ((p.navn || '').includes(' — ') ? (p.navn || '').split(' — ').slice(1).join(' — ').trim() : (p.navn || 'Uten navn'));
+    const kundeNavn = p.kunde?.navn || ((p.navn || '').includes(' — ') ? (p.navn || '').split(' — ')[0].trim() : null);
+    const pl = p.prosjektlederId ? ansatteById[p.prosjektlederId] : null;
+    const antallFolk = new Set((tildelingerByProsjekt[p.id] || []).map(t => t.ansattId)).size;
+    const badge = badgeFor(p);
+    // Handlingsknappen matcher badgen: rød frist → Forleng, bemanningshull → Bemann, ellers Åpne
+    const handling = badge.type === 'frist-over'
+      ? { label: 'Forleng', onClick: () => { setForlengFristId(p.id); setForlengDato(p.sluttDato || dateToIso(new Date())); } }
+      : badge.type === 'bemanning' && onNavigate
+        ? { label: 'Bemann', onClick: () => onNavigate('bemanningsplan') }
+        : { label: 'Åpne', onClick: () => apneProsjekt(p) };
+    const periode = p.startDato && p.sluttDato
+      ? `${kortDato(p.startDato)}–${kortDato(p.sluttDato)}`
+      : p.startDato ? `fra ${kortDato(p.startDato)}` : null;
+    return { visAdresse, kundeNavn, pl, antallFolk, belopVis: formaterBelop(p.belop), badge, handling, periode };
+  }
+
+  function prosjektMeny(p) {
+    const portalToken = kundeportalToken(p, state.befaringer);
+    return [
+      { ikon: <Ikon ikon={Pencil} size={15} />, label: 'Rediger', onClick: () => openEdit(p) },
+      onApneProsjektSide && { ikon: <Ikon ikon={Eye} size={15} />, label: 'Hurtigvisning (panel)', onClick: () => aapnePanel(p) },
+      portalToken && { ikon: <Ikon ikon={ExternalLink} size={15} />, label: 'Kundeportal',
+        onClick: () => window.open(kundeportalUrl(portalToken, { intern: true }), '_blank', 'noopener') },
+      portalToken && { ikon: <Ikon ikon={Copy} size={15} />, label: 'Kopier kundelenke',
+        onClick: () => navigator.clipboard?.writeText(kundeportalUrl(portalToken, { intern: false })).catch(() => {}) },
+      duplikatHint[p.id]
+        ? { ikon: <Ikon ikon={Link2} size={15} />, label: `Slå sammen med ${duplikatHint[p.id].label}…`, onClick: () => setMergeFor({ prosjekt: p, forslagId: duplikatHint[p.id].id }) }
+        : { ikon: <Ikon ikon={Link2} size={15} />, label: 'Slå sammen med…', onClick: () => setMergeFor({ prosjekt: p, forslagId: null }) },
+      !(p.tilbudPayload || p.tilbudLink)
+        && { ikon: <Ikon ikon={Package} size={15} />, label: 'Koble til tilbud…', onClick: () => setKobleFor(p) },
+      p.tilbudsfelterFørKobling
+        && { ikon: <Ikon ikon={Scissors} size={15} />, label: 'Fjern tilbuds-kobling', onClick: () => fjernKobling(p) },
+      { skille: true },
+      ...['jobber_med', 'godkjent', 'aktiv'].filter(s => normStatus(p.status) !== s).map(s => ({
+        ikon: <Ikon ikon={ArrowRight} size={15} />, label: SAVE_LABELS[s], onClick: () => settProsjektStatus(p, s),
+      })),
+      normStatus(p.status) !== 'fullfort' && { ikon: <Ikon ikon={Flag} size={15} />, label: 'Fullfør', onClick: () => settProsjektStatus(p, 'fullfort') },
+      { skille: true },
+      { ikon: <Ikon ikon={Archive} size={15} />, label: 'Arkiver', farlig: true, onClick: () => arkiverProsjekt(p) },
+    ];
+  }
+
+  const forlengBoks = (p, frittstaaende = false) => (
+    <div onClick={e => e.stopPropagation()}
+      style={{
+        display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '8px 14px', background: '#fffbeb',
+        ...(frittstaaende ? { border: '1px solid #fde68a', borderRadius: 10, marginBottom: 10 } : { borderBottom: '1px solid #fde68a' }),
+      }}>
+      <span style={{ fontSize: 12.5, fontWeight: 500, color: '#92400e' }}>Ny sluttdato for {p.adresse || p.navn}:</span>
+      <input type="date" className="input" style={{ width: 160, height: 32 }} value={forlengDato} onChange={e => setForlengDato(e.target.value)} />
+      <button className="btn btn-sm btn-primary" onClick={() => lagreForlengFrist(p)}>Lagre</button>
+      <button className="btn btn-sm" onClick={() => setForlengFristId(null)}>Avbryt</button>
+      {(p.fristUtvidelser || []).length > 0 && (
+        <span style={{ fontSize: 11, color: '#92400e' }}>Forlenget {(p.fristUtvidelser || []).length} gang(er) før</span>
+      )}
+    </div>
+  );
 
   // ── PR2: detaljpanel-hjelpere ──
   const valgtProsjekt = valgtId ? state.prosjekter.find(p => p.id === valgtId) : null;
@@ -1793,7 +1867,7 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
           </button>
         ))}
         <span style={{ fontSize: 12, color: '#5d6b80', marginLeft: 8 }}>Visning:</span>
-        {[['liste', <><Ikon ikon={List} size={13} /> Liste</>], ['gantt', <><Ikon ikon={ChartGantt} size={13} /> Gantt</>]].map(([key, label]) => (
+        {[['liste', <><Ikon ikon={List} size={13} /> Liste</>], ['gantt', <><Ikon ikon={ChartGantt} size={13} /> Gantt</>], ['kort', <><Ikon ikon={Package} size={13} /> Kort</>]].map(([key, label]) => (
           <button
             key={key}
             className="btn btn-sm"
@@ -1899,137 +1973,139 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
       })()}
 
       {/* Kompakte rader */}
-      {visning === 'liste' && faneProsjekter.length === 0 && (
+      {visning !== 'gantt' && faneProsjekter.length === 0 && (
         <div style={{ padding: 32, textAlign: 'center', color: '#5d6b80', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10 }}>
           {aktivFane === 'arkivert' ? 'Ingen arkiverte prosjekter.' : 'Ingen prosjekter i denne fanen.'}
         </div>
       )}
-      {visning === 'liste' && faneProsjekter.map(p => {
+
+      {/* Arkivert-fanen: enkel liste som før */}
+      {visning !== 'gantt' && aktivFane === 'arkivert' && faneProsjekter.map(p => {
         const visAdresse = p.adresse || ((p.navn || '').includes(' — ') ? (p.navn || '').split(' — ').slice(1).join(' — ').trim() : (p.navn || 'Uten navn'));
         const kundeNavn = p.kunde?.navn || ((p.navn || '').includes(' — ') ? (p.navn || '').split(' — ')[0].trim() : null);
-        const pl = p.prosjektlederId ? ansatteById[p.prosjektlederId] : null;
-        const tild = tildelingerByProsjekt[p.id] || [];
-        const antallFolk = new Set(tild.map(t => t.ansattId)).size;
-        const opp = oppgaverByProsjekt[p.id] || [];
-        const fremgang = opp.length
-          ? Math.round(opp.reduce((s, o) => s + (o.fremgang || 0), 0) / opp.length)
-          : (Array.isArray(p.fdTasks) && p.fdTasks.length
-            ? Math.round(p.fdTasks.reduce((s, t) => s + (t.progress || 0), 0) / p.fdTasks.length)
-            : null);
-        const belopVis = formaterBelop(p.belop);
-        const varsel = aktivFane !== 'arkivert' ? sluttDatoInfo(p.sluttDato, p.status) : null;
-        const ks = Array.isArray(p.ksSjekklister) && p.ksSjekklister.length > 0 ? p.ksSjekklister.length : null;
-
-        if (aktivFane === 'arkivert') {
-          const mergetHoved = p.mergetInn
-            ? state.prosjekter.find(x => x.id === p.mergetInn.hovedId)
-            : null;
-          return (
-            <KompaktRad
-              key={p.id}
-              tittel={visAdresse}
-              undertittel={kundeNavn || null}
-              varsel={p.mergetInn ? `Slått sammen med ${mergetHoved ? (mergetHoved.adresse || mergetHoved.navn) : 'annet prosjekt'}` : null}
-              varselFarge={p.mergetInn ? '#0e7490' : null}
-              meta={[
-                p.arkivertDato ? `Arkivert ${formatDate(p.arkivertDato.slice(0, 10))}` : 'Arkivert',
-                p.arkivertAv ? `av ${p.arkivertAv}` : null,
-              ]}
-              hoyre={[belopVis]}
-              meny={[
-                p.mergetInn
-                  ? { ikon: <Ikon ikon={Undo2} size={15} />, label: 'Angre sammenslåing', onClick: () => angreMerge(p.mergetInn.hovedId, p.id) }
-                  : { ikon: <Ikon ikon={Undo2} size={15} />, label: 'Gjenopprett', onClick: () => gjenopprettProsjekt(p) },
-                { ikon: <Ikon ikon={Pencil} size={15} />, label: 'Rediger', onClick: () => openEdit(p) },
-              ]}
-              onClick={() => openEdit(p)}
-            />
-          );
-        }
-
-        const manglerBemanning = utenBemanningIds.has(p.id);
-        const hurtigknapp = overFristIds.has(p.id)
-          ? { label: 'Forleng frist', onClick: () => { setForlengFristId(p.id); setForlengDato(p.sluttDato || dateToIso(new Date())); } }
-          : manglerBemanning && onNavigate
-            ? { label: '+ Bemann', onClick: () => onNavigate('bemanningsplan') }
-            : null;
-        const portalToken = kundeportalToken(p, state.befaringer);
-
+        const mergetHoved = p.mergetInn
+          ? state.prosjekter.find(x => x.id === p.mergetInn.hovedId)
+          : null;
         return (
-          <div key={p.id}>
           <KompaktRad
+            key={p.id}
             tittel={visAdresse}
             undertittel={kundeNavn || null}
-            varsel={(() => {
-              // Rød frist (over/≤7d) vinner alltid; underbemannet-mot-kalkyle er
-              // mer handlingsrettet enn det gule «Xd igjen» og tar dets plass.
-              if (varsel && varsel.farge === '#dc2626') return varsel.label;
-              if (underbemannetIds.has(p.id)) return 'underbemannet mot kalkyle';
-              if (varsel) return varsel.label;
-              if (manglerBemanning) return 'ingen bemanning neste uke';
-              return null;
-            })()}
-            varselFarge={varsel?.farge === '#dc2626' ? varsel.farge : underbemannetIds.has(p.id) ? '#b45309' : varsel ? varsel.farge : manglerBemanning ? '#b45309' : null}
-            hint={duplikatHint[p.id] ? `ligner på ${duplikatHint[p.id].label}` : null}
+            varsel={p.mergetInn ? `Slått sammen med ${mergetHoved ? (mergetHoved.adresse || mergetHoved.navn) : 'annet prosjekt'}` : null}
+            varselFarge={p.mergetInn ? '#0e7490' : null}
             meta={[
-              p.startDato ? `${formatDate(p.startDato)}${p.sluttDato ? ` – ${formatDate(p.sluttDato)}` : ''}` : null,
-              varighetUker(p.startDato, p.sluttDato),
-              pl ? (pl.navn || '').split(' ')[0] : null,
-              p.jobbType || null,
+              p.arkivertDato ? `Arkivert ${formatDate(p.arkivertDato.slice(0, 10))}` : 'Arkivert',
+              p.arkivertAv ? `av ${p.arkivertAv}` : null,
             ]}
-            hoyre={[
-              portalToken ? (
-                <a href={kundeportalUrl(portalToken, { intern: true })} target="_blank" rel="noopener noreferrer"
-                  onClick={e => e.stopPropagation()}
-                  title="Kundeportal — intern visning, telles ikke i kunde-statistikken"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--accent)', textDecoration: 'none', fontWeight: 500 }}>
-                  <Ikon ikon={ExternalLink} size={14} /> Kundeportal
-                </a>
-              ) : null,
-              antallFolk > 0 ? <IkonTekst ikon={Users} size={13} gap={4}>{antallFolk}</IkonTekst> : null,
-              belopVis,
-              ks ? <IkonTekst ikon={ClipboardCheck} size={13} gap={4}>{ks}</IkonTekst> : null,
-            ]}
-            fremdrift={fremgang}
-            hurtigknapp={hurtigknapp}
+            hoyre={[formaterBelop(p.belop)]}
             meny={[
+              p.mergetInn
+                ? { ikon: <Ikon ikon={Undo2} size={15} />, label: 'Angre sammenslåing', onClick: () => angreMerge(p.mergetInn.hovedId, p.id) }
+                : { ikon: <Ikon ikon={Undo2} size={15} />, label: 'Gjenopprett', onClick: () => gjenopprettProsjekt(p) },
               { ikon: <Ikon ikon={Pencil} size={15} />, label: 'Rediger', onClick: () => openEdit(p) },
-              onApneProsjektSide && { ikon: <Ikon ikon={Eye} size={15} />, label: 'Hurtigvisning (panel)', onClick: () => aapnePanel(p) },
-              portalToken && { ikon: <Ikon ikon={ExternalLink} size={15} />, label: 'Kundeportal',
-                onClick: () => window.open(kundeportalUrl(portalToken, { intern: true }), '_blank', 'noopener') },
-              portalToken && { ikon: <Ikon ikon={Copy} size={15} />, label: 'Kopier kundelenke',
-                onClick: () => navigator.clipboard?.writeText(kundeportalUrl(portalToken, { intern: false })).catch(() => {}) },
-              duplikatHint[p.id]
-                ? { ikon: <Ikon ikon={Link2} size={15} />, label: `Slå sammen med ${duplikatHint[p.id].label}…`, onClick: () => setMergeFor({ prosjekt: p, forslagId: duplikatHint[p.id].id }) }
-                : { ikon: <Ikon ikon={Link2} size={15} />, label: 'Slå sammen med…', onClick: () => setMergeFor({ prosjekt: p, forslagId: null }) },
-              !(p.tilbudPayload || p.tilbudLink)
-                && { ikon: <Ikon ikon={Package} size={15} />, label: 'Koble til tilbud…', onClick: () => setKobleFor(p) },
-              p.tilbudsfelterFørKobling
-                && { ikon: <Ikon ikon={Scissors} size={15} />, label: 'Fjern tilbuds-kobling', onClick: () => fjernKobling(p) },
-              { skille: true },
-              ...['jobber_med', 'godkjent', 'aktiv'].filter(s => normStatus(p.status) !== s).map(s => ({
-                ikon: <Ikon ikon={ArrowRight} size={15} />, label: SAVE_LABELS[s], onClick: () => settProsjektStatus(p, s),
-              })),
-              normStatus(p.status) !== 'fullfort' && { ikon: <Ikon ikon={Flag} size={15} />, label: 'Fullfør', onClick: () => settProsjektStatus(p, 'fullfort') },
-              { skille: true },
-              { ikon: <Ikon ikon={Archive} size={15} />, label: 'Arkiver', farlig: true, onClick: () => arkiverProsjekt(p) },
             ]}
-            onClick={() => apneProsjekt(p)}
+            onClick={() => openEdit(p)}
           />
-          {forlengFristId === p.id && (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 14px', margin: '-4px 0 8px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 500, color: '#92400e' }}>Ny sluttdato:</span>
-              <input type="date" className="input" style={{ width: 160, height: 32 }} value={forlengDato} onChange={e => setForlengDato(e.target.value)} />
-              <button className="btn btn-sm btn-primary" onClick={() => lagreForlengFrist(p)}>Lagre</button>
-              <button className="btn btn-sm" onClick={() => setForlengFristId(null)}>Avbryt</button>
-              {(p.fristUtvidelser || []).length > 0 && (
-                <span style={{ fontSize: 11, color: '#92400e' }}>Forlenget {(p.fristUtvidelser || []).length} gang(er) før</span>
-              )}
-            </div>
-          )}
-          </div>
         );
       })}
+
+      {/* Oppdrag 19: prosjektlisten som ÉN sammenhengende tabell (alternativ A) */}
+      {visning === 'liste' && aktivFane !== 'arkivert' && faneProsjekter.length > 0 && (
+        <SeksjonertTabell
+          kolonner={[
+            { id: 'prosjekt', tittel: 'Prosjekt', bredde: 'minmax(180px, 1.6fr)' },
+            { id: 'status', tittel: 'Status', bredde: 'minmax(150px, 1.1fr)' },
+            { id: 'pl', tittel: 'PL', bredde: '80px', skjulMobil: true },
+            { id: 'periode', tittel: 'Periode', bredde: '110px', skjulMobil: true },
+            { id: 'folk', tittel: 'Folk', bredde: '50px', hoyre: true, skjulMobil: true },
+            { id: 'sum', tittel: 'Sum', bredde: '100px', hoyre: true, skjulMobil: true },
+            { id: 'handling', tittel: '', bredde: '150px', hoyre: true },
+          ]}
+          seksjoner={[{
+            rader: faneProsjekter.map(p => {
+              const info = prosjektInfo(p);
+              return {
+                id: p.id,
+                onClick: () => apneProsjekt(p),
+                celler: {
+                  prosjekt: (
+                    <div style={{ minWidth: 0 }}>
+                      <div className="ds-tabell-navn">
+                        {info.visAdresse}
+                        {duplikatHint[p.id] && (
+                          <span title={`Ligner på ${duplikatHint[p.id].label} — slå sammen via ⋯-menyen`}
+                            style={{ marginLeft: 6, color: '#0e7490', verticalAlign: 'middle', cursor: 'help' }}>
+                            <Ikon ikon={Link2} size={13} />
+                          </span>
+                        )}
+                      </div>
+                      {(info.kundeNavn || p.jobbType) && (
+                        <div className="ds-tabell-under">{[info.kundeNavn, p.jobbType].filter(Boolean).join(' · ')}</div>
+                      )}
+                    </div>
+                  ),
+                  status: (
+                    <span className="ds-tabell-badge" style={{ color: info.badge.farge, background: info.badge.bg }}>
+                      {info.badge.tekst}
+                    </span>
+                  ),
+                  pl: info.pl ? (info.pl.navn || '').split(' ')[0] : tomCelle,
+                  periode: info.periode || tomCelle,
+                  folk: info.antallFolk > 0 ? info.antallFolk : tomCelle,
+                  sum: info.belopVis || tomCelle,
+                  handling: (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={e => e.stopPropagation()}>
+                      <button className="btn btn-sm" onClick={info.handling.onClick}>{info.handling.label}</button>
+                      <RadMeny valg={prosjektMeny(p)} />
+                    </span>
+                  ),
+                },
+                etter: forlengFristId === p.id ? forlengBoks(p) : null,
+              };
+            }),
+          }]}
+        />
+      )}
+
+      {/* Oppdrag 19: kort-visning — rutenett for nettbrett */}
+      {visning === 'kort' && aktivFane !== 'arkivert' && faneProsjekter.length > 0 && (
+        <>
+          {forlengFristId && (() => {
+            const p = faneProsjekter.find(x => x.id === forlengFristId);
+            return p ? forlengBoks(p, true) : null;
+          })()}
+          <div className="ds-kortgrid">
+            {faneProsjekter.map(p => {
+              const info = prosjektInfo(p);
+              return (
+                <div key={p.id} className="ds-kort" onClick={() => apneProsjekt(p)}>
+                  <span className="ds-kort-stripe" style={{ background: info.badge.farge }} />
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="ds-tabell-navn" style={{ fontSize: 13.5, whiteSpace: 'normal' }}>{info.visAdresse}</div>
+                      {info.kundeNavn && <div className="ds-tabell-under">{info.kundeNavn}</div>}
+                    </div>
+                    <span onClick={e => e.stopPropagation()}><RadMeny valg={prosjektMeny(p)} /></span>
+                  </div>
+                  <div style={{ margin: '8px 0 10px' }}>
+                    <span className="ds-tabell-badge" style={{ color: info.badge.farge, background: info.badge.bg }}>{info.badge.tekst}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, fontSize: 12.5, color: '#5d6b80' }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {[
+                        info.pl ? (info.pl.navn || '').split(' ')[0] : null,
+                        info.antallFolk > 0 ? `${info.antallFolk} pers` : null,
+                        info.belopVis,
+                      ].filter(Boolean).join(' · ') || '—'}
+                    </span>
+                    <button className="btn btn-sm" style={{ flexShrink: 0 }} onClick={e => { e.stopPropagation(); info.handling.onClick(); }}>{info.handling.label}</button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
 
       {/* ── Detaljpanel (PR2): skyver inn fra høyre ved rad-klikk ── */}
       {valgtProsjekt && (() => {
