@@ -1,4 +1,5 @@
 import { Fragment, useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { MoreHorizontal, X, TriangleAlert } from 'lucide-react';
 import { Ikon } from './Ikon';
 import './designsystem.css';
@@ -57,23 +58,56 @@ export function StatusFaner({ faner, aktiv, onVelg }) {
 }
 
 // ── 1.4 Rad-meny — alle handlinger bak én knapp, aldri knapperader ──
+// Oppdrag 26: lista rendres i portal med fixed-posisjon (målt mot viewport)
+// slik at overflow:hidden på tabell/container aldri klipper den, og den
+// flipper oppover når det ikke er plass under (nederste rader).
+const RADMENY_VALG_HOYDE = 38;
 export function RadMeny({ valg }) {
   const [apen, setApen] = useState(false);
+  const [pos, setPos] = useState(null); // { right, top?, bottom? }
   const ref = useRef(null);
+  const listeRef = useRef(null);
+  const synlige = valg.filter(Boolean);
+
+  function aapne() {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    const est = synlige.length * RADMENY_VALG_HOYDE + 12;
+    const plassUnder = window.innerHeight - r.bottom;
+    const opp = plassUnder < est && r.top > plassUnder;
+    setPos({
+      right: Math.max(8, window.innerWidth - r.right),
+      ...(opp ? { bottom: window.innerHeight - r.top + 4 } : { top: r.bottom + 4 }),
+    });
+    setApen(true);
+  }
+
   useEffect(() => {
     if (!apen) return;
-    const lukk = e => { if (ref.current && !ref.current.contains(e.target)) setApen(false); };
+    const utenfor = e => (!ref.current || !ref.current.contains(e.target)) && (!listeRef.current || !listeRef.current.contains(e.target));
+    const lukk = e => { if (utenfor(e)) setApen(false); };
     const esc = e => { if (e.key === 'Escape') setApen(false); };
+    const lukkStille = () => setApen(false);
     document.addEventListener('mousedown', lukk);
     document.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('mousedown', lukk); document.removeEventListener('keydown', esc); };
+    window.addEventListener('scroll', lukkStille, true);
+    window.addEventListener('resize', lukkStille);
+    return () => {
+      document.removeEventListener('mousedown', lukk);
+      document.removeEventListener('keydown', esc);
+      window.removeEventListener('scroll', lukkStille, true);
+      window.removeEventListener('resize', lukkStille);
+    };
   }, [apen]);
+
   return (
     <div className="ds-radmeny" ref={ref} onClick={e => e.stopPropagation()}>
-      <button className="ds-radmeny-knapp" title="Handlinger" onClick={() => setApen(a => !a)}><Ikon ikon={MoreHorizontal} size={16} /></button>
-      {apen && (
-        <div className="ds-radmeny-liste">
-          {valg.filter(Boolean).map((v, i) => v.skille
+      <button className="ds-radmeny-knapp" title="Handlinger" onClick={() => (apen ? setApen(false) : aapne())}><Ikon ikon={MoreHorizontal} size={16} /></button>
+      {apen && pos && createPortal(
+        <div ref={listeRef} className="ds-radmeny-liste" data-radmeny-portal
+          style={{ position: 'fixed', right: pos.right, top: pos.top ?? 'auto', bottom: pos.bottom ?? 'auto', zIndex: 400, maxHeight: 'calc(100vh - 16px)', overflowY: 'auto' }}
+          onClick={e => e.stopPropagation()}>
+          {synlige.map((v, i) => v.skille
             ? <div key={i} className="ds-radmeny-skille" />
             : (
               <button
@@ -84,7 +118,8 @@ export function RadMeny({ valg }) {
                 {v.ikon} {v.label}
               </button>
             ))}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
