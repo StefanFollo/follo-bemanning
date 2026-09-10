@@ -297,7 +297,7 @@ export function lagDigestEpost(d, appUrl) {
 
   // Oppdrag 21: pipeline-linje (prosjekter uten bemanning som starter snart)
   if (d.pipeline) {
-    html += `<p style="margin:12px 0 0;color:#b45309;font-size:13px;font-weight:600">${esc(d.pipeline)} — <a href="${esc(appUrl)}" style="color:#0f2942">åpne bemanningsplanen</a></p>`;
+    html += `<p style="margin:12px 0 0;color:#b45309;font-size:13px;font-weight:600">${esc(d.pipeline)} — <a href="${esc(appUrl)}/?side=pipeline" style="color:#0f2942">åpne Pipeline</a></p>`;
     tekst.push(d.pipeline);
   }
 

@@ -500,9 +500,10 @@ export default function Dashboard({ onNavigate }) {
                 { tab: 'befaring',       ikon: Search,       label: 'Ny befaring',       sub: 'Planlegg befaring' },
                 { tab: 'reklamasjon',    ikon: ShieldAlert,  label: 'Reklamasjon',       sub: 'Registrer klage' },
                 { tab: 'bemanningsplan', ikon: CalendarDays, label: 'Bemanningsplan',    sub: 'Tildel ansatte' },
-                { tab: 'prosjekter',     ikon: Building2,    label: 'Prosjekter',        sub: 'Se alle prosjekter' },
-              ].map(({ tab, ikon, label, sub }) => (
-                <button key={tab} className="dash-hurtig-knapp" onClick={() => onNavigate(tab)}>
+                { tab: 'prosjekter',     ikon: Building2,    label: 'Prosjekter',        sub: 'Startede prosjekter' },
+                { tab: 'prosjekter',     ikon: Rocket,       label: 'Pipeline',          sub: 'Prosjekter som ikke er startet', underfane: 'pipeline' },
+              ].map(({ tab, ikon, label, sub, underfane }) => (
+                <button key={tab + (underfane || '')} className="dash-hurtig-knapp" onClick={() => { if (underfane) sessionStorage.setItem('fbs_prosjekter_fane', underfane); onNavigate(tab); }}>
                   <span className="dash-hurtig-ikon"><Ikon ikon={ikon} size={20} /></span>
                   <div>
                     <div className="dash-hurtig-label">{label}</div>

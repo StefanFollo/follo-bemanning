@@ -349,7 +349,17 @@ function App() {
   // (kun roller som har Befaring-siden; parameteren fjernes fra URL-en etterpå).
   useEffect(() => {
     if (!localStorage.getItem('fbs_token')) return;
-    const kort = new URLSearchParams(window.location.search).get('kort');
+    const q = new URLSearchParams(window.location.search);
+    // Oppdrag 24: ?side=pipeline (digest/oversikt) → Prosjekter med Pipeline-underfanen
+    if (q.get('side') === 'pipeline') {
+      if (['admin', 'kontor', 'anleggsleder'].includes(localStorage.getItem('fbs_role'))) {
+        sessionStorage.setItem('fbs_prosjekter_fane', 'pipeline');
+        setActiveTab('prosjekter');
+      }
+      window.history.replaceState({}, '', window.location.pathname);
+      return;
+    }
+    const kort = q.get('kort');
     if (!kort) return;
     const r = localStorage.getItem('fbs_role');
     if (['admin', 'kontor', 'befaring'].includes(r)) {
@@ -486,7 +496,7 @@ function App() {
           {activeTab === 'service' && (isAdmin || isKontor || isBefaring) && <Service />}
           {activeTab === 'prosjekter' && (isAdmin || isKontor || isAL) && <Prosjekter onNavigate={setActiveTab} onApneProsjektSide={apneProsjektSide} />}
           {activeTab === 'ansatte' && (isAdmin || isKontor || isAL) && <Ansatte readOnly={isAL} />}
-          {activeTab === 'bemanningsplan' && (isAdmin || isAL || role === 'ansatt') && <Bemanningsplan readOnly={!(isAdmin || isAL)} />}
+          {activeTab === 'bemanningsplan' && (isAdmin || isAL || role === 'ansatt') && <Bemanningsplan readOnly={!(isAdmin || isAL)} onNavigate={setActiveTab} />}
           {activeTab === 'rorlegger' && (isAdmin || isKontor || isRorlegger) && <RorleggerPlan />}
           {activeTab === 'framdrift' && (isAdmin || isKontor || isAL || role === 'ansatt') && <Framdriftsplan readOnly={role === 'ansatt'} ansattId={role === 'ansatt' ? ansattId : null} onNavigate={setActiveTab} onApneProsjektSide={role === 'ansatt' ? null : apneProsjektSide} />}
           {activeTab === 'ks' && (isAdmin || isKontor || isAL || role === 'ansatt') && <KS readOnly={role === 'ansatt'} ansattId={role === 'ansatt' ? ansattId : null} onApneProsjektSide={role === 'ansatt' ? null : apneProsjektSide} />}

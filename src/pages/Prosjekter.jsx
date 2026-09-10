@@ -11,7 +11,7 @@ import { kundeportalToken, kundeportalUrl } from '../kundeportal';
 import { Ikon, IkonTekst, TomIkon } from '../komponenter/Ikon';
 import { varsleFramdriftEksport } from '../framdriftEksportKlient';
 import { useApp } from '../context/AppContext';
-import { formatDate, PROSJEKT_PALETTE, isoToDate, dateToIso, daysBetween } from '../store';
+import { formatDate, PROSJEKT_PALETTE, isoToDate, dateToIso, daysBetween, uid } from '../store';
 import { StatusFaner, KompaktRad, DetaljPanel, VarselBanner, SeksjonertTabell, RadMeny } from '../komponenter/Designsystem';
 import {
   beregnMerge, beregnAngre, beregnPekerOppdatering, beregnAngrePekere,
@@ -23,7 +23,11 @@ import { beregnAktivering, beregnForkast, kalkyleSammendrag, harKalkyle } from '
 import KSFagForslag from '../komponenter/KSFagForslag';
 import { erForslagSkjult } from '../ksForslag';
 import { beregnKalkyleVsBemanning } from '../kalkyleBemanning';
-import { ukeNr } from '../pipeline';
+import {
+  ukeNr, prosjektStatus, harTildeling, bemannetTil, hullEtterBemanning, ferdigForslag,
+  migrerStatus, pipelineListe, pipelineOppsummering, erUtforende, pipelineLoggInnslag,
+  weekStart as ukeStart,
+} from '../pipeline';
 
 function formaterBelop(belop) {
   if (!belop && belop !== 0) return null;
@@ -591,13 +595,14 @@ function nextAutoColor(prosjekter) {
 
 const JOBB_TYPER = ['Ny bygg', 'Tilbygg', 'Tak jobb', 'Fasade jobb', 'Bad', 'Tømrer', 'Maling', 'Rørlegger', 'Flislegging', 'Elektro', 'Rehabilitering', 'Annet'];
 
-const EMPTY = { navn: '', adresse: '', kundeNavn: '', kundeTlf: '', kundeEpost: '', jobbType: '', startDato: '', sluttDato: '', status: 'jobber_med', beskrivelse: '', farge: PROSJEKT_PALETTE[0], belop: '', manskapAntall: '', prosjektlederId: '' };
+const EMPTY = { navn: '', adresse: '', kundeNavn: '', kundeTlf: '', kundeEpost: '', jobbType: '', startDato: '', sluttDato: '', status: 'aktiv', beskrivelse: '', farge: PROSJEKT_PALETTE[0], belop: '', manskapAntall: '', prosjektlederId: '' };
 
-// Normaliser gammel status til visningsgruppe
+// Oppdrag 24: status er avledet (Ikke startet/Startet fra tildelinger, Ferdig
+// manuelt). Lagret felt er 'aktiv' eller 'fullfort'; gamle manuelle verdier
+// (godkjent/jobber_med/planlagt/pagaende) behandles som 'aktiv' til
+// migreringen har skrevet dem om.
 function normStatus(s) {
-  if (s === 'planlagt') return 'jobber_med';
-  if (s === 'pagaende') return 'aktiv';
-  return s;
+  return s === 'fullfort' ? 'fullfort' : 'aktiv';
 }
 
 // ═══ Slå sammen duplikat-prosjekter (SPEC-merge-prosjekter.md) ═══
@@ -1188,8 +1193,17 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
   const setPlFilter = v => { localStorage.setItem('fbs_proj_plfilter', v); setPlFilterState(v); };
   const [dedupPanel, setDedupPanel] = useState(null); // null | {loading} | {dry, plan, ...}
   const isAdmin = localStorage.getItem('fbs_role') === 'admin';
-  // Ny liste (designsystem PR1): aktiv status-fane + sorteringsvalg
-  const [aktivFane, setAktivFane] = useState('aktiv');
+  // Oppdrag 24: underfaner Startet · Pipeline · Ferdig (· Arkivert). Andre
+  // sider kan be om Pipeline via sessionStorage (Bemanning, Oversikt, digest).
+  const [aktivFane, setAktivFane] = useState(() => {
+    const onsket = sessionStorage.getItem('fbs_prosjekter_fane');
+    if (onsket) sessionStorage.removeItem('fbs_prosjekter_fane');
+    return onsket || 'startet';
+  });
+  const [pipelineRedigerId, setPipelineRedigerId] = useState(null);
+  const [pipelineForm, setPipelineForm] = useState(null); // { forventetStart, forventetUker, forventetFolk, sikkerhet }
+  const [visLeggIPipeline, setVisLeggIPipeline] = useState(false);
+  const [leggForm, setLeggForm] = useState({ befaringId: '', forventetStart: '', forventetUker: 2, forventetFolk: 2 });
   // Oppdrag 19: «Trenger handling» er standard, og valget huskes per enhet
   const [sortValg, setSortValgState] = useState(() => localStorage.getItem('fbs_prosjekt_sort') || 'handling');
   const setSortValg = v => { localStorage.setItem('fbs_prosjekt_sort', v); setSortValgState(v); };
@@ -1279,11 +1293,100 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
 
   function gjenopprettProsjekt(p) {
     dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...p, arkivert: false } });
-    setAktivFane(normStatus(p.status) || 'aktiv');
+    setAktivFane(p.status === 'fullfort' ? 'fullfort' : harTildeling(p.id, state.tildelinger) ? 'startet' : 'pipeline');
   }
 
+  // Oppdrag 24: kun Ferdig settes manuelt; Ikke startet/Startet avledes.
   function settProsjektStatus(p, nyStatus) {
-    dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...p, status: nyStatus } });
+    const tekst = nyStatus === 'fullfort' ? 'Markert ferdig' : 'Gjenåpnet';
+    dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...p, status: nyStatus,
+      pipelineLogg: [...(p.pipelineLogg || []), pipelineLoggInnslag(tekst, localStorage.getItem('fbs_user_navn') || 'ukjent')] } });
+  }
+
+  // Oppdrag 24: engangs-migrering av gamle manuelle statuser → 'aktiv' med
+  // statusGammel bevart og logglinje. Idempotent — kjører bare på rader som
+  // fortsatt bærer en gammel verdi. Ingen sletting.
+  useEffect(() => {
+    if (!['admin', 'kontor'].includes(localStorage.getItem('fbs_role'))) return;
+    for (const p of state.prosjekter) {
+      const m = migrerStatus(p);
+      if (m) dispatch({ type: 'UPDATE_PROSJEKT', payload: m });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Oppdrag 24: pipeline-redigering (lagres i p.pipeline, logget)
+  function apnePipelineRediger(p) {
+    setPipelineRedigerId(p.id);
+    setPipelineForm({
+      forventetStart: p.pipeline?.forventetStart || p.startDato || '',
+      forventetUker: p.pipeline?.forventetUker || '',
+      forventetFolk: p.pipeline?.forventetFolk || '',
+      sikkerhet: p.pipeline?.sikkerhet || 'fast',
+    });
+  }
+  function lagrePipelineRediger(p) {
+    const f = pipelineForm;
+    const ny = {
+      forventetStart: f.forventetStart ? ukeStart(f.forventetStart) : null,
+      forventetUker: Number(f.forventetUker) > 0 ? Math.round(Number(f.forventetUker)) : null,
+      forventetFolk: Number(f.forventetFolk) > 0 ? Math.round(Number(f.forventetFolk)) : null,
+      sikkerhet: f.sikkerhet || 'fast',
+    };
+    const g = p.pipeline || {};
+    const deler = [];
+    if ((ny.forventetStart || null) !== (g.forventetStart || null)) deler.push(`start ${g.forventetStart ? 'u' + ukeNr(g.forventetStart) : 'ikke satt'} → ${ny.forventetStart ? 'u' + ukeNr(ny.forventetStart) : 'ikke satt'}`);
+    if ((ny.forventetUker || null) !== (g.forventetUker || null)) deler.push(`uker ${g.forventetUker || '–'} → ${ny.forventetUker || '–'}`);
+    if ((ny.forventetFolk || null) !== (g.forventetFolk || null)) deler.push(`folk ${g.forventetFolk || '–'} → ${ny.forventetFolk || '–'}`);
+    if (ny.sikkerhet !== (g.sikkerhet || 'fast')) deler.push(`sikkerhet ${g.sikkerhet || 'fast'} → ${ny.sikkerhet}`);
+    dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...p, pipeline: { ...g, ...ny },
+      pipelineLogg: [...(p.pipelineLogg || []), pipelineLoggInnslag(deler.length ? `Pipeline endret: ${deler.join(', ')}` : 'Pipeline lagret', localStorage.getItem('fbs_user_navn') || 'ukjent')] } });
+    setPipelineRedigerId(null); setPipelineForm(null);
+  }
+
+  // Oppdrag 24: «+ Legg i pipeline» — oppretter prosjekt (Ikke startet) fra
+  // vunnet tilbud uten prosjekt (fast) eller sendt tilbud/befaring
+  // (sannsynlig/mulig). Samme navnformat som BefaringPlan, så «Opprett
+  // prosjekt» kobler til dette prosjektet når tilbudet vinnes senere.
+  const leggKandidater = (state.befaringer || []).filter(b => b && !b.arkivert && !b.prosjektId
+    && ['godkjent', 'tilbud_sendt', 'tilbud_arbeid', 'planlagt'].includes(b.status)
+    && !state.prosjekter.some(p => !p.arkivert && (p.befaringId === b.id || p.kildeBefaringId === b.id)));
+  function leggIPipeline() {
+    const b = leggKandidater.find(x => x.id === leggForm.befaringId);
+    if (!b) return;
+    const sikkerhet = b.status === 'godkjent' ? 'fast' : b.status === 'tilbud_sendt' ? 'sannsynlig' : 'mulig';
+    const prosjektId = uid();
+    dispatch({
+      type: 'ADD_PROSJEKT',
+      payload: {
+        id: prosjektId,
+        navn: b.kontaktNavn + (b.adresse ? ' – ' + b.adresse : ''),
+        adresse: b.adresse || '',
+        jobbType: b.jobbType || '',
+        belop: b.estimertBelop || '',
+        estimertSum: b.estimertSum || 0,
+        prosjektlederId: b.prosjektlederId || '',
+        startDato: '', sluttDato: '',
+        status: 'aktiv',
+        beskrivelse: [b.notat, b.kommentar].filter(Boolean).join('\n\n') || '',
+        farge: nextAutoColor(state.prosjekter),
+        befaringId: b.id, kildeBefaringId: b.id,
+        poster: b.poster || [], fag: b.fag || [], pristype: b.pristype || '',
+        tilbudLink: b.tilbudLink || '',
+        ...(b.tilbudPayload ? { tilbudPayload: b.tilbudPayload } : {}),
+        kunde: { navn: b.kontaktNavn || '', adresse: b.adresse || '', telefon: b.telefon || '', epost: b.epost || '' },
+        pipeline: {
+          forventetStart: leggForm.forventetStart ? ukeStart(leggForm.forventetStart) : null,
+          forventetUker: Math.max(1, Number(leggForm.forventetUker) || 2),
+          forventetFolk: Math.max(1, Number(leggForm.forventetFolk) || 2),
+          sikkerhet,
+        },
+        pipelineLogg: [pipelineLoggInnslag(`Lagt i pipeline fra ${b.status === 'godkjent' ? 'vunnet tilbud' : 'tilbud/befaring'} (${sikkerhet})`, localStorage.getItem('fbs_user_navn') || 'ukjent')],
+      },
+    });
+    dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, prosjektId, ...(b.status === 'godkjent' ? { arkivert: true } : {}) } });
+    setVisLeggIPipeline(false);
+    setLeggForm({ befaringId: '', forventetStart: '', forventetUker: 2, forventetFolk: 2 });
   }
 
   // ═══ Slå sammen duplikater (SPEC-merge-prosjekter.md) ═══
@@ -1424,6 +1527,12 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
     return m;
   }, [state.tildelinger]);
 
+  // Oppdrag 24: underfane per prosjekt — avledet av tildelinger (Ferdig manuelt)
+  function faneFor(p) {
+    const s = prosjektStatus(p, state.tildelinger);
+    return s === 'ferdig' ? 'fullfort' : s === 'startet' ? 'startet' : 'pipeline';
+  }
+
   const alleProsjekter = useMemo(() => state.prosjekter.filter(p => {
     if (search) {
       const q = search.toLowerCase();
@@ -1447,23 +1556,23 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
   // Arkiverte er utelatt fra status-fanene og har egen dempet fane.
   const faneListe = useMemo(() => {
     const aktive = alleProsjekter.filter(p => !p.arkivert);
-    const perFane = key => aktive.filter(p => normStatus(p.status) === key);
+    const perFane = key => aktive.filter(p => faneFor(p) === key);
     const sum = arr => arr.reduce((s, p) => s + (Number(p.belop) || 0), 0);
     const lag = (key, label, ikon, farge, dempet = false) => {
       const arr = perFane(key);
       return { key, label, ikon, farge, dempet, teller: arr.length, sum: dempet ? 0 : sum(arr) };
     };
     return [
-      lag('aktiv', 'Pågående', <Ikon ikon={Hammer} size={14} />, STATUS_COLORS.aktiv),
-      lag('godkjent', 'Godkjent', <Ikon ikon={CircleCheck} size={14} />, STATUS_COLORS.godkjent),
-      lag('jobber_med', 'Vi jobber med', <Ikon ikon={ClipboardList} size={14} />, STATUS_COLORS.jobber_med),
-      lag('fullfort', 'Fullført', <Ikon ikon={Flag} size={14} />, '#5d6b80', true),
+      lag('startet', 'Startet', <Ikon ikon={Hammer} size={14} />, STATUS_COLORS.aktiv),
+      lag('pipeline', 'Pipeline', <Ikon ikon={ClipboardList} size={14} />, STATUS_COLORS.jobber_med),
+      lag('fullfort', 'Ferdig', <Ikon ikon={Flag} size={14} />, '#5d6b80', true),
       {
         key: 'arkivert', label: 'Arkivert', ikon: <Ikon ikon={Archive} size={14} />, farge: '#5d6b80', dempet: true,
         teller: alleProsjekter.filter(p => p.arkivert).length, sum: 0,
       },
     ];
-  }, [alleProsjekter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alleProsjekter, state.tildelinger]);
 
   // ── PR2: varsler (over frist / uten bemanning neste 7 dager) ──
   const overFristIds = useMemo(() => new Set(
@@ -1478,7 +1587,7 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
     const omEnUke = dateToIso(new Date(Date.now() + 7 * 86400000));
     return new Set(
       alleProsjekter
-        .filter(p => !p.arkivert && normStatus(p.status) === 'aktiv')
+        .filter(p => !p.arkivert && normStatus(p.status) === 'aktiv' && harTildeling(p.id, state.tildelinger))
         // Prosjekter som allerede har passert sluttdato hører til frist-varselet,
         // ikke bemanning-varselet — ellers dobbelttelles de og tallet blåses opp
         .filter(p => !(p.sluttDato && p.sluttDato < iDag))
@@ -1486,7 +1595,8 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
           t.startDato && t.sluttDato && t.startDato <= omEnUke && t.sluttDato >= iDag))
         .map(p => p.id)
     );
-  }, [alleProsjekter, tildelingerByProsjekt]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alleProsjekter, tildelingerByProsjekt, state.tildelinger]);
 
   // ── Duplikat-hint — fuzzy-motor fra mergeProsjekter (SPEC §2): Levenshtein ≤3
   // på gatenavn, husnummer må matche eksakt, kundenavn vekter sterkt.
@@ -1526,29 +1636,31 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
   }, [ksInstanser, alleProsjekter]);
 
   const kortDato = iso => iso ? `${iso.slice(8, 10)}.${iso.slice(5, 7)}` : null;
+  // Oppdrag 24: badge KUN ved avvik — ellers vises «Bemannet til dd.mm».
+  // «Ferdig?» er et forslag (sluttdato passert + ingen tildeling siste 14 d).
   function badgeFor(p) {
-    const fristDager = p.sluttDato && normStatus(p.status) !== 'fullfort'
+    if (p.status === 'fullfort') return { type: 'ok', vekt: 9, tekst: 'Ferdig', farge: '#5d6b80', bg: null };
+    if (ferdigForslag(p, state.tildelinger)) return { type: 'ferdig-forslag', vekt: 0, tekst: 'Ferdig?', farge: '#7c3aed', bg: '#f3e8ff' };
+    const fristDager = p.sluttDato
       ? Math.round((new Date(p.sluttDato + 'T00:00:00') - new Date()) / 86400000) : null;
-    if (fristDager != null && fristDager < 0) return { type: 'frist-over', vekt: 0, tekst: `Frist ${Math.abs(fristDager)} d over`, farge: '#dc2626', bg: '#fee2e2' };
-    // Oppdrag 21: pipeline-prosjekt uten en eneste tildeling → «Ikke bemannet»
-    if (p.pipeline && !(tildelingerByProsjekt[p.id] || []).length) {
-      return { type: 'bemanning', vekt: 1, tekst: 'Ikke bemannet', farge: '#b45309', bg: '#fef3c7' };
-    }
+    if (fristDager != null && fristDager < 0) return { type: 'frist-over', vekt: 0, tekst: 'Frist passert', farge: '#dc2626', bg: '#fee2e2' };
+    const hull = hullEtterBemanning(p, state.tildelinger);
+    if (hull) return { type: 'bemanning', vekt: 1, tekst: `hull u${ukeNr(hull.fra)}${hull.til > hull.fra ? '–' + ukeNr(hull.til) : ''}`, farge: '#b45309', bg: '#fef3c7' };
     if (utenBemanningIds.has(p.id)) return { type: 'bemanning', vekt: 1, tekst: 'Ingen bemanning neste uke', farge: '#b45309', bg: '#fef3c7' };
-    if (fristDager != null && fristDager <= 14) return { type: 'frist-snart', vekt: 2, tekst: `Frist om ${fristDager} d`, farge: '#b45309', bg: '#fef3c7' };
     const uA = utenAnsvarligPer[p.id] || 0;
     if (uA > 0) return { type: 'ks', vekt: 3, tekst: `${uA} liste${uA === 1 ? '' : 'r'} uten ansvarlig`, farge: '#b45309', bg: '#fef3c7' };
-    const tasks = p.fdTasks || [];
-    if (tasks.length) return { type: 'plan', vekt: 4, tekst: `På plan · ${tasks.filter(t => (t.pct ?? 0) >= 100).length}/${tasks.length} faser`, farge: '#15803d', bg: '#dcfce7' };
-    const iDagB = dateToIso(new Date());
-    if (p.startDato && p.startDato > iDagB) return { type: 'starter', vekt: 4, tekst: `Starter ${kortDato(p.startDato)}`, farge: '#15803d', bg: '#dcfce7' };
-    return { type: 'ingen-plan', vekt: 5, tekst: 'Ingen plan ennå', farge: '#5d6b80', bg: '#f1f5f9' };
+    const til = bemannetTil(p.id, state.tildelinger);
+    return { type: 'ok', vekt: 5, tekst: til ? `Bemannet til ${kortDato(til)}` : 'Ikke bemannet', farge: '#5d6b80', bg: null };
+  }
+  function markerFerdig(p) {
+    if (!confirm(`Markere «${p.adresse || p.navn}» som ferdig? (kan gjenåpnes — ingenting slettes)`)) return;
+    settProsjektStatus(p, 'fullfort');
   }
 
   const faneProsjekter = useMemo(() => {
     let arr = aktivFane === 'arkivert'
       ? alleProsjekter.filter(p => p.arkivert)
-      : alleProsjekter.filter(p => !p.arkivert && normStatus(p.status) === aktivFane);
+      : alleProsjekter.filter(p => !p.arkivert && faneFor(p) === aktivFane);
     if (varselFilter === 'frist') arr = arr.filter(p => overFristIds.has(p.id));
     if (varselFilter === 'bemanning') arr = arr.filter(p => utenBemanningIds.has(p.id));
     if (sortValg === 'handling' && aktivFane !== 'arkivert') {
@@ -1557,7 +1669,7 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
     }
     return sorterFane(arr);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [alleProsjekter, aktivFane, sortValg, varselFilter, overFristIds, utenBemanningIds, utenAnsvarligPer]);
+  }, [alleProsjekter, aktivFane, sortValg, varselFilter, overFristIds, utenBemanningIds, utenAnsvarligPer, state.tildelinger]);
 
   // ── Oppdrag 19: delte rad-hjelpere for tabell- og kort-visningen ──
   const tomCelle = <span style={{ color: '#cbd5e1' }}>—</span>;
@@ -1571,6 +1683,8 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
     // Handlingsknappen matcher badgen: rød frist → Forleng, bemanningshull → Bemann, ellers Åpne
     const handling = badge.type === 'frist-over'
       ? { label: 'Forleng', onClick: () => { setForlengFristId(p.id); setForlengDato(p.sluttDato || dateToIso(new Date())); } }
+      : badge.type === 'ferdig-forslag'
+        ? { label: 'Ja, ferdig', onClick: () => markerFerdig(p) }
       : badge.type === 'bemanning' && onNavigate
         ? { label: 'Bemann', onClick: () => onNavigate('bemanningsplan') }
         : { label: 'Åpne', onClick: () => apneProsjekt(p) };
@@ -1600,10 +1714,9 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
       p.tilbudsfelterFørKobling
         && { ikon: <Ikon ikon={Scissors} size={15} />, label: 'Fjern tilbuds-kobling', onClick: () => fjernKobling(p) },
       { skille: true },
-      ...['jobber_med', 'godkjent', 'aktiv'].filter(s => normStatus(p.status) !== s).map(s => ({
-        ikon: <Ikon ikon={ArrowRight} size={15} />, label: SAVE_LABELS[s], onClick: () => settProsjektStatus(p, s),
-      })),
-      normStatus(p.status) !== 'fullfort' && { ikon: <Ikon ikon={Flag} size={15} />, label: 'Fullfør', onClick: () => settProsjektStatus(p, 'fullfort') },
+      normStatus(p.status) !== 'fullfort'
+        ? { ikon: <Ikon ikon={Flag} size={15} />, label: 'Marker ferdig', onClick: () => markerFerdig(p) }
+        : { ikon: <Ikon ikon={Undo2} size={15} />, label: 'Gjenåpne', onClick: () => settProsjektStatus(p, 'aktiv') },
       { skille: true },
       { ikon: <Ikon ikon={Archive} size={15} />, label: 'Arkiver', farlig: true, onClick: () => arkiverProsjekt(p) },
     ];
@@ -1901,7 +2014,7 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
       </div>
 
       {/* ── Gantt-visning (PR2): kun aktiv fanes prosjekter, -1/+N mnd ── */}
-      {visning === 'gantt' && aktivFane !== 'arkivert' && (() => {
+      {visning === 'gantt' && aktivFane !== 'arkivert' && aktivFane !== 'pipeline' && (() => {
         const start = new Date(); start.setMonth(start.getMonth() - 1); start.setDate(1);
         const slutt = new Date(); slutt.setMonth(slutt.getMonth() + ganttMnd);
         const startIso = dateToIso(start), sluttIso = dateToIso(slutt);
@@ -1981,7 +2094,127 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
       })()}
 
       {/* Kompakte rader */}
-      {visning !== 'gantt' && faneProsjekter.length === 0 && (
+      {/* ── Oppdrag 24: Pipeline-underfanen = Ikke startet, enkel liste ── */}
+      {aktivFane === 'pipeline' && (() => {
+        const liste = pipelineListe(alleProsjekter, state.tildelinger);
+        const utforende = state.ansatte.filter(erUtforende);
+        const opps = pipelineOppsummering(liste, state.tildelinger, utforende);
+        const SIK = { fast: 'Vunnet', sannsynlig: 'Sannsynlig', mulig: 'Mulig' };
+        const inputStil = { height: 28, fontSize: 12 };
+        return (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 13, marginBottom: 10 }}>
+              <span>
+                <b>{opps.antall}</b> prosjekt{opps.antall === 1 ? '' : 'er'} ikke startet
+                {opps.forsteStart ? <> · første start <b>u{ukeNr(opps.forsteStart)}</b></> : null}
+                {opps.sprekk
+                  ? <> · <span style={{ color: '#dc2626', fontWeight: 600 }}>behov i u{ukeNr(opps.sprekk.fra)}{opps.sprekk.til !== opps.sprekk.fra ? '–' + ukeNr(opps.sprekk.til) : ''} over kapasitet ({utforende.length} utførende)</span></>
+                  : <> · <span style={{ color: '#15803d' }}>kapasitet OK neste 12 uker ({utforende.length} utførende)</span></>}
+              </span>
+              <button className="btn btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setVisLeggIPipeline(true)}>+ Legg i pipeline</button>
+            </div>
+            {liste.length === 0 && (
+              <div style={{ padding: 32, textAlign: 'center', color: '#5d6b80', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10 }}>
+                Ingen prosjekter venter på oppstart — vunne tilbud legges hit når prosjektet opprettes.
+              </div>
+            )}
+            {liste.length > 0 && (
+              <SeksjonertTabell
+                kolonner={[
+                  { id: 'prosjekt', tittel: 'Prosjekt', bredde: 'minmax(180px, 1.6fr)' },
+                  { id: 'start', tittel: 'Forventet start', bredde: '120px' },
+                  { id: 'uker', tittel: 'Uker', bredde: '56px', hoyre: true, skjulMobil: true },
+                  { id: 'folk', tittel: 'Folk', bredde: '56px', hoyre: true, skjulMobil: true },
+                  { id: 'sikkerhet', tittel: 'Sikkerhet', bredde: '100px', skjulMobil: true },
+                  { id: 'pl', tittel: 'PL', bredde: '80px', skjulMobil: true },
+                  { id: 'handling', tittel: '', bredde: '160px', hoyre: true },
+                ]}
+                seksjoner={[{
+                  rader: liste.map(r => {
+                    const p = alleProsjekter.find(x => x.id === r.prosjektId);
+                    const plA = r.plId ? ansatteById[r.plId] : null;
+                    const klikk = e => { e.stopPropagation(); if (pipelineRedigerId === p.id) setPipelineRedigerId(null); else apnePipelineRediger(p); };
+                    const celleKnapp = (innhold, gul = false) => (
+                      <button onClick={klikk} title="Klikk for å redigere"
+                        style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', font: 'inherit', fontWeight: gul ? 600 : 500, color: gul ? '#b45309' : 'inherit', textAlign: 'inherit' }}>
+                        {innhold}
+                      </button>
+                    );
+                    return {
+                      id: p.id,
+                      onClick: () => apneProsjekt(p),
+                      celler: {
+                        prosjekt: (
+                          <div style={{ minWidth: 0, background: !r.start ? '#fffbeb' : undefined }}>
+                            <div className="ds-tabell-navn">{r.navn}</div>
+                            {(r.kunde || p.jobbType) && <div className="ds-tabell-under">{[r.kunde, p.jobbType].filter(Boolean).join(' · ')}</div>}
+                          </div>
+                        ),
+                        start: r.start ? celleKnapp(`u${ukeNr(r.start)}${r.sikkerhet !== 'fast' ? '?' : ''}`) : celleKnapp('Sett start', true),
+                        uker: celleKnapp(r.uker ?? '—'),
+                        folk: celleKnapp(<span style={r.folkAnslag ? { color: '#94a3b8' } : {}}>{r.folk ?? 2}</span>),
+                        sikkerhet: <span style={{ fontSize: 12, color: r.sikkerhet === 'fast' ? '#15803d' : '#5d6b80', fontWeight: 600 }}>{SIK[r.sikkerhet] || r.sikkerhet}</span>,
+                        pl: plA ? (plA.navn || '').split(' ')[0] : tomCelle,
+                        handling: (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={e => e.stopPropagation()}>
+                            <button className="btn btn-sm" disabled={!r.start || !onNavigate}
+                              title={r.start ? 'Åpne ukeoversikten i planleggingsmodus' : 'Sett forventet start først'}
+                              onClick={() => { sessionStorage.setItem('fbs_planlegg_inn', p.id); onNavigate('bemanningsplan'); }}>
+                              Planlegg inn
+                            </button>
+                            <RadMeny valg={prosjektMeny(p)} />
+                          </span>
+                        ),
+                      },
+                      etter: pipelineRedigerId === p.id && pipelineForm ? (
+                        <div onClick={e => e.stopPropagation()} style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', padding: '8px 14px', background: '#fffbeb', borderBottom: '1px solid #fde68a' }}>
+                          <b style={{ fontSize: 12.5 }}>{r.navn}:</b>
+                          <label style={{ fontSize: 12 }}>Start <input type="date" className="input" style={inputStil} value={pipelineForm.forventetStart} onChange={e => setPipelineForm(s => ({ ...s, forventetStart: e.target.value }))} /></label>
+                          <label style={{ fontSize: 12 }}>Uker <input type="number" min="1" className="input" style={{ ...inputStil, width: 58 }} value={pipelineForm.forventetUker} onChange={e => setPipelineForm(s => ({ ...s, forventetUker: e.target.value }))} /></label>
+                          <label style={{ fontSize: 12 }}>Folk <input type="number" min="1" className="input" style={{ ...inputStil, width: 58 }} value={pipelineForm.forventetFolk} onChange={e => setPipelineForm(s => ({ ...s, forventetFolk: e.target.value }))} /></label>
+                          <select className="input" style={inputStil} value={pipelineForm.sikkerhet} onChange={e => setPipelineForm(s => ({ ...s, sikkerhet: e.target.value }))}>
+                            {Object.entries(SIK).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                          </select>
+                          <button className="btn btn-sm btn-primary" style={{ height: 28 }} onClick={() => lagrePipelineRediger(p)}>Lagre</button>
+                          <button className="btn btn-sm" style={{ height: 28 }} onClick={() => setPipelineRedigerId(null)}>Avbryt</button>
+                        </div>
+                      ) : null,
+                    };
+                  }),
+                }]}
+              />
+            )}
+            {visLeggIPipeline && (
+              <Modal title="Legg i pipeline" onClose={() => setVisLeggIPipeline(false)}>
+                <div className="form">
+                  <label>Tilbud / befaring</label>
+                  <select value={leggForm.befaringId} onChange={e => setLeggForm(f => ({ ...f, befaringId: e.target.value }))}>
+                    <option value="">Velg…</option>
+                    {leggKandidater.filter(b => b.status === 'godkjent').length > 0 && <optgroup label="Vunne tilbud uten prosjekt">
+                      {leggKandidater.filter(b => b.status === 'godkjent').map(b => <option key={b.id} value={b.id}>{b.kontaktNavn} – {b.adresse}</option>)}
+                    </optgroup>}
+                    {leggKandidater.filter(b => b.status !== 'godkjent').length > 0 && <optgroup label="Sendte tilbud / befaringer (sannsynlig / mulig)">
+                      {leggKandidater.filter(b => b.status !== 'godkjent').map(b => <option key={b.id} value={b.id}>{b.kontaktNavn} – {b.adresse}</option>)}
+                    </optgroup>}
+                  </select>
+                  <div className="form-row">
+                    <div><label>Forventet start</label><input type="date" value={leggForm.forventetStart} onChange={e => setLeggForm(f => ({ ...f, forventetStart: e.target.value }))} /></div>
+                    <div><label>Uker</label><input type="number" min="1" value={leggForm.forventetUker} onChange={e => setLeggForm(f => ({ ...f, forventetUker: e.target.value }))} /></div>
+                    <div><label>Folk</label><input type="number" min="1" value={leggForm.forventetFolk} onChange={e => setLeggForm(f => ({ ...f, forventetFolk: e.target.value }))} /></div>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#5d6b80' }}>Vunnet tilbud → Vunnet · sendt tilbud → Sannsynlig · befaring → Mulig. Prosjektet legges som «Ikke startet» og blir Startet ved første tildeling.</div>
+                  <div className="form-actions">
+                    <button className="btn" onClick={() => setVisLeggIPipeline(false)}>Avbryt</button>
+                    <button className="btn btn-primary" disabled={!leggForm.befaringId} onClick={leggIPipeline}>Legg til</button>
+                  </div>
+                </div>
+              </Modal>
+            )}
+          </>
+        );
+      })()}
+
+      {visning !== 'gantt' && aktivFane !== 'pipeline' && faneProsjekter.length === 0 && (
         <div style={{ padding: 32, textAlign: 'center', color: '#5d6b80', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10 }}>
           {aktivFane === 'arkivert' ? 'Ingen arkiverte prosjekter.' : 'Ingen prosjekter i denne fanen.'}
         </div>
@@ -2018,7 +2251,7 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
       })}
 
       {/* Oppdrag 19: prosjektlisten som ÉN sammenhengende tabell (alternativ A) */}
-      {visning === 'liste' && aktivFane !== 'arkivert' && faneProsjekter.length > 0 && (
+      {visning === 'liste' && aktivFane !== 'arkivert' && aktivFane !== 'pipeline' && faneProsjekter.length > 0 && (
         <SeksjonertTabell
           kolonner={[
             { id: 'prosjekt', tittel: 'Prosjekt', bredde: 'minmax(180px, 1.6fr)' },
@@ -2052,11 +2285,19 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
                       )}
                     </div>
                   ),
-                  status: (
-                    <span className="ds-tabell-badge" style={{ color: info.badge.farge, background: info.badge.bg }}>
-                      {info.badge.tekst}
-                    </span>
-                  ),
+                  status: info.badge.type === 'ok'
+                    ? <span style={{ fontSize: 12.5, color: '#5d6b80' }}>{info.badge.tekst}</span>
+                    : (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
+                        <span className="ds-tabell-badge" style={{ color: info.badge.farge, background: info.badge.bg }}>{info.badge.tekst}</span>
+                        {info.badge.type === 'ferdig-forslag' && (
+                          <>
+                            <button className="btn btn-sm" style={{ height: 22, fontSize: 11, padding: '0 7px' }} onClick={() => markerFerdig(p)}>Ja</button>
+                            <button className="btn btn-sm" style={{ height: 22, fontSize: 11, padding: '0 7px' }} onClick={() => { setForlengFristId(p.id); setForlengDato(p.sluttDato || dateToIso(new Date())); }}>Forleng</button>
+                          </>
+                        )}
+                      </span>
+                    ),
                   pl: info.pl ? (info.pl.navn || '').split(' ')[0] : tomCelle,
                   periode: info.periode || tomCelle,
                   folk: info.antallFolk > 0 ? info.antallFolk : tomCelle,
@@ -2076,7 +2317,7 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
       )}
 
       {/* Oppdrag 19: kort-visning — rutenett for nettbrett */}
-      {visning === 'kort' && aktivFane !== 'arkivert' && faneProsjekter.length > 0 && (
+      {visning === 'kort' && aktivFane !== 'arkivert' && aktivFane !== 'pipeline' && faneProsjekter.length > 0 && (
         <>
           {forlengFristId && (() => {
             const p = faneProsjekter.find(x => x.id === forlengFristId);
@@ -2136,17 +2377,10 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
             onLukk={() => setValgtId(null)}
             handlinger={<>
               <KundeportalKnapp token={kundeportalToken(p, state.befaringer)} kompakt />
-              <select
-                className="input" style={{ height: 34, fontSize: 13, width: 160 }}
-                value={normStatus(p.status)}
-                onChange={e => settProsjektStatus(p, e.target.value)}
-              >
-                {Object.entries(SAVE_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-              </select>
               <button className="btn btn-sm" onClick={() => { setValgtId(null); openEdit(p); }} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={Pencil} size={14} /> Rediger</button>
-              {normStatus(p.status) !== 'fullfort' && (
-                <button className="btn btn-sm" onClick={() => settProsjektStatus(p, 'fullfort')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={Flag} size={14} /> Fullfør</button>
-              )}
+              {normStatus(p.status) !== 'fullfort'
+                ? <button className="btn btn-sm" onClick={() => markerFerdig(p)} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={Flag} size={14} /> Marker ferdig</button>
+                : <button className="btn btn-sm" onClick={() => settProsjektStatus(p, 'aktiv')} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><Ikon ikon={Undo2} size={14} /> Gjenåpne</button>}
               <button className="btn btn-sm" style={{ color: '#b45309', display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => { setValgtId(null); arkiverProsjekt(p); }}><Ikon ikon={Archive} size={14} /> Arkiver</button>
             </>}
           >
@@ -2243,12 +2477,6 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
                 .map(a => (
                   <option key={a.id} value={a.id}>{a.navn}{a.fag ? ` (${a.fag})` : ''}</option>
                 ))}
-            </select>
-            <label>Status</label>
-            <select value={normStatus(form.status)} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
-              {SAVE_STATUSES.map(s => (
-                <option key={s} value={s}>{SAVE_LABELS[s]}</option>
-              ))}
             </select>
             <div className="form-row">
               <div>

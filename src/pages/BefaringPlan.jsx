@@ -559,6 +559,11 @@ export default function BefaringPlan({ apneBefaringId, onApnet }) {
       (p.adresse || '').toLowerCase().trim() === nAdr
     );
     if (eksisterende) {
+      // Oppdrag 24: lå prosjektet i pipeline som sannsynlig/mulig, er det nå vunnet
+      if (eksisterende.pipeline && eksisterende.pipeline.sikkerhet !== 'fast') {
+        dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...eksisterende, pipeline: { ...eksisterende.pipeline, sikkerhet: 'fast' },
+          pipelineLogg: [...(eksisterende.pipelineLogg || []), pipelineLoggInnslag('Tilbudet vunnet — sikkerhet satt til fast', localStorage.getItem('fbs_user_navn') || 'bemanningsapp')] } });
+      }
       dispatch({ type: 'UPDATE_BEFARING', payload: { ...bef, prosjektId: eksisterende.id, arkivert: true } });
       alert(`Prosjektet «${eksisterende.navn}» finnes allerede — befaringen er koblet til det eksisterende prosjektet.`);
       setVisKapasitet(null);

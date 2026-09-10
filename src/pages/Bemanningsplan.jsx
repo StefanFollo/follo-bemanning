@@ -8,8 +8,7 @@ import { useApp } from '../context/AppContext';
 import { weekStart, addDays, isoToDate, dateToIso, formatDate, overlaps } from '../store';
 import { getHolidayMap } from '../holidays';
 import PipelineRader from '../komponenter/PipelineRader';
-import PipelineFane from '../komponenter/PipelineFane';
-import { pipelineOversikt, ukeNr as pipelineUkeNr } from '../pipeline';
+import { ukeNr as pipelineUkeNr } from '../pipeline';
 
 const FERIE_ID = '__FERIE__';
 
@@ -78,7 +77,7 @@ function daysDiff(a, b) {
 
 // fastProsjektId (oppdrag 16 PR2): prosjektsiden viser ukesvisningen
 // filtrert til ETT prosjekt — samme komponent, samme legg til/fjern.
-export default function Bemanningsplan({ readOnly = false, fastProsjektId = null }) {
+export default function Bemanningsplan({ readOnly = false, fastProsjektId = null, onNavigate = null }) {
   const { state, dispatch } = useApp();
   // Ansatte som er med i bemanningsplan-kapasitetsberegningen
   const planAnsatte = state.ansatte.filter(a => !a.arkivert && !a.utenforBemanningsplan && a.fag !== 'Rørlegger');
@@ -182,11 +181,11 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
   const weekDays = Array.from({ length: 52 * 7 }, (_, i) => addDays(currentWeek, i))
     .filter(d => { const dow = new Date(d + 'T00:00:00').getDay(); return dow >= 1 && dow <= 5; });
 
-  // Oppdrag 23: badge = det som trenger handling (mangler start + overskredet)
-  const pipelineAntall = useMemo(() => {
-    const { grupper } = pipelineOversikt(state.prosjekter, state.befaringer, state.tildelinger);
-    return grupper.manglerStart.length + grupper.overskredet.length;
-  }, [state.prosjekter, state.befaringer, state.tildelinger]);
+  // Oppdrag 24: Pipeline lever under Prosjekter — hopp dit med underfanen valgt
+  function aapnePipeline() {
+    sessionStorage.setItem('fbs_prosjekter_fane', 'pipeline');
+    if (onNavigate) onNavigate('prosjekter'); else setTab('uke');
+  }
 
   // Oppdrag 22 (skrollfiks): ukeoversikten starter alltid på inneværende
   // periode uten gammel horisontal scroll (scroll-restore kunne etterlate
@@ -202,9 +201,14 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
     const pid = sessionStorage.getItem('fbs_planlegg_inn');
     if (!pid || fastProsjektId) return;
     sessionStorage.removeItem('fbs_planlegg_inn');
-    const rad = pipelineOversikt(state.prosjekter, state.befaringer, state.tildelinger)
-      .rader.find(r => r.prosjektId === pid);
-    if (rad && (rad.pipeline.forventetStart || rad.uker[0])) startPlanlegging(rad);
+    const p = (state.prosjekter || []).find(x => x && x.id === pid);
+    const start = p?.pipeline?.forventetStart || (p?.startDato ? weekStart(p.startDato) : null);
+    if (p && start) {
+      startPlanlegging({
+        prosjektId: p.id, navn: p.adresse || p.navn || 'Uten navn', uker: [],
+        pipeline: { forventetStart: weekStart(start), forventetUker: p.pipeline?.forventetUker || 2, forventetFolk: p.pipeline?.forventetFolk || 2 },
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -276,7 +280,7 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
       setPlanModus({ ...pm, lagtTil: [...pm.lagtTil, ansattId] });
     }
   }
-  function planFerdig() { setPlanModus(null); setTab('pipeline'); }
+  function planFerdig() { setPlanModus(null); aapnePipeline(); }
   function planAvbryt() {
     const pm = planModus;
     if (pm) {
@@ -287,7 +291,7 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
           .forEach(t => dispatch({ type: 'DELETE_TILDELING', id: t.id }));
       }
     }
-    setPlanModus(null); setTab('pipeline');
+    setPlanModus(null); aapnePipeline();
   }
   const planValgte = planModus
     ? new Set(state.tildelinger
@@ -511,12 +515,6 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
         <button className={`tab-btn ${tab === 'uke' ? 'active' : ''}`} onClick={() => setTab('uke')}>
           Ukeoversikt
         </button>
-        <button className={`tab-btn ${tab === 'pipeline' ? 'active' : ''}`} onClick={() => setTab('pipeline')}>
-          Pipeline
-          {pipelineAntall > 0 && (
-            <span style={{ marginLeft: 5, fontSize: 10.5, fontWeight: 700, background: '#fef3c7', color: '#b45309', borderRadius: 8, padding: '1px 7px' }}>{pipelineAntall}</span>
-          )}
-        </button>
         <button className={`tab-btn ${tab === 'oversikt' ? 'active' : ''}`} onClick={() => setTab('oversikt')}>
           <IkonTekst ikon={ClipboardList} size={15}>Oversikt</IkonTekst>
         </button>
@@ -572,11 +570,8 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
             planValgte={planValgte}
             onPlanFerdig={planFerdig}
             onPlanAvbryt={planAvbryt}
-            openPipelineFane={() => setTab('pipeline')}
+            openPipelineFane={aapnePipeline}
           />
-        )}
-        {tab === 'pipeline' && !fastProsjektId && (
-          <PipelineFane state={state} dispatch={dispatch} readOnly={readOnly} onPlanleggInn={startPlanlegging} />
         )}
         {tab === 'oversikt' && (
           <OversiktVisning

@@ -23,10 +23,10 @@ import Framdriftsplan from './Framdriftsplan';
 import KS from './KS';
 import Bemanningsplan from './Bemanningsplan';
 import { byggInterneFaser } from '../framdriftEksport';
-import { ukeNr } from '../pipeline';
+import { ukeNr, prosjektStatus, STATUS_TEKST, pipelineLoggInnslag } from '../pipeline';
 
-const STATUS_TEKST = { jobber_med: 'Jobber med', godkjent: 'Godkjent', aktiv: 'Aktiv', fullfort: 'Fullført' };
-const STATUS_FARGE = { jobber_med: '#b45309', godkjent: '#7c3aed', aktiv: '#15803d', fullfort: '#5d6b80' };
+// Oppdrag 24: status er AVLEDET (Ikke startet / Startet / Ferdig) — ikke valgt
+const STATUS_FARGE = { ikke_startet: '#b45309', startet: '#15803d', ferdig: '#5d6b80' };
 
 function relTid(iso) {
   if (!iso) return '';
@@ -126,7 +126,9 @@ export default function Prosjektside({ prosjektId, fane: startFane = 'oversikt',
   ];
 
   const fmtKr = n => (n || n === 0) ? new Intl.NumberFormat('nb-NO', { style: 'currency', currency: 'NOK', maximumFractionDigits: 0 }).format(n) : '—';
-  const settStatus = s => dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...p, status: s } });
+  const avledet = prosjektStatus(p, state.tildelinger);
+  const settStatus = s => dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...p, status: s,
+    pipelineLogg: [...(p.pipelineLogg || []), pipelineLoggInnslag(s === 'fullfort' ? 'Markert ferdig' : 'Gjenåpnet', localStorage.getItem('fbs_user_navn') || 'ukjent')] } });
 
   return (
     <div className="page" style={{ paddingBottom: 24 }}>
@@ -134,8 +136,9 @@ export default function Prosjektside({ prosjektId, fane: startFane = 'oversikt',
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
         <button className="btn btn-sm" onClick={onTilbake}><IkonTekst ikon={ArrowLeft} size={14}>Prosjekter</IkonTekst></button>
         <h2 style={{ margin: 0, fontSize: 19, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.navn || p.adresse || 'Uten navn'}</h2>
-        <span style={{ fontSize: 11.5, fontWeight: 600, color: STATUS_FARGE[p.status] || '#5d6b80', background: (STATUS_FARGE[p.status] || '#5d6b80') + '1a', borderRadius: 6, padding: '2px 9px' }}>
-          {STATUS_TEKST[p.status] || p.status || 'Aktiv'}
+        <span style={{ fontSize: 11.5, fontWeight: 600, color: STATUS_FARGE[avledet], background: STATUS_FARGE[avledet] + '1a', borderRadius: 6, padding: '2px 9px' }}
+          title="Status avledes automatisk: Startet = minst én tildeling i bemanningsplanen">
+          {STATUS_TEKST[avledet]}
         </span>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <KundeportalKnapp token={portalToken} kompakt />
@@ -146,9 +149,9 @@ export default function Prosjektside({ prosjektId, fane: startFane = 'oversikt',
               <Ikon ikon={MessageSquare} size={13} /> Ny endringsmelding
             </button>
           )}
-          <select className="input" style={{ height: 32, fontSize: 12.5, width: 130 }} value={p.status || 'aktiv'} onChange={e => settStatus(e.target.value)}>
-            {Object.entries(STATUS_TEKST).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
-          </select>
+          {avledet === 'ferdig'
+            ? <button className="btn btn-sm" onClick={() => settStatus('aktiv')} title="Status tilbake til Startet/Ikke startet — ingenting slettes">Gjenåpne</button>
+            : <button className="btn btn-sm" onClick={() => { if (window.confirm(`Markere ${p.navn || p.adresse} som ferdig?`)) settStatus('fullfort'); }}>Marker ferdig</button>}
           <button className="btn btn-sm" style={{ color: 'var(--warning)' }}
             onClick={() => { if (window.confirm(`Arkivere ${p.navn || p.adresse}? (skjules, slettes aldri)`)) { dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...p, arkivert: true, arkivertDato: new Date().toISOString() } }); onTilbake(); } }}>
             <Ikon ikon={Archive} size={13} />
@@ -216,12 +219,12 @@ export default function Prosjektside({ prosjektId, fane: startFane = 'oversikt',
               ['Bemanning denne uka', `${denneUka.length} person${denneUka.length === 1 ? '' : 'er'}`, denneUka.map(n => n.split(' ')[0]).slice(0, 6).join(', ')],
               ['Sjekklister', alleLister.length ? `${signert} av ${alleLister.length} signert` : 'ingen ennå',
                 utenAnsvarlig ? `${utenAnsvarlig} uten ansvarlig` : (alleLister.length ? 'alle har ansvarlig' : '')],
-              ...(p.pipeline ? [[
-                'Planlagt (pipeline)',
-                p.pipeline.forventetStart ? `Start uke ${ukeNr(p.pipeline.forventetStart)}` : 'dato ikke satt',
+              ...(avledet === 'ikke_startet' ? [[
+                'Planlagt start',
+                p.pipeline?.forventetStart ? `u${ukeNr(p.pipeline.forventetStart)}` : (p.startDato ? `u${ukeNr(p.startDato)}` : 'dato ikke satt'),
                 <span key="pl" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  {`${p.pipeline.forventetUker || '?'} uker · ${p.pipeline.forventetFolk || '?'} folk`}
-                  {onNavigate && p.pipeline.forventetStart && (
+                  {`${p.pipeline?.forventetUker || '?'} uker · ${p.pipeline?.forventetFolk || '?'} folk`}
+                  {onNavigate && (p.pipeline?.forventetStart || p.startDato) && (
                     <button className="btn btn-sm" style={{ height: 24, fontSize: 11.5 }}
                       onClick={() => { sessionStorage.setItem('fbs_planlegg_inn', p.id); onNavigate('bemanningsplan'); }}>
                       Planlegg inn
