@@ -9,6 +9,22 @@ import {
 
 const AppContext = createContext(null);
 
+// Oppdrag 24: logglinje på prosjektet ved avledet statusovergang.
+// Returnerer ny prosjektliste, eller null når prosjektet ikke finnes.
+function loggStatusOvergang(prosjekter, prosjektId, tekst) {
+  let funnet = false;
+  const next = prosjekter.map(p => {
+    if (p.id !== prosjektId) return p;
+    funnet = true;
+    return {
+      ...p,
+      pipelineLogg: [...(p.pipelineLogg || []), { tid: new Date().toISOString(), av: localStorage.getItem('fbs_user_navn') || 'automatisk', tekst }],
+      _endret: Date.now(),
+    };
+  });
+  return funnet ? next : null;
+}
+
 // Handlinger der payload er selve elementet — stemples med _endret slik at
 // per-element-fletting (klient + server) vet hvilken versjon som er nyest.
 // Verdien er feltet elementet bor i, slik at stemplingen kan gjøres MONOTON:
@@ -155,10 +171,18 @@ function reducer(state, action) {
     }
 
     // --- Tildelinger ---
+    // Oppdrag 24: Ikke startet ↔ Startet er avledet av tildelinger. Selve
+    // overgangen logges på prosjektet (append-only) når første tildeling
+    // legges inn og når den siste fjernes — ingenting annet endres.
     case 'ADD_TILDELING': {
       const next = [...state.tildelinger, { ...action.payload, id: uid() }];
       saveTildelinger(next);
-      return { ...state, tildelinger: next };
+      const pid = action.payload.prosjektId;
+      const forsteTildeling = pid && pid !== '__FERIE__'
+        && !state.tildelinger.some(t => t.prosjektId === pid);
+      const prosjekter = forsteTildeling ? loggStatusOvergang(state.prosjekter, pid, 'Startet — første tildeling lagt inn') : null;
+      if (prosjekter) saveProsjekter(prosjekter);
+      return { ...state, tildelinger: next, ...(prosjekter ? { prosjekter } : {}) };
     }
     case 'UPDATE_TILDELING': {
       const next = state.tildelinger.map(t => t.id === action.payload.id ? { ...t, ...action.payload } : t);
@@ -185,9 +209,14 @@ function reducer(state, action) {
       return { ...state, tildelinger: action.tildelinger };
     }
     case 'DELETE_TILDELING': {
+      const slettet = state.tildelinger.find(t => t.id === action.id);
       const next = state.tildelinger.filter(t => t.id !== action.id);
       saveTildelinger(next);
-      return { ...state, tildelinger: next };
+      const pid = slettet?.prosjektId;
+      const sisteFjernet = pid && pid !== '__FERIE__' && !next.some(t => t.prosjektId === pid);
+      const prosjekter = sisteFjernet ? loggStatusOvergang(state.prosjekter, pid, 'Tilbake til Ikke startet — siste tildeling fjernet') : null;
+      if (prosjekter) saveProsjekter(prosjekter);
+      return { ...state, tildelinger: next, ...(prosjekter ? { prosjekter } : {}) };
     }
 
     // --- Oppgaver ---

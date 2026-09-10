@@ -1645,7 +1645,11 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
       ? Math.round((new Date(p.sluttDato + 'T00:00:00') - new Date()) / 86400000) : null;
     if (fristDager != null && fristDager < 0) return { type: 'frist-over', vekt: 0, tekst: 'Frist passert', farge: '#dc2626', bg: '#fee2e2' };
     const hull = hullEtterBemanning(p, state.tildelinger);
-    if (hull) return { type: 'bemanning', vekt: 1, tekst: `hull u${ukeNr(hull.fra)}${hull.til > hull.fra ? '–' + ukeNr(hull.til) : ''}`, farge: '#b45309', bg: '#fef3c7' };
+    if (hull) {
+      const u1 = ukeNr(hull.fra), u2 = ukeNr(hull.til);
+      const span = hull.til <= hull.fra ? '' : u2 < u1 ? `–u${u2} (${hull.til.slice(0, 4)})` : `–${u2}`;
+      return { type: 'bemanning', vekt: 1, tekst: `hull u${u1}${span}`, farge: '#b45309', bg: '#fef3c7' };
+    }
     if (utenBemanningIds.has(p.id)) return { type: 'bemanning', vekt: 1, tekst: 'Ingen bemanning neste uke', farge: '#b45309', bg: '#fef3c7' };
     const uA = utenAnsvarligPer[p.id] || 0;
     if (uA > 0) return { type: 'ks', vekt: 3, tekst: `${uA} liste${uA === 1 ? '' : 'r'} uten ansvarlig`, farge: '#b45309', bg: '#fef3c7' };
