@@ -80,8 +80,10 @@ export default function Endringsmeldinger({ tilbudId, nyTrigger = 0 }) {
       pris: Number(p.pris) || 0,
     }));
 
-  const sumEks = (skjema?.poster || []).reduce((s, p) =>
-    s + (p.mengde === '' ? 1 : Number(p.mengde) || 0) * (Number(p.pris) || 0), 0);
+  // NB: tilbuds-appens server beregner sumEksMva som Σ pris (pris = SUM for
+  // posten, ikke enhetspris — antall/enhet er beskrivende felter). Live-summen
+  // her MÅ regne likt, ellers spriker skjemaet mot det kunden får se.
+  const sumEks = (skjema?.poster || []).reduce((s, p) => s + (Number(p.pris) || 0), 0);
 
   async function lagreUtkast({ ogSend = false } = {}) {
     setSkjemaFeil(null);
@@ -246,7 +248,7 @@ export default function Endringsmeldinger({ tilbudId, nyTrigger = 0 }) {
                     onChange={e => setSkjema(s => ({ ...s, poster: s.poster.map((x, j) => j === i ? { ...x, mengde: e.target.value } : x) }))} />
                   <input className="input" placeholder="Enhet" value={p.enhet}
                     onChange={e => setSkjema(s => ({ ...s, poster: s.poster.map((x, j) => j === i ? { ...x, enhet: e.target.value } : x) }))} />
-                  <input className="input" placeholder="Pris eks. mva" type="number" min="0" step="any" value={p.pris}
+                  <input className="input" placeholder="Sum eks. mva" title="Summen for hele posten (eks. mva) — antall og enhet er til forklaring for kunden" type="number" min="0" step="any" value={p.pris}
                     onChange={e => setSkjema(s => ({ ...s, poster: s.poster.map((x, j) => j === i ? { ...x, pris: e.target.value } : x) }))} />
                   <button className="btn btn-sm" title="Fjern posten" disabled={skjema.poster.length === 1}
                     onClick={() => setSkjema(s => ({ ...s, poster: s.poster.filter((_, j) => j !== i) }))}>✕</button>
