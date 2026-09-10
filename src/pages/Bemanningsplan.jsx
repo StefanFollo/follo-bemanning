@@ -8,6 +8,7 @@ import { useApp } from '../context/AppContext';
 import { weekStart, addDays, isoToDate, dateToIso, formatDate, overlaps } from '../store';
 import { getHolidayMap } from '../holidays';
 import PipelineRader from '../komponenter/PipelineRader';
+import PipelineOversiktRader from '../komponenter/PipelineOversiktRader';
 import { ukeNr as pipelineUkeNr } from '../pipeline';
 
 const FERIE_ID = '__FERIE__';
@@ -636,6 +637,12 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
             handleDrop={handleDrop}
             openAddTildeling={openAddTildeling}
             openBarMenu={openBarMenu}
+            dispatch={dispatch}
+            leggInnFraPipeline={leggInnFraPipeline}
+            planleggInnFraPipeline={planleggInnFraPipeline}
+            startToast={startToast}
+            onAngreStart={angreStart}
+            onLukkToast={() => setStartToast(null)}
           />
         )}
         {tab === 'ressurs' && (
@@ -1585,6 +1592,8 @@ function OversiktVisning({
   state, readOnly, planAnsatte, fagFilter, setFagFilter, kompakt, toggleKompakt,
   ansatteOrder, setAnsatteOrder, oversiktScrollRef, oversiktPanRef, oversiktDragId,
   dragRef, HOLIDAYS, handleDrop, openAddTildeling, openBarMenu,
+  dispatch = null, leggInnFraPipeline = null, planleggInnFraPipeline = null,
+  startToast = null, onAngreStart = null, onLukkToast = null,
 }) {
   const today = dateToIso(new Date());
   const PAST_WEEKS  = 4;   // uker før i dag som vises
@@ -1790,6 +1799,14 @@ function OversiktVisning({
 
   return (
     <div>
+      {/* Oppdrag 27: toast når et pipeline-prosjekt startes ved drag — med Angre */}
+      {startToast && (
+        <div className="no-print" style={{ position: 'sticky', top: 0, zIndex: 31, display: 'flex', gap: 10, alignItems: 'center', padding: '8px 14px', background: '#15803d', color: '#fff', borderRadius: 10, marginBottom: 8, fontSize: 13 }}>
+          <b>{startToast.tekst}</b>
+          <button className="btn btn-sm" style={{ background: '#fff', color: '#15803d', fontWeight: 700 }} onClick={onAngreStart}>Angre</button>
+          <button className="btn btn-sm" style={{ marginLeft: 'auto', background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.6)' }} onClick={onLukkToast}>Lukk</button>
+        </div>
+      )}
       {/* Navigation */}
       <div className="uke-nav">
         <button className="btn" title="Gå til i dag"
@@ -1961,6 +1978,8 @@ function OversiktVisning({
                 className={`oversikt-row${ri % 2 === 0 ? '' : ' alt'}`}
                 style={{ height: rowH }}
                 onDragOver={e => {
+                  // Oppdrag 27: pipeline-rad dras over en ansatt → tillat slipp
+                  if ([...e.dataTransfer.types].includes('text/fbs-pipeline')) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; return; }
                   if (!oversiktDragId.current) return;
                   e.preventDefault();
                   e.dataTransfer.dropEffect = 'move';
@@ -1974,6 +1993,15 @@ function OversiktVisning({
                 onDrop={e => {
                   e.preventDefault();
                   delete e.currentTarget.dataset.dragover;
+                  // Oppdrag 27: slipp av pipeline-rad → tildeling for uka under musa
+                  const pid = e.dataTransfer.getData('text/fbs-pipeline');
+                  if (pid) {
+                    const area = e.currentTarget.querySelector('.oversikt-bars-area');
+                    const rect = (area || e.currentTarget).getBoundingClientRect();
+                    const dayIdx = Math.max(0, Math.min(allDays.length - 1, Math.floor((e.clientX - rect.left) / DAY_W)));
+                    if (leggInnFraPipeline) leggInnFraPipeline(pid, ansatt.id, weekStart(allDays[dayIdx]));
+                    return;
+                  }
                   const fromId = oversiktDragId.current;
                   const toId   = ansatt.id;
                   if (!fromId || fromId === toId) return;
@@ -2230,6 +2258,13 @@ function OversiktVisning({
             }
             return rows;
           })()}
+
+          {/* ── Oppdrag 27: Pipeline-rullegardinen også her (Oversikt/Storskjerm/Fullskjerm) ── */}
+          {dispatch && (
+            <PipelineOversiktRader state={state} dispatch={dispatch} readOnly={readOnly}
+              allDays={allDays} DAY_W={DAY_W} LABEL_W={LABEL_W} kompakt={kompakt}
+              onPlanleggInn={planleggInnFraPipeline} />
+          )}
 
         </div>
       </div>
