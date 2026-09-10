@@ -56,7 +56,7 @@ console.log('\n-- pipelineRader: testkrav 1 og 3 --');
   ];
 
   // Testkrav 1: nytt prosjekt uten en eneste tildeling ligger i seksjonen
-  const rader = pipelineRader(prosjekter, [], tildelinger);
+  const rader = pipelineRader(prosjekter, [], tildelinger, '2026-09-10');
   const p1 = rader.find(r => r.prosjektId === 'P1');
   sjekk('P1 (uten tildelinger) vises', !!p1 && p1.type === 'prosjekt' && p1.bemannedeUker.size === 0);
   sjekk('P2 (hele perioden bemannet) er UTE av seksjonen', !rader.some(r => r.prosjektId === 'P2'));
@@ -67,14 +67,21 @@ console.log('\n-- pipelineRader: testkrav 1 og 3 --');
 
   // Testkrav 3: bemann én uke → mørk; fjern tildelingen → tilbake til stiplet
   const medUke1 = pipelineRader(prosjekter, [], [...tildelinger,
-    { id: 't3', prosjektId: 'P1', ansattId: 'A3', startDato: '2026-09-15', sluttDato: '2026-09-17' }]);
+    { id: 't3', prosjektId: 'P1', ansattId: 'A3', startDato: '2026-09-15', sluttDato: '2026-09-17' }], '2026-09-10');
   const p1b = medUke1.find(r => r.prosjektId === 'P1');
   sjekk('Bemannet uke markeres (u38 mørk, u39–40 stiplet)', p1b.bemannedeUker.has('2026-09-14') && p1b.bemannedeUker.size === 1);
-  const utenIgjen = pipelineRader(prosjekter, [], tildelinger).find(r => r.prosjektId === 'P1');
+  const utenIgjen = pipelineRader(prosjekter, [], tildelinger, '2026-09-10').find(r => r.prosjektId === 'P1');
   sjekk('Tildeling fjernet → tilbake i pipeline uendret (ingen data slettes)', utenIgjen.bemannedeUker.size === 0);
 
+  // Hull i fortid er ikke noe PL kan bemanne — kun inneværende uke og framover
+  const fortid = pipelineRader([
+    { id: 'P5', navn: 'Gammel jobb', startDato: '2026-08-10', sluttDato: '2026-09-25' },
+  ], [], [{ id: 't9', prosjektId: 'P5', ansattId: 'A9', startDato: '2026-09-14', sluttDato: '2026-09-18' }], '2026-09-10');
+  const p5 = fortid.find(r => r.prosjektId === 'P5');
+  sjekk('Hull-uker i fortid utelates (starter fra inneværende uke)', !!p5 && p5.uker[0] === '2026-09-07', JSON.stringify(p5?.uker));
+
   // P2 helbemannet → fjern tildelingen → tilbake i seksjonen
-  const p2Tilbake = pipelineRader(prosjekter, [], []).find(r => r.prosjektId === 'P2');
+  const p2Tilbake = pipelineRader(prosjekter, [], [], '2026-09-10').find(r => r.prosjektId === 'P2');
   sjekk('Helbemannet prosjekt kommer TILBAKE når tildelinger fjernes', !!p2Tilbake);
 
   // Befaring lagt inn manuelt (sannsynlig)
@@ -82,7 +89,7 @@ console.log('\n-- pipelineRader: testkrav 1 og 3 --');
     { id: 'B1', adresse: 'Mulig jobb 1', status: 'tilbud_sendt', pipeline: { forventetStart: '2026-09-21', forventetUker: 2, forventetFolk: 2, sikkerhet: 'sannsynlig' } },
     { id: 'B2', adresse: 'Tapt', status: 'tapt', pipeline: { forventetStart: '2026-09-21', forventetUker: 2, forventetFolk: 2, sikkerhet: 'sannsynlig' } },
   ];
-  const medBef = pipelineRader(prosjekter, befaringer, tildelinger);
+  const medBef = pipelineRader(prosjekter, befaringer, tildelinger, '2026-09-10');
   sjekk('Befaring med pipeline vises som usikker rad', medBef.some(r => r.befaringId === 'B1' && r.type === 'befaring'));
   sjekk('Tapt befaring vises ikke', !medBef.some(r => r.befaringId === 'B2'));
 }
@@ -96,7 +103,7 @@ console.log('\n-- ukeKapasitet: testkrav 4 --');
     { id: 'X1', navn: 'Stor jobb', pipeline: { forventetStart: uke, forventetUker: 1, forventetFolk: 8, sikkerhet: 'fast' } },
     { id: 'X2', navn: 'Jobb to', pipeline: { forventetStart: uke, forventetUker: 1, forventetFolk: 3, sikkerhet: 'fast' } },
     { id: 'X3', navn: 'Kanskje', pipeline: { forventetStart: uke, forventetUker: 1, forventetFolk: 2, sikkerhet: 'mulig' } },
-  ], [], []);
+  ], [], [], '2026-09-10');
   const kap = ukeKapasitet(uke, rader, [], ansatte);
   sjekk('behov 11 av 9 ansatte', kap.behov === 11 && kap.ansatte === 9, JSON.stringify(kap));
   sjekk('usikre telles separat (+2)', kap.usikre === 2);

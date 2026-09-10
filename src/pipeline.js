@@ -75,9 +75,12 @@ function ukeBemannet(prosjektId, tildelinger, mandag) {
 //   droppes når befaringen er tapt/arkivert eller har blitt prosjekt)
 // Hver rad: { id, type: 'prosjekt'|'hull'|'befaring', navn, pipeline, uker,
 //            bemannedeUker (Set), prosjektId? }
-export function pipelineRader(prosjekter, befaringer, tildelinger) {
+export function pipelineRader(prosjekter, befaringer, tildelinger, iDag = null) {
   const rader = [];
   const pipelineIds = new Set();
+  // Hull i pågående prosjekter regnes kun fra inneværende uke og framover —
+  // uker som allerede er passert er ikke noe PL kan bemanne.
+  const naavaerendeUke = weekStart(iDag || datoTilIso(new Date()));
 
   for (const p of (prosjekter || [])) {
     if (!p || p.arkivert || p.status === 'fullfort') continue;
@@ -100,7 +103,8 @@ export function pipelineRader(prosjekter, befaringer, tildelinger) {
     if (!p.startDato || !p.sluttDato) continue;
     const harTildeling = (tildelinger || []).some(t => t && t.prosjektId === p.id);
     if (!harTildeling) continue;
-    const start = weekStart(p.startDato);
+    const start = weekStart(p.startDato) > naavaerendeUke ? weekStart(p.startDato) : naavaerendeUke;
+    if (start > p.sluttDato) continue; // hele perioden er passert
     const alle = [];
     for (let m = start; m <= p.sluttDato; m = addDays(m, 7)) alle.push(m);
     if (alle.length > 60) continue; // urimelig lang periode = dårlige datoer, ikke støy
