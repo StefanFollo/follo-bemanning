@@ -162,69 +162,135 @@ export function erUtforende(a) {
     && !/utplass?ering/i.test(a.navn || '');
 }
 
-// Radene i Pipeline-FANEN (oppdrag 22). Med (regel a–d):
-//  a) status godkjent/jobber_med   b) aktiv med 0 tildelinger
-//  c) pipeline satt (fra oppdrag 21)   d) pågående med hull innen 8 uker
-// Prosjekter uten pipeline får en syntetisk (_syntetisk) pipeline fra
-// prosjektdatoene — lagres først når PL redigerer raden.
-// eldre = 0 tildelinger, ingen datoer og ikke rørt på 60 dager («Vis N eldre»).
-export function pipelineFaneRader(prosjekter, befaringer, tildelinger, iDag = null) {
+// ═══ Oppdrag 23: full oversikt — ALLE ikke-fullførte prosjekter, gruppert ═══
+// (Erstatter oppdrag 22 sin pipelineFaneRader: fanen skal være oversikten
+// PL åpner for å se alt som kommer og pågår, ikke en feilliste.)
+// Grupper (fast rekkefølge): manglerStart (gul) · overskredet (rød) ·
+// kommende · pagar · ferdig (bemannet ut perioden, sammenlagt).
+// Effektive verdier med kilde: pipeline-feltet vinner, deretter prosjekt-
+// datoer, deretter bemanningen (grå «fra bemanning»), deretter anslag.
+
+// Maks antall samtidige ansatte i prosjektets tildelinger (uke-oppløsning)
+export function maksSamtidige(prosjektId, tildelinger) {
+  const egne = (tildelinger || []).filter(t => t && t.prosjektId === prosjektId && t.prosjektId !== FERIE_ID && t.startDato && t.sluttDato);
+  if (!egne.length) return 0;
+  let maks = 0;
+  const forste = weekStart(egne.reduce((m, t) => t.startDato < m ? t.startDato : m, egne[0].startDato));
+  const siste = egne.reduce((m, t) => t.sluttDato > m ? t.sluttDato : m, egne[0].sluttDato);
+  for (let m = forste, i = 0; m <= siste && i < 120; m = addDays(m, 7), i++) {
+    const slutt = addDays(m, 6);
+    const antall = new Set(egne.filter(t => overlaps(t.startDato, t.sluttDato, m, slutt)).map(t => t.ansattId)).size;
+    if (antall > maks) maks = antall;
+  }
+  return maks;
+}
+
+export function pipelineOversikt(prosjekter, befaringer, tildelinger, iDag = null) {
   const dag = iDag || datoTilIso(new Date());
-  const basis = pipelineRader(prosjekter, befaringer, tildelinger, dag);
-  const medIds = new Set(basis.map(r => r.prosjektId).filter(Boolean));
-  const grense60 = isoTilDato(dag).getTime() - 60 * 86400000;
-
-  const prosjektFor = {};
-  for (const p of (prosjekter || [])) if (p) prosjektFor[p.id] = p;
-
-  const rader = basis.map(r => {
-    const p = r.prosjektId ? prosjektFor[r.prosjektId] : null;
-    return {
-      ...r,
-      status: p ? (p.status || 'aktiv') : 'tilbud',
-      plId: p ? (p.prosjektlederId || null) : null,
-      kategori: r.type === 'hull' ? 'hull' : (r.pipeline?.sikkerhet === 'fast' ? 'vunnet' : 'usikker'),
-      eldre: false,
-    };
-  });
+  const naavaerendeUke = weekStart(dag);
+  const rader = [];
 
   for (const p of (prosjekter || [])) {
-    if (!p || p.arkivert || p.status === 'fullfort' || medIds.has(p.id) || p.pipeline) continue;
-    const antallTild = (tildelinger || []).filter(t => t && t.prosjektId === p.id && t.prosjektId !== FERIE_ID).length;
-    const medA = ['godkjent', 'jobber_med'].includes(p.status);
-    const medB = (p.status || 'aktiv') === 'aktiv' && antallTild === 0;
-    if (!medA && !medB) continue;
-    if (antallTild > 0) continue; // (a) med tildelinger dekkes evt. av hull-regelen
-    const uker = p.startDato && p.sluttDato
-      ? Math.max(1, Math.ceil((isoTilDato(p.sluttDato) - isoTilDato(weekStart(p.startDato))) / (7 * 86400000)))
-      : null;
-    const pipeline = {
-      forventetStart: p.startDato ? weekStart(p.startDato) : null,
-      forventetUker: uker,
-      forventetFolk: null,
-      sikkerhet: 'fast',
-      _syntetisk: true,
-    };
-    const ukerListe = pipeline.forventetStart ? pipelineUker({ ...pipeline, forventetUker: uker || 1 }) : [];
+    if (!p || p.arkivert || p.status === 'fullfort') continue;
+    const egne = (tildelinger || []).filter(t => t && t.prosjektId === p.id && t.prosjektId !== FERIE_ID && t.startDato && t.sluttDato);
+    const harTild = egne.length > 0;
+    const forsteTild = harTild ? egne.reduce((m, t) => t.startDato < m ? t.startDato : m, egne[0].startDato) : null;
+    const bemannetTil = harTild ? egne.reduce((m, t) => t.sluttDato > m ? t.sluttDato : m, egne[0].sluttDato) : null;
+
+    // Effektiv start med kilde
+    const pl = p.pipeline || null;
+    let start = null, startKilde = null;
+    if (pl?.forventetStart) { start = weekStart(pl.forventetStart); startKilde = 'pipeline'; }
+    else if (p.startDato) { start = weekStart(p.startDato); startKilde = 'prosjekt'; }
+    else if (forsteTild) { start = weekStart(forsteTild); startKilde = 'bemanning'; }
+
+    // Effektiv slutt: prosjektets sluttdato, ellers pipeline-perioden
+    let slutt = p.sluttDato || null;
+    if (!slutt && pl?.forventetStart && pl?.forventetUker) slutt = addDays(weekStart(pl.forventetStart), (pl.forventetUker - 1) * 7 + 4);
+
+    // Uker med kilde
+    let uker = null, ukerKilde = null;
+    if (pl?.forventetUker) { uker = pl.forventetUker; ukerKilde = 'pipeline'; }
+    else if (start && slutt && slutt >= start) { uker = Math.max(1, Math.ceil((isoTilDato(slutt) - isoTilDato(start)) / (7 * 86400000))); ukerKilde = 'prosjekt'; }
+    else if (forsteTild && bemannetTil) { uker = Math.max(1, Math.ceil((isoTilDato(bemannetTil) - isoTilDato(weekStart(forsteTild))) / (7 * 86400000))); ukerKilde = 'bemanning'; }
+
+    // Folk med kilde (B-delen: aldri tom)
+    let folk, folkKilde;
+    const samtidige = maksSamtidige(p.id, tildelinger);
+    if (pl?.forventetFolk) { folk = pl.forventetFolk; folkKilde = 'pipeline'; }
+    else if (samtidige > 0) { folk = samtidige; folkKilde = 'bemanning'; }
+    else { folk = 2; folkKilde = 'anslag'; }
+
+    // Gruppe
+    let gruppe;
+    if (!start) gruppe = 'manglerStart';
+    else if ((p.sluttDato && p.sluttDato < dag) || (start < naavaerendeUke && !harTild)) gruppe = 'overskredet';
+    else if (start >= dag || (start >= naavaerendeUke && !harTild)) gruppe = 'kommende';
+    else gruppe = 'pagar';
+
+    // Stolpe-uker + bemannede + hull. Pågår uten sluttdato: INGEN hull antas
+    // (80 % mangler sluttdato) — vis «bemannet til dd.mm · slutt?» i stedet.
+    let ukerListe = [], bemannede = new Set();
+    if (gruppe === 'pagar' || gruppe === 'kommende') {
+      const stolpeStart = start > naavaerendeUke ? start : naavaerendeUke;
+      const stolpeSlutt = slutt || bemannetTil;
+      if (stolpeSlutt && stolpeSlutt >= stolpeStart) {
+        for (let m = stolpeStart, i = 0; m <= stolpeSlutt && i < 60; m = addDays(m, 7), i++) ukerListe.push(m);
+        bemannede = new Set(ukerListe.filter(m => ukeBemannet(p.id, tildelinger, m)));
+      }
+      // Ferdig bemannet ut kjent periode → egen (sammenlagt) gruppe
+      if (slutt && ukerListe.length > 0 && bemannede.size === ukerListe.length) gruppe = 'ferdig';
+    }
+
     rader.push({
-      id: 'pf-' + p.id, type: 'prosjekt', prosjektId: p.id,
+      id: 'ov-' + p.id, type: 'prosjekt', prosjektId: p.id,
       navn: p.adresse || p.navn || 'Uten navn',
-      pipeline, uker: ukerListe, bemannedeUker: new Set(),
       status: p.status || 'aktiv', plId: p.prosjektlederId || null,
-      kategori: 'vunnet',
-      eldre: !p.startDato && !p.sluttDato && (Number(p._endret) || 0) < grense60,
+      start, startKilde, slutt, bemannetTil, manglerSluttdato: !p.sluttDato,
+      gruppe,
+      uker: ukerListe, bemannedeUker: bemannede,
+      pipeline: {
+        forventetStart: start, forventetUker: uker, forventetFolk: folk,
+        sikkerhet: pl?.sikkerhet || 'fast',
+      },
+      ukerTall: uker, ukerKilde, folk, folkKilde,
+      lagretPipeline: pl,
+      kategori: (pl?.sikkerhet && pl.sikkerhet !== 'fast') ? 'usikker'
+        : (gruppe === 'pagar' && bemannede.size > 0 && bemannede.size < ukerListe.length) ? 'hull' : 'vunnet',
     });
   }
 
-  // Uten start øverst (det PL må fikse først), deretter start stigende
-  rader.sort((a, b) => {
-    const sa = a.pipeline?.forventetStart || '';
-    const sb = b.pipeline?.forventetStart || '';
-    if (!sa && sb) return -1;
-    if (sa && !sb) return 1;
-    return sa.localeCompare(sb) || a.navn.localeCompare(b.navn, 'nb');
-  });
-  return rader;
+  // Manuelle tilbud/befaringer (sannsynlig/mulig) → Kommende
+  for (const b of (befaringer || [])) {
+    if (!b || b.arkivert || !b.pipeline) continue;
+    if (b.prosjektId || ['tapt', 'godkjent'].includes(b.status)) continue;
+    const ukerListe = pipelineUker(b.pipeline);
+    rader.push({
+      id: 'ovbf-' + b.id, type: 'befaring', befaringId: b.id,
+      navn: b.adresse || b.kontaktNavn || 'Uten navn',
+      status: 'tilbud', plId: null,
+      start: b.pipeline.forventetStart ? weekStart(b.pipeline.forventetStart) : null,
+      startKilde: b.pipeline.forventetStart ? 'pipeline' : null,
+      slutt: null, bemannetTil: null, manglerSluttdato: false,
+      gruppe: b.pipeline.forventetStart ? 'kommende' : 'manglerStart',
+      uker: ukerListe, bemannedeUker: new Set(),
+      pipeline: { ...b.pipeline },
+      ukerTall: b.pipeline.forventetUker || null, ukerKilde: 'pipeline',
+      folk: b.pipeline.forventetFolk || 2, folkKilde: b.pipeline.forventetFolk ? 'pipeline' : 'anslag',
+      lagretPipeline: b.pipeline,
+      kategori: 'usikker',
+    });
+  }
+
+  const sorter = arr => arr.sort((a, b) => (a.start || '9999').localeCompare(b.start || '9999') || a.navn.localeCompare(b.navn, 'nb'));
+  const grupper = {
+    manglerStart: sorter(rader.filter(r => r.gruppe === 'manglerStart')),
+    overskredet: rader.filter(r => r.gruppe === 'overskredet').sort((a, b) => (a.slutt || a.start || '').localeCompare(b.slutt || b.start || '') || a.navn.localeCompare(b.navn, 'nb')),
+    kommende: sorter(rader.filter(r => r.gruppe === 'kommende')),
+    pagar: sorter(rader.filter(r => r.gruppe === 'pagar')),
+    ferdig: sorter(rader.filter(r => r.gruppe === 'ferdig')),
+  };
+  return { rader, grupper };
 }
 
 // Kapasitet per uke for kapasitetslinjen nederst i seksjonen.

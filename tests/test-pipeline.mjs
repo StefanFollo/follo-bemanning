@@ -5,7 +5,7 @@ import { readFileSync } from 'fs';
 import {
   foreslaaPipeline, pipelineUker, pipelineRader, ukeKapasitet, kapasitetNivaa,
   ukeNr, pipelineDigestLinje, weekStart, addDays, TIMEVERK_UKE,
-  pipelineFaneRader, erUtforende, ukeEtikett,
+  pipelineOversikt, maksSamtidige, erUtforende, ukeEtikett,
 } from '../src/pipeline.js';
 import { planleggVarsler, lagDigestEpost, VARSEL_STATUS_TOM } from '../src/oppfolgingVarsler.js';
 import { byggFramdriftPayload } from '../src/framdriftEksport.js';
@@ -120,33 +120,55 @@ console.log('\n-- ukeKapasitet: testkrav 4 --');
   sjekk('faktisk bemannet teller i behov, ferie trekkes fra ansatte', kap2.behov === 1 && kap2.ansatte === 8, JSON.stringify(kap2));
 }
 
-console.log('\n-- Oppdrag 22: pipelineFaneRader (regel a–d + eldre) --');
+console.log('\n-- Oppdrag 23: pipelineOversikt — alle prosjekter, gruppert --');
 {
   const iDag = '2026-09-10';
-  const naa = Date.now();
   const prosjekter = [
-    { id: 'F1', navn: 'Med pipeline', pipeline: { forventetStart: '2026-09-21', forventetUker: 2, forventetFolk: 3, sikkerhet: 'fast' }, status: 'aktiv', prosjektlederId: 'PL1', _endret: naa },
-    { id: 'F2', navn: 'Godkjent uten pipeline', status: 'godkjent', startDato: '2026-10-05', sluttDato: '2026-10-16', _endret: naa },
-    { id: 'F3', navn: 'Aktiv null tildelinger', status: 'aktiv', _endret: naa },
-    { id: 'F4', navn: 'Aktiv bemannet', status: 'aktiv', startDato: '2026-09-07', sluttDato: '2026-09-18', _endret: naa },
-    { id: 'F5', navn: 'Gammel uten datoer', status: 'aktiv', _endret: naa - 90 * 86400000 },
-    { id: 'F6', navn: 'Fullført', status: 'fullfort', _endret: naa },
+    // Mangler start: ingen datoer, ingen pipeline, ingen tildelinger
+    { id: 'O1', navn: 'Tusenfryd', status: 'jobber_med' },
+    // Overskredet: sluttdato passert (Stangåsveien-scenarioet)
+    { id: 'O2', navn: 'Stangåsveien 16B', status: 'aktiv', startDato: '2026-05-18', sluttDato: '2026-08-28' },
+    // Overskredet: start passert uten en eneste tildeling
+    { id: 'O3', navn: 'Start passert uten folk', status: 'godkjent', startDato: '2026-08-03' },
+    // Kommende: start fram i tid
+    { id: 'O4', navn: 'Rickard Berzelius', status: 'godkjent', startDato: '2026-10-05', sluttDato: '2026-10-23' },
+    // Pågår uten sluttdato, med tildelinger (Lindemansveien-scenarioet):
+    // start hentes fra bemanningen, INGEN hull antas, «bemannet til»
+    { id: 'O5', navn: 'Lindemansveien 59', status: 'aktiv' },
+    // Ferdig bemannet ut perioden
+    { id: 'O6', navn: 'Helt bemannet', status: 'aktiv', startDato: '2026-09-07', sluttDato: '2026-09-18' },
+    // Aldri med: fullført/arkivert
+    { id: 'O7', navn: 'Fullført', status: 'fullfort' },
+    { id: 'O8', navn: 'Arkivert', status: 'aktiv', arkivert: true },
   ];
   const tildelinger = [
-    { id: 'ft1', prosjektId: 'F4', ansattId: 'A1', startDato: '2026-09-07', sluttDato: '2026-09-18' },
+    { id: 'o5a', prosjektId: 'O5', ansattId: 'A1', startDato: '2026-08-17', sluttDato: '2026-10-02' },
+    { id: 'o5b', prosjektId: 'O5', ansattId: 'A2', startDato: '2026-09-07', sluttDato: '2026-10-02' },
+    { id: 'o6a', prosjektId: 'O6', ansattId: 'A3', startDato: '2026-09-07', sluttDato: '2026-09-18' },
   ];
-  const rader = pipelineFaneRader(prosjekter, [], tildelinger, iDag);
-  sjekk('c) pipeline-prosjekt med', rader.some(r => r.prosjektId === 'F1' && r.kategori === 'vunnet'));
-  const f2 = rader.find(r => r.prosjektId === 'F2');
-  sjekk('a) godkjent uten pipeline → syntetisk rad m/ start fra prosjektdato', !!f2 && f2.pipeline._syntetisk && f2.pipeline.forventetStart === '2026-10-05' && f2.pipeline.forventetUker === 2);
-  sjekk('b) aktiv med 0 tildelinger med (uten start)', rader.some(r => r.prosjektId === 'F3' && !r.pipeline.forventetStart));
-  sjekk('Aktiv HELT bemannet er ikke med', !rader.some(r => r.prosjektId === 'F4'));
-  const f5 = rader.find(r => r.prosjektId === 'F5');
-  sjekk('Gammel uten datoer flagges eldre («Vis N eldre»)', !!f5 && f5.eldre === true);
-  sjekk('Fullført aldri med', !rader.some(r => r.prosjektId === 'F6'));
-  sjekk('Uten start sorteres ØVERST', !rader[0].pipeline.forventetStart, rader.map(r => r.navn).join(', '));
-  const medStart = rader.filter(r => r.pipeline.forventetStart);
-  sjekk('Deretter start stigende', medStart.every((r, i) => i === 0 || medStart[i - 1].pipeline.forventetStart <= r.pipeline.forventetStart));
+  const { rader, grupper } = pipelineOversikt(prosjekter, [], tildelinger, iDag);
+  sjekk('ALLE 6 ikke-fullførte er med (fullført/arkivert aldri)', rader.length === 6
+    && !rader.some(r => ['O7', 'O8'].includes(r.prosjektId)), rader.map(r => r.navn).join(', '));
+  sjekk('Tusenfryd under Mangler start', grupper.manglerStart.some(r => r.prosjektId === 'O1'));
+  sjekk('Stangåsveien under Overskredet (IKKE «ca. u21» under Kommende)',
+    grupper.overskredet.some(r => r.prosjektId === 'O2') && !grupper.kommende.some(r => r.prosjektId === 'O2'));
+  sjekk('Start passert uten folk → Overskredet', grupper.overskredet.some(r => r.prosjektId === 'O3'));
+  sjekk('Kommende: start ≥ i dag', grupper.kommende.some(r => r.prosjektId === 'O4'));
+  const o5 = rader.find(r => r.prosjektId === 'O5');
+  sjekk('Lindemansveien under Pågår med start fra bemanningen', o5?.gruppe === 'pagar' && o5?.startKilde === 'bemanning', JSON.stringify({ g: o5?.gruppe, k: o5?.startKilde }));
+  sjekk('Uten sluttdato: «bemannet til» satt, stolpe t.o.m. u40, ALLE uker mørke (ingen hull antas)',
+    o5?.manglerSluttdato && o5?.bemannetTil === '2026-10-02'
+    && o5?.uker[o5.uker.length - 1] === '2026-09-28' && o5?.bemannedeUker.size === o5?.uker.length,
+    JSON.stringify({ til: o5?.bemannetTil, uker: o5?.uker }));
+  sjekk('Helt bemannet ut perioden → Ferdig-gruppa', grupper.ferdig.some(r => r.prosjektId === 'O6'));
+
+  // B-delen: Folk-kolonnen aldri tom
+  sjekk('Folk: pipeline > bemanning > anslag 2', rader.every(r => r.folk >= 1)
+    && o5?.folk === 2 && o5?.folkKilde === 'bemanning'
+    && rader.find(r => r.prosjektId === 'O1')?.folkKilde === 'anslag');
+  sjekk('maksSamtidige teller unike per uke', maksSamtidige('O5', tildelinger) === 2);
+  const medPl = pipelineOversikt([{ id: 'O9', navn: 'x', status: 'aktiv', pipeline: { forventetStart: '2026-10-05', forventetUker: 3, forventetFolk: 5, sikkerhet: 'fast' } }], [], [], iDag);
+  sjekk('pipeline.forventetFolk vinner over anslag', medPl.rader[0].folk === 5 && medPl.rader[0].folkKilde === 'pipeline');
 }
 
 console.log('\n-- Oppdrag 22: 8-ukers hull + ukeEtikett --');

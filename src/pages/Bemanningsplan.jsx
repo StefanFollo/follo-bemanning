@@ -9,7 +9,7 @@ import { weekStart, addDays, isoToDate, dateToIso, formatDate, overlaps } from '
 import { getHolidayMap } from '../holidays';
 import PipelineRader from '../komponenter/PipelineRader';
 import PipelineFane from '../komponenter/PipelineFane';
-import { pipelineFaneRader, ukeNr as pipelineUkeNr } from '../pipeline';
+import { pipelineOversikt, ukeNr as pipelineUkeNr } from '../pipeline';
 
 const FERIE_ID = '__FERIE__';
 
@@ -182,11 +182,11 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
   const weekDays = Array.from({ length: 52 * 7 }, (_, i) => addDays(currentWeek, i))
     .filter(d => { const dow = new Date(d + 'T00:00:00').getDay(); return dow >= 1 && dow <= 5; });
 
-  // Oppdrag 22: teller til Pipeline-fanens badge (ikke ferdig bemannede)
-  const pipelineAntall = useMemo(
-    () => pipelineFaneRader(state.prosjekter, state.befaringer, state.tildelinger).filter(r => !r.eldre).length,
-    [state.prosjekter, state.befaringer, state.tildelinger]
-  );
+  // Oppdrag 23: badge = det som trenger handling (mangler start + overskredet)
+  const pipelineAntall = useMemo(() => {
+    const { grupper } = pipelineOversikt(state.prosjekter, state.befaringer, state.tildelinger);
+    return grupper.manglerStart.length + grupper.overskredet.length;
+  }, [state.prosjekter, state.befaringer, state.tildelinger]);
 
   // Oppdrag 22 (skrollfiks): ukeoversikten starter alltid på inneværende
   // periode uten gammel horisontal scroll (scroll-restore kunne etterlate
@@ -202,8 +202,8 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
     const pid = sessionStorage.getItem('fbs_planlegg_inn');
     if (!pid || fastProsjektId) return;
     sessionStorage.removeItem('fbs_planlegg_inn');
-    const rad = pipelineFaneRader(state.prosjekter, state.befaringer, state.tildelinger)
-      .find(r => r.prosjektId === pid);
+    const rad = pipelineOversikt(state.prosjekter, state.befaringer, state.tildelinger)
+      .rader.find(r => r.prosjektId === pid);
     if (rad && (rad.pipeline.forventetStart || rad.uker[0])) startPlanlegging(rad);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
