@@ -26,6 +26,7 @@ import { beregnKalkyleVsBemanning } from '../kalkyleBemanning';
 import {
   ukeNr, prosjektStatus, harTildeling, bemannetTil, hullEtterBemanning, ferdigForslag,
   migrerStatus, pipelineListe, pipelineOppsummering, erUtforende, pipelineLoggInnslag,
+  flyttTilPipeline, addDays as leggTilDager,
   weekStart as ukeStart,
 } from '../pipeline';
 import { leggKandidater as finnLeggKandidater, byggPipelineProsjekt } from '../leggIPipeline';
@@ -1294,7 +1295,25 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
 
   function gjenopprettProsjekt(p) {
     dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...p, arkivert: false } });
-    setAktivFane(p.status === 'fullfort' ? 'fullfort' : harTildeling(p.id, state.tildelinger) ? 'startet' : 'pipeline');
+    setAktivFane(p.status === 'fullfort' ? 'fullfort' : prosjektStatus(p, state.tildelinger) === 'startet' ? 'startet' : 'pipeline');
+  }
+
+  // Oppdrag 28 A: «Flytt til pipeline» — prosjektet regnes som ikke startet
+  // til noen setter på NYE folk; gamle tildelinger beholdes (grået i planen).
+  const [flyttFor, setFlyttFor] = useState(null); // prosjekt
+  const [flyttDato, setFlyttDato] = useState('');
+  function apneFlytt(p) {
+    setFlyttFor(p);
+    setFlyttDato(leggTilDager(dateToIso(new Date()), 14));
+  }
+  function utforFlytt() {
+    const p = flyttFor;
+    if (!p) return;
+    dispatch({ type: 'UPDATE_PROSJEKT', payload: flyttTilPipeline(p, state.tildelinger, {
+      forventetStart: flyttDato || null, av: localStorage.getItem('fbs_user_navn') || 'ukjent',
+    }) });
+    setFlyttFor(null);
+    setAktivFane('pipeline');
   }
 
   // Oppdrag 24: kun Ferdig settes manuelt; Ikke startet/Startet avledes.
@@ -1696,6 +1715,8 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
       p.tilbudsfelterFørKobling
         && { ikon: <Ikon ikon={Scissors} size={15} />, label: 'Fjern tilbuds-kobling', onClick: () => fjernKobling(p) },
       { skille: true },
+      prosjektStatus(p, state.tildelinger) === 'startet'
+        && { ikon: <Ikon ikon={RotateCw} size={15} />, label: 'Flytt til pipeline', onClick: () => apneFlytt(p) },
       normStatus(p.status) !== 'fullfort'
         ? { ikon: <Ikon ikon={Flag} size={15} />, label: 'Marker ferdig', onClick: () => markerFerdig(p) }
         : { ikon: <Ikon ikon={Undo2} size={15} />, label: 'Gjenåpne', onClick: () => settProsjektStatus(p, 'aktiv') },
@@ -2083,6 +2104,30 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
       })()}
 
       {/* Kompakte rader */}
+      {/* ── Oppdrag 28 A: «Flytt til pipeline»-dialog ── */}
+      {flyttFor && (() => {
+        const egne = (state.tildelinger || []).filter(t => t && t.prosjektId === flyttFor.id && t.prosjektId !== '__FERIE__' && t.startDato && t.sluttDato);
+        const fra = egne.length ? egne.reduce((m, t) => t.startDato < m ? t.startDato : m, egne[0].startDato) : null;
+        const til = egne.length ? egne.reduce((m, t) => t.sluttDato > m ? t.sluttDato : m, egne[0].sluttDato) : null;
+        return (
+          <Modal title="Flytt til pipeline" onClose={() => setFlyttFor(null)}>
+            <div className="form">
+              <p style={{ fontSize: 13, margin: '0 0 10px' }}>
+                <b>{flyttFor.adresse || flyttFor.navn}</b> har {egne.length} tildeling{egne.length === 1 ? '' : 'er'}
+                {fra ? ` (${kortDato(fra)}–${kortDato(til)})` : ''}. De beholdes, men prosjektet regnes som
+                ikke startet til noen setter på nye folk. De gamle tildelingene vises grået i ukeplanen.
+              </p>
+              <label>Forventet start</label>
+              <input type="date" value={flyttDato} onChange={e => setFlyttDato(e.target.value)} />
+              <div className="form-actions">
+                <button className="btn" onClick={() => setFlyttFor(null)}>Avbryt</button>
+                <button className="btn btn-primary" onClick={utforFlytt}>Flytt til pipeline</button>
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
+
       {/* ── Oppdrag 24: Pipeline-underfanen = Ikke startet, enkel liste ── */}
       {aktivFane === 'pipeline' && (() => {
         const liste = pipelineListe(alleProsjekter, state.tildelinger);

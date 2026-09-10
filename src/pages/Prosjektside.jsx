@@ -23,7 +23,7 @@ import Framdriftsplan from './Framdriftsplan';
 import KS from './KS';
 import Bemanningsplan from './Bemanningsplan';
 import { byggInterneFaser } from '../framdriftEksport';
-import { ukeNr, prosjektStatus, STATUS_TEKST, pipelineLoggInnslag } from '../pipeline';
+import { ukeNr, prosjektStatus, STATUS_TEKST, pipelineLoggInnslag, flyttTilPipeline, addDays as leggTilDager } from '../pipeline';
 
 // Oppdrag 24: status er AVLEDET (Ikke startet / Startet / Ferdig) — ikke valgt
 const STATUS_FARGE = { ikke_startet: '#b45309', startet: '#15803d', ferdig: '#5d6b80' };
@@ -147,6 +147,17 @@ export default function Prosjektside({ prosjektId, fane: startFane = 'oversikt',
               onClick={() => { setFane('kunde'); setNyEmTrigger(t => t + 1); }}
               title="Åpner skjema for ny endringsmelding på Kunde-fanen">
               <Ikon ikon={MessageSquare} size={13} /> Ny endringsmelding
+            </button>
+          )}
+          {avledet === 'startet' && (
+            <button className="btn btn-sm" title="Prosjektet regnes som ikke startet til noen setter på nye folk — gamle tildelinger beholdes"
+              onClick={() => {
+                const antall = (state.tildelinger || []).filter(t => t && t.prosjektId === p.id && t.prosjektId !== '__FERIE__').length;
+                const dato = window.prompt(`Flytte «${p.adresse || p.navn}» til pipeline?\n\nProsjektet har ${antall} tildeling${antall === 1 ? '' : 'er'}. De beholdes (grået i ukeplanen), men prosjektet regnes som ikke startet til noen setter på nye folk.\n\nForventet start (ÅÅÅÅ-MM-DD):`, leggTilDager(new Date().toISOString().slice(0, 10), 14));
+                if (dato === null) return;
+                dispatch({ type: 'UPDATE_PROSJEKT', payload: flyttTilPipeline(p, state.tildelinger, { forventetStart: /^\d{4}-\d{2}-\d{2}$/.test(dato) ? dato : null, av: localStorage.getItem('fbs_user_navn') || 'ukjent' }) });
+              }}>
+              Flytt til pipeline
             </button>
           )}
           {avledet === 'ferdig'

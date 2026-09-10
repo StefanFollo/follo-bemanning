@@ -232,10 +232,44 @@ export function harTildeling(prosjektId, tildelinger) {
   return (tildelinger || []).some(t => t && t.prosjektId === prosjektId && t.prosjektId !== FERIE_ID);
 }
 
+// Oppdrag 28 A: «Flytt til pipeline» setter pipeline.manueltIkkeStartet
+// (epoch ms). Tildelinger opprettet FØR det tidspunktet beholdes (slettes
+// aldri), men teller ikke som «startet» — de vises grået i ukeplanen.
+function opprettetTid(t) {
+  return Number(t.opprettet) || Number(t._endret) || 0;
+}
+export function erFoerFlytting(p, t) {
+  const m = Number(p?.pipeline?.manueltIkkeStartet) || 0;
+  return m > 0 && !!t && opprettetTid(t) < m;
+}
+export function aktiveTildelinger(p, tildelinger) {
+  if (!p) return [];
+  return (tildelinger || []).filter(t => t && t.prosjektId === p.id && t.prosjektId !== FERIE_ID && !erFoerFlytting(p, t));
+}
+
 export function prosjektStatus(p, tildelinger) {
   if (!p) return 'ikke_startet';
   if (p.status === 'fullfort') return 'ferdig';
-  return harTildeling(p.id, tildelinger) ? 'startet' : 'ikke_startet';
+  return aktiveTildelinger(p, tildelinger).length > 0 ? 'startet' : 'ikke_startet';
+}
+
+// Bygger prosjektet etter «Flytt til pipeline»: markerer tidspunkt, setter
+// forventet start og logger. Tildelingene røres ikke.
+export function flyttTilPipeline(p, tildelinger, { forventetStart, av, naa = Date.now() }) {
+  const egne = (tildelinger || []).filter(t => t && t.prosjektId === p.id && t.prosjektId !== FERIE_ID);
+  const g = p.pipeline || {};
+  return {
+    ...p,
+    pipeline: {
+      sikkerhet: 'fast', ...g,
+      forventetStart: forventetStart ? weekStart(forventetStart) : (g.forventetStart || null),
+      manueltIkkeStartet: naa,
+    },
+    pipelineLogg: [...(p.pipelineLogg || []), {
+      tid: new Date(naa).toISOString(), av: av || 'ukjent',
+      tekst: `Flyttet til pipeline av ${av || 'ukjent'} — ${egne.length} tildeling${egne.length === 1 ? '' : 'er'} beholdt`,
+    }],
+  };
 }
 
 // Siste tildelings sluttdato («Bemannet til dd.mm» i Startet-listen)
@@ -303,7 +337,7 @@ export function pipelineListe(prosjekter, tildelinger, iDag = null) {
   const naavaerendeUke = weekStart(iDag || datoTilIso(new Date()));
   for (const p of (prosjekter || [])) {
     if (!p || p.arkivert || p.status === 'fullfort') continue;
-    if (harTildeling(p.id, tildelinger)) continue;
+    if (aktiveTildelinger(p, tildelinger).length > 0) continue;
     const pl = p.pipeline || {};
     const start = pl.forventetStart ? weekStart(pl.forventetStart) : (p.startDato ? weekStart(p.startDato) : null);
     let uker = pl.forventetUker || null;

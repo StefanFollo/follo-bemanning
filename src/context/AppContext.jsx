@@ -175,11 +175,15 @@ function reducer(state, action) {
     // overgangen logges på prosjektet (append-only) når første tildeling
     // legges inn og når den siste fjernes — ingenting annet endres.
     case 'ADD_TILDELING': {
-      const next = [...state.tildelinger, { ...action.payload, id: uid() }];
+      // opprettet: tidsstempel som «Flytt til pipeline» (oppdrag 28) måler mot
+      const next = [...state.tildelinger, { ...action.payload, id: uid(), opprettet: Date.now() }];
       saveTildelinger(next);
       const pid = action.payload.prosjektId;
+      const prosjektet = state.prosjekter.find(p => p.id === pid);
+      const flyttet = Number(prosjektet?.pipeline?.manueltIkkeStartet) || 0;
+      // Første AKTIVE tildeling: ingen fra før, eller alle fra før er eldre enn «Flytt til pipeline»
       const forsteTildeling = pid && pid !== '__FERIE__'
-        && !state.tildelinger.some(t => t.prosjektId === pid);
+        && !state.tildelinger.some(t => t.prosjektId === pid && (Number(t.opprettet) || Number(t._endret) || 0) >= flyttet);
       const prosjekter = forsteTildeling ? loggStatusOvergang(state.prosjekter, pid, 'Startet — første tildeling lagt inn') : null;
       if (prosjekter) saveProsjekter(prosjekter);
       return { ...state, tildelinger: next, ...(prosjekter ? { prosjekter } : {}) };

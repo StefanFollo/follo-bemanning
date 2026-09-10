@@ -6,7 +6,7 @@ import {
   foreslaaPipeline, pipelineUker, pipelineRader, ukeKapasitet, kapasitetNivaa,
   ukeNr, pipelineDigestLinje, weekStart, addDays, TIMEVERK_UKE,
   erUtforende, ukeEtikett, prosjektStatus, bemannetTil, hullEtterBemanning, ferdigForslag,
-  migrerStatus, pipelineListe, pipelineOppsummering,
+  migrerStatus, pipelineListe, pipelineOppsummering, flyttTilPipeline, erFoerFlytting, aktiveTildelinger,
 } from '../src/pipeline.js';
 import { planleggVarsler, lagDigestEpost, VARSEL_STATUS_TOM } from '../src/oppfolgingVarsler.js';
 import { byggFramdriftPayload } from '../src/framdriftEksport.js';
@@ -218,6 +218,31 @@ console.log('\n-- Oppdrag 25: Start passert, 8-ukers hull i Startet-listen, legg
   const vunnet = byggPipelineProsjekt(bef[0], {}, { prosjektId: 'NY2', farge: '#123', brukerNavn: 'Test' });
   sjekk('Vunnet tilbud: fast + befaring arkiveres (som BefaringPlan)', vunnet.prosjekt.pipeline.sikkerhet === 'fast' && vunnet.befaring.arkivert === true && vunnet.prosjekt.pipeline.forventetStart === null);
   sjekk('Lagt-i-pipeline logges på prosjektet', prosjekt.pipelineLogg.length === 1 && /sannsynlig/.test(prosjekt.pipelineLogg[0].tekst));
+}
+
+console.log('\n-- Oppdrag 28: Flytt til pipeline (manueltIkkeStartet) --');
+{
+  const naa = Date.UTC(2026, 8, 10, 12, 0, 0);
+  const gamle = [
+    { id: 'g1', prosjektId: 'K', ansattId: 'A1', startDato: '2026-08-10', sluttDato: '2026-08-14', opprettet: naa - 30 * 86400000 },
+    { id: 'g2', prosjektId: 'K', ansattId: 'A2', startDato: '2026-08-17', sluttDato: '2026-08-21', _endret: naa - 20 * 86400000 },
+    { id: 'g3', prosjektId: 'K', ansattId: 'A3', startDato: '2026-09-07', sluttDato: '2026-09-11' }, // uten stempel = 0 → før
+  ];
+  const p0 = { id: 'K', navn: 'Kråkstadveien 98', status: 'aktiv' };
+  sjekk('Før flytting: 3 tildelinger → Startet', prosjektStatus(p0, gamle) === 'startet');
+
+  const p1 = flyttTilPipeline(p0, gamle, { forventetStart: '2026-09-23', av: 'Stefan', naa });
+  sjekk('flyttTilPipeline setter manueltIkkeStartet + forventet start (snappet til mandag)', p1.pipeline.manueltIkkeStartet === naa && p1.pipeline.forventetStart === '2026-09-21');
+  sjekk('Logg: «Flyttet til pipeline av Stefan — 3 tildelinger beholdt»', /Flyttet til pipeline av Stefan — 3 tildelinger beholdt/.test(p1.pipelineLogg.slice(-1)[0].tekst));
+  sjekk('Etter flytting: samme 3 tildelinger, men prosjektet er ikke_startet', prosjektStatus(p1, gamle) === 'ikke_startet' && aktiveTildelinger(p1, gamle).length === 0);
+  sjekk('Gamle tildelinger flagges «før flytting» (grået i planen)', gamle.every(t => erFoerFlytting(p1, t)));
+  sjekk('Ligger i pipelineListe med forventet start u39', pipelineListe([p1], gamle).some(r => r.prosjektId === 'K' && r.start === '2026-09-21'));
+
+  // Ny tildeling ETTER flytting → Startet igjen; de gamle er fortsatt grå
+  const ny1 = { id: 'n1', prosjektId: 'K', ansattId: 'A4', startDato: '2026-09-21', sluttDato: '2026-09-25', opprettet: naa + 60000 };
+  sjekk('Ny tildeling etter flytting → Startet', prosjektStatus(p1, [...gamle, ny1]) === 'startet' && aktiveTildelinger(p1, [...gamle, ny1]).length === 1);
+  sjekk('Den nye er ikke «før flytting», de gamle er det fortsatt', !erFoerFlytting(p1, ny1) && erFoerFlytting(p1, gamle[0]));
+  sjekk('Uten manueltIkkeStartet er ingenting «før flytting»', !erFoerFlytting(p0, gamle[0]));
 }
 
 console.log('\n-- Oppdrag 22: 8-ukers hull + ukeEtikett --');

@@ -626,17 +626,10 @@ export default function BefaringPlan({ apneBefaringId, onApnet }) {
         },
       },
     });
-    if (prosjektForm.lagTildeling && visKapasitet?.prosjektlederId && prosjektForm.startDato) {
-      dispatch({
-        type: 'ADD_TILDELING',
-        payload: {
-          ansattId: visKapasitet.prosjektlederId,
-          prosjektId,
-          startDato: prosjektForm.startDato,
-          sluttDato: prosjektForm.sluttDato || addDays(prosjektForm.startDato, 13),
-        },
-      });
-    }
+    // Oppdrag 28 B: «Opprett prosjekt» lager ALDRI tildelinger. Tidligere ble
+    // prosjektlederen tildelt automatisk her — det gjorde at hvert nytt
+    // prosjekt landet i «Startet» i stedet for i pipelinen. PL beholdes som
+    // prosjektfelt (prosjektlederId); folk settes på via pipelinen.
     // Merk befaringen som konvertert til prosjekt og flytt til arkiv
     if (visKapasitet) {
       dispatch({ type: 'UPDATE_BEFARING', payload: { ...visKapasitet, prosjektId, arkivert: true } });
@@ -1669,28 +1662,17 @@ export default function BefaringPlan({ apneBefaringId, onApnet }) {
                 </div>
               </div>
 
-              {/* Automatisk tildeling */}
+              {/* Oppdrag 28 B: PL settes som prosjektleder — ingen tildeling lages */}
               {visKapasitet?.prosjektlederId && (
                 <div className="bef-modal-seksjon">
                   <div className="bef-modal-seksjon-tittel">Ansvarlig tilbud</div>
                   {(() => {
                     const ansatt = state.ansatte.find(a => a.id === visKapasitet.prosjektlederId);
                     return ansatt ? (
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', fontSize: 13 }}>
-                        <input type="checkbox" checked={prosjektForm.lagTildeling}
-                          onChange={e => setProsjektForm(f => ({ ...f, lagTildeling: e.target.checked }))} />
-                        <span>
-                          Tildel <strong>{ansatt.navn}</strong> til prosjektet automatisk
-                          {prosjektForm.startDato && (
-                            <span style={{ color: '#5d6b80' }}>
-                              {' '}(fra {new Date(prosjektForm.startDato + 'T00:00:00').toLocaleDateString('nb-NO', { day: '2-digit', month: 'short' })}
-                              {prosjektForm.sluttDato
-                                ? ` til ${new Date(prosjektForm.sluttDato + 'T00:00:00').toLocaleDateString('nb-NO', { day: '2-digit', month: 'short' })}`
-                                : ' i 2 uker'})
-                            </span>
-                          )}
-                        </span>
-                      </label>
+                      <div style={{ fontSize: 13, color: '#5d6b80' }}>
+                        <strong style={{ color: 'inherit' }}>{ansatt.navn}</strong> settes som prosjektleder. Prosjektet legges i
+                        pipelinen (Ikke startet) — folk settes på fra bemanningsplanen.
+                      </div>
                     ) : null;
                   })()}
                 </div>

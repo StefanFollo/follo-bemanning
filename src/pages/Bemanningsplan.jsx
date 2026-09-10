@@ -9,7 +9,7 @@ import { weekStart, addDays, isoToDate, dateToIso, formatDate, overlaps } from '
 import { getHolidayMap } from '../holidays';
 import PipelineRader from '../komponenter/PipelineRader';
 import PipelineOversiktRader from '../komponenter/PipelineOversiktRader';
-import { ukeNr as pipelineUkeNr } from '../pipeline';
+import { ukeNr as pipelineUkeNr, erFoerFlytting } from '../pipeline';
 
 const FERIE_ID = '__FERIE__';
 
@@ -1312,13 +1312,13 @@ function GanttRowContainer({
         return (
           <div key={t.id}
             className={`gantt-bar${isFerie ? ' gantt-bar-ferie' : ''}`}
-            style={{ left: pos.left, width: pos.width, ...(isFerie ? {} : { background: prosjektColor(t.prosjektId) }) }}
+            style={{ left: pos.left, width: pos.width, ...(isFerie ? {} : { background: prosjektColor(t.prosjektId) }), ...(erFoerFlytting(p, t) ? { opacity: 0.4, filter: 'grayscale(0.6)' } : {}) }}
             onClick={e => {
               e.stopPropagation();
               const mid = addDays(t.startDato, Math.max(1, Math.floor(daysDiff(t.startDato, t.sluttDato) / 2)));
               openBarMenu(t, mid, e.clientX, e.clientY);
             }}
-            title={`${barLabel} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)} — klikk for valg`}
+            title={`${barLabel} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}${erFoerFlytting(p, t) ? ' · før flytting til pipeline' : ''} — klikk for valg`}
           >
             {pos.isFirst
               ? <div className="gantt-handle gantt-handle-l" draggable onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'start' }; }}>◂</div>
@@ -2112,8 +2112,9 @@ function OversiktVisning({
                           top: laneOf[t.id] * LANE_H + 2,
                           height: LANE_H - 4,
                           ...(isFerie ? {} : { background: color }),
+                          ...(erFoerFlytting(proj, t) ? { opacity: 0.4, filter: 'grayscale(0.6)' } : {}),
                         }}
-                        title={`${label} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)} — klikk for valg`}
+                        title={`${label} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}${erFoerFlytting(proj, t) ? ' · før flytting til pipeline' : ''} — klikk for valg`}
                         onClick={e => {
                           e.stopPropagation();
                           if (dragRef.current) return;
