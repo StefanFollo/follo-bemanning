@@ -52,7 +52,11 @@ export default function PipelineFane({ state, dispatch, readOnly, onPlanleggInn 
 
   // ── KPI-tallene ──
   const utenStart = aktuelle.filter(r => !r.pipeline.forventetStart);
-  const heltUtenFolk = aktuelle.filter(r => r.pipeline.forventetStart && r.bemannedeUker.size === 0 && r.type !== 'befaring')
+  // Fremoverrettet: starter i fortid (over frist) er egen sak — de skal ikke
+  // fylle «første start uten folk» med f.eks. «u21» fra i mai.
+  const naavaerendeUke = weekStart(iDag);
+  const heltUtenFolk = aktuelle.filter(r => r.pipeline.forventetStart && r.pipeline.forventetStart >= naavaerendeUke
+    && r.bemannedeUker.size === 0 && r.type !== 'befaring')
     .sort((a, b) => a.pipeline.forventetStart.localeCompare(b.pipeline.forventetStart));
   const forsteUtenFolk = heltUtenFolk[0] || null;
   const kapPerUke = vindu.map(m => ({ m, kap: ukeKapasitet(m, aktuelle, state.tildelinger, utforende) }));
