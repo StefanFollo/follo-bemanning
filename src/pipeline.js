@@ -257,9 +257,14 @@ export function hullEtterBemanning(p, tildelinger, iDag = null) {
   const naavaerendeUke = weekStart(dag);
   const fra = forsteHull > naavaerendeUke ? forsteHull : naavaerendeUke;
   if (fra > p.sluttDato) return null;
-  // Er det faktisk en ubemannet uke mellom fra og sluttdato?
-  for (let m = fra, i = 0; m <= p.sluttDato && i < 60; m = addDays(m, 7), i++) {
-    if (!ukeBemannet(p.id, tildelinger, m)) return { fra: m, til: weekStart(p.sluttDato) };
+  // Hull vises kun innenfor de neste 8 ukene (oppdrag 25 c) — lengre fram er
+  // ikke bemannings-handling nå, og lange perioder ga «hull u38–u22 (2027)».
+  const horisont = addDays(naavaerendeUke, 8 * 7 - 1);
+  const sluttGrense = p.sluttDato < horisont ? p.sluttDato : horisont;
+  if (fra > sluttGrense) return null;
+  // Er det faktisk en ubemannet uke mellom fra og grensen?
+  for (let m = fra, i = 0; m <= sluttGrense && i < 60; m = addDays(m, 7), i++) {
+    if (!ukeBemannet(p.id, tildelinger, m)) return { fra: m, til: weekStart(sluttGrense) };
   }
   return null;
 }
@@ -293,8 +298,9 @@ export function migrerStatus(p, dato = null) {
 
 // Pipeline-listen = Ikke startet-prosjekter (ikke arkivert/fullført, 0
 // tildelinger). Enkel liste: uten start øverst, så start stigende.
-export function pipelineListe(prosjekter, tildelinger) {
+export function pipelineListe(prosjekter, tildelinger, iDag = null) {
   const rader = [];
+  const naavaerendeUke = weekStart(iDag || datoTilIso(new Date()));
   for (const p of (prosjekter || [])) {
     if (!p || p.arkivert || p.status === 'fullfort') continue;
     if (harTildeling(p.id, tildelinger)) continue;
@@ -304,23 +310,25 @@ export function pipelineListe(prosjekter, tildelinger) {
     if (!uker && p.startDato && p.sluttDato && p.sluttDato >= p.startDato) {
       uker = Math.max(1, Math.ceil((isoTilDato(p.sluttDato) - isoTilDato(weekStart(p.startDato))) / (7 * 86400000)));
     }
+    // Oppdrag 25 b: forventet start / gammel startdato før inneværende uke
+    // er «Start passert» — flagges rødt, aldri vist som om det var plan.
+    const startPassert = !!start && start < naavaerendeUke;
     rader.push({
       prosjektId: p.id,
       navn: p.adresse || p.navn || 'Uten navn',
       kunde: p.kunde?.navn || null,
-      start, uker,
+      start, uker, startPassert,
       folk: pl.forventetFolk || null,
       folkAnslag: !pl.forventetFolk,
       sikkerhet: pl.sikkerhet || 'fast',
       plId: p.prosjektlederId || null,
-      uker_liste: start ? Array.from({ length: Math.max(1, uker || 1) }, (_, i) => addDays(start, i * 7)) : [],
+      uker_liste: start && !startPassert ? Array.from({ length: Math.max(1, uker || 1) }, (_, i) => addDays(start, i * 7)) : [],
     });
   }
-  return rader.sort((a, b) => {
-    if (!a.start && b.start) return -1;
-    if (a.start && !b.start) return 1;
-    return (a.start || '').localeCompare(b.start || '') || a.navn.localeCompare(b.navn, 'nb');
-  });
+  // Uten start øverst, så «Start passert», så start stigende
+  const rang = r => !r.start ? 0 : r.startPassert ? 1 : 2;
+  return rader.sort((a, b) => rang(a) - rang(b)
+    || (a.start || '').localeCompare(b.start || '') || a.navn.localeCompare(b.navn, 'nb'));
 }
 
 // Én oppsummeringslinje over listen: «N prosjekter · første start u41 ·

@@ -187,6 +187,45 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
     if (onNavigate) onNavigate('prosjekter'); else setTab('uke');
   }
 
+  // Oppdrag 25: pipeline-rad sluppet på en ansatt i en uke → tildeling for
+  // den uka (man–fre), prosjektet blir Startet og raden forsvinner av seg
+  // selv. Toast med Angre fjerner tildelingen igjen — ingen data slettes
+  // ellers.
+  const [startToast, setStartToast] = useState(null); // { tekst, finn: {ansattId, prosjektId, startDato, sluttDato} }
+  useEffect(() => {
+    if (!startToast) return;
+    const t = setTimeout(() => setStartToast(null), 15000);
+    return () => clearTimeout(t);
+  }, [startToast]);
+  function leggInnFraPipeline(prosjektId, ansattId, ukeMandag) {
+    const p = state.prosjekter.find(x => x.id === prosjektId);
+    if (!p || !ansattId) return;
+    const startDato = ukeMandag, sluttDato = addDays(ukeMandag, 4);
+    if (!bekreftParallell(ansattId, startDato, sluttDato)) return;
+    dispatch({ type: 'ADD_TILDELING', payload: { ansattId, prosjektId, startDato, sluttDato } });
+    const a = state.ansatte.find(x => x.id === ansattId);
+    setStartToast({
+      tekst: `${p.adresse || p.navn} startet · ${(a?.navn || '').split(' ')[0]} uke ${pipelineUkeNr(ukeMandag)}`,
+      finn: { ansattId, prosjektId, startDato, sluttDato },
+    });
+  }
+  function angreStart() {
+    const f = startToast?.finn;
+    if (!f) return;
+    const t = state.tildelinger.find(x => x.ansattId === f.ansattId && x.prosjektId === f.prosjektId && x.startDato === f.startDato && x.sluttDato === f.sluttDato);
+    if (t) dispatch({ type: 'DELETE_TILDELING', id: t.id });
+    setStartToast(null);
+  }
+  function planleggInnFraPipeline(prosjektId) {
+    const p = state.prosjekter.find(x => x.id === prosjektId);
+    const start = p?.pipeline?.forventetStart || (p?.startDato ? weekStart(p.startDato) : null);
+    if (!p || !start) return;
+    startPlanlegging({
+      prosjektId: p.id, navn: p.adresse || p.navn || 'Uten navn', uker: [],
+      pipeline: { forventetStart: weekStart(start), forventetUker: p.pipeline?.forventetUker || 2, forventetFolk: p.pipeline?.forventetFolk || 2 },
+    });
+  }
+
   // Oppdrag 22 (skrollfiks): ukeoversikten starter alltid på inneværende
   // periode uten gammel horisontal scroll (scroll-restore kunne etterlate
   // visningen langt fram i tid).
@@ -566,6 +605,11 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
             deleteTildeling={deleteTildeling}
             dispatch={dispatch}
             openBemannProsjekt={openBemannProsjekt}
+            leggInnFraPipeline={leggInnFraPipeline}
+            planleggInnFraPipeline={planleggInnFraPipeline}
+            startToast={startToast}
+            onAngreStart={angreStart}
+            onLukkToast={() => setStartToast(null)}
             planModus={planModus}
             planValgte={planValgte}
             onPlanFerdig={planFerdig}
@@ -790,6 +834,7 @@ function UkeVisning({
   dragRef, HOLIDAYS, handleDrop, openAddTildeling, openBarMenu, deleteTildeling,
   fastProsjektId = null, dispatch = null, openBemannProsjekt = null,
   planModus = null, planValgte = 0, onPlanFerdig = null, onPlanAvbryt = null, openPipelineFane = null,
+  leggInnFraPipeline = null, planleggInnFraPipeline = null, startToast = null, onAngreStart = null, onLukkToast = null,
 }) {
   const today = dateToIso(new Date());
   const isHoliday = (iso) => !!HOLIDAYS[iso];
@@ -887,14 +932,18 @@ function UkeVisning({
   function pipelineDrop(dager) {
     return e => {
       const pid = e.dataTransfer.getData('text/fbs-pipeline');
-      if (!pid || !openBemannProsjekt) return;
+      if (!pid) return;
       e.preventDefault();
       const wrap = e.currentTarget;
       const rect = wrap.getBoundingClientRect();
       const x = e.clientX - rect.left + wrap.scrollLeft - 150;
       const colW = (wrap.scrollWidth - 150) / dager.length;
       const idx = Math.max(0, Math.min(dager.length - 1, Math.floor(x / colW)));
-      openBemannProsjekt(pid, weekStart(dager[idx]));
+      const uke = weekStart(dager[idx]);
+      // Oppdrag 25: sluppet på en ansatts rad → tildeling for den uka direkte
+      const ansattId = e.target.closest?.('[data-ansatt-id]')?.dataset.ansattId || null;
+      if (ansattId && leggInnFraPipeline) leggInnFraPipeline(pid, ansattId, uke);
+      else if (openBemannProsjekt) openBemannProsjekt(pid, uke);
     };
   }
 
@@ -1022,6 +1071,14 @@ function UkeVisning({
 
   return (
     <div>
+      {/* Oppdrag 25: toast når et pipeline-prosjekt startes ved drag — med Angre */}
+      {startToast && (
+        <div style={{ position: 'sticky', top: 0, zIndex: 31, display: 'flex', gap: 10, alignItems: 'center', padding: '8px 14px', background: '#15803d', color: '#fff', borderRadius: 10, marginBottom: 8, fontSize: 13 }}>
+          <b>{startToast.tekst}</b>
+          <button className="btn btn-sm" style={{ background: '#fff', color: '#15803d', fontWeight: 700 }} onClick={onAngreStart}>Angre</button>
+          <button className="btn btn-sm" style={{ marginLeft: 'auto', background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.6)' }} onClick={onLukkToast}>Lukk</button>
+        </div>
+      )}
       {/* Oppdrag 22: planleggingsmodus-stripen («Planlegg inn» fra Pipeline) */}
       {planModus && (
         <div style={{ position: 'sticky', top: 0, zIndex: 30, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '9px 14px', background: '#1d4ed8', color: '#fff', borderRadius: 10, marginBottom: 10, fontSize: 13 }}>
@@ -1095,7 +1152,7 @@ function UkeVisning({
             {renderProsjektRader(dagProsjekter, fastProsjektId ? [] : dagLedige, weekDays.length, DagAnsattRad, currentWeek, weekEnd, { days: weekDays, gantt })}
             {!fagFilter && <RorleggerRader state={state} days={weekDays} unit="day" viewStart={currentWeek} viewEnd={weekEnd} />}
             {!fastProsjektId && dispatch && (
-              <PipelineRader state={state} dispatch={dispatch} days={weekDays} planAnsatte={planAnsatte} readOnly={readOnly} onBemann={openBemannProsjekt} onApneFane={openPipelineFane} />
+              <PipelineRader state={state} dispatch={dispatch} days={weekDays} readOnly={readOnly} onPlanleggInn={planleggInnFraPipeline} />
             )}
           </div>
         </div>
@@ -1122,7 +1179,7 @@ function UkeVisning({
             {renderProsjektRader(ukeProsjekter, fastProsjektId ? [] : ukeLedige, 260, UkeAnsattRad, periodeStart, periodeEnd, { days: WORK_DAYS_UKE, gantt })}
             {!fagFilter && <RorleggerRader state={state} days={WORK_DAYS_UKE} unit="day" viewStart={periodeStart} viewEnd={periodeEnd} />}
             {!fastProsjektId && dispatch && (
-              <PipelineRader state={state} dispatch={dispatch} days={WORK_DAYS_UKE} planAnsatte={planAnsatte} readOnly={readOnly} onBemann={openBemannProsjekt} onApneFane={openPipelineFane} />
+              <PipelineRader state={state} dispatch={dispatch} days={WORK_DAYS_UKE} readOnly={readOnly} onPlanleggInn={planleggInnFraPipeline} />
             )}
           </div>
         </div>
@@ -1195,6 +1252,7 @@ function GanttRowContainer({
   return (
     <div
       className="gantt-row"
+      data-ansatt-id={ansatt.id}
       style={{ gridColumn: '2 / -1' }}
       onDragOver={e => { e.preventDefault(); setDragOverIdx(getIdxFromEvent(e)); }}
       onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDragOverIdx(null); }}

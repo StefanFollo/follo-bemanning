@@ -10,6 +10,7 @@ import {
 } from '../src/pipeline.js';
 import { planleggVarsler, lagDigestEpost, VARSEL_STATUS_TOM } from '../src/oppfolgingVarsler.js';
 import { byggFramdriftPayload } from '../src/framdriftEksport.js';
+import { leggKandidater, byggPipelineProsjekt, sikkerhetFor } from '../src/leggIPipeline.js';
 
 let feil = 0, ok = 0;
 function sjekk(navn, betingelse, detalj = '') {
@@ -179,6 +180,44 @@ console.log('\n-- Oppdrag 24: pipelineListe + oppsummering (test-krav 4) --');
   sjekk('Ingen sprekk ved 21 utførende', opps.sprekk === null);
   const stor = pipelineOppsummering([{ prosjektId: 'X', navn: 'x', start: '2026-09-14', uker: 2, folk: 30, folkAnslag: false, sikkerhet: 'fast', uker_liste: ['2026-09-14', '2026-09-21'] }], [], utforende, iDag);
   sjekk('Sprekk u38–39 når behov 30 > 21', stor.sprekk && stor.sprekk.fra === '2026-09-14' && stor.sprekk.til === '2026-09-21', JSON.stringify(stor.sprekk));
+}
+
+console.log('\n-- Oppdrag 25: Start passert, 8-ukers hull i Startet-listen, legg i pipeline --');
+{
+  const iDag = '2026-09-10';
+  const liste = pipelineListe([
+    { id: 'A', navn: 'Uten start', status: 'aktiv' },
+    { id: 'B', navn: 'Passert', status: 'aktiv', startDato: '2026-05-18' },
+    { id: 'C', navn: 'Framtid', status: 'aktiv', pipeline: { forventetStart: '2026-10-05', forventetUker: 2, forventetFolk: 2, sikkerhet: 'fast' } },
+  ], [], iDag);
+  sjekk('b) gammel startDato < inneværende uke flagges startPassert', liste.find(r => r.prosjektId === 'B').startPassert === true && liste.find(r => r.prosjektId === 'C').startPassert === false);
+  sjekk('b) sortering: Sett start → Start passert → start stigende', liste.map(r => r.prosjektId).join(',') === 'A,B,C', liste.map(r => r.prosjektId).join(','));
+  sjekk('b) passert start gir ingen uker i kapasitetsregningen', liste.find(r => r.prosjektId === 'B').uker_liste.length === 0);
+
+  // c) hull begrenses til neste 8 uker: bemannet t.o.m. u37, slutt langt ute i 2027
+  const hull = hullEtterBemanning({ id: 'H', status: 'aktiv', sluttDato: '2027-05-28' },
+    [{ prosjektId: 'H', ansattId: 'A1', startDato: '2026-09-07', sluttDato: '2026-09-11' }], iDag);
+  sjekk('c) hull u38–44 (8 uker fra inneværende), aldri «u38–u22 (2027)»', hull && hull.fra === '2026-09-14' && hull.til === '2026-10-26', JSON.stringify(hull));
+
+  // Legg i pipeline: kandidater og bygging
+  const bef = [
+    { id: 'b1', status: 'godkjent', kontaktNavn: 'Kunde A', adresse: 'Gate 1' },
+    { id: 'b2', status: 'tilbud_sendt', kontaktNavn: 'Kunde B', adresse: 'Gate 2', poster: [{ navn: 'x' }] },
+    { id: 'b3', status: 'planlagt', kontaktNavn: 'Kunde C', adresse: 'Gate 3' },
+    { id: 'b4', status: 'tapt', kontaktNavn: 'Kunde D', adresse: 'Gate 4' },
+    { id: 'b5', status: 'godkjent', kontaktNavn: 'Har prosjekt', adresse: 'Gate 5', prosjektId: 'P5' },
+    { id: 'b6', status: 'godkjent', kontaktNavn: 'Koblet via prosjekt', adresse: 'Gate 6' },
+  ];
+  const kand = leggKandidater(bef, [{ id: 'P6', kildeBefaringId: 'b6' }]);
+  sjekk('Kandidater: vunnet/sendt/befaring uten prosjekt — ikke tapt, ikke allerede koblet', kand.map(b => b.id).join(',') === 'b1,b2,b3', kand.map(b => b.id).join(','));
+  sjekk('Sikkerhet: vunnet=fast, sendt=sannsynlig, befaring=mulig', sikkerhetFor(bef[0]) === 'fast' && sikkerhetFor(bef[1]) === 'sannsynlig' && sikkerhetFor(bef[2]) === 'mulig');
+  const { prosjekt, befaring } = byggPipelineProsjekt(bef[1], { forventetStart: '2026-10-21', forventetUker: 3, forventetFolk: 2 }, { prosjektId: 'NY1', farge: '#123', brukerNavn: 'Test' });
+  sjekk('Prosjekt: navn «Kunde – adresse» (som BefaringPlan), status aktiv, pipeline sannsynlig, start snappet til mandag',
+    prosjekt.navn === 'Kunde B – Gate 2' && prosjekt.status === 'aktiv' && prosjekt.pipeline.sikkerhet === 'sannsynlig' && prosjekt.pipeline.forventetStart === '2026-10-19' && prosjekt.pipeline.forventetUker === 3 && prosjekt.kildeBefaringId === 'b2');
+  sjekk('Sendt tilbud: befaringen kobles men arkiveres IKKE', befaring.prosjektId === 'NY1' && !befaring.arkivert);
+  const vunnet = byggPipelineProsjekt(bef[0], {}, { prosjektId: 'NY2', farge: '#123', brukerNavn: 'Test' });
+  sjekk('Vunnet tilbud: fast + befaring arkiveres (som BefaringPlan)', vunnet.prosjekt.pipeline.sikkerhet === 'fast' && vunnet.befaring.arkivert === true && vunnet.prosjekt.pipeline.forventetStart === null);
+  sjekk('Lagt-i-pipeline logges på prosjektet', prosjekt.pipelineLogg.length === 1 && /sannsynlig/.test(prosjekt.pipelineLogg[0].tekst));
 }
 
 console.log('\n-- Oppdrag 22: 8-ukers hull + ukeEtikett --');

@@ -28,6 +28,7 @@ import {
   migrerStatus, pipelineListe, pipelineOppsummering, erUtforende, pipelineLoggInnslag,
   weekStart as ukeStart,
 } from '../pipeline';
+import { leggKandidater as finnLeggKandidater, byggPipelineProsjekt } from '../leggIPipeline';
 
 function formaterBelop(belop) {
   if (!belop && belop !== 0) return null;
@@ -1348,46 +1349,23 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
   // vunnet tilbud uten prosjekt (fast) eller sendt tilbud/befaring
   // (sannsynlig/mulig). Samme navnformat som BefaringPlan, så «Opprett
   // prosjekt» kobler til dette prosjektet når tilbudet vinnes senere.
-  const leggKandidater = (state.befaringer || []).filter(b => b && !b.arkivert && !b.prosjektId
-    && ['godkjent', 'tilbud_sendt', 'tilbud_arbeid', 'planlagt'].includes(b.status)
-    && !state.prosjekter.some(p => !p.arkivert && (p.befaringId === b.id || p.kildeBefaringId === b.id)));
+  const leggKandidater = finnLeggKandidater(state.befaringer, state.prosjekter);
   function leggIPipeline() {
     const b = leggKandidater.find(x => x.id === leggForm.befaringId);
     if (!b) return;
-    const sikkerhet = b.status === 'godkjent' ? 'fast' : b.status === 'tilbud_sendt' ? 'sannsynlig' : 'mulig';
-    const prosjektId = uid();
-    dispatch({
-      type: 'ADD_PROSJEKT',
-      payload: {
-        id: prosjektId,
-        navn: b.kontaktNavn + (b.adresse ? ' – ' + b.adresse : ''),
-        adresse: b.adresse || '',
-        jobbType: b.jobbType || '',
-        belop: b.estimertBelop || '',
-        estimertSum: b.estimertSum || 0,
-        prosjektlederId: b.prosjektlederId || '',
-        startDato: '', sluttDato: '',
-        status: 'aktiv',
-        beskrivelse: [b.notat, b.kommentar].filter(Boolean).join('\n\n') || '',
-        farge: nextAutoColor(state.prosjekter),
-        befaringId: b.id, kildeBefaringId: b.id,
-        poster: b.poster || [], fag: b.fag || [], pristype: b.pristype || '',
-        tilbudLink: b.tilbudLink || '',
-        ...(b.tilbudPayload ? { tilbudPayload: b.tilbudPayload } : {}),
-        kunde: { navn: b.kontaktNavn || '', adresse: b.adresse || '', telefon: b.telefon || '', epost: b.epost || '' },
-        pipeline: {
-          forventetStart: leggForm.forventetStart ? ukeStart(leggForm.forventetStart) : null,
-          forventetUker: Math.max(1, Number(leggForm.forventetUker) || 2),
-          forventetFolk: Math.max(1, Number(leggForm.forventetFolk) || 2),
-          sikkerhet,
-        },
-        pipelineLogg: [pipelineLoggInnslag(`Lagt i pipeline fra ${b.status === 'godkjent' ? 'vunnet tilbud' : 'tilbud/befaring'} (${sikkerhet})`, localStorage.getItem('fbs_user_navn') || 'ukjent')],
-      },
+    const { prosjekt, befaring } = byggPipelineProsjekt(b, leggForm, {
+      prosjektId: uid(), farge: nextAutoColor(state.prosjekter), brukerNavn: localStorage.getItem('fbs_user_navn') || 'ukjent',
     });
-    dispatch({ type: 'UPDATE_BEFARING', payload: { ...b, prosjektId, ...(b.status === 'godkjent' ? { arkivert: true } : {}) } });
+    dispatch({ type: 'ADD_PROSJEKT', payload: prosjekt });
+    dispatch({ type: 'UPDATE_BEFARING', payload: befaring });
     setVisLeggIPipeline(false);
     setLeggForm({ befaringId: '', forventetStart: '', forventetUker: 2, forventetFolk: 2 });
   }
+
+  // Oppdrag 25 a: standardvisning = bare adressene + avvik-merke; «Detaljert»
+  // viser alle kolonnene (valget huskes per enhet)
+  const [detaljert, setDetaljertState] = useState(() => localStorage.getItem('fbs_prosjekt_detaljert') === '1');
+  const setDetaljert = v => { localStorage.setItem('fbs_prosjekt_detaljert', v ? '1' : '0'); setDetaljertState(v); };
 
   // ═══ Slå sammen duplikater (SPEC-merge-prosjekter.md) ═══
   // Ingen slette-kode: kopierer til hoved + arkiverer sekundær. Alt angres.
@@ -2002,6 +1980,13 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
             {label}
           </button>
         ))}
+        {visning === 'liste' && (
+          <button className="btn btn-sm" title="Vis alle kolonner (status, PL, periode, folk, sum)"
+            style={detaljert ? { background: '#1e3a5f', color: '#fff', borderColor: '#1e3a5f' } : {}}
+            onClick={() => setDetaljert(!detaljert)}>
+            Detaljert
+          </button>
+        )}
         {visning === 'gantt' && [3, 6, 12].map(m => (
           <button
             key={m}
@@ -2124,13 +2109,17 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
             )}
             {liste.length > 0 && (
               <SeksjonertTabell
-                kolonner={[
+                kolonner={detaljert ? [
                   { id: 'prosjekt', tittel: 'Prosjekt', bredde: 'minmax(180px, 1.6fr)' },
-                  { id: 'start', tittel: 'Forventet start', bredde: '120px' },
+                  { id: 'start', tittel: 'Forventet start', bredde: '150px' },
                   { id: 'uker', tittel: 'Uker', bredde: '56px', hoyre: true, skjulMobil: true },
                   { id: 'folk', tittel: 'Folk', bredde: '56px', hoyre: true, skjulMobil: true },
                   { id: 'sikkerhet', tittel: 'Sikkerhet', bredde: '100px', skjulMobil: true },
                   { id: 'pl', tittel: 'PL', bredde: '80px', skjulMobil: true },
+                  { id: 'handling', tittel: '', bredde: '160px', hoyre: true },
+                ] : [
+                  { id: 'prosjekt', tittel: 'Prosjekt', bredde: 'minmax(180px, 1fr)' },
+                  { id: 'start', tittel: '', bredde: 'auto' },
                   { id: 'handling', tittel: '', bredde: '160px', hoyre: true },
                 ]}
                 seksjoner={[{
@@ -2149,12 +2138,19 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
                       onClick: () => apneProsjekt(p),
                       celler: {
                         prosjekt: (
-                          <div style={{ minWidth: 0, background: !r.start ? '#fffbeb' : undefined }}>
+                          <div style={{ minWidth: 0 }}>
                             <div className="ds-tabell-navn">{r.navn}</div>
-                            {(r.kunde || p.jobbType) && <div className="ds-tabell-under">{[r.kunde, p.jobbType].filter(Boolean).join(' · ')}</div>}
+                            {detaljert && (r.kunde || p.jobbType) && <div className="ds-tabell-under">{[r.kunde, p.jobbType].filter(Boolean).join(' · ')}</div>}
                           </div>
                         ),
-                        start: r.start ? celleKnapp(`u${ukeNr(r.start)}${r.sikkerhet !== 'fast' ? '?' : ''}`) : celleKnapp('Sett start', true),
+                        start: !r.start
+                          ? celleKnapp('Sett start', true)
+                          : r.startPassert
+                            ? <button onClick={klikk} title="Forventet start er passert — sett ny uke"
+                                style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', font: 'inherit', fontWeight: 700, color: '#dc2626' }}>
+                                Start passert · sett ny
+                              </button>
+                            : (detaljert ? celleKnapp(`u${ukeNr(r.start)}${r.sikkerhet !== 'fast' ? '?' : ''}`) : null),
                         uker: celleKnapp(r.uker ?? '—'),
                         folk: celleKnapp(<span style={r.folkAnslag ? { color: '#94a3b8' } : {}}>{r.folk ?? 2}</span>),
                         sikkerhet: <span style={{ fontSize: 12, color: r.sikkerhet === 'fast' ? '#15803d' : '#5d6b80', fontWeight: 600 }}>{SIK[r.sikkerhet] || r.sikkerhet}</span>,
@@ -2257,13 +2253,17 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
       {/* Oppdrag 19: prosjektlisten som ÉN sammenhengende tabell (alternativ A) */}
       {visning === 'liste' && aktivFane !== 'arkivert' && aktivFane !== 'pipeline' && faneProsjekter.length > 0 && (
         <SeksjonertTabell
-          kolonner={[
+          kolonner={detaljert ? [
             { id: 'prosjekt', tittel: 'Prosjekt', bredde: 'minmax(180px, 1.6fr)' },
             { id: 'status', tittel: 'Status', bredde: 'minmax(150px, 1.1fr)' },
             { id: 'pl', tittel: 'PL', bredde: '80px', skjulMobil: true },
             { id: 'periode', tittel: 'Periode', bredde: '110px', skjulMobil: true },
             { id: 'folk', tittel: 'Folk', bredde: '50px', hoyre: true, skjulMobil: true },
             { id: 'sum', tittel: 'Sum', bredde: '100px', hoyre: true, skjulMobil: true },
+            { id: 'handling', tittel: '', bredde: '150px', hoyre: true },
+          ] : [
+            { id: 'prosjekt', tittel: 'Prosjekt', bredde: 'minmax(180px, 1fr)' },
+            { id: 'status', tittel: '', bredde: 'auto' },
             { id: 'handling', tittel: '', bredde: '150px', hoyre: true },
           ]}
           seksjoner={[{
@@ -2284,13 +2284,13 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
                           </span>
                         )}
                       </div>
-                      {(info.kundeNavn || p.jobbType) && (
+                      {detaljert && (info.kundeNavn || p.jobbType) && (
                         <div className="ds-tabell-under">{[info.kundeNavn, p.jobbType].filter(Boolean).join(' · ')}</div>
                       )}
                     </div>
                   ),
                   status: info.badge.type === 'ok'
-                    ? <span style={{ fontSize: 12.5, color: '#5d6b80' }}>{info.badge.tekst}</span>
+                    ? (detaljert ? <span style={{ fontSize: 12.5, color: '#5d6b80' }}>{info.badge.tekst}</span> : null)
                     : (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
                         <span className="ds-tabell-badge" style={{ color: info.badge.farge, background: info.badge.bg }}>{info.badge.tekst}</span>
