@@ -7,7 +7,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ArrowLeft, ChartGantt, ClipboardCheck, Package, ScrollText, House,
-  ExternalLink, MessageSquare, Eye, Archive, Users, TriangleAlert, CircleCheck,
+  MessageSquare, Eye, Archive, Users, TriangleAlert, CircleCheck,
 } from 'lucide-react';
 import { Ikon, IkonTekst } from '../komponenter/Ikon';
 import { useApp } from '../context/AppContext';
@@ -18,12 +18,12 @@ import { oppgaveStat } from '../faseOppgaver';
 import { lagForProsjekt } from '../prosjektLag';
 import { varsleFramdriftEksport } from '../framdriftEksportKlient';
 import TilbudsdataVisning from '../komponenter/Tilbudsdata';
+import Endringsmeldinger from '../komponenter/Endringsmeldinger';
 import Framdriftsplan from './Framdriftsplan';
 import KS from './KS';
 import Bemanningsplan from './Bemanningsplan';
 import { byggInterneFaser } from '../framdriftEksport';
 
-const TILBUDSAPP_URL = 'https://follo-befaring.vercel.app';
 const STATUS_TEKST = { jobber_med: 'Jobber med', godkjent: 'Godkjent', aktiv: 'Aktiv', fullfort: 'Fullført' };
 const STATUS_FARGE = { jobber_med: '#b45309', godkjent: '#7c3aed', aktiv: '#15803d', fullfort: '#5d6b80' };
 
@@ -41,6 +41,7 @@ export default function Prosjektside({ prosjektId, fane: startFane = 'oversikt',
   const [fane, setFane] = useState(startFane);
   const [ksSjekklister, setKsSjekklister] = useState(null);
   const [logg, setLogg] = useState(null);
+  const [nyEmTrigger, setNyEmTrigger] = useState(0);
   useEffect(() => { setFane(startFane); }, [startFane, prosjektId]);
 
   const p = (state.prosjekter || []).find(x => x && x.id === prosjektId);
@@ -138,12 +139,11 @@ export default function Prosjektside({ prosjektId, fane: startFane = 'oversikt',
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <KundeportalKnapp token={portalToken} kompakt />
           {tilbudId && (
-            <a className="btn btn-sm" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5 }}
-              href={`${TILBUDSAPP_URL}/?tilbud=${encodeURIComponent(tilbudId)}#endringsmeldinger`}
-              target="_blank" rel="noopener noreferrer"
-              title="Åpner tilbuds-appen på dette tilbudet med endringsmeldinger i fokus">
-              <Ikon ikon={ExternalLink} size={13} /> Ny endringsmelding
-            </a>
+            <button className="btn btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}
+              onClick={() => { setFane('kunde'); setNyEmTrigger(t => t + 1); }}
+              title="Åpner skjema for ny endringsmelding på Kunde-fanen">
+              <Ikon ikon={MessageSquare} size={13} /> Ny endringsmelding
+            </button>
           )}
           <select className="input" style={{ height: 32, fontSize: 12.5, width: 130 }} value={p.status || 'aktiv'} onChange={e => settStatus(e.target.value)}>
             {Object.entries(STATUS_TEKST).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
@@ -306,27 +306,7 @@ export default function Prosjektside({ prosjektId, fane: startFane = 'oversikt',
                 </div>
               </div>
 
-              <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px', marginBottom: 12 }}>
-                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
-                  <span style={{ fontWeight: 600, fontSize: 13 }}>Endringsmeldinger</span>
-                  <a className="btn btn-sm" style={{ marginLeft: 'auto', textDecoration: 'none' }}
-                    href={`${TILBUDSAPP_URL}/?tilbud=${encodeURIComponent(tilbudId)}#endringsmeldinger`} target="_blank" rel="noopener noreferrer">
-                    + Ny endringsmelding
-                  </a>
-                </div>
-                {Array.isArray(tp.endringsmeldinger) && tp.endringsmeldinger.length > 0 ? tp.endringsmeldinger.map((em, i) => (
-                  <div key={i} style={{ display: 'flex', gap: 8, fontSize: 13, padding: '4px 0', borderTop: i ? '1px solid var(--bg-subtle, #f1f5f9)' : 'none' }}>
-                    <span style={{ flex: 1 }}>{em.tittel || em.navn || 'Endring'}</span>
-                    <span>{fmtKr(em.sum)}</span>
-                    <span style={{ color: 'var(--text-muted)' }}>{em.status || ''}</span>
-                  </div>
-                )) : (
-                  <div style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
-                    Endringsmeldingene ligger i tilbuds-appen — «+ Ny endringsmelding»
-                    åpner riktig tilbud direkte.
-                  </div>
-                )}
-              </div>
+              <Endringsmeldinger tilbudId={tilbudId} nyTrigger={nyEmTrigger} />
 
               <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
