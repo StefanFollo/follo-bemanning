@@ -7,6 +7,7 @@ import { Ikon, IkonTekst } from '../komponenter/Ikon';
 import { useApp } from '../context/AppContext';
 import { weekStart, addDays, isoToDate, dateToIso, formatDate, overlaps } from '../store';
 import { getHolidayMap } from '../holidays';
+import PipelineRader from '../komponenter/PipelineRader';
 
 const FERIE_ID = '__FERIE__';
 
@@ -193,6 +194,18 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
       prosjektId: state.prosjekter[0]?.id || '',
       startDato: dag || currentWeek,
       sluttDato: dag || addDays(currentWeek, 4),
+    });
+    setShowModal(true);
+  }
+
+  // Oppdrag 21: «Bemann ↑» fra pipeline-raden — åpner tildel-flyten for
+  // prosjektet i valgt uke (første uke uten folk), ansatt velges i modalen.
+  function openBemannProsjekt(prosjektId, ukeStartDato) {
+    setTilForm({
+      ansattId: state.ansatte[0]?.id || '',
+      prosjektId,
+      startDato: ukeStartDato || currentWeek,
+      sluttDato: addDays(ukeStartDato || currentWeek, 4),
     });
     setShowModal(true);
   }
@@ -461,6 +474,8 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
             openAddTildeling={openAddTildeling}
             openBarMenu={openBarMenu}
             deleteTildeling={deleteTildeling}
+            dispatch={dispatch}
+            openBemannProsjekt={openBemannProsjekt}
           />
         )}
         {tab === 'oversikt' && (
@@ -678,7 +693,7 @@ function UkeVisning({
   prevWeek, nextWeek, thisWeek,
   needleDay, setNeedleDay, draggingNeedle, gridWrapRef,
   dragRef, HOLIDAYS, handleDrop, openAddTildeling, openBarMenu, deleteTildeling,
-  fastProsjektId = null,
+  fastProsjektId = null, dispatch = null, openBemannProsjekt = null,
 }) {
   const today = dateToIso(new Date());
   const isHoliday = (iso) => !!HOLIDAYS[iso];
@@ -767,6 +782,25 @@ function UkeVisning({
     setNeedleDay(WORK_DAYS_UKE[idx]);
   }
   function handleNeedlePointerUp() { draggingNeedle.current = false; }
+
+  // Oppdrag 21: «dra opp og inn» — slipp en pipeline-rad i planen → tildel-flyt
+  // for prosjektet i uka der den ble sluppet.
+  function pipelineDragOver(e) {
+    if ([...e.dataTransfer.types].includes('text/fbs-pipeline')) e.preventDefault();
+  }
+  function pipelineDrop(dager) {
+    return e => {
+      const pid = e.dataTransfer.getData('text/fbs-pipeline');
+      if (!pid || !openBemannProsjekt) return;
+      e.preventDefault();
+      const wrap = e.currentTarget;
+      const rect = wrap.getBoundingClientRect();
+      const x = e.clientX - rect.left + wrap.scrollLeft - 150;
+      const colW = (wrap.scrollWidth - 150) / dager.length;
+      const idx = Math.max(0, Math.min(dager.length - 1, Math.floor(x / colW)));
+      openBemannProsjekt(pid, weekStart(dager[idx]));
+    };
+  }
 
 
 
@@ -938,11 +972,14 @@ function UkeVisning({
       {state.ansatte.length === 0 && <div className="empty">Ingen ansatte registrert enda.</div>}
 
       {ukeMode === 'dag' ? (
-        <div className="uke-grid-wrap">
+        <div className="uke-grid-wrap" onDragOver={pipelineDragOver} onDrop={pipelineDrop(weekDays)}>
           <div className="uke-grid" style={{ gridTemplateColumns: `150px repeat(${weekDays.length}, minmax(36px, 1fr))` }}>
             <DagGridHeader weekDays={weekDays} HOLIDAYS={HOLIDAYS} today={today} />
             {renderProsjektRader(dagProsjekter, fastProsjektId ? [] : dagLedige, weekDays.length, DagAnsattRad, currentWeek, weekEnd, { days: weekDays, gantt })}
             {!fagFilter && <RorleggerRader state={state} days={weekDays} unit="day" viewStart={currentWeek} viewEnd={weekEnd} />}
+            {!fastProsjektId && dispatch && (
+              <PipelineRader state={state} dispatch={dispatch} days={weekDays} planAnsatte={planAnsatte} readOnly={readOnly} onBemann={openBemannProsjekt} />
+            )}
           </div>
         </div>
       ) : ukeMode === 'uke' ? (
@@ -950,6 +987,8 @@ function UkeVisning({
           ref={gridWrapRef}
           onPointerMove={handleNeedlePointerMove}
           onPointerUp={handleNeedlePointerUp}
+          onDragOver={pipelineDragOver}
+          onDrop={pipelineDrop(WORK_DAYS_UKE)}
         >
           {/* Drabar dato-nål */}
           {getNeedleLeft(needleDay) && (
@@ -965,6 +1004,9 @@ function UkeVisning({
             <UkeGridHeader WORK_DAYS_UKE={WORK_DAYS_UKE} TEN_WEEKS={TEN_WEEKS} today={today} HOLIDAYS={HOLIDAYS} />
             {renderProsjektRader(ukeProsjekter, fastProsjektId ? [] : ukeLedige, 260, UkeAnsattRad, periodeStart, periodeEnd, { days: WORK_DAYS_UKE, gantt })}
             {!fagFilter && <RorleggerRader state={state} days={WORK_DAYS_UKE} unit="day" viewStart={periodeStart} viewEnd={periodeEnd} />}
+            {!fastProsjektId && dispatch && (
+              <PipelineRader state={state} dispatch={dispatch} days={WORK_DAYS_UKE} planAnsatte={planAnsatte} readOnly={readOnly} onBemann={openBemannProsjekt} />
+            )}
           </div>
         </div>
       ) : (

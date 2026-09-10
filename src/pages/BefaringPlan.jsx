@@ -14,6 +14,7 @@ import { StatusFaner } from '../komponenter/Designsystem';
 import RingIDag from '../komponenter/RingIDag';
 import KundeportalKnapp from '../komponenter/KundeportalKnapp';
 import { kundeportalToken } from '../kundeportal';
+import { foreslaaPipeline, pipelineLoggInnslag } from '../pipeline';
 import {
   klassifiserKoblinger, forslagForSpokelse, beregnKobleTilbud, beregnStatusFix,
   beregnAngreSak, hentReparasjonHistorikk, leggTilReparasjonHistorikk, mapSalgsStatus,
@@ -569,6 +570,13 @@ export default function BefaringPlan({ apneBefaringId, onApnet }) {
     // Bygg kildeTilbudData for AI-framdrift fra tilbuds-data på befaringen
     const poster = bef.poster || [];
     const timerPerFag = byggTimer(poster);
+    // Oppdrag 21: vunnet tilbud → automatisk i «Ikke bemannet»-pipelinen i
+    // bemanningsplanen, med folk/uker forhåndsutfylt fra tilbudets timer.
+    const pipeline = foreslaaPipeline({
+      timerPerFag,
+      varighetUker: bef.varighetUker,
+      startDato: prosjektForm.startDato || bef.oppstartDato || null,
+    });
     const kildeTilbudData = (poster.length > 0 || Object.keys(timerPerFag).length > 0)
       ? { poster, timer: timerPerFag, oppstart: bef.oppstartTekst || '', varighet: bef.varighetTekst || '', kundenavn: bef.kontaktNavn || '' }
       : null;
@@ -599,6 +607,10 @@ export default function BefaringPlan({ apneBefaringId, onApnet }) {
         tilbudLink: bef.tilbudLink || '',
         kildeBefaringId: bef.id || '',
         ...(kildeTilbudData ? { kildeTilbudData } : {}),
+        pipeline,
+        pipelineLogg: [pipelineLoggInnslag(
+          `Lagt i pipeline ved prosjektopprettelse — ${pipeline.forventetFolk} folk · ${pipeline.forventetUker} uker${pipeline.forventetStart ? '' : ' · dato ikke satt'}`,
+          localStorage.getItem('fbs_user_navn') || 'bemanningsapp')],
         // Full payload-snapshot fra tilbuds-appen (byggInfo, soner, totalSum osv.)
         ...(bef.tilbudPayload ? { tilbudPayload: bef.tilbudPayload } : {}),
         kunde: {

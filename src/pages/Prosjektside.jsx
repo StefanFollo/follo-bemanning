@@ -23,6 +23,7 @@ import Framdriftsplan from './Framdriftsplan';
 import KS from './KS';
 import Bemanningsplan from './Bemanningsplan';
 import { byggInterneFaser } from '../framdriftEksport';
+import { ukeNr } from '../pipeline';
 
 const STATUS_TEKST = { jobber_med: 'Jobber med', godkjent: 'Godkjent', aktiv: 'Aktiv', fullfort: 'Fullført' };
 const STATUS_FARGE = { jobber_med: '#b45309', godkjent: '#7c3aed', aktiv: '#15803d', fullfort: '#5d6b80' };
@@ -215,6 +216,11 @@ export default function Prosjektside({ prosjektId, fane: startFane = 'oversikt',
               ['Bemanning denne uka', `${denneUka.length} person${denneUka.length === 1 ? '' : 'er'}`, denneUka.map(n => n.split(' ')[0]).slice(0, 6).join(', ')],
               ['Sjekklister', alleLister.length ? `${signert} av ${alleLister.length} signert` : 'ingen ennå',
                 utenAnsvarlig ? `${utenAnsvarlig} uten ansvarlig` : (alleLister.length ? 'alle har ansvarlig' : '')],
+              ...(p.pipeline ? [[
+                'Planlagt (pipeline)',
+                p.pipeline.forventetStart ? `Start uke ${ukeNr(p.pipeline.forventetStart)}` : 'dato ikke satt',
+                `${p.pipeline.forventetUker || '?'} uker · ${p.pipeline.forventetFolk || '?'} folk · ${p.pipeline.sikkerhet || 'fast'} — rediger i bemanningsplanen`,
+              ]] : []),
             ].map(([tittel, tall, under], i) => (
               <div key={i} style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px' }}>
                 <div style={{ fontSize: 11.5, fontWeight: 500, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{tittel}</div>
@@ -234,6 +240,13 @@ export default function Prosjektside({ prosjektId, fane: startFane = 'oversikt',
             if (tasks.length && snartFaser.length === tasks.length) linjer.push({ tekst: 'Ingen faser har tildelte personer', fane: 'framdrift' });
             // PR2-reglene:
             for (const uke of tommeUker) linjer.push({ tekst: `Ingen bemanning ${uke}`, fane: 'bemanning' });
+            // Oppdrag 21: pipeline-prosjekt som starter snart uten en eneste tildeling
+            if (p.pipeline?.forventetStart && !(state.tildelinger || []).some(t => t && t.prosjektId === prosjektId && t.prosjektId !== '__FERIE__')) {
+              const dTilStart = Math.round((new Date(p.pipeline.forventetStart + 'T00:00:00') - Date.now()) / 86400000);
+              if (dTilStart <= 14) {
+                linjer.push({ tekst: dTilStart < 0 ? `Planlagt start (uke ${ukeNr(p.pipeline.forventetStart)}) er passert — ingen bemanning` : `Starter om ${dTilStart} dager — ingen bemanning`, fane: 'bemanning' });
+              }
+            }
             const omSju = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
             const faserNaa = byggInterneFaser(p, { iDag }) || [];
             const faserOmSju = byggInterneFaser(p, { iDag: omSju, fallbackIDag: iDag }) || [];

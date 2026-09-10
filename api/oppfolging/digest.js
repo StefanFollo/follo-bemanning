@@ -68,10 +68,12 @@ export default async function handler(req, res) {
     ]);
     const befaringer = (state && state.befaringer) || [];
     const ansatte = (state && state.ansatte) || [];
+    const prosjekter = (state && state.prosjekter) || [];
+    const tildelinger = (state && state.tildelinger) || [];
     // Admin-mottakere: OPPFOLGING_ADMIN_EPOST (kommaseparert). Standard = Stefan,
     // siden mange kontoer har admin-rolle og speccen sier «PL + Stefan».
     const adminEposter = String(process.env.OPPFOLGING_ADMIN_EPOST || 'stefan@follobyggservice.no').split(',').map(x => x.trim()).filter(Boolean);
-    const plan = planleggVarsler({ befaringer, ansatte, brukere, varselStatus: varselStatus || VARSEL_STATUS_TOM, iDag, adminEposter });
+    const plan = planleggVarsler({ befaringer, ansatte, brukere, prosjekter, tildelinger, varselStatus: varselStatus || VARSEL_STATUS_TOM, iDag, adminEposter });
 
     // ── Kanaloppslag per mottaker (e-post → digestKanal, navn → push-enheter) ──
     const pushIdx = byggPushIndeks(interapp);

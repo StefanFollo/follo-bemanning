@@ -15,6 +15,7 @@ import {
   byggOppfolgingsKo, ukesStatistikk, FRIST_VARSEL_DAGER, SAK_TYPER, sisteNotat,
   AKTIV_PIPELINE, ansvarligFor, leggTilDager,
 } from './oppfolging.js';
+import { pipelineDigestLinje } from './pipeline.js';
 
 export const VARSEL_STATUS_TOM = { digest: {}, frist: {}, eskalert: {}, ukesdigest: null };
 
@@ -61,7 +62,7 @@ export function byggMottakere({ ansatte = [], brukere = [], iDag, adminEposter }
 }
 
 // Hovedfunksjon. Returnerer { digester, fristVarsler, eskaleringer, ukesdigest, nyStatus, hoppetOver }
-export function planleggVarsler({ befaringer = [], ansatte = [], brukere = [], varselStatus, iDag, tvingHverdag = false, adminEposter }) {
+export function planleggVarsler({ befaringer = [], ansatte = [], brukere = [], prosjekter = [], tildelinger = [], varselStatus, iDag, tvingHverdag = false, adminEposter }) {
   const status = {
     digest: { ...((varselStatus && varselStatus.digest) || {}) },
     frist: { ...((varselStatus && varselStatus.frist) || {}) },
@@ -101,13 +102,16 @@ export function planleggVarsler({ befaringer = [], ansatte = [], brukere = [], v
     const u = brukere.find(x => x && normEpost(x.email) === epost);
     return (u && u.ansattId) || null;
   };
+  // Oppdrag 21: én pipeline-linje (lik for alle) når noe starter innen 3 uker
+  // uten bemanning — ren informasjonslinje, endrer ingen triggere/dedup.
+  const pipelineLinje = pipelineDigestLinje(prosjekter, tildelinger, iDag);
   for (const p of Object.values(perEpost)) {
     const antall = p.egne.length + p.tilAdmin.length;
     if (antall === 0) continue;
     if (status.digest[p.epost] === iDag) { ut.hoppetOver.push(`digest allerede sendt i dag: ${p.epost}`); continue; }
     const forfalt = p.egne.filter(s => s.forfalt).length + p.tilAdmin.filter(x => x.sak.forfalt).length;
     const brief = morgenbriefData({ befaringer, ansattId: ansattIdForEpost(p.epost), egne: p.egne, iDag });
-    ut.digester.push({ til: p.epost, navn: p.navn, egne: p.egne, tilAdmin: p.tilAdmin, antall, forfalt, iDag, ...brief });
+    ut.digester.push({ til: p.epost, navn: p.navn, egne: p.egne, tilAdmin: p.tilAdmin, antall, forfalt, iDag, pipeline: pipelineLinje, ...brief });
     status.digest[p.epost] = iDag;
   }
 
@@ -289,6 +293,12 @@ export function lagDigestEpost(d, appUrl) {
     html += cLinjer.map(l => `<p style="margin:0 0 6px">${l.html}</p>`).join('');
     for (const l of cLinjer) tekst.push(l.tekst);
     tekst.push('');
+  }
+
+  // Oppdrag 21: pipeline-linje (prosjekter uten bemanning som starter snart)
+  if (d.pipeline) {
+    html += `<p style="margin:12px 0 0;color:#b45309;font-size:13px;font-weight:600">${esc(d.pipeline)} — <a href="${esc(appUrl)}" style="color:#0f2942">åpne bemanningsplanen</a></p>`;
+    tekst.push(d.pipeline);
   }
 
   // D — ukens tall som fot

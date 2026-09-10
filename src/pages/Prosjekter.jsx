@@ -23,6 +23,7 @@ import { beregnAktivering, beregnForkast, kalkyleSammendrag, harKalkyle } from '
 import KSFagForslag from '../komponenter/KSFagForslag';
 import { erForslagSkjult } from '../ksForslag';
 import { beregnKalkyleVsBemanning } from '../kalkyleBemanning';
+import { ukeNr } from '../pipeline';
 
 function formaterBelop(belop) {
   if (!belop && belop !== 0) return null;
@@ -1529,6 +1530,10 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
     const fristDager = p.sluttDato && normStatus(p.status) !== 'fullfort'
       ? Math.round((new Date(p.sluttDato + 'T00:00:00') - new Date()) / 86400000) : null;
     if (fristDager != null && fristDager < 0) return { type: 'frist-over', vekt: 0, tekst: `Frist ${Math.abs(fristDager)} d over`, farge: '#dc2626', bg: '#fee2e2' };
+    // Oppdrag 21: pipeline-prosjekt uten en eneste tildeling → «Ikke bemannet»
+    if (p.pipeline && !(tildelingerByProsjekt[p.id] || []).length) {
+      return { type: 'bemanning', vekt: 1, tekst: 'Ikke bemannet', farge: '#b45309', bg: '#fef3c7' };
+    }
     if (utenBemanningIds.has(p.id)) return { type: 'bemanning', vekt: 1, tekst: 'Ingen bemanning neste uke', farge: '#b45309', bg: '#fef3c7' };
     if (fristDager != null && fristDager <= 14) return { type: 'frist-snart', vekt: 2, tekst: `Frist om ${fristDager} d`, farge: '#b45309', bg: '#fef3c7' };
     const uA = utenAnsvarligPer[p.id] || 0;
@@ -1571,7 +1576,10 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
         : { label: 'Åpne', onClick: () => apneProsjekt(p) };
     const periode = p.startDato && p.sluttDato
       ? `${kortDato(p.startDato)}–${kortDato(p.sluttDato)}`
-      : p.startDato ? `fra ${kortDato(p.startDato)}` : null;
+      : p.startDato ? `fra ${kortDato(p.startDato)}`
+      : p.pipeline?.forventetStart
+        ? <span style={{ color: '#5d6b80', fontStyle: 'italic' }}>ca. uke {ukeNr(p.pipeline.forventetStart)}</span>
+        : null;
     return { visAdresse, kundeNavn, pl, antallFolk, belopVis: formaterBelop(p.belop), badge, handling, periode };
   }
 

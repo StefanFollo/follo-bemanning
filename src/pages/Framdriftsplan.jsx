@@ -45,7 +45,9 @@ function wkNum(bw, by, weekOffset) {
 function projStartWY(proj) {
   if (proj.fdStartWeek && proj.fdStartYear)
     return { week: proj.fdStartWeek, year: proj.fdStartYear };
-  return isoToWeekYear(proj.startDato || null);
+  // Oppdrag 21: mangler prosjektet startdato brukes pipelinens forventede
+  // start som forslag for standardfasene.
+  return isoToWeekYear(proj.startDato || proj.pipeline?.forventetStart || null);
 }
 
 // Mandag i en gitt ISO-uke/år
