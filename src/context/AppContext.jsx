@@ -217,7 +217,10 @@ function reducer(state, action) {
       const next = state.tildelinger.filter(t => t.id !== action.id);
       saveTildelinger(next);
       const pid = slettet?.prosjektId;
-      const sisteFjernet = pid && pid !== '__FERIE__' && !next.some(t => t.prosjektId === pid);
+      const flyttetTid = Number(state.prosjekter.find(p => p.id === pid)?.pipeline?.manueltIkkeStartet) || 0;
+      // Siste AKTIVE tildeling fjernet (gamle fra før «Flytt til pipeline» teller ikke)
+      const sisteFjernet = pid && pid !== '__FERIE__'
+        && !next.some(t => t.prosjektId === pid && (Number(t.opprettet) || Number(t._endret) || 0) >= flyttetTid);
       const prosjekter = sisteFjernet ? loggStatusOvergang(state.prosjekter, pid, 'Tilbake til Ikke startet — siste tildeling fjernet') : null;
       if (prosjekter) saveProsjekter(prosjekter);
       return { ...state, tildelinger: next, ...(prosjekter ? { prosjekter } : {}) };

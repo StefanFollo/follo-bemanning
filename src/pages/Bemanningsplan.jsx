@@ -336,7 +336,9 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
   const planValgte = planModus
     ? new Set(state.tildelinger
         .filter(t => t.prosjektId === planModus.prosjektId && t.prosjektId !== FERIE_ID
-          && overlaps(t.startDato, t.sluttDato, planModus.startDato, planModus.sluttDato))
+          && overlaps(t.startDato, t.sluttDato, planModus.startDato, planModus.sluttDato)
+          // Oppdrag 28: gamle tildelinger fra før «Flytt til pipeline» teller ikke
+          && !erFoerFlytting(state.prosjekter.find(p => p.id === planModus.prosjektId), t))
         .map(t => t.ansattId)).size
     : 0;
 
