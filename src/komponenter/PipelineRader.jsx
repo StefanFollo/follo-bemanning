@@ -17,8 +17,9 @@ const NIVAA_BG = { ok: '#f0fdf4', gul: '#fef3c7', roed: '#fee2e2' };
 
 const brukerNavn = () => localStorage.getItem('fbs_user_navn') || 'ukjent';
 
-export default function PipelineRader({ state, dispatch, days, planAnsatte, readOnly, onBemann }) {
-  const [apen, setApenState] = useState(() => localStorage.getItem('fbs_pipeline_apen') !== '0');
+export default function PipelineRader({ state, dispatch, days, planAnsatte, readOnly, onBemann, onApneFane = null }) {
+  // Oppdrag 22: sammenlagt som standard — Pipeline-fanen er hovedinngangen
+  const [apen, setApenState] = useState(() => localStorage.getItem('fbs_pipeline_apen') === '1');
   const setApen = v => { localStorage.setItem('fbs_pipeline_apen', v ? '1' : '0'); setApenState(v); };
   const [redigerId, setRedigerId] = useState(null);
   const [redigerForm, setRedigerForm] = useState(null); // { forventetStart, forventetUker, forventetFolk, sikkerhet }
@@ -153,6 +154,12 @@ export default function PipelineRader({ state, dispatch, days, planAnsatte, read
         <Ikon ikon={apen ? ChevronDown : ChevronRight} size={14} />
         <span className="uke-prosjekt-navn">Ikke bemannet ({alleRader.length})</span>
         <span className="uke-prosjekt-antall">vunne tilbud legges hit automatisk</span>
+        {onApneFane && (
+          <button className="btn btn-sm" style={{ height: 24, fontSize: 11.5, marginLeft: 8 }}
+            onClick={e => { e.stopPropagation(); onApneFane(); }}>
+            Åpne Pipeline →
+          </button>
+        )}
         {!readOnly && (
           <button className="btn btn-sm" style={{ marginLeft: 'auto', height: 24, fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 4 }}
             onClick={e => { e.stopPropagation(); setVisLeggTil(v => !v); }}>

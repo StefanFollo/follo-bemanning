@@ -5,6 +5,7 @@ import { readFileSync } from 'fs';
 import {
   foreslaaPipeline, pipelineUker, pipelineRader, ukeKapasitet, kapasitetNivaa,
   ukeNr, pipelineDigestLinje, weekStart, addDays, TIMEVERK_UKE,
+  pipelineFaneRader, erUtforende, ukeEtikett,
 } from '../src/pipeline.js';
 import { planleggVarsler, lagDigestEpost, VARSEL_STATUS_TOM } from '../src/oppfolgingVarsler.js';
 import { byggFramdriftPayload } from '../src/framdriftEksport.js';
@@ -62,8 +63,8 @@ console.log('\n-- pipelineRader: testkrav 1 og 3 --');
   sjekk('P2 (hele perioden bemannet) er UTE av seksjonen', !rader.some(r => r.prosjektId === 'P2'));
   sjekk('Arkivert vises aldri', !rader.some(r => r.prosjektId === 'P3'));
   const hull = rader.find(r => r.prosjektId === 'P4');
-  sjekk('Pågående med hull vises (u38 bemannet, u39–40 uten)', !!hull && hull.type === 'hull'
-    && hull.bemannedeUker.has('2026-09-14') && !hull.bemannedeUker.has('2026-09-21'), JSON.stringify(hull?.uker));
+  sjekk('Pågående med hull: stolpen starter på FØRSTE ubemannede uke (u39–40)', !!hull && hull.type === 'hull'
+    && hull.uker[0] === '2026-09-21' && hull.uker.length === 2 && hull.bemannedeUker.size === 0, JSON.stringify(hull?.uker));
 
   // Testkrav 3: bemann én uke → mørk; fjern tildelingen → tilbake til stiplet
   const medUke1 = pipelineRader(prosjekter, [], [...tildelinger,
@@ -117,6 +118,59 @@ console.log('\n-- ukeKapasitet: testkrav 4 --');
     { prosjektId: '__FERIE__', ansattId: 'A1', startDato: uke, sluttDato: addDays(uke, 6) },
   ], ansatte);
   sjekk('faktisk bemannet teller i behov, ferie trekkes fra ansatte', kap2.behov === 1 && kap2.ansatte === 8, JSON.stringify(kap2));
+}
+
+console.log('\n-- Oppdrag 22: pipelineFaneRader (regel a–d + eldre) --');
+{
+  const iDag = '2026-09-10';
+  const naa = Date.now();
+  const prosjekter = [
+    { id: 'F1', navn: 'Med pipeline', pipeline: { forventetStart: '2026-09-21', forventetUker: 2, forventetFolk: 3, sikkerhet: 'fast' }, status: 'aktiv', prosjektlederId: 'PL1', _endret: naa },
+    { id: 'F2', navn: 'Godkjent uten pipeline', status: 'godkjent', startDato: '2026-10-05', sluttDato: '2026-10-16', _endret: naa },
+    { id: 'F3', navn: 'Aktiv null tildelinger', status: 'aktiv', _endret: naa },
+    { id: 'F4', navn: 'Aktiv bemannet', status: 'aktiv', startDato: '2026-09-07', sluttDato: '2026-09-18', _endret: naa },
+    { id: 'F5', navn: 'Gammel uten datoer', status: 'aktiv', _endret: naa - 90 * 86400000 },
+    { id: 'F6', navn: 'Fullført', status: 'fullfort', _endret: naa },
+  ];
+  const tildelinger = [
+    { id: 'ft1', prosjektId: 'F4', ansattId: 'A1', startDato: '2026-09-07', sluttDato: '2026-09-18' },
+  ];
+  const rader = pipelineFaneRader(prosjekter, [], tildelinger, iDag);
+  sjekk('c) pipeline-prosjekt med', rader.some(r => r.prosjektId === 'F1' && r.kategori === 'vunnet'));
+  const f2 = rader.find(r => r.prosjektId === 'F2');
+  sjekk('a) godkjent uten pipeline → syntetisk rad m/ start fra prosjektdato', !!f2 && f2.pipeline._syntetisk && f2.pipeline.forventetStart === '2026-10-05' && f2.pipeline.forventetUker === 2);
+  sjekk('b) aktiv med 0 tildelinger med (uten start)', rader.some(r => r.prosjektId === 'F3' && !r.pipeline.forventetStart));
+  sjekk('Aktiv HELT bemannet er ikke med', !rader.some(r => r.prosjektId === 'F4'));
+  const f5 = rader.find(r => r.prosjektId === 'F5');
+  sjekk('Gammel uten datoer flagges eldre («Vis N eldre»)', !!f5 && f5.eldre === true);
+  sjekk('Fullført aldri med', !rader.some(r => r.prosjektId === 'F6'));
+  sjekk('Uten start sorteres ØVERST', !rader[0].pipeline.forventetStart, rader.map(r => r.navn).join(', '));
+  const medStart = rader.filter(r => r.pipeline.forventetStart);
+  sjekk('Deretter start stigende', medStart.every((r, i) => i === 0 || medStart[i - 1].pipeline.forventetStart <= r.pipeline.forventetStart));
+}
+
+console.log('\n-- Oppdrag 22: 8-ukers hull + ukeEtikett --');
+{
+  // Haakon-scenarioet: langt prosjekt, kun inneværende uke bemannet →
+  // stolpen dekker første ubemannede uke + 8 uker (u38–45), aldri «u37–22»
+  const rader = pipelineRader([
+    { id: 'H1', navn: 'Haakon Tveters vei', startDato: '2026-08-24', sluttDato: '2027-05-28' },
+  ], [], [{ id: 'ht1', prosjektId: 'H1', ansattId: 'A1', startDato: '2026-09-07', sluttDato: '2026-09-11' }], '2026-09-10');
+  const h = rader.find(r => r.prosjektId === 'H1');
+  sjekk('Hull-vindu = 8 uker fra første ubemannede', !!h && h.uker.length === 8 && h.uker[0] === '2026-09-14', JSON.stringify(h?.uker));
+  sjekk('Etiketten blir «u38–45»', ukeEtikett(h.uker[0], h.uker.length) === 'u38–45', ukeEtikett(h?.uker[0], h?.uker.length));
+  sjekk('Over årsskiftet: årstall i parentes (2026 har 53 uker → u51–u2)', ukeEtikett('2026-12-14', 5) === 'u51–u2 (2027)', ukeEtikett('2026-12-14', 5));
+  sjekk('Én uke: «u41»', ukeEtikett('2026-10-05', 1) === 'u41');
+}
+
+console.log('\n-- Oppdrag 22: erUtforende (kapasitetsnevner) --');
+{
+  sjekk('Tømrer teller', erUtforende({ navn: 'Ola', fag: 'Tømrer' }));
+  sjekk('Montør/Maler/Lærling teller', ['Montør', 'Maler', 'Lærling Tømrer'].every(fag => erUtforende({ navn: 'x', fag })));
+  sjekk('Rørlegger teller IKKE (egen plan)', !erUtforende({ navn: 'Rør', fag: 'Rørlegger' }));
+  sjekk('Prosjektleder/Anleggsleder teller IKKE', !erUtforende({ navn: 'PL', fag: 'Prosjektleder' }) && !erUtforende({ navn: 'AL', fag: 'Anleggsleder' }));
+  sjekk('«Utplassering …»-rader teller IKKE', !erUtforende({ navn: 'Utplassering skole', fag: 'Tømrer' }));
+  sjekk('Arkivert/utenfor planen teller IKKE', !erUtforende({ navn: 'x', fag: 'Tømrer', arkivert: true }) && !erUtforende({ navn: 'x', fag: 'Tømrer', utenforBemanningsplan: true }));
 }
 
 console.log('\n-- Digest-linjen (C-delen) --');

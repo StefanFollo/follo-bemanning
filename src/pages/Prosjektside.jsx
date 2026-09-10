@@ -219,7 +219,15 @@ export default function Prosjektside({ prosjektId, fane: startFane = 'oversikt',
               ...(p.pipeline ? [[
                 'Planlagt (pipeline)',
                 p.pipeline.forventetStart ? `Start uke ${ukeNr(p.pipeline.forventetStart)}` : 'dato ikke satt',
-                `${p.pipeline.forventetUker || '?'} uker · ${p.pipeline.forventetFolk || '?'} folk · ${p.pipeline.sikkerhet || 'fast'} — rediger i bemanningsplanen`,
+                <span key="pl" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {`${p.pipeline.forventetUker || '?'} uker · ${p.pipeline.forventetFolk || '?'} folk`}
+                  {onNavigate && p.pipeline.forventetStart && (
+                    <button className="btn btn-sm" style={{ height: 24, fontSize: 11.5 }}
+                      onClick={() => { sessionStorage.setItem('fbs_planlegg_inn', p.id); onNavigate('bemanningsplan'); }}>
+                      Planlegg inn
+                    </button>
+                  )}
+                </span>,
               ]] : []),
             ].map(([tittel, tall, under], i) => (
               <div key={i} style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 14px' }}>

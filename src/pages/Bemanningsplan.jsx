@@ -8,6 +8,8 @@ import { useApp } from '../context/AppContext';
 import { weekStart, addDays, isoToDate, dateToIso, formatDate, overlaps } from '../store';
 import { getHolidayMap } from '../holidays';
 import PipelineRader from '../komponenter/PipelineRader';
+import PipelineFane from '../komponenter/PipelineFane';
+import { pipelineFaneRader, ukeNr as pipelineUkeNr } from '../pipeline';
 
 const FERIE_ID = '__FERIE__';
 
@@ -82,6 +84,7 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
   const planAnsatte = state.ansatte.filter(a => !a.arkivert && !a.utenforBemanningsplan && a.fag !== 'Rørlegger');
 
   const [tab, setTab] = useState('uke');
+  const [planModus, setPlanModus] = useState(null); // oppdrag 22: { prosjektId, navn, startDato, sluttDato, folk, lagtTil[] }
   const [fullscreen, setFullscreen] = useState(false);
   const [storskjerm, setStorskjerm] = useState(false);
   const [storskjermZoom, setStorskjermZoom] = useState(1);
@@ -179,6 +182,32 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
   const weekDays = Array.from({ length: 52 * 7 }, (_, i) => addDays(currentWeek, i))
     .filter(d => { const dow = new Date(d + 'T00:00:00').getDay(); return dow >= 1 && dow <= 5; });
 
+  // Oppdrag 22: teller til Pipeline-fanens badge (ikke ferdig bemannede)
+  const pipelineAntall = useMemo(
+    () => pipelineFaneRader(state.prosjekter, state.befaringer, state.tildelinger).filter(r => !r.eldre).length,
+    [state.prosjekter, state.befaringer, state.tildelinger]
+  );
+
+  // Oppdrag 22 (skrollfiks): ukeoversikten starter alltid på inneværende
+  // periode uten gammel horisontal scroll (scroll-restore kunne etterlate
+  // visningen langt fram i tid).
+  useEffect(() => {
+    if (tab !== 'uke') return;
+    const wrap = document.querySelector('.uke-grid-wrap');
+    if (wrap) wrap.scrollLeft = 0;
+  }, [tab, ukeMode]);
+
+  // Oppdrag 22: «Planlegg inn» fra prosjektsiden (sessionStorage-flagg)
+  useEffect(() => {
+    const pid = sessionStorage.getItem('fbs_planlegg_inn');
+    if (!pid || fastProsjektId) return;
+    sessionStorage.removeItem('fbs_planlegg_inn');
+    const rad = pipelineFaneRader(state.prosjekter, state.befaringer, state.tildelinger)
+      .find(r => r.prosjektId === pid);
+    if (rad && (rad.pipeline.forventetStart || rad.uker[0])) startPlanlegging(rad);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Helligdagskart – memoisert slik at det ikke bygges på nytt hver render
   const thisYear = new Date().getFullYear();
   const holidaysUke = useMemo(() => getHolidayMap(thisYear - 1, thisYear + 2), [thisYear]);
@@ -189,6 +218,9 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
   function thisWeek() { setCurrentWeek(weekStart(dateToIso(new Date()))); }
 
   function openAddTildeling(ansattId, dag) {
+    // Oppdrag 22: i planleggingsmodus tildeler celle-/rad-klikk hele
+    // prosjektperioden i ett trykk i stedet for å åpne modalen.
+    if (planModus && ansattId) { togglePlanAnsatt(ansattId); return; }
     setTilForm({
       ansattId: ansattId || (state.ansatte[0]?.id || ''),
       prosjektId: state.prosjekter[0]?.id || '',
@@ -209,6 +241,60 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
     });
     setShowModal(true);
   }
+
+  // ── Oppdrag 22: planleggingsmodus («Planlegg inn» fra Pipeline-fanen) ──
+  // Bytter til ukeoversikten med en fast stripe øverst; klikk på en ansatts
+  // celle/rad tildeler hele prosjektperioden i ett trykk, klikk igjen fjerner.
+  function startPlanlegging(rad) {
+    const start = rad.pipeline.forventetStart || rad.uker[0];
+    if (!start) return;
+    const uker = Math.max(1, Number(rad.pipeline.forventetUker) || rad.uker.length || 1);
+    setPlanModus({
+      prosjektId: rad.prosjektId,
+      navn: rad.navn,
+      startDato: start,
+      sluttDato: addDays(start, (uker - 1) * 7 + 4), // t.o.m. fredag siste uke
+      folk: Number(rad.pipeline.forventetFolk) || 0,
+      lagtTil: [],
+    });
+    setCurrentWeek(weekStart(start));
+    setUkeMode('uke');
+    setTab('uke');
+  }
+  function togglePlanAnsatt(ansattId) {
+    const pm = planModus;
+    if (!pm || !ansattId) return;
+    const eksakte = state.tildelinger.filter(t =>
+      t.prosjektId === pm.prosjektId && t.ansattId === ansattId
+      && t.startDato === pm.startDato && t.sluttDato === pm.sluttDato);
+    if (eksakte.length) {
+      eksakte.forEach(t => dispatch({ type: 'DELETE_TILDELING', id: t.id }));
+      setPlanModus({ ...pm, lagtTil: pm.lagtTil.filter(x => x !== ansattId) });
+    } else {
+      if (!bekreftParallell(ansattId, pm.startDato, pm.sluttDato)) return;
+      dispatch({ type: 'ADD_TILDELING', payload: { ansattId, prosjektId: pm.prosjektId, startDato: pm.startDato, sluttDato: pm.sluttDato } });
+      setPlanModus({ ...pm, lagtTil: [...pm.lagtTil, ansattId] });
+    }
+  }
+  function planFerdig() { setPlanModus(null); setTab('pipeline'); }
+  function planAvbryt() {
+    const pm = planModus;
+    if (pm) {
+      for (const ansattId of pm.lagtTil) {
+        state.tildelinger
+          .filter(t => t.prosjektId === pm.prosjektId && t.ansattId === ansattId
+            && t.startDato === pm.startDato && t.sluttDato === pm.sluttDato)
+          .forEach(t => dispatch({ type: 'DELETE_TILDELING', id: t.id }));
+      }
+    }
+    setPlanModus(null); setTab('pipeline');
+  }
+  const planValgte = planModus
+    ? new Set(state.tildelinger
+        .filter(t => t.prosjektId === planModus.prosjektId && t.prosjektId !== FERIE_ID
+          && overlaps(t.startDato, t.sluttDato, planModus.startDato, planModus.sluttDato))
+        .map(t => t.ansattId)).size
+    : 0;
 
   function openAddFerie(ansattId) {
     setTilForm({
@@ -425,6 +511,12 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
         <button className={`tab-btn ${tab === 'uke' ? 'active' : ''}`} onClick={() => setTab('uke')}>
           Ukeoversikt
         </button>
+        <button className={`tab-btn ${tab === 'pipeline' ? 'active' : ''}`} onClick={() => setTab('pipeline')}>
+          Pipeline
+          {pipelineAntall > 0 && (
+            <span style={{ marginLeft: 5, fontSize: 10.5, fontWeight: 700, background: '#fef3c7', color: '#b45309', borderRadius: 8, padding: '1px 7px' }}>{pipelineAntall}</span>
+          )}
+        </button>
         <button className={`tab-btn ${tab === 'oversikt' ? 'active' : ''}`} onClick={() => setTab('oversikt')}>
           <IkonTekst ikon={ClipboardList} size={15}>Oversikt</IkonTekst>
         </button>
@@ -476,7 +568,15 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
             deleteTildeling={deleteTildeling}
             dispatch={dispatch}
             openBemannProsjekt={openBemannProsjekt}
+            planModus={planModus}
+            planValgte={planValgte}
+            onPlanFerdig={planFerdig}
+            onPlanAvbryt={planAvbryt}
+            openPipelineFane={() => setTab('pipeline')}
           />
+        )}
+        {tab === 'pipeline' && !fastProsjektId && (
+          <PipelineFane state={state} dispatch={dispatch} readOnly={readOnly} onPlanleggInn={startPlanlegging} />
         )}
         {tab === 'oversikt' && (
           <OversiktVisning
@@ -694,6 +794,7 @@ function UkeVisning({
   needleDay, setNeedleDay, draggingNeedle, gridWrapRef,
   dragRef, HOLIDAYS, handleDrop, openAddTildeling, openBarMenu, deleteTildeling,
   fastProsjektId = null, dispatch = null, openBemannProsjekt = null,
+  planModus = null, planValgte = 0, onPlanFerdig = null, onPlanAvbryt = null, openPipelineFane = null,
 }) {
   const today = dateToIso(new Date());
   const isHoliday = (iso) => !!HOLIDAYS[iso];
@@ -845,6 +946,9 @@ function UkeVisning({
   function handleToday() {
     if (ukeMode === 'maaned') setCurrentMonth(monthStart(dateToIso(new Date())));
     else thisWeek();
+    // Oppdrag 22: «I dag» nullstiller også horisontal scroll
+    const wrap = gridWrapRef?.current || document.querySelector('.uke-grid-wrap');
+    if (wrap) wrap.scrollLeft = 0;
   }
 
   function renderProsjektRader(prosjekter, ledige, cols, AnsattRad, periodeS, periodeE, radExtra) {
@@ -923,6 +1027,24 @@ function UkeVisning({
 
   return (
     <div>
+      {/* Oppdrag 22: planleggingsmodus-stripen («Planlegg inn» fra Pipeline) */}
+      {planModus && (
+        <div style={{ position: 'sticky', top: 0, zIndex: 30, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', padding: '9px 14px', background: '#1d4ed8', color: '#fff', borderRadius: 10, marginBottom: 10, fontSize: 13 }}>
+          <b>Planlegger inn: {planModus.navn}</b>
+          <span style={{ opacity: 0.9 }}>
+            u{pipelineUkeNr(planModus.startDato)}–{pipelineUkeNr(planModus.sluttDato)}
+            {planModus.folk ? ` · trenger ${planModus.folk} folk` : ''}
+          </span>
+          <span style={{ fontWeight: 700, background: '#fff', color: '#1d4ed8', borderRadius: 7, padding: '2px 9px' }}>
+            {planValgte}{planModus.folk ? `/${planModus.folk}` : ''} valgt
+          </span>
+          <span style={{ fontSize: 12, opacity: 0.85 }}>Klikk på en ansatts rad for å tildele hele perioden — klikk igjen for å fjerne.</span>
+          <span style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+            <button className="btn btn-sm" style={{ background: '#fff', color: '#1d4ed8', fontWeight: 700 }} onClick={onPlanFerdig}>Ferdig</button>
+            <button className="btn btn-sm" style={{ background: 'transparent', color: '#fff', border: '1px solid rgba(255,255,255,0.6)' }} onClick={onPlanAvbryt}>Avbryt</button>
+          </span>
+        </div>
+      )}
       <div className="uke-nav">
         <button className="btn" onClick={handlePrev}>← Forrige</button>
         <div className="uke-label">{navLabel}</div>
@@ -978,7 +1100,7 @@ function UkeVisning({
             {renderProsjektRader(dagProsjekter, fastProsjektId ? [] : dagLedige, weekDays.length, DagAnsattRad, currentWeek, weekEnd, { days: weekDays, gantt })}
             {!fagFilter && <RorleggerRader state={state} days={weekDays} unit="day" viewStart={currentWeek} viewEnd={weekEnd} />}
             {!fastProsjektId && dispatch && (
-              <PipelineRader state={state} dispatch={dispatch} days={weekDays} planAnsatte={planAnsatte} readOnly={readOnly} onBemann={openBemannProsjekt} />
+              <PipelineRader state={state} dispatch={dispatch} days={weekDays} planAnsatte={planAnsatte} readOnly={readOnly} onBemann={openBemannProsjekt} onApneFane={openPipelineFane} />
             )}
           </div>
         </div>
@@ -1005,7 +1127,7 @@ function UkeVisning({
             {renderProsjektRader(ukeProsjekter, fastProsjektId ? [] : ukeLedige, 260, UkeAnsattRad, periodeStart, periodeEnd, { days: WORK_DAYS_UKE, gantt })}
             {!fagFilter && <RorleggerRader state={state} days={WORK_DAYS_UKE} unit="day" viewStart={periodeStart} viewEnd={periodeEnd} />}
             {!fastProsjektId && dispatch && (
-              <PipelineRader state={state} dispatch={dispatch} days={WORK_DAYS_UKE} planAnsatte={planAnsatte} readOnly={readOnly} onBemann={openBemannProsjekt} />
+              <PipelineRader state={state} dispatch={dispatch} days={WORK_DAYS_UKE} planAnsatte={planAnsatte} readOnly={readOnly} onBemann={openBemannProsjekt} onApneFane={openPipelineFane} />
             )}
           </div>
         </div>
