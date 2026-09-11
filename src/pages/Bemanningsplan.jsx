@@ -200,15 +200,32 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
     const t = setTimeout(() => setStartToast(null), 10000);
     return () => clearTimeout(t);
   }, [startToast]);
-  function leggInnFraPipeline(prosjektId, ansattId, ukeMandag) {
+  function leggInnFraPipeline(prosjektId, ansattId, ukeMandag, { bekreftet = false } = {}) {
     const p = state.prosjekter.find(x => x.id === prosjektId);
     if (!p || !ansattId) return;
     const startDato = ukeMandag, sluttDato = addDays(ukeMandag, 4);
-    if (!bekreftParallell(ansattId, startDato, sluttDato)) return;
-    dispatch({ type: 'ADD_TILDELING', payload: { ansattId, prosjektId, startDato, sluttDato } });
     const a = state.ansatte.find(x => x.id === ansattId);
+    const fornavn = (a?.navn || '').split(' ')[0];
+    if (a?.fag === 'Rørlegger') {
+      // Rørlegger-rader viser rørleggerplaner (ikke tildelinger) — legg inn der
+      dispatch({ type: 'ADD_ROR_PLAN', payload: { ansattId, prosjektId, startDato, sluttDato, fritekst: '' } });
+      setStartToast({
+        tekst: `${p.adresse || p.navn} · ${fornavn} uke ${pipelineUkeNr(ukeMandag)} (rørleggerplan)`,
+        angre: () => {
+          const rp = [...(stateRef.current.rorPlaner || [])].reverse().find(x => x.ansattId === ansattId && x.prosjektId === prosjektId && x.startDato === startDato && x.sluttDato === sluttDato);
+          if (rp) dispatch({ type: 'DELETE_ROR_PLAN', id: rp.id });
+        },
+      });
+      return;
+    }
+    if (!bekreftet && harKonflikt(ansattId, startDato, sluttDato)) {
+      const konflikter = state.tildelinger.filter(t => t.ansattId === ansattId && t.prosjektId !== FERIE_ID && overlaps(t.startDato, t.sluttDato, startDato, sluttDato));
+      setKonfliktDialog({ pipeline: { prosjektId, ansattId, ukeMandag }, konflikter });
+      return;
+    }
+    dispatch({ type: 'ADD_TILDELING', payload: { ansattId, prosjektId, startDato, sluttDato } });
     setStartToast({
-      tekst: `${p.adresse || p.navn} startet · ${(a?.navn || '').split(' ')[0]} uke ${pipelineUkeNr(ukeMandag)}`,
+      tekst: `${p.adresse || p.navn} startet · ${fornavn} uke ${pipelineUkeNr(ukeMandag)}`,
       finn: { ansattId, prosjektId, startDato, sluttDato },
     });
   }
@@ -225,10 +242,11 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
   // Mål = enhver rad med data-ansatt-id × celle med data-dag (begge
   // visninger, inkl. Rørlegger og «Uten team»). Autoscroll i motoren.
   const [konfliktDialog, setKonfliktDialog] = useState(null); // { plan, t }
-  const finnMaal = useCallback((x, y) => {
+  const finnMaal = useCallback((x, y, d) => {
     const el = document.elementFromPoint(x, y);
     const rad = el?.closest?.('[data-ansatt-id]');
     if (!rad) return null;
+    if (rad.dataset.ror && d?.kind === 'bar') return null; // rørlegger-rader viser rørleggerplaner, ikke tildelinger
     const area = rad.querySelector('.oversikt-bars-area') || rad;
     const celler = area.querySelectorAll('[data-dag]');
     if (!celler.length) return null;
@@ -247,14 +265,23 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
     if (!t) return null;
     const ansatteById = {};
     for (const a of state.ansatte) ansatteById[a.id] = a;
-    return { t, plan: planleggSlipp({ tildeling: t, grepDag: payload.grepDag, mottakerId: maal.ansattId, dag: maal.dag, kopier,
-      tildelinger: state.tildelinger, ansatteById, prosjekter: state.prosjekter, av: localStorage.getItem('fbs_user_navn') || 'ukjent' }) };
+    const plan = planleggSlipp({ tildeling: t, grepDag: payload.grepDag, mottakerId: maal.ansattId, dag: maal.dag, kopier,
+      tildelinger: state.tildelinger, ansatteById, prosjekter: state.prosjekter, av: localStorage.getItem('fbs_user_navn') || 'ukjent' });
+    if (plan && kanHaFlereProsjekter(maal.ansattId)) plan.konflikter = []; // Anleggsleder/PL kan ha flere
+    return { t, plan };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.tildelinger, state.ansatte, state.prosjekter]);
   const sjekkKonflikt = useCallback((d, maal, kopier) => {
+    if (d.kind === 'pipeline') {
+      if (maal.radEl?.dataset.ror) return false;
+      const man = weekStart(maal.dag);
+      return harKonflikt(maal.ansattId, man, addDays(man, 4));
+    }
     if (d.kind !== 'bar') return false;
     const r = lagPlan(d.payload, maal, kopier);
     return !!(r?.plan?.konflikter?.length);
-  }, [lagPlan]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lagPlan, state.tildelinger, state.ansatte]);
   function utforPlan(plan, t, erstattede) {
     for (const k of erstattede) dispatch({ type: 'DELETE_TILDELING', id: k.id });
     if (plan.handling === 'flyttTid') {
@@ -598,7 +625,25 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
     <div className={`page${fullscreen ? ' bplan-fullscreen' : ''}${storskjerm ? ' bplan-storskjerm' : ''}`}>
       {dragMotor.ghost}
       {/* Oppdrag 29: konflikt ved flytt/kopier — aldri overskriv stille */}
-      {konfliktDialog && (() => {
+      {konfliktDialog?.pipeline && (() => {
+        const { pipeline: pl, konflikter } = konfliktDialog;
+        const lukk = () => setKonfliktDialog(null);
+        return (
+          <Modal title="Legg inn fra pipeline" onClose={lukk}>
+            <div className="form">
+              <p style={{ fontSize: 13, margin: '0 0 12px' }}>
+                <b>{konfliktTekst(konflikter, state.prosjekter)}</b><br />
+                {(state.ansatte.find(a => a.id === pl.ansattId)?.navn || 'Ansatt')} er allerede tildelt et prosjekt den uka. Legge inn som parallelt prosjekt likevel?
+              </p>
+              <div className="form-actions" style={{ flexWrap: 'wrap', gap: 8 }}>
+                <button className="btn" onClick={lukk}>Avbryt</button>
+                <button className="btn btn-primary" onClick={() => { lukk(); leggInnFraPipeline(pl.prosjektId, pl.ansattId, pl.ukeMandag, { bekreftet: true }); }}>Legg ved siden av</button>
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
+      {konfliktDialog?.plan && (() => {
         const { plan, t } = konfliktDialog;
         const tekst = konfliktTekst(plan.konflikter, state.prosjekter);
         const lukk = () => setKonfliktDialog(null);
@@ -1681,7 +1726,7 @@ function RorleggerRader({ state, days, unit, viewStart, viewEnd }) {
               </div>
             </div>
             <div style={{ gridColumn: '2 / -1', position: 'relative', minHeight: radH, borderBottom: '1px solid #f1f5f9' }}
-              data-ansatt-id={ansatt.id}
+              data-ansatt-id={ansatt.id} data-ror="1"
               title="Rørlegger-planen redigeres i Rørlegger-fanen">
               {/* Oppdrag 29: usynlige dagceller så rørleggerraden er slipp-mål */}
               {unit !== 'month' && days.map((d, i) => (
@@ -2350,7 +2395,7 @@ function OversiktVisning({
               const { laneOf, antall } = fordelLaner(items);
               const rowH = antall * LANE_H;
               rows.push(
-                <div key={'ror-' + ansatt.id} className="oversikt-row" data-ansatt-id={ansatt.id} style={{ height: rowH }}>
+                <div key={'ror-' + ansatt.id} className="oversikt-row" data-ansatt-id={ansatt.id} data-ror="1" style={{ height: rowH }}>
                   <div className="oversikt-row-label" style={{ width: LABEL_W, height: rowH }}>
                     <div className="mini-avatar" style={{ background: '#0e7490', width: AVATAR, height: AVATAR, fontSize: kompakt ? 7 : 8, flexShrink: 0 }}>
                       {ansatt.navn.split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase()}
