@@ -52,6 +52,8 @@ console.log('\n-- Navn, farge og visning --');
   const tomt = giGruppeNavn(navngitt, '', { av: 'x' });
   sjekk('tomt navn fjerner feltet → utledet igjen', tomt.every(p => !('gruppeNavn' in p)) && gruppeNavn(tomt, 'F') === 'Greverudveien 15B');
   sjekk('medlemsNavn med satt medlemsNavn', medlemsNavn({ ...B, medlemsNavn: 'Bad 2. etg' }, alle) === 'Bad 2. etg');
+  sjekk('medlemsNavn: adressens hale vinner over generisk jobbType («Greverudveien 15 Bad» + «Ny bygg» → «Bad»)', medlemsNavn({ ...B, jobbType: 'Ny bygg' }, alle) === 'Bad', medlemsNavn({ ...B, jobbType: 'Ny bygg' }, alle));
+  sjekk('medlemsNavn: adresse uten hale faller tilbake på jobbType', medlemsNavn({ ...F, jobbType: 'Fasade' }, alle) === 'Fasade');
   sjekk('medlemsNavn uten jobbType renser navnet for kunde/adresse', medlemsNavn({ id: 'K', gruppeId: 'F', navn: 'Rickard Berzelius – Greverudveien 15B – Kjøkken', adresse: 'Greverudveien 15B', kunde: { navn: 'Rickard Berzelius' } }, alle) === 'Kjøkken');
   sjekk('fargeVariant: idx 0 = basisfarge, idx 1/2 ulike, gyldig hex', fargeVariant('#2563eb', 0) === '#2563eb' && /^#[0-9a-f]{6}$/.test(fargeVariant('#2563eb', 1)) && fargeVariant('#2563eb', 1) !== fargeVariant('#2563eb', 2) && fargeVariant('#2563eb', 1) !== '#2563eb');
   sjekk('gruppeFarge: første medlem = basis, Bad = variant av Fasade-fargen', gruppeFarge(F, alle) === '#2563eb' && gruppeFarge(B, alle) === fargeVariant('#2563eb', 1));

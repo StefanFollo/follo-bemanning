@@ -42,6 +42,10 @@ export function medlemsNavn(p, prosjekter = []) {
   if (!p) return '';
   if (p.medlemsNavn && p.medlemsNavn.trim()) return p.medlemsNavn.trim();
   const gNavn = p.gruppeId ? gruppeNavn(prosjekter, p.gruppeId) : '';
+  // Adressens hale etter husnummeret («Greverudveien 15 Bad» → «Bad») er det
+  // beste medlemsnavnet når PL har skrevet oppdraget inn i adressen.
+  const hale = ((p.adresse || '').split(',')[0].match(/^.*?\D\s*\d+\s*[A-Za-zÆØÅæøå]?\b[\s–—\-·:]*(.+)$/) || [])[1];
+  if (hale && hale.trim() && norm(hale) !== norm(gNavn)) return hale.trim();
   const fjern = [gNavn, p.adresse, p.kunde && p.kunde.navn, p.kundeNavn].filter(Boolean).map(norm);
   let rest = (p.navn || '').split(SKILLE).map(x => x.trim()).filter(Boolean)
     .filter(del => !fjern.some(f => f && (norm(del) === f || f.includes(norm(del)) || norm(del).includes(f))));

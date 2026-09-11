@@ -1444,7 +1444,7 @@ function GanttRowContainer({
       {busyTil.map(t => {
         const pos = getBarPos(t);
         if (!pos) return null;
-        const pNavn = state.prosjekter.find(pr => pr.id === t.prosjektId)?.navn || '–';
+        const pOpptatt = state.prosjekter.find(pr => pr.id === t.prosjektId); const pNavn = pOpptatt ? visningsnavn(pOpptatt, state.prosjekter) : '–';
         return (
           <div key={t.id + '-busy'}
             className="gantt-bar gantt-bar-busy"
