@@ -60,14 +60,15 @@ export function useDragMotor({ finnMaal, sjekkKonflikt = null, onSlipp, scrollEl
       forrigeCelle.current.classList.remove('drop-maal', 'drop-maal-konflikt');
       forrigeCelle.current = null;
     }
-    if (rafRef.current) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+    if (rafRef.current) { clearInterval(rafRef.current); rafRef.current = null; }
     document.body.classList.remove('dm-drar');
   }, []);
 
-  // Autoscroll-løkke (kjører mens drag er aktiv)
+  // Autoscroll-løkke (kjører mens drag er aktiv). setInterval, ikke rAF:
+  // rAF pauses i bakgrunnsfaner og kan strupes, intervallet er billig.
   const autoscroll = useCallback(() => {
     const d = ref.current;
-    if (!d || !d.startet) { rafRef.current = null; return; }
+    if (!d || !d.startet) { if (rafRef.current) clearInterval(rafRef.current); rafRef.current = null; return; }
     const el = typeof scrollEl === 'function' ? scrollEl() : scrollEl;
     const { x, y } = d.pos;
     // Vinduet
@@ -82,7 +83,6 @@ export function useDragMotor({ finnMaal, sjekkKonflikt = null, onSlipp, scrollEl
       if (cy && el.scrollHeight > el.clientHeight) el.scrollTop += cy;
       if (cx && el.scrollWidth > el.clientWidth) el.scrollLeft += cx;
     }
-    rafRef.current = requestAnimationFrame(autoscroll);
   }, [scrollEl]);
 
   const oppdaterMaal = useCallback((x, y, kopier) => {
@@ -137,7 +137,7 @@ export function useDragMotor({ finnMaal, sjekkKonflikt = null, onSlipp, scrollEl
       document.body.classList.add('dm-drar');
       setAktiv({ kind: d.kind, payload: d.payload, tekst: d.tekst, x: d.pos.x, y: d.pos.y, kopier: d.kopier, maal: null, konflikt: false });
       oppdaterMaal(d.pos.x, d.pos.y, d.kopier);
-      if (!rafRef.current) rafRef.current = requestAnimationFrame(autoscroll);
+      if (!rafRef.current) rafRef.current = setInterval(autoscroll, 16);
     };
     d.onMove = ev => {
       if (ref.current !== d) return;
