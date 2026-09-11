@@ -2228,6 +2228,7 @@ function OversiktVisning({
                     const dow = (new Date(d + 'T00:00:00').getDay() + 6) % 7;
                     return (
                       <div key={d}
+                        data-dag={d}
                         className={`oversikt-bg-cell${d === today ? ' today-col' : ''}${HOLIDAYS[d] ? ' holiday-col' : ''}${dow === 4 ? ' week-last' : ''}`}
                         style={{ left: i * DAY_W, width: DAY_W }}
                         onClick={() => { if (!readOnly && !dragRef.current) openAddTildeling(ansatt.id, d); }}
