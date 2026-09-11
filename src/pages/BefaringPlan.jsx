@@ -612,6 +612,8 @@ export default function BefaringPlan({ apneBefaringId, onApnet }) {
         tilbudLink: bef.tilbudLink || '',
         kildeBefaringId: bef.id || '',
         ...(kildeTilbudData ? { kildeTilbudData } : {}),
+        // Oppdrag 32: underprosjekt — gruppeId fra tilbuds-appen (bemanning-event) følger med
+        ...(bef.gruppeId ? { gruppeId: String(bef.gruppeId), ...(bef.gruppeNavn ? { gruppeNavn: bef.gruppeNavn } : {}) } : {}),
         pipeline,
         pipelineLogg: [pipelineLoggInnslag(
           `Lagt i pipeline ved prosjektopprettelse — ${pipeline.forventetFolk} folk · ${pipeline.forventetUker} uker${pipeline.forventetStart ? '' : ' · dato ikke satt'}`,

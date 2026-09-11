@@ -14,6 +14,7 @@
 import { Redis } from '@upstash/redis'
 import { put } from '@vercel/blob'
 import { byggInterneFaser } from '../../src/framdriftEksport.js'
+import { visningsnavn } from '../../src/grupper.js'
 import { leggTilOppgaver, endreOppgave, oppgaverPaaFase, migrerFase } from '../../src/faseOppgaver.js'
 import { appendAuditLog, byggAuditEntry } from '../_dataIntegritet.js'
 
@@ -549,7 +550,7 @@ export default async function handler(req, res) {
         .map(a => ({ id: a.id, navn: a.navn, fag: a.fag || '' })) : undefined
       return {
         id: p.id,
-        navn: p.navn || p.adresse || 'Prosjekt',
+        navn: p.gruppeId ? visningsnavn(p, state.prosjekter || []) : (p.navn || p.adresse || 'Prosjekt'), // oppdrag 32: «Greverudveien 15B · Bad»
         adresse: p.adresse || '',
         startDato: p.startDato || null,
         sluttDato: p.sluttDato || null,

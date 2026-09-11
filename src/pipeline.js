@@ -1,3 +1,4 @@
+import { visningsnavn, grupperDigestLinjer } from './grupper.js';
 // src/pipeline.js — «Ikke bemannet»-pipeline (postkasse-oppdrag 21).
 // Ren logikk uten React så alt kan testes: forhåndsutfylling fra tilbudsdata,
 // hvilke rader som hører hjemme i seksjonen, bemannings-status per uke og
@@ -92,7 +93,7 @@ export function pipelineRader(prosjekter, befaringer, tildelinger, iDag = null) 
     if (uker.length > 0 && bemannede.size === uker.length) continue;
     rader.push({
       id: 'pl-' + p.id, type: 'prosjekt', prosjektId: p.id,
-      navn: p.adresse || p.navn || 'Uten navn',
+      navn: visningsnavn(p, prosjekter),
       pipeline: p.pipeline, uker, bemannedeUker: bemannede,
     });
   }
@@ -118,7 +119,7 @@ export function pipelineRader(prosjekter, befaringer, tildelinger, iDag = null) 
     if (bemannede.size === alle.length) continue;
     rader.push({
       id: 'hull-' + p.id, type: 'hull', prosjektId: p.id,
-      navn: p.adresse || p.navn || 'Uten navn',
+      navn: visningsnavn(p, prosjekter),
       pipeline: { forventetStart: start, forventetUker: alle.length, forventetFolk: null, sikkerhet: 'fast' },
       uker: alle, bemannedeUker: bemannede,
     });
@@ -217,7 +218,11 @@ export function pipelineDigestLinje(prosjekter, tildelinger, iDag) {
   if (!forste) return null;
   const dager = Math.round((isoTilDato(forste.pipeline.forventetStart) - isoTilDato(iDag)) / 86400000);
   if (dager > 21) return null;
-  return `Pipeline: ${uten.length} prosjekt${uten.length === 1 ? '' : 'er'} uten bemanning, første starter uke ${ukeNr(forste.pipeline.forventetStart)}`;
+  // Oppdrag 32: medlemmer av en gruppe nevnes samlet («Greverudveien 15B: Bad u39»)
+  const iGruppe = medStart.filter(p => p.gruppeId).slice(0, 6)
+    .map(p => ({ prosjektId: p.id, tekst: 'u' + ukeNr(p.pipeline.forventetStart) }));
+  const detaljer = iGruppe.length ? grupperDigestLinjer(iGruppe, prosjekter).join('; ') : '';
+  return `Pipeline: ${uten.length} prosjekt${uten.length === 1 ? '' : 'er'} uten bemanning, første starter uke ${ukeNr(forste.pipeline.forventetStart)}${detaljer ? ' (' + detaljer + ')' : ''}`;
 }
 
 // ═══ Oppdrag 24: avledet prosjektstatus — Ikke startet · Startet · Ferdig ═══
@@ -364,7 +369,7 @@ export function pipelineListe(prosjekter, tildelinger, iDag = null) {
     const startPassert = !!start && start < naavaerendeUke;
     rader.push({
       prosjektId: p.id,
-      navn: p.adresse || p.navn || 'Uten navn',
+      navn: visningsnavn(p, prosjekter),
       kunde: p.kunde?.navn || null,
       start, uker, startPassert,
       folk: pl.forventetFolk || null,

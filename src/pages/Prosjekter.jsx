@@ -3,7 +3,7 @@ import {
   Sparkles, TriangleAlert, Link as LinkIkon, Link2, ArrowUp, ArrowDown, ArrowRight, X, Trash2,
   Lightbulb, Check, CircleX, CircleCheck, CalendarDays, Package, Flag, Archive, Star,
   Users, Lock, ClipboardList, Hammer, Wrench, Eye, Pencil, Scissors, Undo2, Maximize,
-  List, ChartGantt, Loader, Pin, ChevronLeft, ChevronRight, ScrollText, ClipboardCheck, CircleAlert, Ban, RotateCw,
+  List, ChartGantt, Loader, Pin, ChevronLeft, ChevronRight, ChevronDown, ScrollText, ClipboardCheck, CircleAlert, Ban, RotateCw,
   ExternalLink, Copy,
 } from 'lucide-react';
 import KundeportalKnapp from '../komponenter/KundeportalKnapp';
@@ -20,6 +20,7 @@ import {
   andreKoblinger, kandidatEtikett, rapportKandidater, beregnTilbudIdKobling,
 } from '../mergeProsjekter';
 import TilbudsdataVisning from '../komponenter/Tilbudsdata';
+import { samleIGrupper, gruppeAvvik, gruppeSum, gruppeNavn, medlemsNavn, visningsnavn, gruppeMedlemmer, leggIGruppe, losneFraGruppe, giGruppeNavn, sammeGruppe } from '../grupper';
 import { beregnAktivering, beregnForkast, kalkyleSammendrag, harKalkyle } from '../framdriftUtkast';
 import KSFagForslag from '../komponenter/KSFagForslag';
 import { erForslagSkjult } from '../ksForslag';
@@ -841,6 +842,45 @@ function MergeModal({ startProsjekt, forslagId, alleProsjekter, tildelingerByPro
   );
 }
 
+// ═══ Oppdrag 32: «Legg i gruppe med …» — velger blant aktive prosjekter ═══
+function GruppeVelger({ prosjekt, prosjekter, onVelg, onLukk }) {
+  const [søk, setSøk] = useState('');
+  const q = søk.toLowerCase();
+  const aktive = (prosjekter || []).filter(p => p && !p.arkivert && p.id !== prosjekt.id && p.gruppeId !== (prosjekt.gruppeId || '__ingen__'));
+  const treffer = p => !q || (p.adresse || '').toLowerCase().includes(q) || (p.navn || '').toLowerCase().includes(q) || (p.kunde?.navn || '').toLowerCase().includes(q)
+    || (p.gruppeId && gruppeNavn(prosjekter, p.gruppeId).toLowerCase().includes(q));
+  const forslag = aktive.filter(p => kandidatScore(prosjekt, p) >= 30);
+  const forslagIds = new Set(forslag.map(p => p.id));
+  const liste = [...forslag.filter(treffer), ...aktive.filter(p => !forslagIds.has(p.id) && treffer(p))].slice(0, 40);
+  return (
+    <Modal title="Legg i gruppe med …" onClose={onLukk}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: '70vh', overflowY: 'auto', fontSize: 13 }}>
+        <div style={{ color: '#5d6b80' }}>
+          <b>{prosjekt.adresse || prosjekt.navn}</b> blir et underprosjekt i samme gruppe som prosjektet du velger. Begge beholder egen bemanning,
+          pipeline-rad, framdrift og sjekklister — gruppen binder dem bare sammen i listene og planen. Kan løsnes når som helst.
+        </div>
+        <input className="input" autoFocus placeholder="Søk adresse, navn, kunde eller gruppe…" value={søk} onChange={e => setSøk(e.target.value)} style={{ width: '100%' }} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 320, overflowY: 'auto' }}>
+          {liste.map(p => (
+            <button key={p.id} className="btn" style={{ textAlign: 'left', display: 'flex', gap: 8, alignItems: 'center' }} onClick={() => onVelg(p)}>
+              {forslagIds.has(p.id) && <Ikon ikon={Link2} size={14} />}
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {p.gruppeId ? visningsnavn(p, prosjekter) : (p.adresse || p.navn)}
+                {p.kunde?.navn ? <span style={{ color: '#5d6b80' }}> · {p.kunde.navn}</span> : null}
+                {p.gruppeId ? <span style={{ color: '#1e40af' }}> · i gruppe ({gruppeMedlemmer(prosjekter, p.gruppeId).length})</span> : null}
+              </span>
+            </button>
+          ))}
+          {liste.length === 0 && <div style={{ color: '#5d6b80', padding: 8 }}>Ingen prosjekter matcher søket.</div>}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+          <button className="btn" onClick={onLukk}>Avbryt</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 // ═══ «Koble til tilbud»-dialog (SPEC-del2 trinn 2) ═══
 // Søker blant befaringer som HAR tilbudPayload; fuzzy-forslag øverst.
 // Kopierer kun tilbudsdata (gruppe A) — driftsdata røres ALDRI.
@@ -1610,7 +1650,9 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
   function utførTilbudIdKobling(prosjekt, tilbud) {
     const av = localStorage.getItem('fbs_user_navn') || localStorage.getItem('fbs_role') || 'ukjent';
     const dato = new Date().toISOString();
-    const { nyProsjekt, kopierteFelter, felterFør } = beregnTilbudIdKobling(prosjekt, tilbud, { av, dato });
+    const { nyProsjekt: nyP, kopierteFelter, felterFør } = beregnTilbudIdKobling(prosjekt, tilbud, { av, dato });
+    // Oppdrag 32: gruppeId fra koblingsrapporten følger med (aldri auto-merge)
+    const nyProsjekt = tilbud.gruppeId && !nyP.gruppeId ? { ...nyP, gruppeId: String(tilbud.gruppeId), ...(tilbud.gruppeNavn ? { gruppeNavn: tilbud.gruppeNavn } : {}) } : nyP;
     try {
       const hist = JSON.parse(localStorage.getItem('fbs_koble_historikk') || '[]');
       hist.push({ dato, av, prosjektId: prosjekt.id, tilbudId: tilbud.tilbudId, felterFør, prosjektFør: prosjekt });
@@ -1691,6 +1733,7 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
       const match =
         (p.navn || '').toLowerCase().includes(q) ||
         (p.adresse || '').toLowerCase().includes(q) ||
+        (p.gruppeId && gruppeNavn(state.prosjekter, p.gruppeId).toLowerCase().includes(q)) ||
         (p.jobbType || '').toLowerCase().includes(q) ||
         (p.beskrivelse || '').toLowerCase().includes(q) ||
         (pl?.navn || '').toLowerCase().includes(q) ||
@@ -1758,7 +1801,7 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
     for (const p of aktive) {
       let best = null;
       for (const q of aktive) {
-        if (q.id === p.id) continue;
+        if (q.id === p.id || sammeGruppe(p, q)) continue; // oppdrag 32: aldri merge-hint innen gruppe
         const s = kandidatScore(p, q);
         if (s >= 50 && (!best || s > best.score)) best = { score: s, q };
       }
@@ -1830,7 +1873,8 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
   const tomCelle = <span style={{ color: '#cbd5e1' }}>—</span>;
 
   function prosjektInfo(p) {
-    const visAdresse = p.adresse || ((p.navn || '').includes(' — ') ? (p.navn || '').split(' — ').slice(1).join(' — ').trim() : (p.navn || 'Uten navn'));
+    const visAdresse = p.gruppeId ? visningsnavn(p, state.prosjekter)
+      : (p.adresse || ((p.navn || '').includes(' — ') ? (p.navn || '').split(' — ').slice(1).join(' — ').trim() : (p.navn || 'Uten navn')));
     const kundeNavn = p.kunde?.navn || ((p.navn || '').includes(' — ') ? (p.navn || '').split(' — ')[0].trim() : null);
     const pl = p.prosjektlederId ? ansatteById[p.prosjektlederId] : null;
     const antallFolk = new Set((tildelingerByProsjekt[p.id] || []).map(t => t.ansattId)).size;
@@ -1852,6 +1896,77 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
     return { visAdresse, kundeNavn, pl, antallFolk, belopVis: formaterBelop(p.belop), badge, handling, periode };
   }
 
+  // ═══ Oppdrag 32: underprosjekter / grupper ═══
+  const [lukkedeGrupper, setLukkedeGrupper] = useState(() => { try { return JSON.parse(sessionStorage.getItem('fbs_grupper_lukket') || '{}'); } catch { return {}; } });
+  const toggleGruppe = gid => setLukkedeGrupper(l => { const ny = { ...l, [gid]: !l[gid] }; try { sessionStorage.setItem('fbs_grupper_lukket', JSON.stringify(ny)); } catch { /* ok */ } return ny; });
+  const [gruppeFor, setGruppeFor] = useState(null);         // prosjekt som skal legges i gruppe
+  const [gruppeNavnFor, setGruppeNavnFor] = useState(null); // { gruppeId, navn }
+  const brukerNavnNaa = () => localStorage.getItem('fbs_user_navn') || localStorage.getItem('fbs_role') || 'ukjent';
+  function utforLeggIGruppe(p, mal) {
+    const r = leggIGruppe(p, mal, { av: brukerNavnNaa() });
+    if (!r) return;
+    dispatch({ type: 'UPDATE_PROSJEKT', payload: r.prosjekt });
+    if (r.mal) dispatch({ type: 'UPDATE_PROSJEKT', payload: r.mal });
+    loggAudit(p.id, 'gruppe', null, r.prosjekt.gruppeId, `Lagt i gruppe med «${mal.adresse || mal.navn}»`);
+    setGruppeFor(null);
+  }
+  function utforLosne(p) {
+    const ny = losneFraGruppe(p, { av: brukerNavnNaa() });
+    if (!ny) return;
+    dispatch({ type: 'UPDATE_PROSJEKT', payload: ny });
+    loggAudit(p.id, 'gruppe', p.gruppeId, null, 'Løsnet fra gruppen');
+  }
+  function utforGiNavn(gruppeId, navn) {
+    const medlemmer = gruppeMedlemmer(state.prosjekter, gruppeId, { medArkiverte: true });
+    for (const m of giGruppeNavn(medlemmer, navn, { av: brukerNavnNaa() })) dispatch({ type: 'UPDATE_PROSJEKT', payload: m });
+    loggAudit(gruppeId, 'gruppenavn', null, navn || '(utledet)', `Gruppen fikk navnet «${navn || '(utledet av adressen)'}»`);
+    setGruppeNavnFor(null);
+  }
+  function gruppeMeny(e) {
+    return [
+      { ikon: <Ikon ikon={Pencil} size={15} />, label: 'Gi gruppen navn…', onClick: () => setGruppeNavnFor({ gruppeId: e.gruppeId, navn: e.medlemmer.find(m => m.gruppeNavn)?.gruppeNavn || '' }) },
+      { ikon: <Ikon ikon={lukkedeGrupper[e.gruppeId] ? ChevronRight : ChevronLeft} size={15} />, label: lukkedeGrupper[e.gruppeId] ? 'Vis medlemmene' : 'Skjul medlemmene', onClick: () => toggleGruppe(e.gruppeId) },
+    ];
+  }
+  // Rader for tabellen: gruppemedlemmer innrykket under en gruppe-rad
+  function gruppertRader(liste, lagRad) {
+    return samleIGrupper(liste, state.prosjekter).flatMap(e => {
+      if (e.type === 'enkel') return [lagRad(e.prosjekt, false)];
+      const lukket = !!lukkedeGrupper[e.gruppeId];
+      const infoer = e.medlemmer.map(prosjektInfo);
+      const avvik = gruppeAvvik(infoer.map(i => i.badge));
+      const folk = new Set(e.medlemmer.flatMap(m => (tildelingerByProsjekt[m.id] || []).map(t => t.ansattId))).size;
+      const gruppeRad = {
+        id: 'gruppe-' + e.gruppeId,
+        onClick: () => toggleGruppe(e.gruppeId),
+        celler: {
+          prosjekt: (
+            <div style={{ minWidth: 0 }}>
+              <div className="ds-tabell-navn ds-gruppe-navn" title={lukket ? 'Klikk for å vise medlemmene' : 'Klikk for å skjule medlemmene'}>
+                <Ikon ikon={lukket ? ChevronRight : ChevronDown} size={14} />
+                {e.navn} <span className="ds-gruppe-antall">({e.medlemmer.length})</span>
+              </div>
+              {(detaljert || lukket) && <div className="ds-tabell-under">{e.medlemmer.map(m => medlemsNavn(m, state.prosjekter)).join(' · ')}</div>}
+            </div>
+          ),
+          status: avvik
+            ? <span className="ds-tabell-badge" style={{ color: '#b45309', background: '#fef3c7' }}>{avvik}</span>
+            : (detaljert ? <span style={{ fontSize: 12.5, color: '#15803d' }}>alt ok</span> : null),
+          pl: tomCelle,
+          periode: tomCelle,
+          folk: folk > 0 ? folk : tomCelle,
+          sum: detaljert ? formaterBelop(String(gruppeSum(e.medlemmer))) : tomCelle,
+          handling: (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={ev => ev.stopPropagation()}>
+              <RadMeny valg={gruppeMeny(e)} />
+            </span>
+          ),
+        },
+      };
+      return [gruppeRad, ...(lukket ? [] : e.medlemmer.map(m => lagRad(m, true)))];
+    });
+  }
+
   function prosjektMeny(p) {
     const portalToken = kundeportalToken(p, state.befaringer);
     return [
@@ -1868,6 +1983,10 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
         && { ikon: <Ikon ikon={Package} size={15} />, label: 'Koble til tilbud…', onClick: () => setKobleFor(p) },
       p.tilbudsfelterFørKobling
         && { ikon: <Ikon ikon={Scissors} size={15} />, label: 'Fjern tilbuds-kobling', onClick: () => fjernKobling(p) },
+      { skille: true },
+      { ikon: <Ikon ikon={Users} size={15} />, label: p.gruppeId ? 'Legg annet prosjekt i gruppen…' : 'Legg i gruppe med…', onClick: () => setGruppeFor(p) },
+      p.gruppeId && { ikon: <Ikon ikon={Pencil} size={15} />, label: 'Gi gruppen navn…', onClick: () => setGruppeNavnFor({ gruppeId: p.gruppeId, navn: p.gruppeNavn || '' }) },
+      p.gruppeId && { ikon: <Ikon ikon={Scissors} size={15} />, label: 'Løsne fra gruppe', onClick: () => utforLosne(p) },
       { skille: true },
       prosjektStatus(p, state.tildelinger) === 'startet'
         && { ikon: <Ikon ikon={RotateCw} size={15} />, label: 'Flytt til pipeline', onClick: () => apneFlytt(p) },
@@ -2326,9 +2445,11 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
                   { id: 'start', tittel: '', bredde: 'auto' },
                   { id: 'handling', tittel: '', bredde: '160px', hoyre: true },
                 ]}
-                seksjoner={[{
-                  rader: liste.map(r => {
+                seksjoner={samleIGrupper(liste.map(r => ({ ...r, id: r.prosjektId, gruppeId: alleProsjekter.find(x => x.id === r.prosjektId)?.gruppeId })), state.prosjekter).map(enhet => ({
+                  ...(enhet.type === 'gruppe' ? { tittel: `${enhet.navn} (${enhet.medlemmer.length})` } : {}),
+                  rader: (enhet.type === 'gruppe' ? enhet.medlemmer : [enhet.prosjekt]).map(r => {
                     const p = alleProsjekter.find(x => x.id === r.prosjektId);
+                    const iGruppe = enhet.type === 'gruppe';
                     const plA = r.plId ? ansatteById[r.plId] : null;
                     const klikk = e => { e.stopPropagation(); if (pipelineRedigerId === p.id) setPipelineRedigerId(null); else apnePipelineRediger(p); };
                     const celleKnapp = (innhold, gul = false) => (
@@ -2343,7 +2464,7 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
                       celler: {
                         prosjekt: (
                           <div style={{ minWidth: 0 }}>
-                            <div className="ds-tabell-navn">{r.navn}</div>
+                            <div className="ds-tabell-navn">{iGruppe ? medlemsNavn(p, state.prosjekter) : r.navn}</div>
                             {detaljert && (r.kunde || p.jobbType) && <div className="ds-tabell-under">{[r.kunde, p.jobbType].filter(Boolean).join(' · ')}</div>}
                           </div>
                         ),
@@ -2385,7 +2506,7 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
                       ) : null,
                     };
                   }),
-                }]}
+                }))}
               />
             )}
             {visLeggIPipeline && (
@@ -2471,16 +2592,16 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
             { id: 'handling', tittel: '', bredde: '150px', hoyre: true },
           ]}
           seksjoner={[{
-            rader: faneProsjekter.map(p => {
+            rader: gruppertRader(faneProsjekter, (p, medlem) => {
               const info = prosjektInfo(p);
               return {
                 id: p.id,
                 onClick: () => apneProsjekt(p),
                 celler: {
                   prosjekt: (
-                    <div style={{ minWidth: 0 }}>
+                    <div style={{ minWidth: 0 }} className={medlem ? 'ds-tabell-medlem' : undefined}>
                       <div className="ds-tabell-navn">
-                        {info.visAdresse}
+                        {medlem ? medlemsNavn(p, state.prosjekter) : info.visAdresse}
                         {duplikatHint[p.id] && (
                           <span title={`Ligner på ${duplikatHint[p.id].label} — slå sammen via ⋯-menyen`}
                             style={{ marginLeft: 6, color: '#0e7490', verticalAlign: 'middle', cursor: 'help' }}>
@@ -2736,6 +2857,30 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
         </Modal>
       )}
 
+      {/* ── Oppdrag 32: Legg i gruppe med … ── */}
+      {gruppeFor && (
+        <GruppeVelger
+          prosjekt={gruppeFor}
+          prosjekter={state.prosjekter}
+          onVelg={mal => utforLeggIGruppe(gruppeFor, mal)}
+          onLukk={() => setGruppeFor(null)}
+        />
+      )}
+      {gruppeNavnFor && (
+        <Modal title="Gi gruppen navn" onClose={() => setGruppeNavnFor(null)}>
+          <form className="form" onSubmit={e => { e.preventDefault(); utforGiNavn(gruppeNavnFor.gruppeId, gruppeNavnFor.navn); }}>
+            <p style={{ fontSize: 13, color: '#5d6b80', margin: '0 0 10px' }}>
+              Navnet vises foran medlemsnavnet i planen og listene («{gruppeNavnFor.navn.trim() || gruppeNavn(state.prosjekter, gruppeNavnFor.gruppeId)} · Bad»). Tomt navn = utledes av adressen.
+            </p>
+            <input className="input" autoFocus placeholder={gruppeNavn(state.prosjekter, gruppeNavnFor.gruppeId)} value={gruppeNavnFor.navn}
+              onChange={e => setGruppeNavnFor(g => ({ ...g, navn: e.target.value }))} style={{ width: '100%' }} />
+            <div className="form-actions">
+              <button type="button" className="btn" onClick={() => setGruppeNavnFor(null)}>Avbryt</button>
+              <button type="submit" className="btn btn-primary">Lagre</button>
+            </div>
+          </form>
+        </Modal>
+      )}
       {/* ── Koble til tilbud-dialog (SPEC-del2 trinn 2) ── */}
       {kobleFor && (
         <KobleDialog

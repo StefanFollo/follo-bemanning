@@ -3916,3 +3916,9 @@ body.dm-drar * { cursor: grabbing !important; }
 .dm-spokelse-konflikt { font-size: 10px; background: #dc2626; border-radius: 5px; padding: 1px 6px; }
 .gantt-bg-cell.drop-maal, .oversikt-bg-cell.drop-maal { background: var(--accent-subtle, #dbeafe) !important; outline: 2px dashed var(--accent, #2563eb); outline-offset: -2px; z-index: 1; }
 .gantt-bg-cell.drop-maal-konflikt, .oversikt-bg-cell.drop-maal-konflikt { background: #fee2e2 !important; outline: 2px dashed #dc2626; outline-offset: -2px; z-index: 1; }
+
+/* ── Oppdrag 32: underprosjekter — gruppe-rad og medlemsrader i prosjektlisten ── */
+.ds-gruppe-navn { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.ds-gruppe-antall { color: #5d6b80; font-weight: 500; }
+.ds-tabell-medlem { position: relative; padding-left: 22px; }
+.ds-tabell-medlem::before { content: ''; position: absolute; left: 8px; top: -8px; bottom: 50%; width: 8px; border-left: 2px solid #cbd5e1; border-bottom: 2px solid #cbd5e1; border-radius: 0 0 0 4px; }

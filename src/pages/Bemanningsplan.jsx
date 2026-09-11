@@ -12,6 +12,7 @@ import PipelineOversiktRader from '../komponenter/PipelineOversiktRader';
 import { ukeNr as pipelineUkeNr, erFoerFlytting } from '../pipeline';
 import { useDragMotor, nyligDratt } from '../komponenter/DragMotor';
 import { planleggSlipp, konfliktTekst } from '../flyttTildeling';
+import { visningsnavn, gruppeFarge } from '../grupper';
 
 const FERIE_ID = '__FERIE__';
 
@@ -210,7 +211,7 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
       // Rørlegger-rader viser rørleggerplaner (ikke tildelinger) — legg inn der
       dispatch({ type: 'ADD_ROR_PLAN', payload: { ansattId, prosjektId, startDato, sluttDato, fritekst: '' } });
       setStartToast({
-        tekst: `${p.adresse || p.navn} · ${fornavn} uke ${pipelineUkeNr(ukeMandag)} (rørleggerplan)`,
+        tekst: `${visningsnavn(p, state.prosjekter)} · ${fornavn} uke ${pipelineUkeNr(ukeMandag)} (rørleggerplan)`,
         angre: () => {
           const rp = [...(stateRef.current.rorPlaner || [])].reverse().find(x => x.ansattId === ansattId && x.prosjektId === prosjektId && x.startDato === startDato && x.sluttDato === sluttDato);
           if (rp) dispatch({ type: 'DELETE_ROR_PLAN', id: rp.id });
@@ -225,7 +226,7 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
     }
     dispatch({ type: 'ADD_TILDELING', payload: { ansattId, prosjektId, startDato, sluttDato } });
     setStartToast({
-      tekst: `${p.adresse || p.navn} startet · ${fornavn} uke ${pipelineUkeNr(ukeMandag)}`,
+      tekst: `${visningsnavn(p, state.prosjekter)} startet · ${fornavn} uke ${pipelineUkeNr(ukeMandag)}`,
       finn: { ansattId, prosjektId, startDato, sluttDato },
     });
   }
@@ -995,7 +996,8 @@ function UkeVisning({
   const today = dateToIso(new Date());
   const isHoliday = (iso) => !!HOLIDAYS[iso];
   const holidayName = (iso) => HOLIDAYS[iso] || '';
-  const prosjektColor = (pid) => state.prosjekter.find(p => p.id === pid)?.farge || '#6b8fc4';
+  // Oppdrag 32: gruppemedlemmer får varianter av gruppefargen
+  const prosjektColor = (pid) => { const p = state.prosjekter.find(x => x.id === pid); return p ? gruppeFarge(p, state.prosjekter) : '#6b8fc4'; };
   // Felles props som trés ned til GanttRowContainer via rad-komponentene
   const gantt = { state, readOnly, dragRef, today, isHoliday, holidayName, prosjektColor, handleDrop, openAddTildeling, openBarMenu, deleteTildeling, fastProsjektId, startDrag };
 
@@ -1174,7 +1176,7 @@ function UkeVisning({
             <React.Fragment key={prosjekt.id}>
               <div className="uke-prosjekt-header" style={{ gridColumn: '1 / -1', borderLeft: `4px solid ${color}` }}>
                 <span className="uke-prosjekt-farge" style={{ background: color }} />
-                <span className="uke-prosjekt-navn">{prosjekt.navn}</span>
+                <span className="uke-prosjekt-navn">{visningsnavn(prosjekt, state.prosjekter)}</span>
                 <span className="uke-prosjekt-antall">{ansatte.length} ansatt{ansatte.length !== 1 ? 'e' : ''}</span>
               </div>
               {ansatte.map(a => <AnsattRad key={a.id} ansatt={a} prosjektId={prosjekt.id} {...radExtra} />)}
@@ -1459,7 +1461,7 @@ function GanttRowContainer({
         if (!pos) return null;
         const isFerie = t.prosjektId === FERIE_ID;
         const p = isFerie ? null : state.prosjekter.find(pr => pr.id === t.prosjektId);
-        const barLabel = isFerie ? 'Ferie / Fri' : (p?.navn || '–');
+        const barLabel = isFerie ? 'Ferie / Fri' : (p ? visningsnavn(p, state.prosjekter) : '–');
         return (
           <div key={t.id}
             className={`gantt-bar${isFerie ? ' gantt-bar-ferie' : ''}`}
@@ -2268,8 +2270,8 @@ function OversiktVisning({
                     if (!bp) return null;
                     const isFerie = t.prosjektId === FERIE_ID;
                     const proj  = isFerie ? null : state.prosjekter.find(p => p.id === t.prosjektId);
-                    const color = proj?.farge || '#6b7280';
-                    const label = isFerie ? 'Ferie' : (proj?.navn || '?');
+                    const color = proj ? gruppeFarge(proj, state.prosjekter) : '#6b7280';
+                    const label = isFerie ? 'Ferie' : (proj ? visningsnavn(proj, state.prosjekter) : '?');
 
                     return (
                       <div key={t.id}

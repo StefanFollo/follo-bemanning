@@ -387,6 +387,7 @@ export default async function handler(req, res) {
         opprettetAv: d.kontaktperson || 'ukjent',
         opprinneligTilbudId: tilbudId || null,
         tilbudId: tilbudId || null,
+        ...(d.gruppeId || body.gruppeId ? { gruppeId: String(d.gruppeId || body.gruppeId), ...((d.gruppeNavn || body.gruppeNavn) ? { gruppeNavn: String(d.gruppeNavn || body.gruppeNavn).slice(0, 80) } : {}) } : {}),
         tilbudLink: tilbudLink || '',
         sistEvent: type,
         sistEventDato: naa,
@@ -650,6 +651,9 @@ export default async function handler(req, res) {
           if (data.epost != null && data.epost !== '') oppdatert.epost = data.epost
           if (data.estimertSum != null) oppdatert.estimertSum = parseFloat(data.estimertSum) || 0
           if (data.pristype) oppdatert.pristype = data.pristype
+          // Oppdrag 32: gruppeId/gruppeNavn (underprosjekter) fra tilbuds-appen
+          if (data.gruppeId || body.gruppeId) oppdatert.gruppeId = String(data.gruppeId || body.gruppeId)
+          if (data.gruppeNavn || body.gruppeNavn) oppdatert.gruppeNavn = String(data.gruppeNavn || body.gruppeNavn).slice(0, 80)
           if (data.tilbudsfrist) oppdatert.tilbudFrist = data.tilbudsfrist
           if (data.oppstart) oppdatert.oppstartTekst = data.oppstart
           if (data.oppstartDato) oppdatert.oppstartDato = data.oppstartDato

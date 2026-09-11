@@ -38,6 +38,7 @@ export function byggPipelineProsjekt(b, form, { prosjektId, farge, brukerNavn })
     poster: b.poster || [], fag: b.fag || [], pristype: b.pristype || '',
     tilbudLink: b.tilbudLink || '',
     ...(b.tilbudPayload ? { tilbudPayload: b.tilbudPayload } : {}),
+    ...(b.gruppeId ? { gruppeId: String(b.gruppeId), ...(b.gruppeNavn ? { gruppeNavn: b.gruppeNavn } : {}) } : {}),
     kunde: { navn: b.kontaktNavn || '', adresse: b.adresse || '', telefon: b.telefon || '', epost: b.epost || '' },
     pipeline: {
       forventetStart: form.forventetStart ? weekStart(form.forventetStart) : null,

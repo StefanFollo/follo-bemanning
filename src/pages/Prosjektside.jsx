@@ -14,6 +14,7 @@ import { useApp } from '../context/AppContext';
 import KundeportalKnapp from '../komponenter/KundeportalKnapp';
 import { kundeportalToken } from '../kundeportal';
 import { tilbudIdForProsjekt } from '../framdriftEksport';
+import { gruppeNavn, medlemsNavn, gruppeMedlemmer } from '../grupper';
 import { oppgaveStat } from '../faseOppgaver';
 import { lagForProsjekt } from '../prosjektLag';
 import { varsleFramdriftEksport } from '../framdriftEksportKlient';
@@ -37,7 +38,7 @@ function relTid(iso) {
   return dg === 1 ? 'i går' : `${dg} d siden`;
 }
 
-export default function Prosjektside({ prosjektId, fane: startFane = 'oversikt', onTilbake, onNavigate }) {
+export default function Prosjektside({ prosjektId, fane: startFane = 'oversikt', onTilbake, onNavigate, onApneProsjekt = null }) {
   const { state, dispatch } = useApp();
   const [fane, setFane] = useState(startFane);
   const [ksSjekklister, setKsSjekklister] = useState(null);
@@ -97,6 +98,13 @@ export default function Prosjektside({ prosjektId, fane: startFane = 'oversikt',
     .map(t => (state.ansatte || []).find(a => a && a.id === t.ansattId)?.navn).filter(Boolean))];
   const tp = p.tilbudPayload || {};
   const kontrakt = tp.totalSum ?? tp.akseptertSum ?? (p.belop ? Number(p.belop) : null);
+  // Oppdrag 32: gruppen (underprosjekter) — kun lesing
+  const sosken = p.gruppeId ? gruppeMedlemmer(state.prosjekter || [], p.gruppeId) : [];
+  const gNavn = p.gruppeId ? gruppeNavn(state.prosjekter || [], p.gruppeId) : '';
+  const gruppeKontrakt = sosken.reduce((s, m) => { const t = m.tilbudPayload || {}; const k = t.totalSum ?? t.akseptertSum ?? (m.belop ? Number(m.belop) : 0); return s + (Number(k) || 0); }, 0);
+  const gruppeFolk = new Set((state.tildelinger || [])
+    .filter(t => t && t.prosjektId !== '__FERIE__' && sosken.some(m => m.id === t.prosjektId) && (t.startDato || '0000') <= omEnUke && (t.sluttDato || '9999') >= iDag)
+    .map(t => t.ansattId)).size;
   const kundeAkt = (befaring?.kundeAktivitet || []).slice(-5).reverse();
   const nyKundeAkt = kundeAkt.some(a => a && (Date.now() - new Date(a.sistTidspunkt || a.tidspunkt || 0).getTime()) < 86400000);
 
@@ -135,7 +143,23 @@ export default function Prosjektside({ prosjektId, fane: startFane = 'oversikt',
       {/* ── Topp (alltid synlig) ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 4 }}>
         <button className="btn btn-sm" onClick={onTilbake}><IkonTekst ikon={ArrowLeft} size={14}>Prosjekter</IkonTekst></button>
-        <h2 style={{ margin: 0, fontSize: 19, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.navn || p.adresse || 'Uten navn'}</h2>
+        <h2 style={{ margin: 0, fontSize: 19, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {p.gruppeId
+            ? <><span style={{ color: 'var(--text-secondary)' }}>{gNavn}</span> <span style={{ color: '#94a3b8' }}>›</span> {medlemsNavn(p, state.prosjekter)}</>
+            : (p.navn || p.adresse || 'Uten navn')}
+        </h2>
+        {sosken.length > 1 && (
+          <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }} title="Underprosjekter i samme gruppe">
+            {sosken.map(m => (
+              <button key={m.id} className="btn btn-sm"
+                style={{ height: 24, fontSize: 11.5, padding: '0 8px', ...(m.id === p.id ? { background: '#1e3a5f', color: '#fff', borderColor: '#1e3a5f' } : {}) }}
+                disabled={m.id === p.id || !onApneProsjekt}
+                onClick={() => onApneProsjekt && onApneProsjekt(m.id, fane)}>
+                {medlemsNavn(m, state.prosjekter)}
+              </button>
+            ))}
+          </span>
+        )}
         <span style={{ fontSize: 11.5, fontWeight: 600, color: STATUS_FARGE[avledet], background: STATUS_FARGE[avledet] + '1a', borderRadius: 6, padding: '2px 9px' }}
           title="Status avledes automatisk: Startet = minst én tildeling i bemanningsplanen">
           {STATUS_TEKST[avledet]}
@@ -230,6 +254,11 @@ export default function Prosjektside({ prosjektId, fane: startFane = 'oversikt',
               ['Bemanning denne uka', `${denneUka.length} person${denneUka.length === 1 ? '' : 'er'}`, denneUka.map(n => n.split(' ')[0]).slice(0, 6).join(', ')],
               ['Sjekklister', alleLister.length ? `${signert} av ${alleLister.length} signert` : 'ingen ennå',
                 utenAnsvarlig ? `${utenAnsvarlig} uten ansvarlig` : (alleLister.length ? 'alle har ansvarlig' : '')],
+              ...(p.gruppeId ? [[
+                'Gruppen',
+                `${sosken.length} oppdrag`,
+                `kontrakt Σ ${fmtKr(gruppeKontrakt)} · ${gruppeFolk} folk denne uka`,
+              ]] : []),
               ...(avledet === 'ikke_startet' ? [[
                 'Planlagt start',
                 p.pipeline?.forventetStart ? `u${ukeNr(p.pipeline.forventetStart)}` : (p.startDato ? `u${ukeNr(p.startDato)}` : 'dato ikke satt'),

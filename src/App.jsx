@@ -488,7 +488,7 @@ function App() {
           {prosjektSide && (isAdmin || isKontor || isAL) ? (
             <Prosjektside prosjektId={prosjektSide.id} fane={prosjektSide.fane}
               onTilbake={() => { setProsjektSide(null); setActiveTab('prosjekter'); }}
-              onNavigate={setActiveTab} />
+              onNavigate={setActiveTab} onApneProsjekt={apneProsjektSide} />
           ) : (<>
           {activeTab === 'dashboard' && (isAdmin || isKontor || isAL) && <Dashboard onNavigate={navigerTil} />}
           {activeTab === 'befaring' && (isAdmin || isKontor || isBefaring) && <BefaringPlan apneBefaringId={apneBefaringId} onApnet={() => setApneBefaringId(null)} />}

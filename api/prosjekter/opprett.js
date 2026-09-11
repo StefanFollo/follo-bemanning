@@ -145,6 +145,8 @@ export default async function handler(req, res) {
       // Inter-app-referanser så vi kan se hvor prosjektet kom fra
       kildeTilbudId: body.tilbudId || null,
       kildeBefaringId: body.kildeBefaringId || null,
+      // Oppdrag 32: underprosjekt (SPEC-underprosjekter §1) — gruppeId binder søsken; aldri auto-merge
+      ...(body.gruppeId ? { gruppeId: String(body.gruppeId), ...(body.gruppeNavn ? { gruppeNavn: String(body.gruppeNavn).slice(0, 80) } : {}) } : {}),
       // Kunde-info (bevares fra tilbud)
       kunde: {
         navn: body.kundenavn,

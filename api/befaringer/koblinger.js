@@ -75,6 +75,8 @@ export default async function handler(req, res) {
         adresse: k.adresse || '',
         tilbudLink: k.tilbudLink || '',
         ...(k.tilbudPayload ? { tilbudPayload: k.tilbudPayload } : {}),
+        // Oppdrag 32: gruppeId (underprosjekter) følger koblingen
+        ...(k.gruppeId ? { gruppeId: String(k.gruppeId), gruppeNavn: k.gruppeNavn ? String(k.gruppeNavn).slice(0, 80) : '' } : {}),
       })),
       losninger: rapport.losninger || {}, // løsninger overlever ny rapport
     }
