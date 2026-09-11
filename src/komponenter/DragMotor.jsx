@@ -11,7 +11,7 @@
 //  - touch: langt trykk (400 ms) starter drag; mus: 5 px bevegelse
 //  - Alt/Ctrl under drag = «Kopier» (vises i spøkelset)
 
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 
 const KANT = 60;          // px fra kant der autoscroll starter
@@ -28,8 +28,29 @@ function fart(avstand) {
 let sisteDragSlutt = 0;
 export function nyligDratt() { return Date.now() - sisteDragSlutt < 400; }
 
+// Spøkelset har egen state så planen (tusenvis av celler) ikke re-rendres
+// for hver pointermove — bare denne lille portalen oppdateres.
+function DragGhost({ abonner }) {
+  const [aktiv, setAktiv] = useState(null);
+  useEffect(() => abonner(setAktiv), [abonner]);
+  if (!aktiv) return null;
+  return createPortal(
+    <div className="dm-spokelse" style={{ left: aktiv.x + 14, top: aktiv.y + 12 }}>
+      <span className={`dm-spokelse-modus${aktiv.kopier ? ' dm-spokelse-modus--kopier' : ''}`}>
+        {aktiv.kind === 'pipeline' ? 'Legg inn' : aktiv.kopier ? 'Kopier' : 'Flytt'}
+      </span>
+      <span className="dm-spokelse-tekst">{aktiv.tekst}</span>
+      {aktiv.konflikt && <span className="dm-spokelse-konflikt">overlapper</span>}
+    </div>,
+    document.body
+  );
+}
+
 export function useDragMotor({ finnMaal, sjekkKonflikt = null, onSlipp, scrollEl = null }) {
-  const [aktiv, setAktiv] = useState(null); // { kind, payload, tekst, x, y, kopier, maal }
+  const lytter = useRef(null);              // setAktiv fra DragGhost
+  const aktivRef = useRef(null);
+  const setAktiv = useCallback(v => { aktivRef.current = typeof v === 'function' ? v(aktivRef.current) : v; lytter.current?.(aktivRef.current); }, []);
+  const abonner = useCallback(fn => { lytter.current = fn; fn(aktivRef.current); return () => { if (lytter.current === fn) lytter.current = null; }; }, []);
   const ref = useRef(null);                 // arbeidsdata mellom events
   const rafRef = useRef(null);
   const forrigeCelle = useRef(null);
@@ -155,18 +176,9 @@ export function useDragMotor({ finnMaal, sjekkKonflikt = null, onSlipp, scrollEl
   const avbryt = useCallback(() => avslutt(false), [avslutt]);
   useEffect(() => () => rydd(), [rydd]);
 
-  const ghost = aktiv ? createPortal(
-    <div className="dm-spokelse" style={{ left: aktiv.x + 14, top: aktiv.y + 12 }}>
-      <span className={`dm-spokelse-modus${aktiv.kopier ? ' dm-spokelse-modus--kopier' : ''}`}>
-        {aktiv.kind === 'pipeline' ? 'Legg inn' : aktiv.kopier ? 'Kopier' : 'Flytt'}
-      </span>
-      <span className="dm-spokelse-tekst">{aktiv.tekst}</span>
-      {aktiv.konflikt && <span className="dm-spokelse-konflikt">overlapper</span>}
-    </div>,
-    document.body
-  ) : null;
+  const ghost = useMemo(() => <DragGhost abonner={abonner} />, [abonner]);
 
-  return { startDrag, avbryt, aktiv, ghost };
+  return { startDrag, avbryt, ghost };
 }
 
 // Hjelper for visningene: finn rad + kolonne under pekeren.
