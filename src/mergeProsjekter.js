@@ -386,3 +386,97 @@ export function beregnAngrePekere(state, pekereIds, sekundarId, hovedId) {
   }
   return resultat;
 }
+
+// ═══ Oppdrag 30: koble via tilbudId (koblingsrapporten) + vern mot feil adresse ═══
+
+// Adressenøkkel «gate|husnummer» uten bokstav-suffiks og uten etterfølgende
+// ord: «Greverudveien 15B Bad» og «Greverudveien 15 Bad» og «Greverudveien 15»
+// gir alle «greverudvei|15». Brukes KUN til advarselen «et annet prosjekt
+// er allerede koblet til denne adressen» — aldri til automatisk kobling.
+export function adresseNokkel(s) {
+  const rens = (s || '').toLowerCase().split(',')[0].replace(/[^a-zæøå0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const m = rens.match(/^(.*?\D)\s*(\d+)\s*[a-zæøå]?\b/);
+  if (!m) return '';
+  const gate = m[1].trim().replace(/(vei|veg)(en)?$/, 'vei').replace(/\s(vn|v)$/, ' vei').replace(/\s+/g, ' ').trim();
+  return gate ? gate + '|' + m[2] : '';
+}
+
+// Andre prosjekter som allerede er koblet til kandidaten — via samme
+// befaring, samme tilbudId eller samme adresse (gate + husnummer).
+// kandidat: { befaringId?, tilbudId?, adresse? }. Returnerer [] når fritt.
+export function andreKoblinger(prosjekt, kandidat, prosjekter = [], befaringer = []) {
+  const treff = [];
+  const sett = new Set();
+  const legg = (p, grunn) => {
+    if (!p || p.id === prosjekt.id || sett.has(p.id)) return;
+    sett.add(p.id);
+    treff.push({ prosjektId: p.id, navn: p.navn || p.adresse || p.id, grunn });
+  };
+  if (kandidat.befaringId) {
+    const b = befaringer.find(x => x.id === kandidat.befaringId);
+    if (b?.prosjektId) legg(prosjekter.find(p => p.id === b.prosjektId), 'samme befaring');
+    for (const p of prosjekter) {
+      if (p.befaringId === kandidat.befaringId || p.kildeBefaringId === kandidat.befaringId) legg(p, 'samme befaring');
+    }
+  }
+  if (kandidat.tilbudId !== undefined && kandidat.tilbudId !== null && kandidat.tilbudId !== '') {
+    for (const p of prosjekter) if (String(p.tilbudId) === String(kandidat.tilbudId)) legg(p, 'samme tilbud');
+  }
+  const nokkel = adresseNokkel(kandidat.adresse);
+  if (nokkel) {
+    for (const p of prosjekter) {
+      if (p.arkivert) continue;
+      if (adresseNokkel(p.adresse || p.navn) === nokkel) legg(p, 'samme adresse');
+    }
+  }
+  return treff;
+}
+
+// Visningsetikett for en kandidat i «Koble til tilbud»: kunde · adresse ·
+// tilbudsnavn · sum. Virker for befaringer (med tilbudPayload) og for
+// rapport-tilbud fra tilbuds-appen (kundenavn/adresse/salgsStatus).
+export function kandidatEtikett(k) {
+  const pl = k.tilbudPayload || {};
+  const kunde = k.kontaktNavn || k.kundenavn || pl.kundenavn || '';
+  const adresse = k.adresse || pl.adresse || '';
+  const tilbudsnavn = pl.tilbudsnavn || pl.tittel || pl.navn || pl.jobbType || k.jobbType || '';
+  const sumRaa = k.estimertSum || pl.totalSum || pl.sum || k.estimertBelop || '';
+  const sum = Number(sumRaa) > 0 ? Number(sumRaa) : null;
+  return { kunde, adresse, tilbudsnavn, sum, status: k.salgsStatus || k.status || '' };
+}
+
+// Tilbud i koblingsrapporten som ingen befaring/prosjekt i bemanning kjenner
+// (mangler kildeBefaringId hos tilbuds-appen og finnes ikke som tilbudId her).
+// Det er disse Stefan må koble manuelt.
+export function rapportKandidater(rapport, befaringer = [], prosjekter = []) {
+  const liste = Array.isArray(rapport?.koblinger) ? rapport.koblinger : [];
+  const kjente = new Set();
+  for (const b of befaringer) if (b?.tilbudId !== undefined && b?.tilbudId !== null) kjente.add(String(b.tilbudId));
+  for (const p of prosjekter) if (p?.tilbudId !== undefined && p?.tilbudId !== null) kjente.add(String(p.tilbudId));
+  return liste.filter(k => k && k.tilbudId !== undefined && k.tilbudId !== null && !kjente.has(String(k.tilbudId)));
+}
+
+// Kobling via tilbudId: setter KUN tilbudId (+ tilbudLink) på prosjektet,
+// med samme før-logg som beregnKobling slik at «Fjern kobling» gjenoppretter
+// eksakt. Tilbudsdata (poster, sum …) kommer når tilbuds-appen sender
+// «Send data på nytt» — da treffer event-oppslaget via tilbudId.
+export function beregnTilbudIdKobling(prosjekt, tilbud, valg) {
+  const kilde = { tilbudId: tilbud.tilbudId, tilbudLink: tilbud.tilbudLink || '' };
+  const nyProsjekt = { ...prosjekt };
+  const kopierteFelter = [];
+  const felterFør = {};
+  const felterSomManglet = [];
+  for (const [felt, tilVerdi] of Object.entries(kilde)) {
+    if (erTom(tilVerdi)) continue;
+    if (likVerdi(nyProsjekt[felt], tilVerdi)) continue;
+    if (felt in nyProsjekt) felterFør[felt] = nyProsjekt[felt];
+    else felterSomManglet.push(felt);
+    kopierteFelter.push({ felt, fraVerdi: felt in prosjekt ? prosjekt[felt] : undefined, tilVerdi });
+    nyProsjekt[felt] = tilVerdi;
+  }
+  nyProsjekt.tilbudKobletDato = valg.dato;
+  nyProsjekt.tilbudKobletAv = valg.av;
+  nyProsjekt.tilbudKobletVia = 'tilbudId';
+  nyProsjekt.tilbudsfelterFørKobling = { felterFør, felterSomManglet: [...felterSomManglet, 'tilbudKobletVia'] };
+  return { nyProsjekt, kopierteFelter, felterFør, felterSomManglet };
+}

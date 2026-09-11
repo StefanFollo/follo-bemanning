@@ -17,6 +17,7 @@ import {
   beregnMerge, beregnAngre, beregnPekerOppdatering, beregnAngrePekere,
   beregnKobling, beregnFjernKobling, tilbudsfelterFraBefaring,
   harTilbud, kandidatScore, finnKandidater, TILBUDSFELTER, erTom, likVerdi,
+  andreKoblinger, kandidatEtikett, rapportKandidater, beregnTilbudIdKobling,
 } from '../mergeProsjekter';
 import TilbudsdataVisning from '../komponenter/Tilbudsdata';
 import { beregnAktivering, beregnForkast, kalkyleSammendrag, harKalkyle } from '../framdriftUtkast';
@@ -843,21 +844,33 @@ function MergeModal({ startProsjekt, forslagId, alleProsjekter, tildelingerByPro
 // ═══ «Koble til tilbud»-dialog (SPEC-del2 trinn 2) ═══
 // Søker blant befaringer som HAR tilbudPayload; fuzzy-forslag øverst.
 // Kopierer kun tilbudsdata (gruppe A) — driftsdata røres ALDRI.
-function KobleDialog({ prosjekt, befaringer, onUtfør, onLukk }) {
+function KobleDialog({ prosjekt, befaringer, prosjekter = [], rapportTilbud = [], rapportStatus = '', onUtfør, onLukk }) {
   const [valgtBefId, setValgtBefId] = useState(null);
+  const [valgtTilbudId, setValgtTilbudId] = useState(null);
   const [søk, setSøk] = useState('');
   const [beholdManuell, setBeholdManuell] = useState({});
+  const [bekreftAnnetOppdrag, setBekreftAnnetOppdrag] = useState(false);
 
   const medPayload = befaringer.filter(b => b && b.tilbudPayload);
+  const q = søk.toLowerCase();
+  const passer = (tekst) => !q || (tekst || '').toLowerCase().includes(q);
   const kandidater = useMemo(() => {
-    const q = søk.toLowerCase();
     return medPayload
-      .filter(b => !q || (b.adresse || '').toLowerCase().includes(q) || (b.kontaktNavn || '').toLowerCase().includes(q))
+      .filter(b => passer(b.adresse) || passer(b.kontaktNavn) || passer(kandidatEtikett(b).tilbudsnavn))
       .map(b => ({ b, score: kandidatScore(prosjekt, { adresse: b.adresse, navn: b.kontaktNavn, kunde: { navn: b.kontaktNavn } }) }))
       .sort((x, y) => y.score - x.score);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [medPayload, prosjekt, søk]);
+  // Oppdrag 30: tilbud fra tilbuds-appen som ingen befaring her kjenner ennå
+  const rapportListe = useMemo(() => rapportTilbud
+    .filter(k => passer(k.adresse) || passer(k.kundenavn))
+    .map(k => ({ k, score: kandidatScore(prosjekt, { adresse: k.adresse, navn: k.kundenavn, kunde: { navn: k.kundenavn } }) }))
+    .sort((x, y) => y.score - x.score),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rapportTilbud, prosjekt, søk]);
 
   const valgtBef = medPayload.find(b => b.id === valgtBefId) || null;
+  const valgtTilbud = rapportTilbud.find(k => String(k.tilbudId) === String(valgtTilbudId)) || null;
 
   // Tørrkjøring for forhåndsvisning
   const preview = useMemo(() => {
@@ -868,34 +881,86 @@ function KobleDialog({ prosjekt, befaringer, onUtfør, onLukk }) {
   const erstattede = (preview?.kopierteFelter || []).filter(k => !erTom(k.fraVerdi));
   const nyeFelter = (preview?.kopierteFelter || []).filter(k => erTom(k.fraVerdi));
 
+  // Advarsel: et annet prosjekt er allerede koblet til befaringen/tilbudet/adressen
+  const andre = valgtBef
+    ? andreKoblinger(prosjekt, { befaringId: valgtBef.id, tilbudId: valgtBef.tilbudId, adresse: valgtBef.adresse }, prosjekter, befaringer)
+    : valgtTilbud
+      ? andreKoblinger(prosjekt, { tilbudId: valgtTilbud.tilbudId, adresse: valgtTilbud.adresse }, prosjekter, befaringer)
+      : [];
+  const maaBekrefte = andre.length > 0 && !bekreftAnnetOppdrag;
+  const advarselFor = (kand) => andreKoblinger(prosjekt, kand, prosjekter, befaringer);
+
+  const radTekst = (k, { medStatus = false } = {}) => {
+    const e = kandidatEtikett(k);
+    return (
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {e.kunde || '(uten kunde)'}
+        {e.adresse ? <span style={{ color: '#5d6b80' }}> · {e.adresse}</span> : null}
+        {e.tilbudsnavn ? <span style={{ color: '#1e40af' }}> · {e.tilbudsnavn}</span> : null}
+        {e.sum ? <span style={{ color: '#15803d' }}> · {formaterBelop(e.sum)}</span> : null}
+        {medStatus && e.status ? <span style={{ color: '#5d6b80' }}> · {e.status}</span> : null}
+        {Array.isArray(k.poster) && k.poster.length > 0 ? <span style={{ color: '#5d6b80' }}> · {k.poster.length} poster</span> : null}
+      </span>
+    );
+  };
+  const advarselLinje = (treff) => treff.length > 0 && (
+    <div style={{ fontSize: 11.5, color: '#b45309', display: 'flex', gap: 4, alignItems: 'center', marginTop: 2 }}>
+      <Ikon ikon={TriangleAlert} size={12} farge="#b45309" />
+      Et annet prosjekt ({treff.map(t => t.navn).join(', ')}) er allerede koblet til denne {treff[0].grunn === 'samme adresse' ? 'adressen' : treff[0].grunn === 'samme tilbud' ? 'tilbudet' : 'befaringen'}
+    </div>
+  );
+
+  const velg = (befId, tilbudId) => { setValgtBefId(befId); setValgtTilbudId(tilbudId); setBekreftAnnetOppdrag(false); };
+  const ingenValgt = !valgtBef && !valgtTilbud;
+
   return (
     <Modal title="Koble prosjekt til tilbud" onClose={onLukk}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '70vh', overflowY: 'auto', fontSize: 13 }}>
         <div style={{ color: '#5d6b80' }}>
           Koble <b>{prosjekt.adresse || prosjekt.navn}</b> til et tilbud fra tilbuds-appen.
-          Tilbudsdata kopieres inn — bemanning, datoer og status røres ikke.
+          Tilbudsdata kopieres inn — bemanning, datoer og status røres ikke. Ingenting kobles automatisk på adresse.
         </div>
 
-        {!valgtBef && (
+        {ingenValgt && (
           <>
-            <input className="input" autoFocus placeholder="Søk på adresse eller kundenavn…"
+            <input className="input" autoFocus placeholder="Søk på kunde, adresse eller tilbudsnavn…"
               value={søk} onChange={e => setSøk(e.target.value)} style={{ width: '100%' }} />
-            <div style={{ maxHeight: 280, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
-              {kandidater.slice(0, 30).map(({ b, score }) => (
-                <button key={b.id} className="btn" style={{ textAlign: 'left', display: 'flex', gap: 8, alignItems: 'center' }}
-                  onClick={() => setValgtBefId(b.id)}>
-                  {score >= 30 && <Ikon ikon={Link2} size={14} />}
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {b.adresse || b.kontaktNavn}
-                    {b.kontaktNavn ? <span style={{ color: '#5d6b80' }}> · {b.kontaktNavn}</span> : null}
-                    {(b.estimertSum || b.tilbudPayload?.totalSum) ? <span style={{ color: '#15803d' }}> · {formaterBelop(b.estimertSum || b.tilbudPayload?.totalSum)}</span> : null}
-                    {Array.isArray(b.poster) && b.poster.length > 0 ? <span style={{ color: '#5d6b80' }}> · {b.poster.length} poster</span> : null}
-                  </span>
-                </button>
-              ))}
-              {kandidater.length === 0 && (
+            <div style={{ maxHeight: 320, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {kandidater.slice(0, 30).map(({ b, score }) => {
+                const treff = advarselFor({ befaringId: b.id, tilbudId: b.tilbudId, adresse: b.adresse });
+                return (
+                  <button key={b.id} className="btn" style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 0, borderColor: treff.length ? '#f59e0b' : undefined }}
+                    onClick={() => velg(b.id, null)}>
+                    <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      {score >= 30 && <Ikon ikon={Link2} size={14} />}
+                      {radTekst(b)}
+                    </span>
+                    {advarselLinje(treff)}
+                  </button>
+                );
+              })}
+              {rapportListe.length > 0 && (
+                <div style={{ fontSize: 11.5, color: '#5d6b80', padding: '6px 2px 2px', borderTop: kandidater.length ? '1px solid var(--border)' : 'none' }}>
+                  Tilbud i tilbuds-appen uten befaringsdata her ennå — kobles på tilbudsnummer; tilbudsdata kommer ved «Send data på nytt» fra tilbuds-appen:
+                </div>
+              )}
+              {rapportListe.slice(0, 30).map(({ k, score }) => {
+                const treff = advarselFor({ tilbudId: k.tilbudId, adresse: k.adresse });
+                return (
+                  <button key={'rap-' + k.tilbudId} className="btn" style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: 0, borderColor: treff.length ? '#f59e0b' : undefined }}
+                    onClick={() => velg(null, k.tilbudId)}>
+                    <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      {score >= 30 && <Ikon ikon={Link2} size={14} />}
+                      {radTekst(k, { medStatus: true })}
+                    </span>
+                    {advarselLinje(treff)}
+                  </button>
+                );
+              })}
+              {kandidater.length === 0 && rapportListe.length === 0 && (
                 <div style={{ color: '#5d6b80', padding: 8 }}>
-                  Ingen befaringer med tilbudsdata matcher søket. (Kun befaringer som har mottatt full tilbudspakke vises her.)
+                  Ingen befaringer med tilbudsdata eller tilbud i koblingsrapporten matcher søket.
+                  {rapportStatus ? <div style={{ marginTop: 4 }}>{rapportStatus}</div> : null}
                 </div>
               )}
             </div>
@@ -907,9 +972,9 @@ function KobleDialog({ prosjekt, befaringer, onUtfør, onLukk }) {
             <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
               <div style={{ fontWeight: 500 }}>{valgtBef.adresse || valgtBef.kontaktNavn}</div>
               <div style={{ fontSize: 12, color: '#5d6b80' }}>
-                {[valgtBef.kontaktNavn, valgtBef.status, formaterBelop(valgtBef.estimertSum || valgtBef.tilbudPayload?.totalSum)].filter(Boolean).join(' · ')}
+                {[valgtBef.kontaktNavn, kandidatEtikett(valgtBef).tilbudsnavn, valgtBef.status, formaterBelop(valgtBef.estimertSum || valgtBef.tilbudPayload?.totalSum)].filter(Boolean).join(' · ')}
               </div>
-              <button className="btn btn-sm" style={{ marginTop: 6 }} onClick={() => setValgtBefId(null)}>Velg annet…</button>
+              <button className="btn btn-sm" style={{ marginTop: 6 }} onClick={() => velg(null, null)}>Velg annet…</button>
             </div>
 
             <div style={{ background: 'var(--success-bg)', border: '1px solid var(--success-border)', borderRadius: 8, padding: 10 }}>
@@ -945,10 +1010,46 @@ function KobleDialog({ prosjekt, befaringer, onUtfør, onLukk }) {
           </>
         )}
 
+        {valgtTilbud && (
+          <>
+            <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+              <div style={{ fontWeight: 500 }}>{valgtTilbud.adresse || valgtTilbud.kundenavn}</div>
+              <div style={{ fontSize: 12, color: '#5d6b80' }}>
+                {[valgtTilbud.kundenavn, 'tilbud #' + valgtTilbud.tilbudId, valgtTilbud.salgsStatus].filter(Boolean).join(' · ')}
+              </div>
+              <button className="btn btn-sm" style={{ marginTop: 6 }} onClick={() => velg(null, null)}>Velg annet…</button>
+            </div>
+            <div style={{ background: 'var(--bg-subtle)', border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+              Prosjektet {prosjekt.befaringId || prosjekt.kildeBefaringId ? 'og befaringen får' : 'får'} tilbudsnummeret, og tilbuds-appen får beskjed om
+              hvilken befaring tilbudet hører til (via koblingsrapporten). Poster, sum og tilbudsdata kommer inn når
+              tilbuds-appen sender «Send data på nytt» — da finner den fram hit på tilbudsnummeret.
+              «Fjern kobling» i rad-menyen angrer.
+            </div>
+          </>
+        )}
+
+        {!ingenValgt && andre.length > 0 && (
+          <div style={{ background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: 8, padding: 10 }}>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'flex-start', color: '#92400e' }}>
+              <Ikon ikon={TriangleAlert} size={15} farge="#b45309" />
+              <div>
+                Et annet prosjekt (<b>{andre.map(t => t.navn).join(', ')}</b>) er allerede koblet til denne
+                {' '}{andre[0].grunn === 'samme adresse' ? 'adressen' : andre[0].grunn === 'samme tilbud' ? 'tilbudet' : 'befaringen'} — er dette et annet oppdrag?
+              </div>
+            </div>
+            <label style={{ display: 'inline-flex', gap: 6, alignItems: 'center', cursor: 'pointer', marginTop: 8 }}>
+              <input type="checkbox" checked={bekreftAnnetOppdrag} onChange={e => setBekreftAnnetOppdrag(e.target.checked)} />
+              Ja, dette er et annet oppdrag på samme sted — koble likevel
+            </label>
+          </div>
+        )}
+
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
           <button className="btn" onClick={onLukk}>Avbryt</button>
-          <button className="btn btn-primary" disabled={!valgtBef}
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={() => onUtfør({ befaringId: valgtBef.id, beholdManuell })}>
+          <button className="btn btn-primary" disabled={ingenValgt || maaBekrefte}
+            title={maaBekrefte ? 'Bekreft at dette er et annet oppdrag først' : undefined}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+            onClick={() => onUtfør(valgtBef ? { befaringId: valgtBef.id, beholdManuell } : { tilbudId: valgtTilbud.tilbudId, rapport: valgtTilbud })}>
             <Ikon ikon={Link2} size={15} /> Koble til
           </button>
         </div>
@@ -1477,8 +1578,61 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
   // ═══ Koble til tilbud (SPEC-del2 trinn 2) — kun gruppe A, alt reversibelt ═══
   const [kobleFor, setKobleFor] = useState(null); // prosjekt | null
 
+  // Oppdrag 30: koblingsrapporten (tilbud uten befaring her) hentes når dialogen åpnes
+  const [rapportTilbud, setRapportTilbud] = useState([]);
+  const [rapportStatus, setRapportStatus] = useState('');
+  useEffect(() => {
+    if (!kobleFor) return;
+    let avbrutt = false;
+    const token = localStorage.getItem('fbs_token') || '';
+    setRapportStatus('Henter tilbud fra koblingsrapporten…');
+    fetch('/api/befaringer/koblinger', { headers: { Authorization: 'Bearer ' + token } })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error('svarte ' + r.status)))
+      .then(rap => {
+        if (avbrutt) return;
+        setRapportTilbud(rapportKandidater(rap, state.befaringer || [], state.prosjekter));
+        setRapportStatus(rap?.mottattDato ? 'Koblingsrapport fra tilbuds-appen ' + String(rap.mottattDato).slice(0, 16).replace('T', ' ') : 'Ingen koblingsrapport mottatt ennå — trykk «Send koblingsliste» i tilbuds-appen (Innstillinger).');
+      })
+      .catch(e => { if (!avbrutt) { setRapportTilbud([]); setRapportStatus('Fikk ikke hentet koblingsrapporten (' + e.message + ').'); } });
+    return () => { avbrutt = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kobleFor?.id]);
+
+  function postLosning(losning) {
+    const token = localStorage.getItem('fbs_token') || '';
+    return fetch('/api/befaringer/koblinger', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ losning }),
+    }).catch(() => {});
+  }
+
+  function utførTilbudIdKobling(prosjekt, tilbud) {
+    const av = localStorage.getItem('fbs_user_navn') || localStorage.getItem('fbs_role') || 'ukjent';
+    const dato = new Date().toISOString();
+    const { nyProsjekt, kopierteFelter, felterFør } = beregnTilbudIdKobling(prosjekt, tilbud, { av, dato });
+    try {
+      const hist = JSON.parse(localStorage.getItem('fbs_koble_historikk') || '[]');
+      hist.push({ dato, av, prosjektId: prosjekt.id, tilbudId: tilbud.tilbudId, felterFør, prosjektFør: prosjekt });
+      localStorage.setItem('fbs_koble_historikk', JSON.stringify(hist));
+    } catch (e) { console.error('fbs_koble_historikk:', e); }
+    dispatch({ type: 'UPDATE_PROSJEKT', payload: nyProsjekt });
+    // Befaringen prosjektet kom fra får samme tilbudsnummer (så events fra tilbuds-appen treffer den)
+    const befId = prosjekt.befaringId || prosjekt.kildeBefaringId || null;
+    const bef = befId ? (state.befaringer || []).find(b => b.id === befId) : null;
+    if (bef && (bef.tilbudId === undefined || bef.tilbudId === null || bef.tilbudId === '')) {
+      dispatch({ type: 'UPDATE_BEFARING', payload: { ...bef, tilbudId: tilbud.tilbudId, tilbudLink: tilbud.tilbudLink || bef.tilbudLink || '', _endret: Date.now() } });
+    }
+    // Tilbuds-appen henter løsningen («Hent løsninger» i Innstillinger) og lagrer kildeBefaringId
+    if (bef) postLosning({ tilbudId: tilbud.tilbudId, nyKildeBefaringId: bef.id });
+    loggAudit(prosjekt.id, 'koble-tilbud', null, String(tilbud.tilbudId),
+      `Koblet prosjektet til tilbud #${tilbud.tilbudId} (${tilbud.kundenavn || ''} – ${tilbud.adresse || ''}) via koblingsrapporten — ${kopierteFelter.length} felter satt${bef ? `, befaring ${bef.id} fikk tilbudsnummeret` : ''}`);
+    setKobleFor(null);
+  }
+
   function utførKobling(prosjektId, valgInn) {
     const prosjekt = state.prosjekter.find(p => p.id === prosjektId);
+    if (prosjekt && valgInn.tilbudId !== undefined && valgInn.rapport) { utførTilbudIdKobling(prosjekt, valgInn.rapport); return; }
     const befaring = (state.befaringer || []).find(b => b.id === valgInn.befaringId);
     if (!prosjekt || !befaring) return;
     const av = localStorage.getItem('fbs_user_navn') || localStorage.getItem('fbs_role') || 'ukjent';
@@ -2587,6 +2741,9 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
         <KobleDialog
           prosjekt={kobleFor}
           befaringer={state.befaringer || []}
+          prosjekter={state.prosjekter}
+          rapportTilbud={rapportTilbud}
+          rapportStatus={rapportStatus}
           onUtfør={valg => utførKobling(kobleFor.id, valg)}
           onLukk={() => setKobleFor(null)}
         />
