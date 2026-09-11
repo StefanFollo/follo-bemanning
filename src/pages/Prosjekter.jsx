@@ -26,7 +26,7 @@ import { beregnKalkyleVsBemanning } from '../kalkyleBemanning';
 import {
   ukeNr, prosjektStatus, harTildeling, bemannetTil, hullEtterBemanning, ferdigForslag,
   migrerStatus, pipelineListe, pipelineOppsummering, erUtforende, pipelineLoggInnslag,
-  flyttTilPipeline, addDays as leggTilDager,
+  flyttTilPipeline, angreFlyttTilPipeline, addDays as leggTilDager,
   weekStart as ukeStart,
 } from '../pipeline';
 import { leggKandidater as finnLeggKandidater, byggPipelineProsjekt } from '../leggIPipeline';
@@ -1717,6 +1717,11 @@ export default function Prosjekter({ onNavigate = null, onApneProsjektSide = nul
       { skille: true },
       prosjektStatus(p, state.tildelinger) === 'startet'
         && { ikon: <Ikon ikon={RotateCw} size={15} />, label: 'Flytt til pipeline', onClick: () => apneFlytt(p) },
+      p.pipeline?.manueltIkkeStartet
+        && { ikon: <Ikon ikon={Undo2} size={15} />, label: 'Angre flytt til pipeline', onClick: () => {
+          const ny = angreFlyttTilPipeline(p, { av: localStorage.getItem('fbs_user_navn') || 'ukjent' });
+          if (ny) { dispatch({ type: 'UPDATE_PROSJEKT', payload: ny }); setAktivFane('startet'); }
+        } },
       normStatus(p.status) !== 'fullfort'
         ? { ikon: <Ikon ikon={Flag} size={15} />, label: 'Marker ferdig', onClick: () => markerFerdig(p) }
         : { ikon: <Ikon ikon={Undo2} size={15} />, label: 'Gjenåpne', onClick: () => settProsjektStatus(p, 'aktiv') },

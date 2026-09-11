@@ -330,6 +330,21 @@ export function migrerStatus(p, dato = null) {
   };
 }
 
+// Angrer «Flytt til pipeline»: fjerner tidsstempelet så de gamle
+// tildelingene teller igjen (prosjektet blir Startet). Ingenting slettes.
+export function angreFlyttTilPipeline(p, { av, tekst, naa = Date.now() } = {}) {
+  if (!p?.pipeline?.manueltIkkeStartet) return null;
+  const { manueltIkkeStartet, ...rest } = p.pipeline; // eslint-disable-line no-unused-vars
+  return {
+    ...p,
+    pipeline: rest,
+    pipelineLogg: [...(p.pipelineLogg || []), {
+      tid: new Date(naa).toISOString(), av: av || 'ukjent',
+      tekst: tekst || `Flytt til pipeline angret av ${av || 'ukjent'} — tildelingene teller igjen`,
+    }],
+  };
+}
+
 // Pipeline-listen = Ikke startet-prosjekter (ikke arkivert/fullført, 0
 // tildelinger). Enkel liste: uten start øverst, så start stigende.
 export function pipelineListe(prosjekter, tildelinger, iDag = null) {
