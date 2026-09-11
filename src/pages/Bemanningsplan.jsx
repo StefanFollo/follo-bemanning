@@ -10,6 +10,8 @@ import { getHolidayMap } from '../holidays';
 import PipelineRader from '../komponenter/PipelineRader';
 import PipelineOversiktRader from '../komponenter/PipelineOversiktRader';
 import { ukeNr as pipelineUkeNr, erFoerFlytting } from '../pipeline';
+import { useDragMotor, nyligDratt } from '../komponenter/DragMotor';
+import { planleggSlipp, konfliktTekst } from '../flyttTildeling';
 
 const FERIE_ID = '__FERIE__';
 
@@ -192,10 +194,10 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
   // den uka (man–fre), prosjektet blir Startet og raden forsvinner av seg
   // selv. Toast med Angre fjerner tildelingen igjen — ingen data slettes
   // ellers.
-  const [startToast, setStartToast] = useState(null); // { tekst, finn: {ansattId, prosjektId, startDato, sluttDato} }
+  const [startToast, setStartToast] = useState(null); // { tekst, finn?: {...}, angre?: fn }
   useEffect(() => {
     if (!startToast) return;
-    const t = setTimeout(() => setStartToast(null), 15000);
+    const t = setTimeout(() => setStartToast(null), 10000);
     return () => clearTimeout(t);
   }, [startToast]);
   function leggInnFraPipeline(prosjektId, ansattId, ukeMandag) {
@@ -211,12 +213,87 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
     });
   }
   function angreStart() {
+    if (startToast?.angre) { startToast.angre(); setStartToast(null); return; }
     const f = startToast?.finn;
     if (!f) return;
     const t = state.tildelinger.find(x => x.ansattId === f.ansattId && x.prosjektId === f.prosjektId && x.startDato === f.startDato && x.sluttDato === f.sluttDato);
     if (t) dispatch({ type: 'DELETE_TILDELING', id: t.id });
     setStartToast(null);
   }
+
+  // ── Oppdrag 29: felles pointer-drag (pipeline-rad + tildelings-stolpe) ──
+  // Mål = enhver rad med data-ansatt-id × celle med data-dag (begge
+  // visninger, inkl. Rørlegger og «Uten team»). Autoscroll i motoren.
+  const [konfliktDialog, setKonfliktDialog] = useState(null); // { plan, t }
+  const finnMaal = useCallback((x, y) => {
+    const el = document.elementFromPoint(x, y);
+    const rad = el?.closest?.('[data-ansatt-id]');
+    if (!rad) return null;
+    const area = rad.querySelector('.oversikt-bars-area') || rad;
+    const celler = area.querySelectorAll('[data-dag]');
+    if (!celler.length) return null;
+    const rect = area.getBoundingClientRect();
+    const idx = Math.max(0, Math.min(celler.length - 1, Math.floor((x - rect.left) / (rect.width / celler.length))));
+    const c = celler[idx];
+    return { ansattId: rad.dataset.ansattId, dag: c.dataset.dag, idx, celleEl: c, radEl: rad };
+  }, []);
+  const loggPaaProsjekt = useCallback((prosjektId, tekst) => {
+    const p = state.prosjekter.find(x => x.id === prosjektId);
+    if (!p) return;
+    dispatch({ type: 'UPDATE_PROSJEKT', payload: { ...p, pipelineLogg: [...(p.pipelineLogg || []), { tid: new Date().toISOString(), av: localStorage.getItem('fbs_user_navn') || 'ukjent', tekst }] } });
+  }, [state.prosjekter, dispatch]);
+  const lagPlan = useCallback((payload, maal, kopier) => {
+    const t = state.tildelinger.find(x => x.id === payload.tildelingId);
+    if (!t) return null;
+    const ansatteById = {};
+    for (const a of state.ansatte) ansatteById[a.id] = a;
+    return { t, plan: planleggSlipp({ tildeling: t, grepDag: payload.grepDag, mottakerId: maal.ansattId, dag: maal.dag, kopier,
+      tildelinger: state.tildelinger, ansatteById, prosjekter: state.prosjekter, av: localStorage.getItem('fbs_user_navn') || 'ukjent' }) };
+  }, [state.tildelinger, state.ansatte, state.prosjekter]);
+  const sjekkKonflikt = useCallback((d, maal, kopier) => {
+    if (d.kind !== 'bar') return false;
+    const r = lagPlan(d.payload, maal, kopier);
+    return !!(r?.plan?.konflikter?.length);
+  }, [lagPlan]);
+  function utforPlan(plan, t, erstattede) {
+    for (const k of erstattede) dispatch({ type: 'DELETE_TILDELING', id: k.id });
+    if (plan.handling === 'flyttTid') {
+      dispatchKeepScroll({ type: 'UPDATE_TILDELING', payload: plan.oppdater });
+    } else {
+      dispatch({ type: 'ADD_TILDELING', payload: plan.ny });
+      for (const id of plan.slettIds) dispatch({ type: 'DELETE_TILDELING', id });
+    }
+    if (t.prosjektId !== FERIE_ID) loggPaaProsjekt(t.prosjektId, plan.loggTekst);
+    const original = { ansattId: t.ansattId, prosjektId: t.prosjektId, startDato: t.startDato, sluttDato: t.sluttDato };
+    setStartToast({
+      tekst: plan.loggTekst,
+      angre: () => {
+        if (plan.handling === 'flyttTid') {
+          dispatch({ type: 'UPDATE_TILDELING', payload: { ...plan.oppdater, startDato: t.startDato, sluttDato: t.sluttDato } });
+        } else {
+          // Finn den nye via feltene (reduceren gir id), fjern den, gjenopprett originalen
+          const nyT = [...(stateRef.current.tildelinger || [])].reverse().find(x => x.ansattId === plan.ny.ansattId && x.prosjektId === plan.ny.prosjektId && x.startDato === plan.ny.startDato && x.sluttDato === plan.ny.sluttDato);
+          if (nyT) dispatch({ type: 'DELETE_TILDELING', id: nyT.id });
+          if (plan.slettIds.length) dispatch({ type: 'ADD_TILDELING', payload: original });
+        }
+        for (const k of erstattede) dispatch({ type: 'ADD_TILDELING', payload: { ansattId: k.ansattId, prosjektId: k.prosjektId, startDato: k.startDato, sluttDato: k.sluttDato } });
+        if (t.prosjektId !== FERIE_ID) loggPaaProsjekt(t.prosjektId, 'Angret: ' + plan.loggTekst);
+      },
+    });
+  }
+  const stateRef = useRef(state); stateRef.current = state;
+  const haandterSlipp = useCallback(({ kind, payload, maal, kopier }) => {
+    if (kind === 'pipeline') { leggInnFraPipeline(payload.prosjektId, maal.ansattId, weekStart(maal.dag)); return; }
+    const r = lagPlan(payload, maal, kopier);
+    if (!r || !r.plan) return;
+    if (r.plan.konflikter.length) { setKonfliktDialog(r); return; }
+    utforPlan(r.plan, r.t, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lagPlan, state.prosjekter]);
+  const dragMotor = useDragMotor({
+    finnMaal, sjekkKonflikt, onSlipp: haandterSlipp,
+    scrollEl: () => document.querySelector('.oversikt-scroll-wrap') || document.querySelector('.uke-grid-wrap'),
+  });
   function planleggInnFraPipeline(prosjektId) {
     const p = state.prosjekter.find(x => x.id === prosjektId);
     const start = p?.pipeline?.forventetStart || (p?.startDato ? weekStart(p.startDato) : null);
@@ -519,6 +596,28 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
 
   return (
     <div className={`page${fullscreen ? ' bplan-fullscreen' : ''}${storskjerm ? ' bplan-storskjerm' : ''}`}>
+      {dragMotor.ghost}
+      {/* Oppdrag 29: konflikt ved flytt/kopier — aldri overskriv stille */}
+      {konfliktDialog && (() => {
+        const { plan, t } = konfliktDialog;
+        const tekst = konfliktTekst(plan.konflikter, state.prosjekter);
+        const lukk = () => setKonfliktDialog(null);
+        return (
+          <Modal title={plan.handling === 'flyttTid' ? 'Flytt i tid' : plan.handling === 'kopier' ? 'Kopier tildeling' : 'Flytt tildeling'} onClose={lukk}>
+            <div className="form">
+              <p style={{ fontSize: 13, margin: '0 0 12px' }}>
+                <b>{tekst}</b><br />
+                Mottakeren har allerede folk på de dagene. Hva vil du gjøre?
+              </p>
+              <div className="form-actions" style={{ flexWrap: 'wrap', gap: 8 }}>
+                <button className="btn" onClick={lukk}>Avbryt</button>
+                <button className="btn" onClick={() => { lukk(); utforPlan(plan, t, []); }} title="Begge tildelingene ligger ved siden av hverandre (parallelt)">Legg ved siden av</button>
+                <button className="btn btn-primary" style={{ background: '#dc2626', borderColor: '#dc2626' }} onClick={() => { lukk(); utforPlan(plan, t, plan.konflikter); }} title="Den overlappende tildelingen fjernes (kan angres i 10 s)">Erstatt</button>
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
       {/* Storskjerm: flytende lukk-knapp */}
       {storskjerm && (
         <div className="bplan-storskjerm-toolbar no-print">
@@ -613,6 +712,7 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
             startToast={startToast}
             onAngreStart={angreStart}
             onLukkToast={() => setStartToast(null)}
+            startDrag={dragMotor.startDrag}
             planModus={planModus}
             planValgte={planValgte}
             onPlanFerdig={planFerdig}
@@ -645,6 +745,7 @@ export default function Bemanningsplan({ readOnly = false, fastProsjektId = null
             startToast={startToast}
             onAngreStart={angreStart}
             onLukkToast={() => setStartToast(null)}
+            startDrag={dragMotor.startDrag}
           />
         )}
         {tab === 'ressurs' && (
@@ -844,13 +945,14 @@ function UkeVisning({
   fastProsjektId = null, dispatch = null, openBemannProsjekt = null,
   planModus = null, planValgte = 0, onPlanFerdig = null, onPlanAvbryt = null, openPipelineFane = null,
   leggInnFraPipeline = null, planleggInnFraPipeline = null, startToast = null, onAngreStart = null, onLukkToast = null,
+  startDrag = null,
 }) {
   const today = dateToIso(new Date());
   const isHoliday = (iso) => !!HOLIDAYS[iso];
   const holidayName = (iso) => HOLIDAYS[iso] || '';
   const prosjektColor = (pid) => state.prosjekter.find(p => p.id === pid)?.farge || '#6b8fc4';
   // Felles props som trés ned til GanttRowContainer via rad-komponentene
-  const gantt = { state, readOnly, dragRef, today, isHoliday, holidayName, prosjektColor, handleDrop, openAddTildeling, openBarMenu, deleteTildeling, fastProsjektId };
+  const gantt = { state, readOnly, dragRef, today, isHoliday, holidayName, prosjektColor, handleDrop, openAddTildeling, openBarMenu, deleteTildeling, fastProsjektId, startDrag };
 
   // ---- DAG-MODUS ----
   const weekEnd = addDays(currentWeek, 52 * 7 - 1);
@@ -1161,7 +1263,7 @@ function UkeVisning({
             {renderProsjektRader(dagProsjekter, fastProsjektId ? [] : dagLedige, weekDays.length, DagAnsattRad, currentWeek, weekEnd, { days: weekDays, gantt })}
             {!fagFilter && <RorleggerRader state={state} days={weekDays} unit="day" viewStart={currentWeek} viewEnd={weekEnd} />}
             {!fastProsjektId && dispatch && (
-              <PipelineRader state={state} dispatch={dispatch} days={weekDays} readOnly={readOnly} onPlanleggInn={planleggInnFraPipeline} />
+              <PipelineRader state={state} dispatch={dispatch} days={weekDays} readOnly={readOnly} onPlanleggInn={planleggInnFraPipeline} onStartDrag={startDrag} />
             )}
           </div>
         </div>
@@ -1188,7 +1290,7 @@ function UkeVisning({
             {renderProsjektRader(ukeProsjekter, fastProsjektId ? [] : ukeLedige, 260, UkeAnsattRad, periodeStart, periodeEnd, { days: WORK_DAYS_UKE, gantt })}
             {!fagFilter && <RorleggerRader state={state} days={WORK_DAYS_UKE} unit="day" viewStart={periodeStart} viewEnd={periodeEnd} />}
             {!fastProsjektId && dispatch && (
-              <PipelineRader state={state} dispatch={dispatch} days={WORK_DAYS_UKE} readOnly={readOnly} onPlanleggInn={planleggInnFraPipeline} />
+              <PipelineRader state={state} dispatch={dispatch} days={WORK_DAYS_UKE} readOnly={readOnly} onPlanleggInn={planleggInnFraPipeline} onStartDrag={startDrag} />
             )}
           </div>
         </div>
@@ -1215,7 +1317,7 @@ function GanttRowContainer({
   ansatt, days, unit, prosjektId,
   state, readOnly, dragRef, today, isHoliday, holidayName, prosjektColor,
   handleDrop, openAddTildeling, openBarMenu, deleteTildeling,
-  fastProsjektId = null,
+  fastProsjektId = null, startDrag = null,
 }) {
   const [dragOverIdx, setDragOverIdx] = useState(null);
   const n = days.length;
@@ -1272,6 +1374,7 @@ function GanttRowContainer({
         handleDrop(days[idx], unit === 'month' ? 'month' : 'day');
       }}
       onClick={e => {
+        if (nyligDratt()) return;
         if (!readOnly && (e.target === e.currentTarget || e.target.classList.contains('gantt-bg-cell'))) {
           openAddTildeling(ansatt.id, days[getIdxFromEvent(e)]);
         }
@@ -1283,6 +1386,7 @@ function GanttRowContainer({
         const isHol = unit !== 'month' && isHoliday(d);
         return (
           <div key={d}
+            data-dag={d}
             className={`gantt-bg-cell${isTod ? ' today-col' : ''}${isMonday ? ' week-start-col' : ''}${isHol ? ' holiday-col' : ''}${dragOverIdx === i ? ' drag-over' : ''}`}
             style={{ left: `${(i / n) * 100}%`, width: `${100 / n}%` }}
             title={isHol ? holidayName(d) : undefined}
@@ -1317,10 +1421,19 @@ function GanttRowContainer({
             style={{ left: pos.left, width: pos.width, ...(isFerie ? {} : { background: prosjektColor(t.prosjektId) }), ...(erFoerFlytting(p, t) ? { opacity: 0.4, filter: 'grayscale(0.6)' } : {}) }}
             onClick={e => {
               e.stopPropagation();
+              if (nyligDratt()) return;
               const mid = addDays(t.startDato, Math.max(1, Math.floor(daysDiff(t.startDato, t.sluttDato) / 2)));
               openBarMenu(t, mid, e.clientX, e.clientY);
             }}
-            title={`${barLabel} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}${erFoerFlytting(p, t) ? ' · før flytting til pipeline' : ''} — klikk for valg`}
+            onPointerDown={e => {
+              // Oppdrag 29: dra stolpen til en annen ansatt (flytt / Alt=kopier) eller i tid
+              if (readOnly || !startDrag || e.target.closest('.gantt-handle,button')) return;
+              const rowEl = e.currentTarget.closest('.gantt-row');
+              const rect = rowEl.getBoundingClientRect();
+              const idx = Math.max(0, Math.min(n - 1, Math.floor((e.clientX - rect.left) / (rect.width / n))));
+              startDrag(e, { kind: 'bar', payload: { tildelingId: t.id, grepDag: days[idx] }, tekst: `${barLabel} · ${formatDate(t.startDato)}–${formatDate(t.sluttDato)}` });
+            }}
+            title={`${barLabel} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}${erFoerFlytting(p, t) ? ' · før flytting til pipeline' : ''} — klikk for valg, dra for å flytte`}
           >
             {pos.isFirst
               ? <div className="gantt-handle gantt-handle-l" draggable onDragStart={e => { e.stopPropagation(); dragRef.current = { tildelingId: t.id, type: 'start' }; }}>◂</div>
@@ -1568,7 +1681,12 @@ function RorleggerRader({ state, days, unit, viewStart, viewEnd }) {
               </div>
             </div>
             <div style={{ gridColumn: '2 / -1', position: 'relative', minHeight: radH, borderBottom: '1px solid #f1f5f9' }}
+              data-ansatt-id={ansatt.id}
               title="Rørlegger-planen redigeres i Rørlegger-fanen">
+              {/* Oppdrag 29: usynlige dagceller så rørleggerraden er slipp-mål */}
+              {unit !== 'month' && days.map((d, i) => (
+                <div key={d} data-dag={d} className="gantt-bg-cell" style={{ left: `${(i / days.length) * 100}%`, width: `${100 / days.length}%`, background: 'transparent', borderColor: 'transparent' }} />
+              ))}
               {items.map(it => {
                 const p = pos(it.startDato, it.sluttDato);
                 if (!p) return null;
@@ -1595,7 +1713,7 @@ function OversiktVisning({
   ansatteOrder, setAnsatteOrder, oversiktScrollRef, oversiktPanRef, oversiktDragId,
   dragRef, HOLIDAYS, handleDrop, openAddTildeling, openBarMenu,
   dispatch = null, leggInnFraPipeline = null, planleggInnFraPipeline = null,
-  startToast = null, onAngreStart = null, onLukkToast = null,
+  startToast = null, onAngreStart = null, onLukkToast = null, startDrag = null,
 }) {
   const today = dateToIso(new Date());
   const PAST_WEEKS  = 4;   // uker før i dag som vises
@@ -1978,6 +2096,7 @@ function OversiktVisning({
               return (
               <div key={ansatt.id}
                 className={`oversikt-row${ri % 2 === 0 ? '' : ' alt'}`}
+                data-ansatt-id={ansatt.id}
                 style={{ height: rowH }}
                 onDragOver={e => {
                   // Oppdrag 27: pipeline-rad dras over en ansatt → tillat slipp
@@ -2116,10 +2235,18 @@ function OversiktVisning({
                           ...(isFerie ? {} : { background: color }),
                           ...(erFoerFlytting(proj, t) ? { opacity: 0.4, filter: 'grayscale(0.6)' } : {}),
                         }}
-                        title={`${label} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}${erFoerFlytting(proj, t) ? ' · før flytting til pipeline' : ''} — klikk for valg`}
+                        title={`${label} · ${formatDate(t.startDato)} – ${formatDate(t.sluttDato)}${erFoerFlytting(proj, t) ? ' · før flytting til pipeline' : ''} — klikk for valg, dra for å flytte`}
+                        onPointerDown={e => {
+                          // Oppdrag 29: dra stolpen til en annen ansatt (flytt / Alt=kopier) eller i tid
+                          if (readOnly || !startDrag || e.target.closest('.oversikt-handle,button')) return;
+                          const area = e.currentTarget.closest('.oversikt-bars-area');
+                          const rect = area.getBoundingClientRect();
+                          const dayIdx = Math.max(0, Math.min(allDays.length - 1, Math.floor((e.clientX - rect.left) / DAY_W)));
+                          startDrag(e, { kind: 'bar', payload: { tildelingId: t.id, grepDag: allDays[dayIdx] }, tekst: `${label} · ${formatDate(t.startDato)}–${formatDate(t.sluttDato)}` });
+                        }}
                         onClick={e => {
                           e.stopPropagation();
-                          if (dragRef.current) return;
+                          if (dragRef.current || nyligDratt()) return;
                           const area = e.currentTarget.closest('.oversikt-bars-area');
                           const rect = area ? area.getBoundingClientRect() : e.currentTarget.getBoundingClientRect();
                           const dayIdx = Math.max(0, Math.min(allDays.length - 1, Math.floor((e.clientX - rect.left) / DAY_W)));
@@ -2223,7 +2350,7 @@ function OversiktVisning({
               const { laneOf, antall } = fordelLaner(items);
               const rowH = antall * LANE_H;
               rows.push(
-                <div key={'ror-' + ansatt.id} className="oversikt-row" style={{ height: rowH }}>
+                <div key={'ror-' + ansatt.id} className="oversikt-row" data-ansatt-id={ansatt.id} style={{ height: rowH }}>
                   <div className="oversikt-row-label" style={{ width: LABEL_W, height: rowH }}>
                     <div className="mini-avatar" style={{ background: '#0e7490', width: AVATAR, height: AVATAR, fontSize: kompakt ? 7 : 8, flexShrink: 0 }}>
                       {ansatt.navn.split(' ').map(x => x[0]).join('').slice(0, 2).toUpperCase()}
@@ -2236,6 +2363,7 @@ function OversiktVisning({
                       const dow = (new Date(d + 'T00:00:00').getDay() + 6) % 7;
                       return (
                         <div key={d}
+                          data-dag={d}
                           className={`oversikt-bg-cell${d === today ? ' today-col' : ''}${HOLIDAYS[d] ? ' holiday-col' : ''}${dow === 4 ? ' week-last' : ''}`}
                           style={{ left: i * DAY_W, width: DAY_W }}
                         />
@@ -2266,7 +2394,7 @@ function OversiktVisning({
           {dispatch && (
             <PipelineOversiktRader state={state} dispatch={dispatch} readOnly={readOnly}
               allDays={allDays} DAY_W={DAY_W} LABEL_W={LABEL_W} kompakt={kompakt}
-              onPlanleggInn={planleggInnFraPipeline} />
+              onPlanleggInn={planleggInnFraPipeline} onStartDrag={startDrag} />
           )}
 
         </div>

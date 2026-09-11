@@ -17,7 +17,7 @@ const SIKKERHET = { fast: 'Vunnet', sannsynlig: 'Sannsynlig', mulig: 'Mulig' };
 const brukerNavn = () => localStorage.getItem('fbs_user_navn') || 'ukjent';
 const kanDra = () => typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: fine)').matches;
 
-export default function PipelineOversiktRader({ state, dispatch, readOnly, allDays, DAY_W, LABEL_W, kompakt, onPlanleggInn = null }) {
+export default function PipelineOversiktRader({ state, dispatch, readOnly, allDays, DAY_W, LABEL_W, kompakt, onPlanleggInn = null, onStartDrag = null }) {
   const [apen, setApenState] = useState(() => localStorage.getItem('fbs_pipeline_rullegardin') === '1');
   const setApen = v => { localStorage.setItem('fbs_pipeline_rullegardin', v ? '1' : '0'); setApenState(v); };
   const [redigerId, setRedigerId] = useState(null);
@@ -121,8 +121,7 @@ export default function PipelineOversiktRader({ state, dispatch, readOnly, allDa
         const redigerer = redigerId === r.prosjektId;
         return (
           <div key={'pl-' + r.prosjektId} className="oversikt-row" data-pipeline-rad={r.prosjektId} style={{ height: rowH }}
-            draggable={draTillatt}
-            onDragStart={e => { e.dataTransfer.setData('text/fbs-pipeline', r.prosjektId); e.dataTransfer.effectAllowed = 'copy'; }}
+            onPointerDown={e => { if (draTillatt && onStartDrag && !e.target.closest('button,input,select')) onStartDrag(e, { kind: 'pipeline', payload: { prosjektId: r.prosjektId }, tekst: r.navn }); }}
             title={draTillatt ? 'Dra raden opp på en ansatt i uka jobben skal gjøres' : undefined}>
             <div className="oversikt-row-label" style={{ width: LABEL_W, height: rowH, cursor: draTillatt ? 'grab' : 'default', background: !r.start ? '#fffbeb' : undefined, gap: 6 }}>
               <span className="oversikt-row-navn" style={{ fontSize: kompakt ? 11 : 12, fontWeight: 500 }}>{r.navn}</span>

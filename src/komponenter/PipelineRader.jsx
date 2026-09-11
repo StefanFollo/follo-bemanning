@@ -20,7 +20,7 @@ const brukerNavn = () => localStorage.getItem('fbs_user_navn') || 'ukjent';
 // Mobil/touch: ingen drag — kun «Planlegg inn»
 const kanDra = () => typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: fine)').matches;
 
-export default function PipelineRader({ state, dispatch, days, readOnly, onPlanleggInn = null }) {
+export default function PipelineRader({ state, dispatch, days, readOnly, onPlanleggInn = null, onStartDrag = null }) {
   const [apen, setApenState] = useState(() => localStorage.getItem('fbs_pipeline_rullegardin') === '1');
   const setApen = v => { localStorage.setItem('fbs_pipeline_rullegardin', v ? '1' : '0'); setApenState(v); };
   const [redigerId, setRedigerId] = useState(null);
@@ -109,8 +109,7 @@ export default function PipelineRader({ state, dispatch, days, readOnly, onPlanl
         return (
           <React.Fragment key={r.prosjektId}>
             <div className="uke-row-label"
-              draggable={draTillatt}
-              onDragStart={e => { e.dataTransfer.setData('text/fbs-pipeline', r.prosjektId); e.dataTransfer.effectAllowed = 'copy'; }}
+              onPointerDown={e => { if (draTillatt && onStartDrag && !e.target.closest('button,input,select')) onStartDrag(e, { kind: 'pipeline', payload: { prosjektId: r.prosjektId }, tekst: r.navn }); }}
               style={{ cursor: draTillatt ? 'grab' : 'default', background: !r.start ? '#fffbeb' : undefined }}
               title={draTillatt ? 'Dra raden opp på en ansatt i uka jobben skal gjøres' : undefined}>
               <div style={{ minWidth: 0 }}>

@@ -6,8 +6,9 @@ import {
   foreslaaPipeline, pipelineUker, pipelineRader, ukeKapasitet, kapasitetNivaa,
   ukeNr, pipelineDigestLinje, weekStart, addDays, TIMEVERK_UKE,
   erUtforende, ukeEtikett, prosjektStatus, bemannetTil, hullEtterBemanning, ferdigForslag,
-  migrerStatus, pipelineListe, pipelineOppsummering, flyttTilPipeline, erFoerFlytting, aktiveTildelinger,
+  migrerStatus, pipelineListe, pipelineOppsummering, flyttTilPipeline, erFoerFlytting, aktiveTildelinger, angreFlyttTilPipeline,
 } from '../src/pipeline.js';
+import { planleggSlipp, konfliktTekst, ukeSpenn } from '../src/flyttTildeling.js';
 import { planleggVarsler, lagDigestEpost, VARSEL_STATUS_TOM } from '../src/oppfolgingVarsler.js';
 import { byggFramdriftPayload } from '../src/framdriftEksport.js';
 import { leggKandidater, byggPipelineProsjekt, sikkerhetFor } from '../src/leggIPipeline.js';
@@ -308,6 +309,51 @@ console.log('\n-- Testkrav 5: pipeline lekker ALDRI til flate eller kundeportal 
   );
   const raa = JSON.stringify(payload);
   sjekk('Kundepayload uten pipeline/pipelineLogg', !/pipeline/i.test(raa), raa.slice(0, 120));
+}
+
+console.log('\n-- Oppdrag 29: dra stolper mellom ansatte (planleggSlipp) + angre flytt til pipeline --');
+{
+  const pros = [{ id: 'P1', navn: 'Lindemansveien 4', adresse: '' }, { id: 'P2', navn: 'Trollveien 2' }];
+  const ansatteById = { A: { navn: 'Andrius K' }, B: { navn: 'Pyrros T' } };
+  const t1 = { id: 't1', ansattId: 'A', prosjektId: 'P1', startDato: '2026-09-14', sluttDato: '2026-09-25' }; // u38–39
+  const t2 = { id: 't2', ansattId: 'B', prosjektId: 'P2', startDato: '2026-09-21', sluttDato: '2026-09-23' }; // u39
+  const alle = [t1, t2];
+  sjekk('ukeSpenn én uke / to uker', ukeSpenn('2026-09-14', '2026-09-18') === 'u38' && ukeSpenn('2026-09-14', '2026-09-25') === 'u38–39');
+
+  // Flytt til annen ansatt uten konflikt
+  const f1 = planleggSlipp({ tildeling: t1, grepDag: '2026-09-15', mottakerId: 'B', dag: '2026-10-05', tildelinger: [t1], ansatteById, prosjekter: pros, av: 'Stefan' });
+  sjekk('Flytt: handling flytt, ny på mottaker med samme datoer', f1.handling === 'flytt' && f1.ny.ansattId === 'B' && f1.ny.startDato === '2026-09-14' && f1.ny.sluttDato === '2026-09-25');
+  sjekk('Flytt: originalen slettes (tombstone), ingen konflikt', f1.slettIds.length === 1 && f1.slettIds[0] === 't1' && f1.konflikter.length === 0);
+  sjekk('Flytt: loggtekst «Flyttet fra Andrius til Pyrros · Lindemansveien 4 · u38–39 · Stefan»', f1.loggTekst === 'Flyttet fra Andrius til Pyrros · Lindemansveien 4 · u38–39 · Stefan', f1.loggTekst);
+
+  // Kopier (Alt) beholder originalen
+  const k1 = planleggSlipp({ tildeling: t1, grepDag: '2026-09-15', mottakerId: 'B', dag: '2026-10-05', kopier: true, tildelinger: [t1], ansatteById, prosjekter: pros, av: 'Stefan' });
+  sjekk('Kopier: handling kopier, ingenting slettes', k1.handling === 'kopier' && k1.slettIds.length === 0 && k1.ny.ansattId === 'B');
+  sjekk('Kopier: loggtekst starter med «Kopiert fra Andrius til Pyrros»', k1.loggTekst.startsWith('Kopiert fra Andrius til Pyrros'));
+
+  // Konflikt: mottaker har Trollveien u39 → rapporteres, aldri overskrevet stille
+  const f2 = planleggSlipp({ tildeling: t1, grepDag: '2026-09-15', mottakerId: 'B', dag: '2026-10-05', tildelinger: alle, ansatteById, prosjekter: pros, av: 'Stefan' });
+  sjekk('Konflikt oppdages hos mottaker', f2.konflikter.length === 1 && f2.konflikter[0].id === 't2');
+  sjekk('konfliktTekst «Overlapper Trollveien 2 u39»', konfliktTekst(f2.konflikter, pros) === 'Overlapper Trollveien 2 u39', konfliktTekst(f2.konflikter, pros));
+  sjekk('konfliktTekst teller flere', konfliktTekst([t2, t2], pros).endsWith('(+1 til)'));
+  sjekk('Ferie gir aldri konflikt', planleggSlipp({ tildeling: { ...t1, prosjektId: '__FERIE__' }, mottakerId: 'B', dag: '2026-09-21', tildelinger: alle, ansatteById, prosjekter: pros }).konflikter.length === 0);
+
+  // Samme ansatt = flytt i tid med grep-offset og samme varighet
+  const f3 = planleggSlipp({ tildeling: t1, grepDag: '2026-09-15', mottakerId: 'A', dag: '2026-09-22', tildelinger: [t1], ansatteById, prosjekter: pros, av: 'Stefan' });
+  sjekk('Flytt i tid: grep tirsdag → slipp tirsdag uka etter = +7 dager, samme varighet', f3.handling === 'flyttTid' && f3.oppdater.startDato === '2026-09-21' && f3.oppdater.sluttDato === '2026-10-02');
+  sjekk('Flytt i tid: loggtekst «Flyttet i tid u38–39 → u39–40 …»', f3.loggTekst.startsWith('Flyttet i tid u38–39 → u39–40'), f3.loggTekst);
+  sjekk('Slipp på samme sted gjør ingenting (null)', planleggSlipp({ tildeling: t1, grepDag: '2026-09-15', mottakerId: 'A', dag: '2026-09-15', tildelinger: [t1], ansatteById, prosjekter: pros }) === null);
+  sjekk('Manglende mål gir null', planleggSlipp({ tildeling: t1, mottakerId: null, dag: '2026-09-15' }) === null);
+
+  // Angre flytt til pipeline (del 3): manueltIkkeStartet fjernes, logg append-only
+  const p = { id: 'P9', navn: 'Kråkstadveien 98', status: 'aktiv', pipeline: { forventetStart: '2026-09-21', sikkerhet: 'fast', manueltIkkeStartet: 1000 }, pipelineLogg: [{ tid: 'a', av: 'x', tekst: 'Flyttet til pipeline' }] };
+  const gamle = [{ id: 'g1', ansattId: 'A', prosjektId: 'P9', startDato: '2026-09-14', sluttDato: '2026-09-18', _endret: 500 }];
+  sjekk('Før angre: gamle tildelinger teller ikke → ikke_startet', prosjektStatus(p, gamle) === 'ikke_startet');
+  const a = angreFlyttTilPipeline(p, { av: 'Stefan', naa: 2000 });
+  sjekk('Etter angre: manueltIkkeStartet borte, øvrig pipeline beholdt', a.pipeline.manueltIkkeStartet === undefined && a.pipeline.forventetStart === '2026-09-21');
+  sjekk('Etter angre: tildelingene teller igjen → startet', prosjektStatus(a, gamle) === 'startet' && !erFoerFlytting(a, gamle[0]));
+  sjekk('Etter angre: logg append-only med ny linje', a.pipelineLogg.length === 2 && /angret/i.test(a.pipelineLogg[1].tekst));
+  sjekk('Angre uten flytting er no-op (null)', angreFlyttTilPipeline({ id: 'Q', pipeline: {} }, { av: 'x' }) === null);
 }
 
 console.log(`\n=== ${ok} OK, ${feil} FEIL ===`);

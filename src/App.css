@@ -3900,3 +3900,19 @@ body {
 
 /* Ring i dag øverst på Befaring-siden (PL-rollen) */
 .bef-ringidag { margin-bottom: 18px; padding: 14px 16px; background: #fff; border: 1px solid var(--border); border-radius: 10px; }
+
+/* ── Oppdrag 29: pointer-drag i bemanningsplanen (DragMotor) ── */
+body.dm-drar { user-select: none; cursor: grabbing; }
+body.dm-drar * { cursor: grabbing !important; }
+.dm-spokelse {
+  position: fixed; z-index: 10000; pointer-events: none;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 10px; border-radius: 8px; font-size: 12px; font-weight: 600;
+  background: #1e293b; color: #fff; box-shadow: 0 6px 20px rgba(15,23,42,.35);
+  max-width: 320px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.dm-spokelse-modus { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; background: #2563eb; border-radius: 5px; padding: 1px 6px; }
+.dm-spokelse-modus--kopier { background: #7c3aed; }
+.dm-spokelse-konflikt { font-size: 10px; background: #dc2626; border-radius: 5px; padding: 1px 6px; }
+.gantt-bg-cell.drop-maal, .oversikt-bg-cell.drop-maal { background: var(--accent-subtle, #dbeafe) !important; outline: 2px dashed var(--accent, #2563eb); outline-offset: -2px; z-index: 1; }
+.gantt-bg-cell.drop-maal-konflikt, .oversikt-bg-cell.drop-maal-konflikt { background: #fee2e2 !important; outline: 2px dashed #dc2626; outline-offset: -2px; z-index: 1; }
